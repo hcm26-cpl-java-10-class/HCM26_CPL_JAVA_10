@@ -251,17 +251,21 @@ class CommitHistorySyncIntegrationTest extends AbstractTaskLinkIntegrationTest {
                 .andExpect(jsonPath("$.latestSync.resumable").value(true))
                 .andExpect(jsonPath("$.latestSync.progress.inserted").value(1));
 
-        // "Resume sync" resets the same job and continues from the cursor.
+        // "Resume sync" queues a new job that continues from the cursor (SY-06: the PARTIAL one stays in the history).
         mvc.perform(post(repositoryUrl() + "/sync").header("Authorization", "Bearer " + managerToken))
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.id").value(jobId))
                 .andExpect(jsonPath("$.status").value("PENDING"));
+        GitSyncJob resumed = jobs.findFirstByRepositoryIdOrderByIdDesc(connectionId).orElseThrow();
+        assertThat(resumed.getId()).isNotEqualTo(jobId);
+        assertThat(resumed.getResumedFromJobId()).isEqualTo(jobId);
+        assertThat(resumed.getCommitCursor()).isEqualTo("c1");
         when(graphql.commitHistory(anyString(), anyString(), anyString(), any(), eq("c1"), anyInt()))
                 .thenReturn(page(List.of(commit("p2", 1, "dev-gh", 7L)), false, "c2"));
-        runner.run(jobId);
+        runner.run(resumed.getId());
 
-        GitSyncJob done = jobs.findById(jobId).orElseThrow();
+        GitSyncJob done = jobs.findById(resumed.getId()).orElseThrow();
         assertThat(done.getStatus()).isEqualTo(GitSyncJobStatus.SUCCEEDED);
+        assertThat(jobs.findById(jobId).orElseThrow().getStatus()).isEqualTo(GitSyncJobStatus.PARTIAL);
         assertThat(commits.countByRepositoryId(connectionId)).isEqualTo(2);
         // The first page was read once (before the failure), never again after the resume.
         verify(graphql).commitHistory(anyString(), anyString(), anyString(), any(), isNull(), anyInt());

@@ -43,7 +43,7 @@ function PullRequestRow({ pr, selected, onSelect, onOpenTask }: {
         <span>{pr.authorLogin ?? "Unknown author"}</span>
         {pr.headRef && <span className="max-w-48 truncate font-mono">· {pr.headRef}</span>}
         <span>· updated <time dateTime={pr.updatedAt} title={formatDateTime(pr.updatedAt)}>{formatRelative(pr.updatedAt)}</time></span>
-        {pr.repository?.status === "INACTIVE" && <RepositoryLabelChip repository={pr.repository} />}
+        {(pr.repository?.status === "INACTIVE" || pr.repository?.status === "DISCONNECTED") && <RepositoryLabelChip repository={pr.repository} />}
         {pr.additions != null && pr.deletions != null && <span>· <span className="text-emerald-700 dark:text-emerald-400">+{pr.additions}</span> <span className="text-red-700 dark:text-red-400">−{pr.deletions}</span></span>}
       </span>
       {(summary.approved > 0 || summary.changesRequested > 0) && <span className="mt-1 flex flex-wrap gap-x-2 text-[11px]">

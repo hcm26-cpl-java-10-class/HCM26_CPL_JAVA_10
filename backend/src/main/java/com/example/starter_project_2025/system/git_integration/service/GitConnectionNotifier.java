@@ -9,6 +9,8 @@ import com.example.starter_project_2025.system.git_integration.repository.GitRep
 import com.example.starter_project_2025.system.git_integration.tasklink.ProjectScopeResolver;
 import com.example.starter_project_2025.system.notification.NotificationService;
 import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
+import com.example.starter_project_2025.system.rbac.user.User;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -60,6 +62,7 @@ public class GitConnectionNotifier {
         private final GitProjectMembership membership;
         private final WorkspaceRepository workspaces;
         private final NotificationService notifications;
+        private final UserRepository users;
 
         @Transactional(propagation = Propagation.REQUIRES_NEW)
         public void notify(GitInstallationStatusChangedEvent event, boolean broke) {
@@ -67,10 +70,14 @@ public class GitConnectionNotifier {
             if (installation == null) return;
             List<GitRepository> repositories = connections.findByInstallationRefAndStatusIn(installation.getId(),
                     GitRepositoryRepository.CURRENT);
-            String title = broke ? "GitHub connection needs attention" : "GitHub connection restored";
-            String message = message(installation.getAccountLogin(), event.to());
+            // GI-07: disconnected on purpose from the platform: says who did it and how to synchronize again.
+            boolean byUser = GitInstallationReason.DISCONNECTED_BY_USER.equals(event.reason());
+            String title = byUser ? "GitHub disconnected" : broke ? "GitHub connection needs attention" : "GitHub connection restored";
+            String message = byUser ? disconnectedMessage(installation.getAccountLogin(), actorName(event.actorUserId()))
+                    : message(installation.getAccountLogin(), event.to());
             long stamp = System.currentTimeMillis();
             Set<Long> notified = new LinkedHashSet<>();
+            if (event.actorUserId() != null) notified.add(event.actorUserId()); // the person who disconnected knows
             for (GitRepository repository : repositories) {
                 Long masterId = repository.getProjectId();
                 Set<Long> scope = scopes.scope(masterId);
@@ -89,7 +96,17 @@ public class GitConnectionNotifier {
                 notifications.createOnce(connectedBy, key(installation, event, stamp, connectedBy), title, message, "/git-integration");
             }
             log.info("GitHub connection notification: installationId={}, {} -> {}, recipients={}",
-                    installation.getInstallationId(), event.from(), event.to(), notified.size());
+                    installation.getInstallationId(), event.from(), event.to(), notified.size() - (event.actorUserId() == null ? 0 : 1));
+        }
+
+        static String disconnectedMessage(String account, String actor) {
+            return (actor == null ? "Someone" : actor) + " disconnected GitHub account " + account
+                    + " from the platform. Synchronized data is kept. To synchronize again, connect GitHub again and link the repository again.";
+        }
+
+        private String actorName(Long userId) {
+            if (userId == null) return null;
+            return users.findById(userId).map(User::getFullName).filter(name -> name != null && !name.isBlank()).orElse(null);
         }
 
         static String message(String account, GitInstallationStatus status) {

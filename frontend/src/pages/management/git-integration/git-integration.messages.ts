@@ -76,6 +76,12 @@ const ERRORS: Record<string, GitIntegrationMessage> = {
     description: "Ask your program manager to grant the Git Integration permission.",
     action: "dashboard",
   },
+  GIT_DISCONNECT_CONFIRMATION_MISMATCH: {
+    tone: "warning",
+    title: "The name doesn't match",
+    description: "Type the account or organization name exactly as shown. Nothing was changed.",
+    action: "retry",
+  },
   GIT_PROVIDER_UNAVAILABLE: {
     tone: "error",
     title: "GitHub is not reachable right now",
@@ -243,8 +249,8 @@ const REPOSITORY_REASONS: Record<string, { title: string; description: string }>
     description: "It was removed from the GitHub App's repositories. Grant the App access to it again on GitHub, then check again.",
   },
   INSTALLATION_DELETED: {
-    title: "The GitHub App was uninstalled",
-    description: "The repository can't be read until the App is installed again on its account.",
+    title: "GitHub was disconnected from this repository's account",
+    description: "The GitHub App was uninstalled, so the repository isn't synchronized any more. Connect GitHub again, then link the repository again.",
   },
   REPOSITORY_DELETED: {
     title: "This repository was deleted on GitHub",
@@ -287,6 +293,26 @@ const REPLAY_ERRORS: Record<string, string> = {
 
 export function replayErrorMessage(code?: string) {
   return (code && REPLAY_ERRORS[code]) || "The event could not be queued again. Please try again.";
+}
+
+/** US-SY-06: why a failed webhook delivery could not be retried from the sync history. */
+const SYNC_HISTORY_RETRY_ERRORS: Record<string, string> = {
+  GIT_WEBHOOK_EVENT_NOT_REPLAYABLE: "This delivery is no longer failed. The list has been refreshed.",
+  GIT_WEBHOOK_PAYLOAD_PURGED: "The delivery's content was removed after the retention period, so it can't be processed again. Sync the repository instead.",
+  GIT_REPOSITORY_NOT_RECEIVING: "The repository was unlinked or lost its connection, so the delivery would only be ignored.",
+  GIT_SYNC_HISTORY_NOT_FOUND: "This delivery is not one of this project's repository.",
+  GIT_INTEGRATION_FORBIDDEN: "Only the project manager can retry deliveries.",
+};
+
+export function syncHistoryRetryErrorMessage(code?: string) {
+  return (code && SYNC_HISTORY_RETRY_ERRORS[code]) || "The delivery could not be queued again. Please try again.";
+}
+
+/** US-SY-06: why a failed delivery offers no Retry. */
+export function retryBlockedMessage(reason?: string | null) {
+  if (reason === "PAYLOAD_PURGED") return "Its content was removed after the retention period. Sync the repository to collect any missing data.";
+  if (reason === "REPOSITORY_NOT_RECEIVING") return "The repository was unlinked or lost its connection.";
+  return null;
 }
 
 /** US-TM-03: why a manual link / unlink failed, in words. */

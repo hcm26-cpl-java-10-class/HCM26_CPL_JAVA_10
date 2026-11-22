@@ -4,8 +4,11 @@ import com.example.starter_project_2025.system.git_integration.domain.GitOAuthOu
 import com.example.starter_project_2025.system.git_integration.dto.GitHubCallbackRequest;
 import com.example.starter_project_2025.system.git_integration.dto.GitHubCallbackResponse;
 import com.example.starter_project_2025.system.git_integration.dto.GitHubConnectStartResponse;
+import com.example.starter_project_2025.system.git_integration.dto.DisconnectInstallationRequest;
+import com.example.starter_project_2025.system.git_integration.dto.GitInstallationDisconnectResponse;
 import com.example.starter_project_2025.system.git_integration.dto.GitInstallationListResponse;
 import com.example.starter_project_2025.system.git_integration.dto.GitRepositoryPage;
+import com.example.starter_project_2025.system.git_integration.service.GitInstallationDisconnectService;
 import com.example.starter_project_2025.system.git_integration.service.GitInstallationService;
 import com.example.starter_project_2025.system.git_integration.service.GitRepositoryBrowseService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,6 +33,7 @@ public class GitInstallationController {
 
     private final GitInstallationService installationService;
     private final GitRepositoryBrowseService repositoryBrowseService;
+    private final GitInstallationDisconnectService disconnectService;
 
     @Operation(summary = "GitHub App installations of the current organization")
     @GetMapping("/installations")
@@ -47,6 +51,13 @@ public class GitInstallationController {
                                           @RequestParam(defaultValue = "false") boolean refresh,
                                           @RequestParam(required = false) Long projectId) {
         return repositoryBrowseService.browse(id, q, filter, page, size, refresh, projectId);
+    }
+
+    @Operation(summary = "US-GI-07: uninstall the GitHub App from the account and disconnect it and its repositories "
+            + "(Git Integration manager or the person who installed it; confirmLogin must match the account)")
+    @PostMapping("/installations/{id}/disconnect")
+    public GitInstallationDisconnectResponse disconnect(@PathVariable Long id, @Valid @RequestBody DisconnectInstallationRequest request) {
+        return disconnectService.disconnect(id, request);
     }
 
     @Operation(summary = "Start Connect GitHub: returns the GitHub App install URL (requires GIT_INTEGRATION_MANAGE)")

@@ -59,6 +59,19 @@ export interface GitInstallation {
   lastCheckedAt?: string | null;
   /** Master projects whose repository is read through this installation; removing the App affects them all. */
   projects?: GitInstallationProject[];
+  /** US-GI-07: the viewer may disconnect it (Git Integration manager or the person who installed it). */
+  canDisconnect?: boolean;
+  /** US-GI-07: who disconnected it from the platform; null when removed on GitHub. */
+  disconnectedBy?: { id: number; name?: string | null } | null;
+}
+
+/** US-GI-07: result of "Disconnect GitHub". */
+export interface GitInstallationDisconnectResponse {
+  installation: GitInstallation;
+  repositoriesDisconnected: number;
+  projects: GitInstallationProject[];
+  /** The App had already been uninstalled on GitHub (or the installation was disconnected before). */
+  alreadyRemovedOnGitHub: boolean;
 }
 
 export interface GitInstallationProject {
@@ -128,6 +141,12 @@ export type GitIntegrationErrorCode =
   | "GIT_WEBHOOK_EVENT_NOT_FOUND"
   | "GIT_WEBHOOK_EVENT_NOT_REPLAYABLE"
   | "GIT_WEBHOOK_PAYLOAD_PURGED"
+  /** US-GI-07: the account name typed to confirm "Disconnect GitHub" does not match. */
+  | "GIT_DISCONNECT_CONFIRMATION_MISMATCH"
+  /** US-SY-06: the synchronization is not one of the project's repositories. */
+  | "GIT_SYNC_HISTORY_NOT_FOUND"
+  /** US-SY-06: the repository was unlinked or disconnected: a retried webhook would only be ignored. */
+  | "GIT_REPOSITORY_NOT_RECEIVING"
   | "GIT_BACKLOG_ITEM_NOT_FOUND"
   | "GIT_TASK_LINK_NOT_FOUND"
   | "GIT_TASK_OUTSIDE_PROJECT"
@@ -258,6 +277,8 @@ export interface GitSyncJob {
   resumable?: boolean;
   /** Waiting for the GitHub rate limit until then. */
   pausedUntil?: string | null;
+  /** US-SY-06: a resume is a new job continuing this stopped one. */
+  resumedFromJobId?: number | null;
 }
 
 /** US-SY-01: answer of "Sync now"; `queued = false` when a sync was already waiting, running or just done. */
@@ -289,6 +310,8 @@ export interface LinkedRepository {
   /** US-GI-05: why it is not ACTIVE (REPOSITORY_ACCESS_REMOVED, INSTALLATION_DELETED, SYNC_FAILED…) and since when. */
   statusReason?: string | null;
   statusChangedAt?: string | null;
+  /** US-GI-07: DISCONNECTED because its GitHub installation was disconnected: connect GitHub again, then link again. */
+  installationGone?: boolean;
 }
 
 /** US-GI-05: a repository unlinked from the master project; its data stays in the project's analytics. */
@@ -320,6 +343,8 @@ export interface ProjectRepositoryView {
   /** US-GI-05: "Unlink repository" (PM of the master or Git Integration manager). */
   canUnlink: boolean;
   previousRepositories: PreviousRepository[];
+  /** US-SY-06: may open the synchronization history (PM of the master or Git Integration manager). */
+  canViewSyncHistory?: boolean;
 }
 
 export interface LinkRepositoryRequest {
@@ -748,4 +773,81 @@ export interface GitContributorView {
   userId: number | null;
   source: GitContributorMapSource | null;
   mappedAt: string | null;
+}
+
+// ---- US-SY-06 · Synchronization history -----------------------------------------------------------
+
+export type GitSyncHistorySource = "JOB" | "WEBHOOK";
+/** BR3: SCHEDULED jobs are the periodic reconcile. */
+export type GitSyncHistoryType = "INITIAL" | "MANUAL" | "RECONCILE" | "WEBHOOK";
+/** BR4: PARTIAL_SUCCESS = finished, but part of the data could not be read. */
+export type GitSyncHistoryStatus = "PENDING" | "PROCESSING" | "SUCCESS" | "PARTIAL_SUCCESS" | "FAILED";
+
+export interface GitSyncHistoryItem {
+  source: GitSyncHistorySource;
+  id: number;
+  repository?: GitRepositoryLabel | null;
+  type: GitSyncHistoryType;
+  status: GitSyncHistoryStatus;
+  rawStatus: string;
+  /** Queued (job) or received (webhook); the list is ordered by it. */
+  occurredAt: string;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  durationMs?: number | null;
+  /** Commits, pull requests and reviews processed; null when unknown. */
+  recordsProcessed?: number | null;
+  attempts: number;
+  /** Job: why it failed / stopped / waits. */
+  errorCode?: string | null;
+  /** Webhook: the error of a failed delivery, one line. */
+  error?: string | null;
+  eventType?: string | null;
+  action?: string | null;
+  /** The platform tries again by itself at this time. */
+  retryAt?: string | null;
+  canRetry: boolean;
+}
+
+export interface GitSyncHistoryPage extends GitPage<GitSyncHistoryItem> {
+  /** false: the project never linked a repository. */
+  hasRepository: boolean;
+  /** The repository shown (the current one unless another was asked for). */
+  repositoryId?: number | null;
+  repositories: GitRepositoryLabel[];
+}
+
+export interface GitSyncHistoryQuery {
+  type?: GitSyncHistoryType;
+  status?: GitSyncHistoryStatus;
+  repositoryId?: number;
+  page?: number;
+  size?: number;
+}
+
+export interface GitSyncHistoryDetail {
+  item: GitSyncHistoryItem;
+  breakdown?: {
+    commitsInserted?: number | null; commitsExisting?: number | null;
+    pullRequestsInserted?: number | null; pullRequestsUpdated?: number | null; pullRequestsUnchanged?: number | null;
+    reviewsInserted?: number | null; reviewsUpdated?: number | null;
+  } | null;
+  error?: { code?: string | null; message?: string | null } | null;
+  /** What a processed webhook did, in the platform's words. */
+  note?: string | null;
+  job?: {
+    phase: GitSyncPhase;
+    resumedFromJobId?: number | null;
+    requestedBy?: { id: number; name?: string | null } | null;
+    maxAttempts: number;
+    canSyncAgain: boolean;
+  } | null;
+  webhook?: {
+    deliveryId: string;
+    senderLogin?: string | null;
+    maxRetries: number;
+    receivedAt: string;
+    payloadAvailable: boolean;
+    retryBlockedReason?: "PAYLOAD_PURGED" | "REPOSITORY_NOT_RECEIVING" | string | null;
+  } | null;
 }

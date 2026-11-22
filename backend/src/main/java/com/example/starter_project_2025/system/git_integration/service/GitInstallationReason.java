@@ -13,6 +13,8 @@ public final class GitInstallationReason {
     public static final String SUSPENDED_ON_GITHUB = "SUSPENDED_ON_GITHUB";
     /** The App was uninstalled (webhook "deleted", or "Check again" got 404). */
     public static final String UNINSTALLED = "UNINSTALLED";
+    /** GI-07: disconnected from the platform (the App was uninstalled on GitHub by the platform). */
+    public static final String DISCONNECTED_BY_USER = "DISCONNECTED_BY_USER";
     /** The account owner lifted the suspension. */
     public static final String UNSUSPENDED = "UNSUSPENDED";
     /** "Check again" found the installation working. */

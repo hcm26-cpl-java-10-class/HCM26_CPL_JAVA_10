@@ -151,8 +151,7 @@ public class GitInstallationService {
         String message = result.outcome() == GitOAuthOutcome.RECONNECTED
                 ? "Đã cập nhật kết nối GitHub"
                 : "Kết nối GitHub thành công";
-        return new GitHubCallbackResponse(result.outcome(), message,
-                toResponse(result.installation(), Map.of(user.getId(), user), linkedProjects(result.installation())));
+        return new GitHubCallbackResponse(result.outcome(), message, view(user, result.installation()));
     }
 
     @Transactional(readOnly = true)
@@ -162,13 +161,11 @@ public class GitInstallationService {
         List<GitInstallation> rows = installations
                 .findByTenantIdAndProviderAndIsActiveTrueOrderByConnectedAtDesc(user.getTenant().getId(), GitProvider.GITHUB);
 
-        Map<Long, User> connectedBy = users.findAllById(rows.stream()
-                        .map(GitInstallation::getConnectedByUserId).filter(Objects::nonNull).distinct().toList())
-                .stream().collect(Collectors.toMap(User::getId, Function.identity()));
-
+        Map<Long, User> people = people(rows);
         Map<Long, List<GitInstallationResponse.LinkedProject>> linked = linkedProjects(rows.stream().map(GitInstallation::getId).toList());
         return new GitInstallationListResponse(summarize(rows), access.canManage(user),
-                rows.stream().map(row -> toResponse(row, connectedBy, linked.getOrDefault(row.getId(), List.of()))).toList());
+                rows.stream().map(row -> toResponse(row, people, linked.getOrDefault(row.getId(), List.of()),
+                        canDisconnect(user, row))).toList());
     }
 
     private static String summarize(List<GitInstallation> rows) {
@@ -200,7 +197,31 @@ public class GitInstallationService {
         }
     }
 
-    private List<GitInstallationResponse.LinkedProject> linkedProjects(GitInstallation row) {
+    /**
+     * GI-07 BR1: a Git Integration manager ("Workspace Admin") or the person who installed it may
+     * disconnect an installation that is not disconnected yet.
+     */
+    public boolean canDisconnect(User user, GitInstallation row) {
+        return row.getStatus() != GitInstallationStatus.DISCONNECTED
+                && (access.canManage(user) || user.getId().equals(row.getConnectedByUserId()));
+    }
+
+    /** One installation as {@code viewer} sees it. */
+    @Transactional(readOnly = true)
+    public GitInstallationResponse view(User viewer, GitInstallation row) {
+        return toResponse(row, people(List.of(row)), linkedProjects(row), canDisconnect(viewer, row));
+    }
+
+    /** Who connected and who disconnected the installations. */
+    private Map<Long, User> people(List<GitInstallation> rows) {
+        List<Long> ids = rows.stream()
+                .flatMap(row -> java.util.stream.Stream.of(row.getConnectedByUserId(), row.getDisconnectedByUserId()))
+                .filter(Objects::nonNull).distinct().toList();
+        return ids.isEmpty() ? Map.of()
+                : users.findAllById(ids).stream().collect(Collectors.toMap(User::getId, Function.identity()));
+    }
+
+    public List<GitInstallationResponse.LinkedProject> linkedProjects(GitInstallation row) {
         return linkedProjects(List.of(row.getId())).getOrDefault(row.getId(), List.of());
     }
 
@@ -221,22 +242,24 @@ public class GitInstallationService {
     }
 
     private static GitInstallationResponse toResponse(GitInstallation row, Map<Long, User> usersById,
-                                                      List<GitInstallationResponse.LinkedProject> linked) {
-        User by = usersById.get(row.getConnectedByUserId());
-        String name = by == null ? null
-                : (by.getFirstName() + (by.getLastName() == null ? "" : " " + by.getLastName())).trim();
+                                                      List<GitInstallationResponse.LinkedProject> linked, boolean canDisconnect) {
+        Long disconnectedBy = row.getDisconnectedByUserId();
         return new GitInstallationResponse(row.getId(), row.getInstallationId(), row.getStatus(),
                 row.getAccountLogin(), row.getAccountType(), row.getRepositorySelection(), row.getGithubUserLogin(),
-                row.getConnectedByUserId(), name, row.getConnectedAt(), row.getLastVerifiedAt(),
-                row.getStatusReason(), row.getStatusChangedAt(), row.getLastCheckedAt(), linked);
+                row.getConnectedByUserId(), name(usersById.get(row.getConnectedByUserId())), row.getConnectedAt(), row.getLastVerifiedAt(),
+                row.getStatusReason(), row.getStatusChangedAt(), row.getLastCheckedAt(), linked, canDisconnect,
+                disconnectedBy == null ? null : new GitInstallationResponse.Person(disconnectedBy, name(usersById.get(disconnectedBy))));
+    }
+
+    private static String name(User user) {
+        return user == null ? null
+                : (user.getFirstName() + (user.getLastName() == null ? "" : " " + user.getLastName())).trim();
     }
 
     /** GI-02: one installation as listed (after "Check again"). */
     @Transactional(readOnly = true)
     public GitInstallationResponse installation(Long installationRowId) {
         GitInstallation row = installations.findById(installationRowId).orElseThrow(GitIntegrationException::installationNotFound);
-        Map<Long, User> by = row.getConnectedByUserId() == null ? Map.of()
-                : users.findById(row.getConnectedByUserId()).map(user -> Map.of(user.getId(), user)).orElse(Map.of());
-        return toResponse(row, by, linkedProjects(row));
+        return view(access.requireUser(), row);
     }
 }

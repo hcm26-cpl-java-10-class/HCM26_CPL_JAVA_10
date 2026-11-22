@@ -121,6 +121,8 @@ public class GitRepositorySyncRunner {
     }
 
     private void handleGitHubFailure(GitSyncJobStore.ClaimedJob job, GitHubApiException e, GitSyncPhase step) {
+        // GI-07 AC07: GitHub refuses because the App was uninstalled meanwhile: stop, do not mark the installation ERROR.
+        if (e.getKind() != GitHubApiException.Kind.RATE_LIMITED && store.stoppedIfDisconnected(job)) return;
         String unavailable = switch (step) {
             case COMMITS -> "HISTORY_UNAVAILABLE";
             case PULL_REQUESTS -> "PULL_REQUESTS_UNAVAILABLE";

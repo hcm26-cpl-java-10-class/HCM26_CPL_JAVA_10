@@ -14,11 +14,14 @@ import type {
   GitInsightsRange,
   GitPullRequestQuery,
   GitRepositoryQuery,
+  GitSyncHistoryPage,
+  GitSyncHistoryQuery,
+  GitSyncHistorySource,
   GitWebhookEventQuery,
   LinkRepositoryRequest,
   ProjectRepositoryView,
 } from "@/types/features/git-integration";
-import { accountErrorMessage, errorMessage, replayErrorMessage, taskLinkErrorMessage } from "./git-integration.messages";
+import { accountErrorMessage, errorMessage, replayErrorMessage, syncHistoryRetryErrorMessage, taskLinkErrorMessage } from "./git-integration.messages";
 import { savePendingAccountConnect, savePendingConnect } from "./git-integration.storage";
 
 export const gitIntegrationKeys = {
@@ -46,6 +49,11 @@ export const gitIntegrationKeys = {
   pullRequestCandidates: (itemId: number, q: string) => ["git-integration", "pull-request-candidates", itemId, q] as const,
   githubAccounts: (projectId: number) => ["git-integration", "github-accounts", projectId] as const,
   githubConnection: (projectId: number) => ["git-integration", "github-connection", projectId] as const,
+  syncHistory: (projectId: number, query: GitSyncHistoryQuery) =>
+    ["git-integration", "sync-history", projectId, query.type ?? "ALL", query.status ?? "ALL", query.repositoryId ?? null,
+      query.page ?? 0, query.size ?? 20] as const,
+  syncHistoryEntry: (projectId: number, source: GitSyncHistorySource, id: number) =>
+    ["git-integration", "sync-history-entry", projectId, source, id] as const,
   webhookEvents: (query: GitWebhookEventQuery) =>
     ["git-integration", "webhook-events", query.status ?? "ALL", query.eventType ?? "", query.projectId ?? null, query.page ?? 0, query.size ?? 20] as const,
 };
@@ -56,6 +64,8 @@ export const gitIntegrationKeys = {
  */
 const ACTIVITY_POLL_MS = 30_000;
 const WEBHOOK_LOG_POLL_MS = 15_000;
+/** US-SY-06: while a synchronization of the page waits or runs, the history refreshes this often. */
+const SYNC_HISTORY_POLL_MS = 5_000;
 
 /** Poll while a synchronization is waiting or running, so the card moves from "Pending" to "Synced" by itself. */
 const SYNC_POLL_MS = 3000;
@@ -136,7 +146,7 @@ export function useRetrySync(projectId: number) {
     mutationFn: () => gitIntegrationApi.retrySync(projectId),
     onSuccess: ({ job, queued }) => {
       if (queued) {
-        toast.success(job.resumable || (job.progress?.pages ?? 0) > 0 ? "Sync resumed" : "Sync started",
+        toast.success(job.resumable || job.resumedFromJobId || (job.progress?.pages ?? 0) > 0 ? "Sync resumed" : "Sync started",
           { description: "New commits will appear here in a moment." });
       } else if (job.status === "SUCCEEDED") {
         toast.info("Already up to date", { description: "The repository was synchronized a moment ago." });
@@ -152,6 +162,9 @@ export function useRetrySync(projectId: number) {
       queryClient.invalidateQueries({ queryKey: ["git-integration", "project-repository"] }),
       // US-GI-05: "Sync again" may have restored a repository: the connection banner changes too.
       queryClient.invalidateQueries({ queryKey: ["git-integration", "github-connection"] }),
+      // US-SY-06: the new synchronization appears in the history.
+      queryClient.invalidateQueries({ queryKey: ["git-integration", "sync-history"] }),
+      queryClient.invalidateQueries({ queryKey: ["git-integration", "sync-history-entry"] }),
     ]),
   });
 }
@@ -245,6 +258,53 @@ export function useWebhookEvents(query: GitWebhookEventQuery, enabled = true) {
       item.status === "RECEIVED" || item.status === "PROCESSING" || item.status === "FAILED_RETRYABLE")
       ? WEBHOOK_LOG_POLL_MS : false,
     refetchIntervalInBackground: false,
+  });
+}
+
+/** US-SY-06: synchronization history of the project's repository; polls while an entry is pending or processing. */
+export function useSyncHistory(projectId: number, query: GitSyncHistoryQuery, enabled = true) {
+  return useQuery({
+    queryKey: gitIntegrationKeys.syncHistory(projectId, query),
+    queryFn: ({ signal }) => gitIntegrationApi.syncHistory(projectId, query, signal),
+    enabled,
+    placeholderData: keepPreviousData,
+    retry: false,
+    refetchInterval: result => hasRunningSync(result.state.data) ? SYNC_HISTORY_POLL_MS : false,
+    refetchIntervalInBackground: false,
+  });
+}
+
+function hasRunningSync(page?: GitSyncHistoryPage) {
+  return page?.items.some(item => item.status === "PENDING" || item.status === "PROCESSING") ?? false;
+}
+
+/** US-SY-06 AC02: one synchronization in detail; polls while it is pending or processing. */
+export function useSyncHistoryEntry(projectId: number, source?: GitSyncHistorySource, id?: number) {
+  return useQuery({
+    queryKey: gitIntegrationKeys.syncHistoryEntry(projectId, source ?? "JOB", id ?? 0),
+    queryFn: ({ signal }) => gitIntegrationApi.syncHistoryEntry(projectId, source!, id!, signal),
+    enabled: source !== undefined && id !== undefined,
+    retry: false,
+    refetchInterval: result => {
+      const status = result.state.data?.item.status;
+      return status === "PENDING" || status === "PROCESSING" ? SYNC_HISTORY_POLL_MS : false;
+    },
+    refetchIntervalInBackground: false,
+  });
+}
+
+/** US-SY-06 AC04: process a failed webhook delivery of the project's repository again. */
+export function useRetrySyncHistoryWebhook(projectId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => gitIntegrationApi.retrySyncHistoryWebhook(projectId, id),
+    onSuccess: () => toast.success("Retry queued", { description: "The delivery will be processed again in a moment." }),
+    onError: error => toast.error("Retry failed", { description: syncHistoryRetryErrorMessage(gitIntegrationErrorCode(error)) }),
+    onSettled: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["git-integration", "sync-history"] }),
+      queryClient.invalidateQueries({ queryKey: ["git-integration", "sync-history-entry"] }),
+      queryClient.invalidateQueries({ queryKey: ["git-integration", "activity"] }),
+    ]),
   });
 }
 
@@ -622,6 +682,7 @@ const CONNECTION_REASONS: Record<string, string> = {
   RECHECK_OK: "The GitHub connection works.",
   SUSPENDED_ON_GITHUB: "The GitHub App is suspended on GitHub.",
   UNINSTALLED: "The GitHub App was removed from GitHub.",
+  DISCONNECTED_BY_USER: "GitHub was disconnected from the platform.",
   TOKEN_REJECTED: "GitHub refused the connection.",
   INSTALLATION_NOT_FOUND: "GitHub could not find the App installation.",
 };
@@ -643,6 +704,28 @@ function invalidateConnection(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({
     predicate: query => query.queryKey[0] === "git-integration"
       && ["github-connection", "project-repository", "installations", "activity"].includes(String(query.queryKey[1])),
+  });
+}
+
+/** US-GI-07: disconnect a GitHub account / organization (the 422 for a wrong name is shown in the dialog). */
+export function useDisconnectInstallation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, confirmLogin }: { id: number; confirmLogin: string }) => gitIntegrationApi.disconnectInstallation(id, confirmLogin),
+    onSuccess: result => {
+      const projects = result.projects.length;
+      toast.success(`GitHub disconnected from ${result.installation.accountLogin}`, {
+        description: result.alreadyRemovedOnGitHub && result.repositoriesDisconnected === 0 && projects === 0
+          ? "The GitHub App had already been removed on GitHub."
+          : projects > 0
+            ? `${projects} ${projects === 1 ? "project stopped" : "projects stopped"} synchronizing. Synchronized data is kept.`
+            : "No project was using it. Synchronized data is kept.",
+      });
+    },
+    onSettled: () => queryClient.invalidateQueries({
+      predicate: query => query.queryKey[0] === "git-integration" && ["github-connection", "project-repository", "installations",
+        "activity", "sync-history", "sync-history-entry", "commits", "pull-requests", "insights"].includes(String(query.queryKey[1])),
+    }),
   });
 }
 

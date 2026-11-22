@@ -117,7 +117,7 @@ class GitHubWebhookIntegrationTest {
 
     @BeforeEach
     void fixture() {
-        doCallRealMethod().when(installationWriter).transition(anyLong(), any(), any(), anyString());
+        doCallRealMethod().when(installationWriter).disconnect(any(), any(), anyString());
         events.deleteAll();
         jobs.deleteAll();
         connections.deleteAll();
@@ -321,8 +321,9 @@ class GitHubWebhookIntegrationTest {
         String body = "{\"action\":\"deleted\",\"installation\":{\"id\":556677}}";
         deliver("installation", "delivery-fail", body).andExpect(status().isAccepted());
         Long id = events.findByProviderAndDeliveryId(GitProvider.GITHUB, "delivery-fail").orElseThrow().getId();
+        // GI-07: "deleted" disconnects through GitInstallationWriter.disconnect.
         doThrow(new IllegalStateException("database is busy"))
-                .when(installationWriter).transition(anyLong(), any(), any(), anyString());
+                .when(installationWriter).disconnect(any(), any(), anyString());
 
         processor.process(id);
 
@@ -337,7 +338,7 @@ class GitHubWebhookIntegrationTest {
         assertThat(events.findById(id).orElseThrow().getAttempts()).isEqualTo(1);
 
         // The retry succeeds once the cause is gone.
-        doCallRealMethod().when(installationWriter).transition(anyLong(), any(), any(), anyString());
+        doCallRealMethod().when(installationWriter).disconnect(any(), any(), anyString());
         makeDue(id);
         assertThat(store.dueIds(registry.handledTypes(), 50)).contains(id);
         processor.process(id);

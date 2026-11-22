@@ -134,6 +134,8 @@ public class GitWebhookEventStore {
             resolve(event, resolution);
             event.setStatus(result.handled() ? GitWebhookEventStatus.PROCESSED : GitWebhookEventStatus.IGNORED);
             event.setLastError(GitWebhookJson.limit(result.note(), 1000));
+            event.setRecordsProcessed(result.handled() ? result.records() : null);
+            event.setPartialResult(result.handled() && result.partial() ? Boolean.TRUE : null);
             event.setProcessedAt(now());
         });
     }
@@ -185,6 +187,8 @@ public class GitWebhookEventStore {
         event.setNextAttemptAt(now);
         event.setProcessingStartedAt(null);
         event.setProcessedAt(null);
+        event.setRecordsProcessed(null);
+        event.setPartialResult(null);
         event.setLastError(GitWebhookJson.limit("Replayed by user #" + actorUserId, 1000));
         events.saveAndFlush(event);
         publisher.publishEvent(new GitWebhookEventReceived(event.getId(), event.getEventType()));

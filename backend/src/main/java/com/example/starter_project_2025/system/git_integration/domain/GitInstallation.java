@@ -87,6 +87,10 @@ public class GitInstallation extends BaseEntity {
     @Column(name = "connected_by_user_id", nullable = false)
     Long connectedByUserId;
 
+    /** GI-07: who disconnected it from the platform (NULL when removed on GitHub, or never disconnected). */
+    @Column(name = "disconnected_by_user_id")
+    Long disconnectedByUserId;
+
     @Column(name = "github_user_id")
     Long githubUserId;
 

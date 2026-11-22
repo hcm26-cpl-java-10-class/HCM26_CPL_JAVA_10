@@ -2,6 +2,7 @@ import { AlertCircle, ExternalLink, History, MoreHorizontal, RefreshCw, Triangle
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import type { GitRepositoryConnectionStatus, GitRepositoryLabel, PreviousRepository, ProjectRepositoryView } from "@/types/features/git-integration";
 import { formatDateTime, formatRelative } from "../git-integration.format";
@@ -35,16 +36,20 @@ export function RepositoryStatusBadge({ status, className }: { status: GitReposi
   </span>;
 }
 
-/** US-GI-05: which repository a commit / pull request came from, when the project linked more than one. */
+/**
+ * US-GI-05: which repository a commit / pull request came from, when the project linked more than one.
+ * US-GI-07 (AC05): data of a repository that stopped synchronizing is labelled "unlinked" or "disconnected".
+ */
 export function RepositoryLabelChip({ repository }: { repository?: GitRepositoryLabel | null }) {
   if (!repository) return null;
   const name = repository.fullName.includes("/") ? repository.fullName.slice(repository.fullName.indexOf("/") + 1) : repository.fullName;
-  return <span title={repository.status === "INACTIVE" ? `${repository.fullName} (unlinked)` : repository.fullName}
-    className={cn("inline-flex max-w-40 items-center gap-1 truncate rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
-      repository.status === "INACTIVE"
-        ? "border-dashed border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-400"
-        : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300")}>
-    <span className="truncate">{name}</span>{repository.status === "INACTIVE" && <span className="shrink-0">· unlinked</span>}
+  const state = repository.status === "INACTIVE" ? "unlinked" : repository.status === "DISCONNECTED" ? "disconnected" : null;
+  return <span title={state ? `${repository.fullName} (${state})` : repository.fullName}
+    className={cn("inline-flex max-w-44 items-center gap-1 truncate rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
+      state === "unlinked" ? "border-dashed border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-400"
+        : state === "disconnected" ? "border-dashed border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-300"
+          : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300")}>
+    <span className="truncate">{name}</span>{state && <span className="shrink-0">· {state}</span>}
   </span>;
 }
 
@@ -53,12 +58,14 @@ export function RepositoryLabelChip({ repository }: { repository?: GitRepository
  * viewer may do: grant access on GitHub, sync again (GitHub is checked first), unlink. Someone who
  * may not change the configuration only reads it.
  */
-export function RepositoryStatusAlert({ view, manageUrl, syncing, onResync, onUnlink }: {
+export function RepositoryStatusAlert({ view, manageUrl, syncing, onResync, onUnlink, linkAction }: {
   view: ProjectRepositoryView;
   manageUrl?: string;
   syncing: boolean;
   onResync: () => void;
   onUnlink: () => void;
+  /** US-GI-07: GitHub was disconnected from the repository's account: link it again (or connect GitHub first). */
+  linkAction?: ReactNode;
 }) {
   const repository = view.repository;
   if (!repository || (repository.status !== "DISCONNECTED" && repository.status !== "ERROR")) return null;
@@ -68,7 +75,8 @@ export function RepositoryStatusAlert({ view, manageUrl, syncing, onResync, onUn
   const since = repository.statusChangedAt
     ? <span className="font-normal" title={formatDateTime(repository.statusChangedAt)}> · since {formatRelative(repository.statusChangedAt)}</span>
     : null;
-  const manage = view.canResync || view.canUnlink;
+  const relink = repository.installationGone && view.canLink ? linkAction : null;
+  const manage = view.canResync || view.canUnlink || !!relink;
 
   return <div role="alert" className={cn("flex flex-wrap items-start gap-2.5 rounded-lg border px-3 py-2.5",
     disconnected
@@ -79,10 +87,12 @@ export function RepositoryStatusAlert({ view, manageUrl, syncing, onResync, onUn
       <p className="text-sm font-medium">{message.title}{since}</p>
       <p className="text-xs opacity-90">
         {message.description} Synchronized data is kept.
-        {!manage && " Ask the project manager to restore or unlink the repository."}
+        {!manage && (repository.installationGone ? " Ask the project manager to link the repository again once GitHub is connected."
+          : " Ask the project manager to restore or unlink the repository.")}
       </p>
     </div>
     {manage && <div className="flex flex-wrap items-center gap-1.5">
+      {relink}
       {disconnected && !deleted && view.canResync && manageUrl && <Button size="sm" className="h-8" asChild>
         <a href={manageUrl} target="_blank" rel="noopener noreferrer"><ExternalLink />Grant access on GitHub</a>
       </Button>}

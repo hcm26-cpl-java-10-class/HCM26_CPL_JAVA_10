@@ -1,4 +1,4 @@
-import { GitCommitHorizontal, GitPullRequest, LayoutDashboard, Loader2, RefreshCw, TriangleAlert, Users } from "lucide-react";
+import { GitCommitHorizontal, GitPullRequest, History, LayoutDashboard, Loader2, RefreshCw, TriangleAlert, Users } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ import { Segmented } from "@/pages/management/git-integration/components/activit
 import { CommitList } from "@/pages/management/git-integration/components/activity/CommitList";
 import { PullRequestsView } from "@/pages/management/git-integration/components/activity/PullRequestList";
 import { RepositoryInsights } from "@/pages/management/git-integration/components/activity/RepositoryInsights";
+import { SyncHistoryView } from "@/pages/management/git-integration/components/sync-history/SyncHistoryView";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { isConnectBannerSnoozed, snoozeConnectBanner } from "@/pages/management/git-integration/git-integration.storage";
@@ -31,7 +32,7 @@ function Count({ value }: { value?: number }) {
   return <span className="rounded-full bg-current/15 px-1.5 text-[10px] font-semibold tabular-nums leading-4">{value}</span>;
 }
 
-function SyncHealth({ activity }: { activity: GitRepositoryActivity }) {
+function SyncHealth({ activity, onReview }: { activity: GitRepositoryActivity; onReview?: () => void }) {
   const { hasPermission } = usePermissions();
   if (activity.pendingEvents === 0 && activity.failedEvents === 0) return null;
   return <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
@@ -40,7 +41,10 @@ function SyncHealth({ activity }: { activity: GitRepositoryActivity }) {
     </span>}
     {activity.failedEvents > 0 && <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300">
       <TriangleAlert className="size-3" aria-hidden="true" />{activity.failedEvents} {activity.failedEvents === 1 ? "event" : "events"} could not be synchronized
-      {hasPermission("GIT_INTEGRATION_MANAGE") && <Link to="/git-integration#webhook-deliveries" className="font-medium underline underline-offset-2">Review</Link>}
+      {onReview
+        // US-SY-06: the PM reviews (and retries) them in the project's Sync history.
+        ? <button type="button" onClick={onReview} className="font-medium underline underline-offset-2">Review</button>
+        : hasPermission("GIT_INTEGRATION_MANAGE") && <Link to="/git-integration#webhook-deliveries" className="font-medium underline underline-offset-2">Review</Link>}
     </span>}
   </p>;
 }
@@ -78,7 +82,7 @@ function RepositoryFilter({ activity, value, onChange }: {
     <SelectContent align="end">
       <SelectItem value="all">All repositories</SelectItem>
       {repositories.map(repository => <SelectItem key={repository.id} value={String(repository.id)}>
-        {repository.fullName}{repository.status === "INACTIVE" ? " (unlinked)" : ""}
+        {repository.fullName}{repository.status === "INACTIVE" ? " (unlinked)" : repository.status === "DISCONNECTED" ? " (disconnected)" : ""}
       </SelectItem>)}
     </SelectContent>
   </Select>;
@@ -111,6 +115,9 @@ export function WorkspaceGitHubPanel({ projectId, assignedProjectIds }: {
   const canConnect = !!overview && overview.viewer.canConnect && !overview.viewer.mapped;
   // Members offers Connect on the viewer's own row, so neither the banner nor the strip button shows there.
   const inMembers = state.view === "members";
+  // US-SY-06: Sync history, for whoever manages the project (it picks one repository itself).
+  const canViewHistory = !!repository.data?.canViewSyncHistory;
+  const inHistory = state.view === "history";
   const showBanner = linked && canConnect && !inMembers && !snoozedNow && !isConnectBannerSnoozed(overview!.master.id);
 
   // Filters replace the history entry; opening a task pushes one so Back returns here.
@@ -143,16 +150,24 @@ export function WorkspaceGitHubPanel({ projectId, assignedProjectIds }: {
         className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold tabular-nums leading-4 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
         <span className="size-1.5 rounded-full bg-amber-500" aria-hidden="true" />{overview.summary.unmappedContributors}
       </span>}</> },
+    ...(canViewHistory ? [{ id: "history" as const, label: <><History className="size-3.5" aria-hidden="true" />Sync history</> }] : []),
   ];
 
   // Shown on Insights when nothing is linked now (only unlinked repositories).
   const repositoryName = repository.data?.repository?.fullName ?? repository.data?.previousRepositories?.[0]?.fullName ?? "the repository";
-  const repo = data?.repositories?.some(item => item.id === state.repo) ? state.repo : undefined;
+  // Sync history reads one repository: the one in the URL is checked by the server (404 when not the project's).
+  const repo = inHistory ? state.repo : data?.repositories?.some(item => item.id === state.repo) ? state.repo : undefined;
   const filters = { ...state, repo };
 
   let content: ReactNode = null;
   if (hasData) {
-    if (state.view === "commits") {
+    if (inHistory) {
+      content = canViewHistory
+        ? <div className={LIST_CARD}><SyncHistoryView projectId={projectId} state={filters} onChange={update} canLink={!!repository.data?.canLink} /></div>
+        : <div role="status" className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+          Only the project manager can view the synchronization history.
+        </div>;
+    } else if (state.view === "commits") {
       content = <div className={LIST_CARD}><CommitList projectId={projectId} filters={filters} onChange={update} onOpenTask={openTask} /></div>;
     } else if (state.view === "members") {
       content = <MembersView projectId={projectId} overview={overview} loading={accounts.isPending} error={accounts.isError}
@@ -192,10 +207,11 @@ export function WorkspaceGitHubPanel({ projectId, assignedProjectIds }: {
     {hasData && <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Segmented label="GitHub views" value={state.view} options={views}
-          onChange={view => navigate({ view, range: state.range, repo })} />
+          onChange={view => navigate({ view, range: state.range, repo: view === "history" || inHistory ? undefined : repo })} />
         <div className="flex flex-wrap items-center gap-2">
-          {data && !inMembers && <RepositoryFilter activity={data} value={repo} onChange={next => update({ repo: next, pr: undefined })} />}
-          {data && linked && <SyncHealth activity={data} />}
+          {data && !inMembers && !inHistory && <RepositoryFilter activity={data} value={repo} onChange={next => update({ repo: next, pr: undefined })} />}
+          {data && linked && !inHistory && <SyncHealth activity={data}
+            onReview={canViewHistory ? () => navigate({ view: "history", status: "FAILED" }) : undefined} />}
         </div>
       </div>
       {content}

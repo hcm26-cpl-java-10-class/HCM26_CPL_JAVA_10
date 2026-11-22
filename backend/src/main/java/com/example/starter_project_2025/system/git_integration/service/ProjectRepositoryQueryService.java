@@ -43,6 +43,7 @@ public class ProjectRepositoryQueryService {
     private final GitPullRequestRepository pullRequests;
     private final UserRepository users;
     private final ObjectMapper json;
+    private final GitRepositoryLinkWriter linkWriter;
 
     @Transactional(readOnly = true)
     public ProjectRepositoryView view(Long projectId) {
@@ -65,10 +66,13 @@ public class ProjectRepositoryQueryService {
 
         GitRepositoryStatus status = connection == null ? null : connection.getStatus();
         boolean manage = !inherited && policy.canManage(user, master);
-        boolean canLink = manage && connection == null && projectResolver.isLinkable(master);
+        // GI-07: a repository stranded on a disconnected installation can only be linked again (BR7).
+        boolean installationGone = connection != null && linkWriter.installationGone(connection);
+        boolean canLink = manage && (connection == null || installationGone) && projectResolver.isLinkable(master);
         // SY-01: "Sync now" is offered at any time; a sync already waiting or running is returned as is.
         boolean canSync = !inherited && status == GitRepositoryStatus.ACTIVE && policy.canSync(user, master);
-        boolean canResync = manage && (status == GitRepositoryStatus.ERROR || status == GitRepositoryStatus.DISCONNECTED);
+        boolean canResync = manage && !installationGone
+                && (status == GitRepositoryStatus.ERROR || status == GitRepositoryStatus.DISCONNECTED);
         boolean canUnlink = manage && connection != null;
 
         return new ProjectRepositoryView(
@@ -76,16 +80,17 @@ public class ProjectRepositoryQueryService {
                 new ProjectRepositoryView.MasterRef(master.getId(), master.getCode(), master.getName(),
                         String.valueOf(master.getStatus()), projectResolver.moduleCount(master)),
                 inherited,
-                connection == null ? null : repositoryView(connection),
+                connection == null ? null : repositoryView(connection, installationGone),
                 latestSync == null ? null : jobView(latestSync),
                 canLink,
                 canSync,
                 canResync,
                 canUnlink,
-                previous.stream().map(this::previousView).toList());
+                previous.stream().map(this::previousView).toList(),
+                !all.isEmpty() && policy.canManage(user, master));
     }
 
-    private ProjectRepositoryView.RepositoryView repositoryView(GitRepository row) {
+    private ProjectRepositoryView.RepositoryView repositoryView(GitRepository row, boolean installationGone) {
         ProjectRepositoryView.InstallationRef installation = installations.findById(row.getInstallationRef())
                 .map(item -> new ProjectRepositoryView.InstallationRef(item.getId(), item.getAccountLogin(),
                         item.getAccountType(), item.getStatus()))
@@ -98,7 +103,7 @@ public class ProjectRepositoryQueryService {
                 row.getStatus(), installation, linkedBy, row.getLinkedAt(), row.getLastSyncedAt(),
                 commits.countByRepositoryId(row.getId()), row.getCommitHistorySyncedAt(),
                 pullRequests.countByRepositoryId(row.getId()), row.getPullRequestsSyncedAt(),
-                row.getStatusReason(), row.getStatusChangedAt());
+                row.getStatusReason(), row.getStatusChangedAt(), installationGone);
     }
 
     private ProjectRepositoryView.PreviousRepository previousView(GitRepository row) {
@@ -123,7 +128,7 @@ public class ProjectRepositoryQueryService {
                         new GitSyncJobView.PullRequests(job.prPages(), number(stats, "pullRequestsInserted"),
                                 number(stats, "pullRequestsUpdated"), number(stats, "pullRequestsUnchanged")),
                         new GitSyncJobView.Reviews(number(stats, "reviewsInserted"), number(stats, "reviewsUpdated"))),
-                resumable, paused ? job.getNextRunAt() : null);
+                resumable, paused ? job.getNextRunAt() : null, job.getResumedFromJobId());
     }
 
     private static long number(Map<String, Object> stats, String key) {

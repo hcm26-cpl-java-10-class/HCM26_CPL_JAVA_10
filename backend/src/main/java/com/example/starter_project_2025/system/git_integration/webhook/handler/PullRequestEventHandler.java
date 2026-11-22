@@ -41,9 +41,9 @@ public class PullRequestEventHandler implements GitWebhookEventHandler {
                 ingestion.upsertPullRequest(context.repository(), pr, context.action(), context.eventId()));
         if (!result.applied()) {
             return GitWebhookHandlerResult.processed("Stale event skipped for #" + pr.number()
-                    + ": payload updated_at=" + pr.updatedAt() + ", stored updated_at=" + result.storedUpdatedAt());
+                    + ": payload updated_at=" + pr.updatedAt() + ", stored updated_at=" + result.storedUpdatedAt(), 0);
         }
         return GitWebhookHandlerResult.processed("Pull request #" + pr.number() + (result.created() ? " created" : " updated")
-                + " (" + pr.state() + ")");
+                + " (" + pr.state() + ")", 1);
     }
 }

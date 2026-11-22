@@ -135,6 +135,10 @@ public class GitSyncJob extends BaseEntity {
     @Column(name = "pr_pages_done")
     Integer prPagesDone;
 
+    /** SY-06: the stopped job this one continues (resume) or runs again (failed initial import). */
+    @Column(name = "resumed_from_job_id")
+    Long resumedFromJobId;
+
     @Version
     @Column(name = "version")
     Long version;

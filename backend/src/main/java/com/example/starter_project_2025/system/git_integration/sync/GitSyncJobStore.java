@@ -42,6 +42,11 @@ import java.util.Optional;
 @Service
 public class GitSyncJobStore {
 
+    /** GI-07: the job stopped because the GitHub App was uninstalled from the repository's account. */
+    public static final String INSTALLATION_DISCONNECTED = "INSTALLATION_DISCONNECTED";
+    static final String INSTALLATION_DISCONNECTED_MESSAGE = "The GitHub App was uninstalled from the repository's account";
+
+
     /** Wait before attempt 2, 3, … (the last value repeats). */
     private static final List<Duration> BACKOFF = List.of(Duration.ofMinutes(1), Duration.ofMinutes(5), Duration.ofMinutes(15));
 
@@ -120,6 +125,10 @@ public class GitSyncJobStore {
             return Optional.empty();
         }
         GitInstallation installation = installations.findById(connection.getInstallationRef()).orElse(null);
+        if (installation != null && installation.getStatus() == GitInstallationStatus.DISCONNECTED) {
+            finish(job, GitSyncJobStatus.FAILED, INSTALLATION_DISCONNECTED, INSTALLATION_DISCONNECTED_MESSAGE); // GI-07
+            return Optional.empty();
+        }
         if (installation == null || installation.getStatus() != GitInstallationStatus.CONNECTED) {
             boolean error = installation != null && installation.getStatus() == GitInstallationStatus.ERROR;
             finish(job, GitSyncJobStatus.FAILED, error ? "INSTALLATION_ERROR" : "INSTALLATION_NOT_ACTIVE",
@@ -128,7 +137,7 @@ public class GitSyncJobStore {
         }
         job.setStatus(GitSyncJobStatus.RUNNING);
         job.setAttemptCount(job.getAttemptCount() + 1);
-        job.setStartedAt(now);
+        if (job.getStartedAt() == null) job.setStartedAt(now); // SY-06: when this synchronization began, not the last attempt
         job.setFinishedAt(null);
         jobs.saveAndFlush(job); // optimistic lock: a concurrent claim fails here
         return Optional.of(new ClaimedJob(job.getId(), connection.getId(), installation.getId(),
@@ -301,6 +310,24 @@ public class GitSyncJobStore {
         jobs.findById(claimed.jobId()).ifPresent(job -> finishStopped(job, connection));
     }
 
+    /**
+     * GI-07: a GitHub call of a running job failed: when the installation was disconnected (or the
+     * connection stopped receiving) meanwhile, the job stops for that reason instead of counting a
+     * failure, and the installation is not marked ERROR. True when it stopped.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean stoppedIfDisconnected(ClaimedJob claimed) {
+        GitRepository connection = connections.findById(claimed.repositoryId()).orElse(null);
+        boolean installationGone = installations.findById(claimed.installationRowId())
+                .map(row -> row.getStatus() == GitInstallationStatus.DISCONNECTED).orElse(true);
+        if (!installationGone && connection != null && connection.getStatus().receivesEvents()) return false;
+        jobs.findById(claimed.jobId()).ifPresent(job -> {
+            if (installationGone) finish(job, GitSyncJobStatus.FAILED, INSTALLATION_DISCONNECTED, INSTALLATION_DISCONNECTED_MESSAGE);
+            else finishStopped(job, connection);
+        });
+        return true;
+    }
+
     /** A permanent failure: no further attempts (PARTIAL when commit pages were already stored). */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void fail(ClaimedJob claimed, String errorCode, String message) {
@@ -357,7 +384,11 @@ public class GitSyncJobStore {
 
     /** GI-05: why a job cannot run on its connection any more. */
     private void finishStopped(GitSyncJob job, GitRepository connection) {
-        if (connection != null && connection.getStatus() == GitRepositoryStatus.DISCONNECTED) {
+        if (connection != null && connection.getStatus() == GitRepositoryStatus.DISCONNECTED
+                && GitRepositoryReason.INSTALLATION_DELETED.equals(connection.getStatusReason())) {
+            // GI-07 AC07: the GitHub App was uninstalled (from the platform or on GitHub).
+            finish(job, GitSyncJobStatus.FAILED, INSTALLATION_DISCONNECTED, INSTALLATION_DISCONNECTED_MESSAGE);
+        } else if (connection != null && connection.getStatus() == GitRepositoryStatus.DISCONNECTED) {
             finish(job, GitSyncJobStatus.FAILED, "REPOSITORY_DISCONNECTED", "GitHub no longer gives access to the repository");
         } else if (connection != null && connection.getStatus() == GitRepositoryStatus.INACTIVE) {
             finish(job, GitSyncJobStatus.FAILED, "REPOSITORY_UNLINKED", "The repository was unlinked from the project");

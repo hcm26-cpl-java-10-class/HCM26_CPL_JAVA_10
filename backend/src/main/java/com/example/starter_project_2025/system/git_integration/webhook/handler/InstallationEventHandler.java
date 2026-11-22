@@ -5,8 +5,7 @@ import com.example.starter_project_2025.system.git_integration.domain.GitInstall
 import com.example.starter_project_2025.system.git_integration.github.InstallationTokenProvider;
 import com.example.starter_project_2025.system.git_integration.service.GitInstallationReason;
 import com.example.starter_project_2025.system.git_integration.service.GitInstallationWriter;
-import com.example.starter_project_2025.system.git_integration.service.GitRepositoryReason;
-import com.example.starter_project_2025.system.git_integration.service.GitRepositoryConnectionWriter;
+import com.example.starter_project_2025.system.git_integration.service.GitInstallationDisconnectWriter;
 import com.example.starter_project_2025.system.git_integration.service.InstallationRepositoryCache;
 import com.example.starter_project_2025.system.git_integration.webhook.GitWebhookContext;
 import com.example.starter_project_2025.system.git_integration.webhook.GitWebhookEventHandler;
@@ -27,7 +26,7 @@ import java.util.Set;
 public class InstallationEventHandler implements GitWebhookEventHandler {
 
     private final GitInstallationWriter installationWriter;
-    private final GitRepositoryConnectionWriter connectionWriter;
+    private final GitInstallationDisconnectWriter disconnectWriter;
     private final InstallationTokenProvider tokens;
     private final InstallationRepositoryCache cache;
 
@@ -45,11 +44,10 @@ public class InstallationEventHandler implements GitWebhookEventHandler {
         String action = context.action() == null ? "" : context.action();
         return switch (action) {
             case "deleted" -> {
-                // T6: the app was uninstalled; linked repositories can no longer be read.
-                installationWriter.transition(installation.getId(),
-                        EnumSet.of(GitInstallationStatus.CONNECTED, GitInstallationStatus.SUSPENDED, GitInstallationStatus.ERROR),
-                        GitInstallationStatus.DISCONNECTED, GitInstallationReason.UNINSTALLED);
-                int repositories = connectionWriter.disconnectByInstallation(installation.getId(), GitRepositoryReason.INSTALLATION_DELETED);
+                // T6: the app was uninstalled; linked repositories can no longer be read. GI-07 BR6: handled
+                // exactly like a disconnection from the platform (repositories, waiting jobs); nothing left
+                // to change when the platform disconnected it first.
+                int repositories = disconnectWriter.disconnect(installation.getId(), null, GitInstallationReason.UNINSTALLED).repositories();
                 forget(installation);
                 yield GitWebhookHandlerResult.processed(repositories + " repository connection(s) disconnected");
             }

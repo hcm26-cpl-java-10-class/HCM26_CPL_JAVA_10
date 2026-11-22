@@ -40,6 +40,11 @@ import java.util.Optional;
  * it is unlinked, so changing repositories is "unlink, then link". Linking again the
  * repository this project unlinked before re-activates that connection (its data is
  * not imported a second time) and queues a sync of what changed meanwhile.
+ * <p>
+ * GI-07 (BR7): a current repository DISCONNECTED because its installation was disconnected can never
+ * come back (a reconnection is a new installation), so it does not block a link: the same repository
+ * through the new installation re-activates that connection (no data imported twice); another
+ * repository retires it (INACTIVE) first.
  */
 @Service
 public class GitRepositoryLinkWriter {
@@ -114,6 +119,14 @@ public class GitRepositoryLinkWriter {
         }
 
         LocalDateTime now = LocalDateTime.now(clock);
+        Optional<GitRepository> stranded = connections.findCurrent(master.getId()).filter(this::installationGone);
+        if (stranded.isPresent()) {
+            GitRepository row = stranded.get();
+            if (row.getExternalId().equals(repository.id())) {
+                return Optional.of(relink(user, plan, repository, row, now)); // GI-07: same repository, new installation
+            }
+            retire(user, row, now);
+        }
         Optional<GitRepository> unlinked = connections.findFirstByProjectIdAndProviderAndExternalIdAndStatusOrderByIdDesc(
                 master.getId(), GitProvider.GITHUB, repository.id(), GitRepositoryStatus.INACTIVE);
         if (unlinked.isPresent()) {
@@ -150,8 +163,32 @@ public class GitRepositoryLinkWriter {
         return Optional.of(new Created(connection, job));
     }
 
+    /**
+     * GI-07: the current repository is DISCONNECTED and so is its installation: GitHub will never give
+     * access to it through that installation again (reconnecting creates a new installation).
+     */
+    public boolean installationGone(GitRepository row) {
+        return row.getStatus() == GitRepositoryStatus.DISCONNECTED
+                && installations.findById(row.getInstallationRef())
+                .map(installation -> installation.getStatus() == GitInstallationStatus.DISCONNECTED).orElse(true);
+    }
+
+    /** GI-07: a repository stranded on a disconnected installation leaves the project before another one is linked. */
+    private void retire(User user, GitRepository row, LocalDateTime now) {
+        GitRepositoryStatus from = row.getStatus();
+        row.setStatus(GitRepositoryStatus.INACTIVE);
+        row.setStatusReason(GitRepositoryReason.INSTALLATION_DELETED);
+        row.setStatusChangedAt(now);
+        row.setUnlinkedByUserId(user.getId());
+        row.setUnlinkedAt(now);
+        connections.saveAndFlush(row); // frees the project (active_project_id) before the new connection
+        events.publishEvent(new GitRepositoryStatusChangedEvent(row.getTenantId(), row.getId(), row.getProjectId(),
+                row.getFullName(), from, GitRepositoryStatus.INACTIVE, GitRepositoryReason.INSTALLATION_DELETED));
+    }
+
     /** GI-05: the same repository linked again to the same project: the unlinked connection becomes ACTIVE. */
     private Created relink(User user, Plan plan, GitHubRepository repository, GitRepository row, LocalDateTime now) {
+        GitRepositoryStatus from = row.getStatus();
         row.setInstallationRef(plan.installationRowId());
         row.setOwnerLogin(repository.ownerLogin());
         row.setName(repository.name());
@@ -168,7 +205,7 @@ public class GitRepositoryLinkWriter {
         row.setUnlinkedAt(null);
         GitRepository connection = connections.saveAndFlush(row);
         events.publishEvent(new GitRepositoryStatusChangedEvent(connection.getTenantId(), connection.getId(),
-                connection.getProjectId(), connection.getFullName(), GitRepositoryStatus.INACTIVE, GitRepositoryStatus.ACTIVE, null));
+                connection.getProjectId(), connection.getFullName(), from, GitRepositoryStatus.ACTIVE, null));
         // Commits since the last complete import (with overlap), or everything when it never completed.
         GitSyncJob job = queue.request(connection.getId(), GitSyncJobType.MANUAL, user.getId(), now)
                 .map(GitSyncJobQueue.Requested::job)
@@ -183,10 +220,11 @@ public class GitRepositoryLinkWriter {
     /**
      * Empty when the link may proceed; the connection itself when this repository is already
      * ACTIVE on this project (idempotent retry). Throws AC02 / AC03 otherwise. GI-05: a current
-     * repository in ERROR / DISCONNECTED still occupies the project (unlink it first).
+     * repository in ERROR / DISCONNECTED still occupies the project (unlink it first), unless its
+     * installation was disconnected (GI-07).
      */
     private Optional<GitRepository> existingOrConflict(Long projectId, Long externalId, Long tenantId) {
-        Optional<GitRepository> current = connections.findCurrent(projectId);
+        Optional<GitRepository> current = connections.findCurrent(projectId).filter(row -> !installationGone(row));
         if (current.isPresent()) {
             GitRepository linked = current.get();
             GitLinkDetails.RepositorySummary summary = new GitLinkDetails.RepositorySummary(

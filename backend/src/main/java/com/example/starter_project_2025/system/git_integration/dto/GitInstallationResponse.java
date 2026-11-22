@@ -24,7 +24,14 @@ public record GitInstallationResponse(
         LocalDateTime statusChangedAt,
         LocalDateTime lastCheckedAt,
         /* Master projects whose repository is read through this installation: removing the App affects them all. */
-        List<LinkedProject> projects) {
+        List<LinkedProject> projects,
+        /* GI-07: the viewer may disconnect it (Git Integration manager or the person who installed it; not disconnected yet). */
+        boolean canDisconnect,
+        /* GI-07: who disconnected it from the platform; null when removed on GitHub. */
+        Person disconnectedBy) {
+
+    public record Person(Long id, String name) {
+    }
 
     public record LinkedProject(Long id, String code, String name, String repositoryFullName, GitRepositoryStatus repositoryStatus) {
     }

@@ -44,7 +44,7 @@ public class PushEventHandler implements GitWebhookEventHandler {
             return GitWebhookHandlerResult.ignored("Tag push");
         }
         if (Boolean.TRUE.equals(bool(context, "deleted"))) {
-            return GitWebhookHandlerResult.processed("Branch deleted: no commits to store");
+            return GitWebhookHandlerResult.processed("Branch deleted: no commits to store", 0);
         }
         GitRepository repository = context.repository();
         PushCommitCollector.Collected collected = collector.collect(context.payload(), repository, context.installation());
@@ -53,7 +53,8 @@ public class PushEventHandler implements GitWebhookEventHandler {
         return GitWebhookHandlerResult.processed("ref=" + ref + ", inserted=" + result.inserted()
                 + ", existing=" + result.existing() + ", source=" + collected.source()
                 + (collected.apiPages() > 0 ? ", apiPages=" + collected.apiPages() : "")
-                + (collected.truncated() ? ", truncated=true" : ""));
+                + (collected.truncated() ? ", truncated=true" : ""),
+                result.inserted() + result.existing(), collected.truncated());
     }
 
     private static Boolean bool(GitWebhookContext context, String key) {

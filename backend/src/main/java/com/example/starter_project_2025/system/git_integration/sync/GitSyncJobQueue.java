@@ -8,7 +8,6 @@ import com.example.starter_project_2025.system.git_integration.domain.GitSyncJob
 import com.example.starter_project_2025.system.git_integration.domain.GitSyncPhase;
 import com.example.starter_project_2025.system.git_integration.repository.GitRepositoryRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitSyncJobRepository;
-import com.example.starter_project_2025.system.git_integration.service.GitRepositoryLinkWriter;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
@@ -25,8 +24,9 @@ import java.util.Optional;
  * <ol>
  *   <li>a job PENDING/RUNNING is returned as is;</li>
  *   <li>a recent success is returned as is ("Sync now" cooldown, reconcile skip);</li>
- *   <li>a PARTIAL/FAILED job past its metadata step is reset and resumes where it stopped (SY-01 AC05, SY-02);</li>
- *   <li>a failed INITIAL job without a cursor is reset (a connection has one INITIAL job);</li>
+ *   <li>a PARTIAL/FAILED job past its metadata step is resumed by a new job that continues where it stopped
+ *       (SY-01 AC05, SY-02; SY-06: the stopped job stays in the history as it ended);</li>
+ *   <li>a failed INITIAL job without a cursor is run again by a new INITIAL job;</li>
  *   <li>otherwise a new job of the requested type is queued.</li>
  * </ol>
  */
@@ -67,37 +67,46 @@ public class GitSyncJobQueue {
             return Optional.of(new Requested(latest, false));
         }
 
-        GitSyncJob job = null;
+        GitSyncJob job = newJob(connection, type, requestedByUserId, runAt);
         if (latest != null && resumable(latest)) {
-            job = latest; // resume at its step and cursor
-        } else {
-            job = jobs.findByDedupeKey(GitRepositoryLinkWriter.initialDedupeKey(connection.getId()))
-                    .filter(initial -> initial.getStatus() == GitSyncJobStatus.FAILED)
-                    .orElse(null);
-        }
-        if (job != null) {
-            job.setStatus(GitSyncJobStatus.PENDING);
-            job.setAttemptCount(0);
-            job.setNextRunAt(runAt);
-            job.setStartedAt(null);
-            job.setFinishedAt(null);
-            job.setErrorCode(null);
-            job.setErrorMessage(null);
-            if (requestedByUserId != null) job.setRequestedByUserId(requestedByUserId);
-        } else {
-            job = GitSyncJob.builder()
-                    .tenantId(connection.getTenantId())
-                    .repositoryId(connection.getId())
-                    .type(type)
-                    .status(GitSyncJobStatus.PENDING)
-                    .maxAttempts(properties.getSyncMaxAttempts())
-                    .nextRunAt(runAt)
-                    .requestedByUserId(requestedByUserId)
-                    .build();
+            // SY-06 (BR1): a resume is a new synchronization; the stopped one keeps its result in the history.
+            resumeFrom(job, latest);
+        } else if (latest != null && latest.getType() == GitSyncJobType.INITIAL && latest.getStatus() == GitSyncJobStatus.FAILED) {
+            // A failed first import without a cursor runs again as an initial import (whole history).
+            job.setType(GitSyncJobType.INITIAL);
+            job.setResumedFromJobId(latest.getId());
         }
         job = jobs.saveAndFlush(job);
         events.publishEvent(new GitSyncJobRequested(job.getId()));
         return Optional.of(new Requested(job, true));
+    }
+
+    private GitSyncJob newJob(GitRepository connection, GitSyncJobType type, Long requestedByUserId, LocalDateTime runAt) {
+        return GitSyncJob.builder()
+                .tenantId(connection.getTenantId())
+                .repositoryId(connection.getId())
+                .type(type)
+                .status(GitSyncJobStatus.PENDING)
+                .maxAttempts(properties.getSyncMaxAttempts())
+                .nextRunAt(runAt)
+                .requestedByUserId(requestedByUserId)
+                .build();
+    }
+
+    /**
+     * The new job continues at the step, window and cursors where {@code stopped} ended; its page
+     * counters start at 0 so PARTIAL / FAILED describe this run. The stopped job is left as it ended;
+     * only the latest job of a connection is ever resumed, so it is not resumed twice.
+     */
+    private static void resumeFrom(GitSyncJob job, GitSyncJob stopped) {
+        job.setResumedFromJobId(stopped.getId());
+        job.setPhase(stopped.getPhase());
+        job.setCommitCursor(stopped.getCommitCursor());
+        job.setCommitSince(stopped.getCommitSince());
+        job.setCommitBranch(stopped.getCommitBranch());
+        job.setCommitHeadOid(stopped.getCommitHeadOid());
+        job.setPrCursor(stopped.getPrCursor());
+        job.setPrSince(stopped.getPrSince());
     }
 
     /** A stopped job that got past its metadata step keeps its step, window and cursors: resuming continues it. */

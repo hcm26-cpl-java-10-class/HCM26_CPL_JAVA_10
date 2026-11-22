@@ -26,7 +26,9 @@ public record GitSyncJobView(
         GitSyncPhase phase,
         Progress progress,
         boolean resumable,
-        LocalDateTime pausedUntil) {
+        LocalDateTime pausedUntil,
+        /* SY-06: the stopped job this one continues (a resume is a new job). */
+        Long resumedFromJobId) {
 
     /**
      * Commit pages stored, and commits inserted / already stored / completed (all runs of the job).

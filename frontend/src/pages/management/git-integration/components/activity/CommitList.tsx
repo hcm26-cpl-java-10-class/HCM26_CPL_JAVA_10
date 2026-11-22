@@ -66,7 +66,7 @@ export function CommitRow({ commit, onAuthor, onBranch, onOpenTask, compact = fa
           : <span className="inline-flex max-w-56 items-center gap-1 font-mono"><GitBranch className="size-3 shrink-0" aria-hidden="true" /><span className="truncate">{commit.branch}</span></span>)}
         <time dateTime={commit.committedAt} title={formatDateTime(commit.committedAt)}>{formatRelative(commit.committedAt)}</time>
         {/* US-GI-05: data of a repository unlinked from the project keeps its label. */}
-        {commit.repository?.status === "INACTIVE" && <RepositoryLabelChip repository={commit.repository} />}
+        {(commit.repository?.status === "INACTIVE" || commit.repository?.status === "DISCONNECTED") && <RepositoryLabelChip repository={commit.repository} />}
         {!compact && commit.filesChanged != null && <span className="hidden sm:inline">· {commit.filesChanged} {commit.filesChanged === 1 ? "file" : "files"}</span>}
         {compact && refs.length > 0 && <TaskRefChips refs={refs} onOpen={onOpenTask} />}
       </div>

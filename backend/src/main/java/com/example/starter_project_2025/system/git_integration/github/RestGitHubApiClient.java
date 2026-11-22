@@ -135,6 +135,23 @@ public class RestGitHubApiClient implements GitHubApiClient {
     }
 
     @Override
+    public DeleteOutcome deleteInstallation(long installationId) {
+        try {
+            call("delete installation", () -> restClient.delete()
+                    .uri("/app/installations/{id}", installationId)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtFactory.createAppJwt())
+                    .retrieve()
+                    .toBodilessEntity());
+            return DeleteOutcome.DELETED;
+        } catch (GitHubApiException e) {
+            if (e.getHttpStatus() == 404) {
+                return DeleteOutcome.NOT_FOUND;
+            }
+            throw e;
+        }
+    }
+
+    @Override
     public GitHubInstallationToken createInstallationToken(long installationId) {
         return createToken(installationId, METADATA_PERMISSIONS, "create installation token");
     }

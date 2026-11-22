@@ -42,7 +42,8 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_git_webhook_due", columnList = "status, next_attempt_at"),
                 @Index(name = "idx_git_webhook_installation", columnList = "installation_id, received_at"),
                 @Index(name = "idx_git_webhook_repository", columnList = "repo_external_id, received_at"),
-                @Index(name = "idx_git_webhook_received", columnList = "received_at")
+                @Index(name = "idx_git_webhook_received", columnList = "received_at"),
+                @Index(name = "idx_git_webhook_repository_ref", columnList = "repository_ref, received_at")
         })
 @Getter
 @Setter
@@ -138,6 +139,14 @@ public class GitWebhookEvent extends BaseEntity {
 
     @Column(name = "processed_at")
     LocalDateTime processedAt;
+
+    /** SY-06: Git records (commits, pull requests, reviews) processed; NULL = not a data event, or before SY-06. */
+    @Column(name = "records_processed")
+    Integer recordsProcessed;
+
+    /** SY-06: processed, but some records could not be read (push truncated). NULL = no. */
+    @Column(name = "partial_result")
+    Boolean partialResult;
 
     @Version
     @Column(name = "version")

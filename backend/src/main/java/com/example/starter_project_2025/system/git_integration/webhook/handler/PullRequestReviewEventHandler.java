@@ -57,9 +57,9 @@ public class PullRequestReviewEventHandler implements GitWebhookEventHandler {
                 ingestion.upsertReview(context.repository(), pullRequest.pullRequestId(), review, action, context.eventId()));
         if (!result.applied()) {
             return GitWebhookHandlerResult.processed("Stale review event skipped for review " + review.externalId()
-                    + " on #" + pr.number());
+                    + " on #" + pr.number(), 0);
         }
         return GitWebhookHandlerResult.processed("Review " + review.externalId() + " on #" + pr.number()
-                + (result.created() ? " created" : " updated") + " (" + review.state() + ")");
+                + (result.created() ? " created" : " updated") + " (" + review.state() + ")", 1);
     }
 }

@@ -302,13 +302,16 @@ class PullRequestSyncIntegrationTest extends AbstractTaskLinkIntegrationTest {
                 .andExpect(jsonPath("$.latestSync.resumable").value(true));
 
         mvc.perform(post(repositoryUrl() + "/sync").header("Authorization", "Bearer " + managerToken))
-                .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.id").value(jobId));
+                .andExpect(status().isAccepted());
+        // SY-06: the resume is a new job continuing at the pull request cursor; the PARTIAL one is kept.
+        GitSyncJob resumed = jobs.findFirstByRepositoryIdOrderByIdDesc(connectionId).orElseThrow();
+        assertThat(resumed.getResumedFromJobId()).isEqualTo(jobId);
         when(graphql.pullRequests(anyString(), anyString(), anyString(), eq("c1"), anyInt(), anyInt()))
                 .thenReturn(page(List.of(pr(20, "MERGED", true, T.minusHours(1), List.of())), false, "c2"));
-        runner.run(jobId);
+        runner.run(resumed.getId());
 
-        assertThat(jobs.findById(jobId).orElseThrow().getStatus()).isEqualTo(GitSyncJobStatus.SUCCEEDED);
+        assertThat(jobs.findById(resumed.getId()).orElseThrow().getStatus()).isEqualTo(GitSyncJobStatus.SUCCEEDED);
+        assertThat(jobs.findById(jobId).orElseThrow().getStatus()).isEqualTo(GitSyncJobStatus.PARTIAL);
         assertThat(pullRequests.countByRepositoryId(connectionId)).isEqualTo(2);
         verify(graphql, times(1)).commitHistory(anyString(), anyString(), anyString(), any(), any(), anyInt());
     }

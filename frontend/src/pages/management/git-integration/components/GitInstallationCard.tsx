@@ -11,6 +11,7 @@ import { STATUS_STYLES } from "./git-integration.styles";
 const STATUS_REASONS: Record<string, string> = {
   SUSPENDED_ON_GITHUB: "Suspended on GitHub",
   UNINSTALLED: "Removed from GitHub",
+  DISCONNECTED_BY_USER: "Disconnected from the platform",
   TOKEN_REJECTED: "GitHub refused the access token",
   INSTALLATION_NOT_FOUND: "GitHub could not find the installation",
 };
@@ -58,6 +59,7 @@ export function GitInstallationCard({ installation: connection, actions }: {
           </p>
           {connection.status !== "CONNECTED" && <p className="text-xs font-medium text-foreground">
             {STATUS_REASONS[connection.statusReason ?? ""] ?? "Not connected"}
+            {connection.disconnectedBy?.name && <span className="font-normal"> by {connection.disconnectedBy.name}</span>}
             {connection.statusChangedAt && <span className="font-normal text-muted-foreground" title={formatDateTime(connection.statusChangedAt)}>
               {" "}· since {formatRelative(connection.statusChangedAt)}
             </span>}

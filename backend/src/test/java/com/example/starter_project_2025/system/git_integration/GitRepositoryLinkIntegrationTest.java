@@ -516,17 +516,22 @@ class GitRepositoryLinkIntegrationTest {
                 .andExpect(jsonPath("$.canSync").value(false))
                 .andExpect(jsonPath("$.canResync").value(true));
 
+        // SY-06: the failed first import runs again as a new INITIAL job; the failed one stays in the history.
         mvc.perform(post(url(masterId) + "/sync").header("Authorization", "Bearer " + managerToken))
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.id").value(jobId))
                 .andExpect(jsonPath("$.type").value("INITIAL"))
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.attemptCount").value(0));
+        GitSyncJob again = jobs.findFirstByRepositoryIdOrderByIdDesc(failed.getRepositoryId()).orElseThrow();
+        assertThat(again.getId()).isNotEqualTo(jobId);
+        assertThat(again.getResumedFromJobId()).isEqualTo(jobId);
+        assertThat(again.getDedupeKey()).isNull();
+        assertThat(jobs.findById(jobId).orElseThrow().getStatus()).isEqualTo(GitSyncJobStatus.FAILED);
         // Clicking again while it waits queues nothing new.
         mvc.perform(post(url(masterId) + "/sync").header("Authorization", "Bearer " + managerToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(jobId));
-        assertThat(jobs.count()).isEqualTo(1);
+                .andExpect(jsonPath("$.id").value(again.getId()));
+        assertThat(jobs.count()).isEqualTo(2);
     }
 
     @Test

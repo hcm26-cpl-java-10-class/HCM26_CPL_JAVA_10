@@ -84,7 +84,10 @@ public class GitConnectionQueryService {
                 GitProjectResolver.summary(master),
                 inherited,
                 Math.max(0, connected - (broken ? 0 : 1)),
-                new GitHubConnectionView.Actions(canOperate, canOperate && broken, canConnect, false));
+                // GI-07: the installation was disconnected and another one works: link the repository again (BR7).
+                new GitHubConnectionView.Actions(canOperate, canOperate && broken, canConnect,
+                        status == GitInstallationStatus.DISCONNECTED && !inherited && connected > 0
+                                && policy.canLink(user, master) && projects.isLinkable(master)));
         return new Resolved(view, Optional.of(installation.getId()), canOperate);
     }
 

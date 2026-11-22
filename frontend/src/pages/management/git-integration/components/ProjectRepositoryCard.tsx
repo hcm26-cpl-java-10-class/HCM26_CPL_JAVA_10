@@ -183,10 +183,12 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
 
   // Shown under the repository in both layouts (card on Overview, strip in the GitHub tab).
   const alerts = repository ? <>
-      {broken && connection && <GitHubConnectionBanner projectId={projectId} connection={connection} />}
+      {/* US-GI-07: when the installation itself was disconnected, the repository alert says what to do (link again). */}
+      {broken && connection && !repository.installationGone && <GitHubConnectionBanner projectId={projectId} connection={connection} />}
       {/* US-GI-05 AC04: DISCONNECTED / ERROR (the connection banner above covers a broken installation). */}
-      {!active && !broken && <RepositoryStatusAlert view={view} manageUrl={connection?.account?.manageUrl}
-        syncing={retry.isPending} onResync={() => retry.mutate()} onUnlink={() => setUnlinking(true)} />}
+      {!active && (!broken || repository.installationGone) && <RepositoryStatusAlert view={view} manageUrl={connection?.account?.manageUrl}
+        syncing={retry.isPending} onResync={() => retry.mutate()} onUnlink={() => setUnlinking(true)}
+        linkAction={linkButton("Link repository again")} />}
       {stopped && sync && !broken && <div role="alert" className={sync.status === "PARTIAL"
         ? "flex flex-wrap items-center gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-900 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-100"
         : "flex flex-wrap items-center gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-red-900 dark:border-red-900 dark:bg-red-950/50 dark:text-red-100"}>

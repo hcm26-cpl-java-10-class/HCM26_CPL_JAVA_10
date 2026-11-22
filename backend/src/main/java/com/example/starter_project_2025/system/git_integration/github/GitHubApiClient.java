@@ -30,6 +30,20 @@ public interface GitHubApiClient {
     /** Installation details using the App JWT; empty when it does not belong to this App. */
     Optional<GitHubInstallation> getInstallation(long installationId);
 
+    /** GI-07: what {@link #deleteInstallation} found. */
+    enum DeleteOutcome {
+        /** GitHub uninstalled the App from the account (204). */
+        DELETED,
+        /** The installation no longer exists: the owner already removed the App (404). */
+        NOT_FOUND
+    }
+
+    /**
+     * GI-07: uninstalls the App from the account or organization ({@code DELETE /app/installations/{id}},
+     * App JWT). Other failures are thrown as {@link GitHubApiException}.
+     */
+    DeleteOutcome deleteInstallation(long installationId);
+
     /**
      * Creates a short-lived installation access token (App JWT), limited to read-only metadata.
      * Throws with {@link GitHubApiException.Kind#GONE} when the app was uninstalled and

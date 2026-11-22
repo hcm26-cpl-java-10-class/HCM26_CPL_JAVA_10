@@ -21,6 +21,11 @@ import type {
   GitCommitItem,
   GitCommitQuery,
   GitPage,
+  GitInstallationDisconnectResponse,
+  GitSyncHistoryDetail,
+  GitSyncHistoryPage,
+  GitSyncHistoryQuery,
+  GitSyncHistorySource,
   GitPullRequestDetail,
   GitPullRequestItem,
   GitPullRequestQuery,
@@ -208,6 +213,28 @@ export const gitIntegrationApi = {
   /** US-SY-04: process a FAILED (or IGNORED activity) event again; 202 when queued. */
   replayWebhookEvent: async (id: number) =>
     (await axiosInstance.post<{ id: number; status: string }>(`/v1/git-integration/webhook-events/${id}/replay`)).data,
+
+  /** US-GI-07: uninstall the GitHub App from the account and disconnect it; `confirmLogin` must match the account. */
+  disconnectInstallation: async (id: number, confirmLogin: string) =>
+    (await axiosInstance.post<GitInstallationDisconnectResponse>(`${BASE}/installations/${id}/disconnect`, { confirmLogin })).data,
+
+  // ---- US-SY-06 · Synchronization history ----
+
+  /** Synchronizations of the project's repository, newest first (PM of the master / Git Integration manager). */
+  syncHistory: async (projectId: number, query: GitSyncHistoryQuery, signal?: AbortSignal) =>
+    (await axiosInstance.get<GitSyncHistoryPage>(`${PROJECTS}/${projectId}/repository/sync-history`, {
+      params: { type: query.type, status: query.status, repositoryId: query.repositoryId, page: query.page ?? 0, size: query.size ?? 20 },
+      signal,
+    })).data,
+
+  /** One synchronization: records processed and error. */
+  syncHistoryEntry: async (projectId: number, source: GitSyncHistorySource, id: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<GitSyncHistoryDetail>(
+      `${PROJECTS}/${projectId}/repository/sync-history/${source.toLowerCase()}/${id}`, { signal })).data,
+
+  /** AC04: process a FAILED webhook delivery of the project's repository again; 202 when queued. */
+  retrySyncHistoryWebhook: async (projectId: number, id: number) =>
+    (await axiosInstance.post<{ id: number; status: string }>(`${PROJECTS}/${projectId}/repository/sync-history/webhook/${id}/retry`)).data,
 
   // ---- US-GI-06 · Connect GitHub account & map to project member ----
 

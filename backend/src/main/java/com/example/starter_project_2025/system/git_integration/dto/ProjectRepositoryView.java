@@ -26,7 +26,9 @@ public record ProjectRepositoryView(
         boolean canResync,
         /* GI-05: "Unlink repository". */
         boolean canUnlink,
-        List<PreviousRepository> previousRepositories) {
+        List<PreviousRepository> previousRepositories,
+        /* SY-06: may open the synchronization history (PM of the master or Git Integration manager; a module reads its master's). */
+        boolean canViewSyncHistory) {
 
     public record ProjectRef(Long id, String code, String name, boolean master) {
     }
@@ -56,7 +58,9 @@ public record ProjectRepositoryView(
             LocalDateTime pullRequestsSyncedAt,
             /* GI-05: why it is not ACTIVE (GitRepositoryReason) and since when. */
             String statusReason,
-            LocalDateTime statusChangedAt) {
+            LocalDateTime statusChangedAt,
+            /* GI-07: DISCONNECTED because its installation was disconnected: connect GitHub again, then link again. */
+            boolean installationGone) {
     }
 
     /** GI-05: a repository unlinked from the master project; its synchronized data is kept. */

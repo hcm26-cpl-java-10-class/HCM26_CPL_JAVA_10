@@ -197,8 +197,8 @@ export default function GitIntegrationIndexPage() {
 
 /**
  * Actions that make sense for each installation state: browsing for a working
- * connection (and, for a manager, disconnecting it); US-GI-02: "Check again" (asks GitHub) first for a
- * broken one, then reconnecting.
+ * connection; US-GI-02: "Check again" (asks GitHub) first for a broken one, then reconnecting.
+ * US-GI-07: "Disconnect GitHub…" for a manager or the person who installed it (`canDisconnect`).
  */
 function InstallationActions({ installation, canManage, onBrowse }: {
   installation: GitInstallation;
@@ -206,18 +206,20 @@ function InstallationActions({ installation, canManage, onBrowse }: {
   onBrowse: () => void;
 }) {
   const recheck = useRecheckInstallation();
+  const disconnect = installation.canDisconnect && <DisconnectGitHubAction installation={installation} />;
   if (installation.status === "CONNECTED") {
     return <>
       <Button size="sm" onClick={onBrowse}><FolderGit2 />View repositories</Button>
-      {canManage && <DisconnectGitHubAction installation={installation} />}
+      {disconnect}
     </>;
   }
-  if (!canManage) return null;
+  if (!canManage) return disconnect || null;
   return <>
     {installation.status !== "DISCONNECTED" && <Button size="sm" variant={installation.status === "ERROR" ? "default" : "outline"}
       disabled={recheck.isPending} onClick={() => recheck.mutate(installation.id)}>
       <RefreshCw className={recheck.isPending ? "animate-spin motion-reduce:animate-none" : undefined} />Check again
     </Button>}
     <ConnectGitHubButton label="Reconnect" variant="secondary" size="sm" />
+    {disconnect}
   </>;
 }

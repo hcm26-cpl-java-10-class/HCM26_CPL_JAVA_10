@@ -1,11 +1,13 @@
-import type { GitInsightsRange, GitPullRequestState, GitTaskLinkFilter } from "@/types/features/git-integration";
+import type {
+  GitInsightsRange, GitPullRequestState, GitSyncHistoryStatus, GitSyncHistoryType, GitTaskLinkFilter,
+} from "@/types/features/git-integration";
 
 /**
  * WS-GH-01: the workspace GitHub tab keeps its whole state in the URL
  * (`?tab=github&view=pulls&state=OPEN&pr=12`), so reloads, the back button and
  * shared links land on the same screen even though the layout remounts.
  */
-export type GitHubView = "insights" | "commits" | "pulls" | "members";
+export type GitHubView = "insights" | "commits" | "pulls" | "members" | "history";
 export type GitHubLinkFilter = Extract<GitTaskLinkFilter, "LINKED" | "NEEDS_ATTENTION">;
 
 export interface GitHubTabState {
@@ -25,19 +27,27 @@ export interface GitHubTabState {
   contributor?: number;
   /** US-GI-05: one repository of the project (`git_repositories.id`); all of them when absent. Kept across views. */
   repo?: number;
+  /** US-SY-06: Sync history filters, and the synchronization opened in the side panel (`job-12`, `webhook-80`). */
+  type?: GitSyncHistoryType;
+  status?: GitSyncHistoryStatus;
+  entry?: string;
   page: number;
 }
 
 /** A place in the tab to open; omitted fields are cleared. */
 export type GitHubTabTarget = Partial<Omit<GitHubTabState, "view">> & { view: GitHubView };
-/** A change of the current state; `undefined` clears a field, and any change except `page`/`pr` resets paging. */
+/** A change of the current state; `undefined` clears a field, and any change except `page`/`pr`/`entry` resets paging. */
 export type GitHubTabPatch = Partial<Omit<GitHubTabState, "view">> & { view?: GitHubView };
 
 export const GITHUB_TAB = "github";
-export const GITHUB_TAB_PARAMS = ["view", "range", "q", "author", "branch", "link", "from", "to", "state", "pr", "contributor", "repo", "page"] as const;
+export const GITHUB_TAB_PARAMS = ["view", "range", "q", "author", "branch", "link", "from", "to", "state", "pr", "contributor", "repo",
+  "type", "status", "entry", "page"] as const;
 export const DEFAULT_INSIGHTS_RANGE: GitInsightsRange = "30d";
 
-const VIEWS: readonly GitHubView[] = ["insights", "commits", "pulls", "members"];
+const VIEWS: readonly GitHubView[] = ["insights", "commits", "pulls", "members", "history"];
+const SYNC_TYPES: readonly GitSyncHistoryType[] = ["INITIAL", "MANUAL", "RECONCILE", "WEBHOOK"];
+const SYNC_STATUSES: readonly GitSyncHistoryStatus[] = ["PENDING", "PROCESSING", "SUCCESS", "PARTIAL_SUCCESS", "FAILED"];
+const ENTRY = /^(job|webhook)-\d{1,12}$/;
 const LINKS: readonly GitHubLinkFilter[] = ["LINKED", "NEEDS_ATTENTION"];
 const STATES: readonly GitPullRequestState[] = ["OPEN", "MERGED", "CLOSED"];
 const RANGES: readonly GitInsightsRange[] = ["7d", "30d", "90d"];
@@ -85,6 +95,9 @@ export function parseGitHubTabParams(params: URLSearchParams): GitHubTabState {
     pr: positiveInt(params.get("pr")),
     contributor: positiveInt(params.get("contributor")),
     repo: positiveInt(params.get("repo")),
+    type: oneOf(SYNC_TYPES, params.get("type")),
+    status: oneOf(SYNC_STATUSES, params.get("status")),
+    entry: ENTRY.test(params.get("entry") ?? "") ? params.get("entry")! : undefined,
     page: positiveInt(params.get("page")) ?? 0,
   };
 }
@@ -110,6 +123,9 @@ function write(next: URLSearchParams, state: GitHubTabState) {
   if (state.pr !== undefined) next.set("pr", String(state.pr));
   if (state.contributor !== undefined) next.set("contributor", String(state.contributor));
   if (state.repo !== undefined) next.set("repo", String(state.repo));
+  if (state.type) next.set("type", state.type);
+  if (state.status) next.set("status", state.status);
+  if (state.entry) next.set("entry", state.entry);
   if (state.page > 0) next.set("page", String(state.page));
   return next;
 }
@@ -124,7 +140,7 @@ export function openGitHubTabParams(params: URLSearchParams, target: GitHubTabTa
 /** Applies a change to the current tab state. */
 export function patchGitHubTabParams(params: URLSearchParams, patch: GitHubTabPatch): URLSearchParams {
   const current = parseGitHubTabParams(params);
-  const keepsPaging = Object.keys(patch).every(key => key === "page" || key === "pr" || key === "range");
+  const keepsPaging = Object.keys(patch).every(key => key === "page" || key === "pr" || key === "range" || key === "entry");
   const merged: GitHubTabState = { ...current, ...patch, q: patch.q ?? ("q" in patch ? "" : current.q),
     range: patch.range ?? current.range, view: patch.view ?? current.view };
   if (!keepsPaging && !("page" in patch)) merged.page = 0;

@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.git_integration.exception;
 import com.example.starter_project_2025.system.git_integration.controller.BacklogGitLinkController;
 import com.example.starter_project_2025.system.git_integration.controller.GitAccountController;
 import com.example.starter_project_2025.system.git_integration.controller.GitConnectionController;
+import com.example.starter_project_2025.system.git_integration.controller.GitSyncHistoryController;
 import com.example.starter_project_2025.system.git_integration.controller.GitInstallationController;
 import com.example.starter_project_2025.system.git_integration.controller.GitWebhookEventController;
 import com.example.starter_project_2025.system.git_integration.controller.ProjectRepositoryController;
@@ -36,7 +37,7 @@ import java.util.Map;
 @Slf4j
 @RestControllerAdvice(assignableTypes = {GitInstallationController.class, ProjectRepositoryController.class,
         RepositoryActivityController.class, GitWebhookEventController.class, BacklogGitLinkController.class,
-        GitAccountController.class, GitConnectionController.class})
+        GitAccountController.class, GitConnectionController.class, GitSyncHistoryController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class GitIntegrationExceptionHandler {
 

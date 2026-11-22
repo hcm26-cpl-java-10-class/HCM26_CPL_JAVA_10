@@ -73,6 +73,7 @@ public class GitInstallationWriter {
         row.setGithubUserLogin(githubUser.login());
         row.setConnectedAt(now);
         row.setLastVerifiedAt(now);
+        row.setDisconnectedByUserId(null);
         if (from != to) {
             row.setStatusReason(to == GitInstallationStatus.SUSPENDED ? GitInstallationReason.SUSPENDED_ON_GITHUB : GitInstallationReason.CONNECTED);
             row.setStatusChangedAt(now);
@@ -108,6 +109,28 @@ public class GitInstallationWriter {
             publish(row, current, to, reason);
             return true;
         }).orElse(false);
+    }
+
+    /**
+     * GI-07: the installation, locked by the caller's transaction, becomes DISCONNECTED (from any other
+     * status). Joins the caller's transaction (GitInstallationDisconnectWriter) so the repositories
+     * change with it. False when it already was DISCONNECTED (a second request, or the "deleted"
+     * webhook came first).
+     */
+    @Transactional
+    public boolean disconnect(GitInstallation row, Long actorUserId, String reason) {
+        GitInstallationStatus current = row.getStatus();
+        if (current == GitInstallationStatus.DISCONNECTED) return false;
+        row.setStatus(GitInstallationStatus.DISCONNECTED);
+        row.setStatusReason(reason);
+        row.setStatusChangedAt(LocalDateTime.now(clock));
+        row.setDisconnectedByUserId(actorUserId);
+        installations.saveAndFlush(row);
+        log.info("GitHub installation transition: installationId={}, tenantId={}, {} -> DISCONNECTED, reason={}, actorUserId={}",
+                row.getInstallationId(), row.getTenantId(), current, reason, actorUserId);
+        events.publishEvent(new GitInstallationStatusChangedEvent(row.getTenantId(), row.getId(), row.getAccountLogin(),
+                current, GitInstallationStatus.DISCONNECTED, reason, actorUserId));
+        return true;
     }
 
     /** GI-02: "Check again" was run (cooldown), whatever it found. */

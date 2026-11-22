@@ -59,6 +59,25 @@ public class GitIntegrationException extends RuntimeException {
                 "Payload của event đã bị xoá theo thời hạn lưu trữ nên không thể xử lý lại");
     }
 
+    // ---- GI-07: disconnect GitHub -------------------------------------------------------------------
+
+    public static GitIntegrationException disconnectConfirmationMismatch() {
+        return new GitIntegrationException(HttpStatus.UNPROCESSABLE_ENTITY, "GIT_DISCONNECT_CONFIRMATION_MISMATCH",
+                "Tên tài khoản hoặc organization nhập vào không khớp");
+    }
+
+    // ---- SY-06: synchronization history ------------------------------------------------------------
+
+    public static GitIntegrationException syncHistoryNotFound() {
+        return new GitIntegrationException(HttpStatus.NOT_FOUND, "GIT_SYNC_HISTORY_NOT_FOUND",
+                "Không tìm thấy lần đồng bộ này trong project");
+    }
+
+    public static GitIntegrationException repositoryNotReceiving() {
+        return new GitIntegrationException(HttpStatus.CONFLICT, "GIT_REPOSITORY_NOT_RECEIVING",
+                "Repository đã bị gỡ liên kết hoặc mất kết nối nên event sẽ không được xử lý");
+    }
+
     public static GitIntegrationException pullRequestNotFound() {
         return new GitIntegrationException(HttpStatus.NOT_FOUND, "GIT_PULL_REQUEST_NOT_FOUND",
                 "Không tìm thấy pull request");
