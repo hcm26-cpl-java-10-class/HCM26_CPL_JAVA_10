@@ -19,7 +19,7 @@ import java.util.Locale;
 import com.example.starter_project_2025.system.demo.syllabus.entity.Syllabus;
 import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusClo;
 import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusCloRepository;
-import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusMaterialRepository;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusCourseUsageRepository;
 import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusRepository;
 import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusSectionRepository;
 import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusStatus;
@@ -36,8 +36,8 @@ public class StudentSyllabusCatalogService {
     private final SyllabusSectionRepository sections;
     private final SyllabusTopicRepository topics;
     private final SyllabusCloRepository clos;
-    private final SyllabusMaterialRepository materials;
     private final SyllabusTopicCloLinkRepository topicCloLinks;
+    private final SyllabusCourseUsageRepository courseUsage;
 
     public record Item(
             Long id,
@@ -104,6 +104,19 @@ public class StudentSyllabusCatalogService {
             List<CloView> clos,
             List<MaterialView> materials
     ) {}
+
+    public record RelatedCourse(Long id, String name) {}
+
+    /** Only published, active courses; never expose draft or inactive Syllabus details. */
+    public List<RelatedCourse> relatedCourses(Long syllabusId) {
+        syllabuses.findById(syllabusId)
+                .filter(s -> s.getStatus() == SyllabusStatus.PUBLISHED
+                        && Boolean.TRUE.equals(s.getIsActive()))
+                .orElseThrow(() -> new ResourceNotFoundException("Published Syllabus not found"));
+        return courseUsage.findPublishedActiveBySyllabus(syllabusId).stream()
+                .map(course -> new RelatedCourse(course.getId(), course.getName()))
+                .toList();
+    }
 
     // Search and pagination for Published syllabuses.
     public CatalogPage list(
@@ -247,25 +260,9 @@ public class StudentSyllabusCatalogService {
                         ))
                         .toList();
 
-        List<MaterialView> materialViews =
-                materials.findBySyllabus_IdOrderByIdAsc(id)
-                        .stream()
-                        .map(material -> new MaterialView(
-                                material.getId(),
-                                material.getTitle(),
-                                material.getType().name(),
-                                material.getUrl(),
-                                material.getAuthor(),
-                                material.getPublisher(),
-                                Boolean.TRUE.equals(
-                                        material.getMainMaterial()
-                                ),
-                                material.getNote(),
-                                material.getTopic() == null
-                                        ? null
-                                        : material.getTopic().getId()
-                        ))
-                        .toList();
+        // Legacy Syllabus materials are not part of the Student programme view.
+        // Per-topic learning links are now resolved from published linked Courses.
+        List<MaterialView> materialViews = List.of();
 
         return new Detail(
                 s.getId(),

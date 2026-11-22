@@ -14,6 +14,32 @@ import com.example.starter_project_2025.system.demo.syllabus.repository.Syllabus
 import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusTopicRepository;
 
 class SyllabusTopicServiceTest {
+    @Test void deletingTopicDetachesOldSyllabusMaterialInsteadOfBlockingTheDraft() {
+        var sections = mock(SyllabusSectionRepository.class);
+        var topics = mock(SyllabusTopicRepository.class);
+        var materials = mock(SyllabusMaterialRepository.class);
+        var links = mock(SyllabusTopicCloLinkRepository.class);
+        var workflow = mock(SyllabusWorkflowService.class);
+        var queries = mock(SyllabusQueryService.class);
+        Syllabus syllabus = new Syllabus(); syllabus.setId(7L);
+        SyllabusSection section = new SyllabusSection(); section.setId(8L); section.setSyllabus(syllabus);
+        SyllabusTopic topic = new SyllabusTopic(); topic.setId(9L); topic.setSection(section);
+        var archived = new com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusMaterial();
+        archived.setTopic(topic);
+        when(sections.findById(8L)).thenReturn(Optional.of(section));
+        when(topics.findById(9L)).thenReturn(Optional.of(topic));
+        when(materials.findBySyllabus_IdOrderByIdAsc(7L)).thenReturn(List.of(archived));
+
+        new SyllabusTopicService(sections, topics, materials, links, workflow, queries)
+                .deleteTopic(7L, 8L, 9L);
+
+        assertNull(archived.getTopic(), "Archived material stays with its Syllabus");
+        verify(materials).save(archived);
+        verify(links).deleteAllForTopic(9L);
+        verify(topics).delete(topic);
+        verify(materials, never()).delete(any(com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusMaterial.class));
+    }
+
     @Test void deletingTopicDeletesCoverageLinksBeforeTopic() {
         var sections=mock(SyllabusSectionRepository.class);
         var topics=mock(SyllabusTopicRepository.class);
@@ -26,7 +52,7 @@ class SyllabusTopicServiceTest {
         SyllabusTopic topic=new SyllabusTopic(); topic.setId(9L); topic.setSection(section);
         when(sections.findById(8L)).thenReturn(Optional.of(section));
         when(topics.findById(9L)).thenReturn(Optional.of(topic));
-        when(materials.countByTopic_Id(9L)).thenReturn(0L);
+        when(materials.findBySyllabus_IdOrderByIdAsc(7L)).thenReturn(List.of());
         var service=new SyllabusTopicService(sections,topics,materials,links,workflow,queries);
         service.deleteTopic(7L,8L,9L);
         var order=inOrder(links,topics);

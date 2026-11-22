@@ -8,6 +8,9 @@ public final class SyllabusAiModels {
 
     public record Status(boolean configured) {}
 
+    /** Minimal AI input; structure is chosen by the model and reviewed in Draft. */
+    public record QuickGenerateRequest(String prompt) {}
+
     public record GenerateRequest(
             String code, String name, String focus, String degreeLevel,
             String language, Integer sectionCount, Integer topicsPerSection,

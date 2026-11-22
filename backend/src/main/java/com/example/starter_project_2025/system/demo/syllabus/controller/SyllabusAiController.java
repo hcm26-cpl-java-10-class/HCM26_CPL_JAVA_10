@@ -25,6 +25,13 @@ public class SyllabusAiController {
         return service.generate(input);
     }
 
+    /** One instruction, with AI-selected section/topic counts. Preview only, no DB writes. */
+    @PostMapping("/quick-generate")
+    @PreAuthorize("hasAuthority('SYLLABUS_CREATE')")
+    public SyllabusAiModels.Draft quickGenerate(@RequestBody SyllabusAiModels.QuickGenerateRequest input) {
+        return service.quickGenerate(input);
+    }
+
     /** The reviewed payload is saved as an independent DRAFT in one transaction. */
     @PostMapping("/save")
     @PreAuthorize("hasAuthority('SYLLABUS_CREATE') and hasAuthority('SYLLABUS_UPDATE')")

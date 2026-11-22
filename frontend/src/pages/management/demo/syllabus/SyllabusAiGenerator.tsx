@@ -7,8 +7,6 @@ import { ArrowLeft, BookOpen, Check, Loader2, Plus, RotateCcw, Sparkles, Trash2 
 import {
   syllabusAiApi,
   type SyllabusAiDraft,
-  type SyllabusAiGenerateRequest,
-  type SyllabusAiMaterial,
   type SyllabusAiSection,
   type SyllabusAiTopic,
 } from "@/api/features/demo/syllabus-ai.api";
@@ -19,13 +17,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SYLLABUS_DEGREE_LEVEL_OPTIONS, isStandardSyllabusDegreeLevel } from "./syllabusDegreeLevels";
-
-const materials: SyllabusAiMaterial["type"][] = ["BOOK", "DOCUMENT", "SLIDE", "VIDEO", "LINK"];
-
-const defaultConfig: SyllabusAiGenerateRequest = {
-  code: "", name: "", focus: "", degreeLevel: "Undergraduate", language: "English",
-  sectionCount: 4, topicsPerSection: 3, cloCount: 4, notes: "",
-};
 
 const normalize = (draft: SyllabusAiDraft): SyllabusAiDraft => ({
   ...draft,
@@ -40,11 +31,7 @@ const normalize = (draft: SyllabusAiDraft): SyllabusAiDraft => ({
   sections: (draft.sections ?? []).map((s) => ({
     ...s, mission: s.mission ?? "", topics: (s.topics ?? []).map((t) => ({ ...t, cloNumbers: t.cloNumbers ?? [] })),
   })),
-  materials: (draft.materials ?? []).map((m) => ({
-    ...m, url: m.url ?? "", author: m.author ?? "", publisher: m.publisher ?? "",
-    note: m.note ?? "", include: false, mainMaterial: false,
-    sectionIndex: null, topicIndex: null,
-  })),
+  materials: [], // Legacy API field only; learning content lives on Courses.
 });
 
 function errorText(error: unknown): string {
@@ -99,26 +86,12 @@ function DegreeLevelField({ label, value, onChange, id }: {
   </div>;
 }
 
-function TeachingLanguageField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  return <div className="flex min-w-0 flex-col gap-1.5 text-xs font-medium">
-    <label htmlFor="ai-teaching-language">Teaching language</label>
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger id="ai-teaching-language" className="h-9 w-full text-sm"><SelectValue placeholder="Choose teaching language" /></SelectTrigger>
-      <SelectContent>
-        <SelectItem value="English">English (ENG)</SelectItem>
-        <SelectItem value="Vietnamese">Vietnamese (VN)</SelectItem>
-      </SelectContent>
-    </Select>
-    <p className="font-normal text-muted-foreground">Teaching language is instructional context. The generated Syllabus will always be written in English.</p>
-  </div>;
-}
-
 export default function SyllabusAiGenerator({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
   const canSave = hasPermission("SYLLABUS_CREATE") && hasPermission("SYLLABUS_UPDATE");
   const queryClient = useQueryClient();
-  const [config, setConfig] = useState<SyllabusAiGenerateRequest>(defaultConfig);
+  const [prompt, setPrompt] = useState("");
   const [draft, setDraft] = useState<SyllabusAiDraft | null>(null);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -126,13 +99,9 @@ export default function SyllabusAiGenerator({ onClose }: { onClose: () => void }
   const [needsRegeneration, setNeedsRegeneration] = useState(false);
   const status = useQuery({ queryKey: ["syllabus-ai-status"], queryFn: syllabusAiApi.status, retry: false });
 
-  const setPrompt = <K extends keyof SyllabusAiGenerateRequest>(key: K, value: SyllabusAiGenerateRequest[K]) => {
-    setConfig((prev) => ({ ...prev, [key]: value }));
-    if (key === "code" || key === "name" || key === "degreeLevel") {
-      setDraft((prev) => prev ? { ...prev, [key]: value } : null);
-    } else if (draft) {
-      setNeedsRegeneration(true);
-    }
+  const changePrompt = (value: string) => {
+    setPrompt(value);
+    if (draft) setNeedsRegeneration(true);
   };
   const edit = (fn: (previous: SyllabusAiDraft) => SyllabusAiDraft) => {
     setDraft((prev) => prev ? fn(prev) : prev);
@@ -140,27 +109,21 @@ export default function SyllabusAiGenerator({ onClose }: { onClose: () => void }
   };
   const setField = <K extends keyof SyllabusAiDraft>(key: K, value: SyllabusAiDraft[K]) => {
     edit((prev) => ({ ...prev, [key]: value }));
-    if (key === "code" || key === "name" || key === "degreeLevel") {
-      setConfig((prev) => ({ ...prev, [key]: value as string }));
-    }
   };
   const editSection = (si: number, fn: (s: SyllabusAiSection) => SyllabusAiSection) =>
     edit((prev) => ({ ...prev, sections: prev.sections.map((s, i) => i === si ? fn(s) : s) }));
   const editTopic = (si: number, ti: number, fn: (t: SyllabusAiTopic) => SyllabusAiTopic) =>
     editSection(si, (s) => ({ ...s, topics: s.topics.map((t, i) => i === ti ? fn(t) : t) }));
-  const editMaterial = (mi: number, fn: (m: SyllabusAiMaterial) => SyllabusAiMaterial) =>
-    edit((prev) => ({ ...prev, materials: prev.materials.map((m, i) => i === mi ? fn(m) : m) }));
 
   async function generate() {
     if (generating || saving) return;
-    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{2,29}$/.test(config.code.trim())) {
-      toast.error("Enter a Syllabus code (3–30 characters, letters/numbers/_/-)."); return;
+    if (prompt.trim().length < 3) {
+      toast.error("Describe the subject you want to create a Syllabus about."); return;
     }
-    if (config.name.trim().length < 3) { toast.error("Enter a Syllabus name."); return; }
     if (draft && (modified || needsRegeneration) && !window.confirm("Regenerate and replace the current preview? Unsaved edits will be lost.")) return;
     setGenerating(true);
     try {
-      const result = await syllabusAiApi.generate({ ...config, code: config.code.trim().toUpperCase(), name: config.name.trim() });
+      const result = await syllabusAiApi.quickGenerate({ prompt: prompt.trim() });
       setDraft(normalize(result));
       setModified(false);
       setNeedsRegeneration(false);
@@ -183,16 +146,10 @@ export default function SyllabusAiGenerator({ onClose }: { onClose: () => void }
   const removeSection = (si: number) => edit((prev) => ({
     ...prev,
     sections: prev.sections.filter((_, i) => i !== si),
-    materials: prev.materials.map((m) => m.sectionIndex === si
-      ? { ...m, include: false, sectionIndex: null, topicIndex: null }
-      : m.sectionIndex != null && m.sectionIndex > si ? { ...m, sectionIndex: m.sectionIndex - 1 } : m),
   }));
   const removeTopic = (si: number, ti: number) => edit((prev) => ({
     ...prev,
     sections: prev.sections.map((s, i) => i !== si ? s : { ...s, topics: s.topics.filter((_, j) => j !== ti) }),
-    materials: prev.materials.map((m) => m.sectionIndex !== si || m.topicIndex == null ? m
-      : m.topicIndex === ti ? { ...m, include: false, sectionIndex: null, topicIndex: null }
-      : m.topicIndex > ti ? { ...m, topicIndex: m.topicIndex - 1 } : m),
   }));
 
   async function save() {
@@ -203,14 +160,11 @@ export default function SyllabusAiGenerator({ onClose }: { onClose: () => void }
     if (draft.sections.some((s) => s.topics.some((t) => !t.cloNumbers.length))) {
       toast.error("Map every Topic to at least one CLO."); return;
     }
-    if (draft.materials.some((m) => m.include && !/^https?:\/\/[^\s]+/i.test(m.url.trim()))) {
-      toast.error("Selected Learning Materials require a valid HTTP(S) URL."); return;
-    }
     setSaving(true);
     try {
       const result = await syllabusAiApi.save(draft);
       await queryClient.invalidateQueries({ queryKey: ["syllabuses"] });
-      toast.success(`Syllabus Draft created. ${result.savedMaterialCount} reviewed materials saved.`);
+      toast.success("Syllabus Draft created. Review its academic content before publishing.");
       navigate(`/syllabuses/${result.id}`);
     } catch (e) { toast.error(errorText(e)); }
     finally { setSaving(false); }
@@ -220,7 +174,7 @@ export default function SyllabusAiGenerator({ onClose }: { onClose: () => void }
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 className="flex items-center gap-2 text-xl font-semibold"><Sparkles className="size-5" /> AI Syllabus Generator</h1>
-        <p className="text-sm text-muted-foreground">Enter instructions in Vietnamese or English. Review the English-language Syllabus preview before saving as Draft.</p>
+        <p className="text-sm text-muted-foreground">Describe a subject in one sentence. AI will design the Sections, Topics and CLOs; review the English preview before saving a Draft.</p>
       </div>
       <Button variant="outline" size="sm" onClick={() => {
         if (draft && modified && !window.confirm("Leave the AI Generator? Your unsaved preview will be lost.")) return;
@@ -230,34 +184,28 @@ export default function SyllabusAiGenerator({ onClose }: { onClose: () => void }
     <div className="grid items-start gap-4 xl:grid-cols-[minmax(290px,0.85fr)_minmax(0,1.5fr)]">
       <section className="min-w-0 rounded-lg border bg-card p-4 xl:sticky xl:top-4" aria-label="AI input settings">
         <div className="mb-4 flex items-center justify-between gap-2">
-          <h2 className="font-semibold">1. AI Configuration</h2>
-          <Badge variant="outline">Input</Badge>
+          <h2 className="font-semibold">1. Describe your Syllabus</h2>
+          <Badge variant="outline">One prompt</Badge>
         </div>
         {status.isPending ? <p className="mb-3 text-xs text-muted-foreground">Checking AI service availability...</p>
           : status.isError ? <p className="mb-3 text-xs text-destructive">Unable to check AI service availability. Please try again or contact your administrator.</p>
           : !status.data?.configured ? <p className="mb-3 rounded-md border p-2 text-xs text-destructive">AI-assisted generation is currently unavailable. Please contact your system administrator to enable this service.</p>
           : <p className="mb-3 text-xs text-muted-foreground">AI-assisted generation is available. All generated Syllabus content is standardized in English.</p>}
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-          <TextField label="Syllabus code *" value={config.code} onChange={(v) => setPrompt("code", v.toUpperCase())} maxLength={30} placeholder="HSF302" />
-          <TextField label="Syllabus name *" value={config.name} onChange={(v) => setPrompt("name", v)} maxLength={150} placeholder="Working with Spring Framework" />
-          <DegreeLevelField id="ai-degree-level" label="Degree level" value={config.degreeLevel} onChange={(v) => setPrompt("degreeLevel", v)} />
-          <TeachingLanguageField value={config.language} onChange={(v) => setPrompt("language", v)} />
-          <LongField label="Main teaching focus" value={config.focus} onChange={(v) => setPrompt("focus", v)} maxLength={1000} />
-          <div className="grid grid-cols-3 gap-2">
-            {(["sectionCount", "topicsPerSection", "cloCount"] as const).map((key) => <label key={key} className="flex flex-col gap-1 text-xs font-medium">
-              {key === "sectionCount" ? "Sections" : key === "topicsPerSection" ? "Topics/Section" : "CLOs"}
-              <Input type="number" className="h-9" min={key === "cloCount" || key === "sectionCount" ? 2 : 1}
-                max={key === "cloCount" ? 10 : 8} value={config[key]}
-                onChange={(e) => setPrompt(key, Number(e.target.value))} />
-            </label>)}
-          </div>
-          <LongField label="Additional requirements" value={config.notes} onChange={(v) => setPrompt("notes", v)} maxLength={2000} rows={3} />
+        <label htmlFor="syllabus-quick-prompt" className="block text-sm font-medium">What Syllabus would you like to create?</label>
+        <Textarea id="syllabus-quick-prompt" autoFocus rows={5} maxLength={2000}
+          value={prompt} onChange={(e) => changePrompt(e.target.value)}
+          placeholder={'Tạo Syllabus về SQL\nTạo Syllabus làm game với Unity\nCreate a beginner Python programming syllabus'}
+          className="mt-2 min-h-32 resize-y text-sm" disabled={generating || saving}/>
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-2 text-xs text-muted-foreground">
+          <span>AI chooses the number of Sections, different Topics per Section and CLOs automatically.</span>
+          <span>{prompt.length}/2000</span>
         </div>
+        <p className="mt-3 text-xs text-muted-foreground">No code, name or counts needed. AI proposes an editable code and title.</p>
         <Button className="mt-4 w-full" disabled={generating || saving || !status.data?.configured} onClick={() => void generate()}>
           {generating ? <Loader2 className="size-4 animate-spin" /> : draft ? <RotateCcw className="size-4" /> : <Sparkles className="size-4" />}
           {generating ? "Generating..." : draft ? "Regenerate Preview" : "Generate Syllabus Preview"}
         </Button>
-        {needsRegeneration && <p className="mt-2 text-xs text-amber-600">Prompt settings changed. Regenerate to apply them to the AI outline; your current preview remains intact.</p>}
+        {needsRegeneration && <p className="mt-2 text-xs text-muted-foreground">Your request changed. Regenerate to update the preview; existing edits remain until you confirm.</p>}
       </section>
 
       <section className="min-w-0 rounded-lg border bg-card p-4" aria-label="Syllabus preview">
@@ -265,9 +213,10 @@ export default function SyllabusAiGenerator({ onClose }: { onClose: () => void }
           <h2 className="font-semibold">2. Editable Syllabus Preview</h2>
           <div className="flex items-center gap-2"><Badge variant="outline">English content</Badge><Badge variant="outline">{draft ? "Unsaved Draft" : "Not generated"}</Badge></div>
         </div>
+        {draft && <p className="mb-3 text-xs text-muted-foreground">AI proposed {draft.sections.length} Sections · {draft.sections.reduce((n, s) => n + s.topics.length, 0)} Topics (varies by Section) · {draft.clos.length} CLOs. All fields below remain editable.</p>}
         {!draft ? <div className="flex min-h-72 flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
           <BookOpen className="size-9" />
-          <p>Enter your requirements on the left, then generate a full Syllabus blueprint.</p>
+          <p>Enter a subject on the left, then let AI propose a complete Syllabus outline.</p>
           <p className="text-xs">AI generation never saves or publishes anything automatically.</p>
         </div> : <div className="flex flex-col gap-5">
           <fieldset disabled={saving || generating} className="flex flex-col gap-5 disabled:opacity-70">
@@ -337,59 +286,6 @@ export default function SyllabusAiGenerator({ onClose }: { onClose: () => void }
                     onClick={() => editSection(si, (s) => ({ ...s, topics: [...s.topics, { title: "", cloNumbers: [1] }] }))}>
                     <Plus className="size-4"/> Topic</Button>
                 </div>
-              </article>)}
-            </section>
-            <section className="flex flex-col gap-3 border-t pt-4">
-              <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Learning Materials — AI Suggestions</h3>
-                <Button size="sm" variant="outline" disabled={draft.materials.length >= 12}
-                  onClick={() => edit((p) => ({ ...p, materials: [...p.materials, {
-                    title: "", type: "LINK", url: "", author: "", publisher: "", mainMaterial: false,
-                    note: "", sectionIndex: null, topicIndex: null, include: false,
-                  }] }))}><Plus className="size-4"/> Material</Button></div>
-              <p className="text-xs text-muted-foreground">AI material titles are suggestions, not verified references. To save a material, select it and provide a real HTTP(S) URL. Unselected suggestions are not stored.</p>
-              {draft.materials.map((material, mi) => <article key={mi} className="rounded-md border p-3">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <label className="flex items-center gap-2 text-xs font-medium"><input type="checkbox" checked={material.include}
-                    onChange={(e) => editMaterial(mi, (m) => ({ ...m, include: e.target.checked }))}/>
-                    Save this reviewed material</label>
-                  <Button size="icon-sm" variant="ghost" title="Remove Material"
-                    onClick={() => edit((p) => ({ ...p, materials: p.materials.filter((_, i) => i !== mi) }))}>
-                    <Trash2 className="size-4" /></Button>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <TextField label="Title" value={material.title} maxLength={200}
-                    onChange={(v) => editMaterial(mi, (m) => ({ ...m, title: v }))} />
-                  <label className="flex flex-col gap-1 text-xs font-medium">Type
-                    <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={material.type}
-                      onChange={(e) => editMaterial(mi, (m) => ({ ...m, type: e.target.value as SyllabusAiMaterial["type"] }))}>
-                      {materials.map((type) => <option key={type} value={type}>{type}</option>)}
-                    </select>
-                  </label>
-                  <TextField label="Author (optional)" value={material.author} maxLength={150}
-                    onChange={(v) => editMaterial(mi, (m) => ({ ...m, author: v }))}/>
-                  <TextField label="Publisher (optional)" value={material.publisher} maxLength={150}
-                    onChange={(v) => editMaterial(mi, (m) => ({ ...m, publisher: v }))}/>
-                  <label className="flex flex-col gap-1 text-xs font-medium">Link to Topic (optional)
-                    <select className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                      value={material.sectionIndex == null ? "general" : `${material.sectionIndex}:${material.topicIndex}`}
-                      onChange={(e) => editMaterial(mi, (m) => {
-                        const [si, ti] = e.target.value.split(":").map(Number);
-                        return e.target.value === "general" ? { ...m, sectionIndex: null, topicIndex: null }
-                          : { ...m, sectionIndex: si, topicIndex: ti };
-                      })}>
-                      <option value="general">General Learning Materials</option>
-                      {draft.sections.flatMap((s, si) => s.topics.map((t, ti) =>
-                        <option key={`${si}:${ti}`} value={`${si}:${ti}`}>{si + 1}.{ti + 1} {t.title}</option>))}
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2 self-end pb-2 text-xs"><input type="checkbox" checked={material.mainMaterial}
-                    onChange={(e) => editMaterial(mi, (m) => ({ ...m, mainMaterial: e.target.checked }))}/> Main material</label>
-                </div>
-                <div className="mt-2"><TextField label={material.include ? "Verified URL *" : "URL (required only when saving)"}
-                  value={material.url} maxLength={2048} placeholder="https://..."
-                  onChange={(v) => editMaterial(mi, (m) => ({ ...m, url: v }))}/></div>
-                <div className="mt-2"><LongField label="Notes / source verification" value={material.note}
-                  maxLength={1000} onChange={(v) => editMaterial(mi, (m) => ({ ...m, note: v }))}/></div>
               </article>)}
             </section>
           </fieldset>

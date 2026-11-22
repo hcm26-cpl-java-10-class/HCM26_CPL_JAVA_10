@@ -145,12 +145,6 @@ public class SyllabusService {
             fail("clos", "Delete all CLOs before deleting this Syllabus");
         }
 
-        if (materials.countBySyllabus_Id(id) > 0) {
-            fail(
-                    "materials",
-                    "Delete all Learning Materials before deleting this Syllabus"
-            );
-        }
         if (sections.countBySyllabus_Id(id) > 0) {
             fail(
                     "sections",
@@ -158,6 +152,13 @@ public class SyllabusService {
             );
         }
 
+        // Legacy archived resources are removed only when the user explicitly
+        // deletes this entire Draft Syllabus, after other safety checks passed.
+        var archivedMaterials = materials.findBySyllabus_IdOrderByIdAsc(id);
+        if (!archivedMaterials.isEmpty()) {
+            materials.deleteAll(archivedMaterials);
+            materials.flush();
+        }
         syllabuses.delete(entity);
     }
 

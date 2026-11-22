@@ -70,22 +70,6 @@ public class SyllabusImportTemplateService {
                     "Order Index"
             );
 
-            addSheet(
-                    workbook,
-                    headerStyle,
-                    "LearningMaterials",
-                    "Syllabus Code",
-                    "Section Title",
-                    "Topic Title",
-                    "Title",
-                    "Type",
-                    "URL",
-                    "Author",
-                    "Publisher",
-                    "Main Material",
-                    "Note"
-            );
-
             workbook.write(output);
 
             return output.toByteArray();

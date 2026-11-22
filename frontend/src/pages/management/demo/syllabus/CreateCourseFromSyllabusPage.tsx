@@ -118,8 +118,10 @@ export default function CreateCourseFromSyllabusPage() {
     retry: false,
   });
   const categoriesQuery = useQuery({
-    queryKey: ["course-creation-category-tree", "active"],
-    queryFn: () => hasPermission("CATEGORY_READ") ? categoryApi.getTree(true) : courseApi.getCatalogCategories(),
+    queryKey: ["course-creation-category-tree", hasPermission("CATEGORY_READ") ? "all-active" : "catalog-fallback"],
+    // /categories/tree?onlyActive=true prunes categories without published Courses.
+    // The Course creation form must also offer unused active categories.
+    queryFn: () => hasPermission("CATEGORY_READ") ? categoryApi.getTree(false) : courseApi.getCatalogCategories(),
     enabled: allowed && (hasPermission("CATEGORY_READ") || hasPermission("COURSE_READ")), retry: false,
   });
   const categoryOptions = useMemo(() => flattenCategoryTree(categoriesQuery.data ?? []), [categoriesQuery.data]);

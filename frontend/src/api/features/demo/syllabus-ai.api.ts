@@ -40,11 +40,15 @@ export type SyllabusAiGenerateRequest = {
   cloCount: number;
   notes: string;
 };
+export type SyllabusAiQuickGenerateRequest = { prompt: string };
+
 export const syllabusAiApi = {
   status: async (): Promise<{ configured: boolean }> =>
     (await api.get("/syllabuses/templates/ai/status")).data,
   generate: async (body: SyllabusAiGenerateRequest): Promise<SyllabusAiDraft> =>
     (await api.post("/syllabuses/templates/ai/generate", body, { timeout: 210000 })).data,
+  quickGenerate: async (body: SyllabusAiQuickGenerateRequest): Promise<SyllabusAiDraft> =>
+    (await api.post("/syllabuses/templates/ai/quick-generate", body, { timeout: 210000 })).data,
   save: async (body: SyllabusAiDraft): Promise<{ id: number; savedMaterialCount: number }> =>
     (await api.post("/syllabuses/templates/ai/save", body, { timeout: 120000 })).data,
 };
