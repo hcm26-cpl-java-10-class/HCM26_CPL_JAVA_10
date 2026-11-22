@@ -12,9 +12,6 @@ import java.util.Map;
 import com.example.starter_project_2025.system.demo.syllabus.entity.Syllabus;
 import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusClo;
 import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusCloRepository;
-import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusMaterial;
-import com.example.starter_project_2025.system.demo.syllabus.storage.SyllabusMaterialFileService;
-import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusMaterialRepository;
 import com.example.starter_project_2025.system.demo.syllabus.dto.SyllabusModels;
 import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusRepository;
 import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusSection;
@@ -36,9 +33,7 @@ public class SyllabusTemplateService {
     private final SyllabusCloRepository clos;
     private final SyllabusSectionRepository sections;
     private final SyllabusTopicRepository topics;
-    private final SyllabusMaterialRepository materials;
     private final SyllabusTopicCloLinkRepository coverageLinks;
-    private final SyllabusMaterialFileService materialFiles;
 
     public record CopyInput(Long sourceId, String code, String name) {}
 
@@ -104,26 +99,8 @@ public class SyllabusTemplateService {
             }
         }
 
-        for (SyllabusMaterial original :
-                materials.findBySyllabus_IdOrderByIdAsc(source.getId())) {
-            SyllabusMaterial clone = new SyllabusMaterial();
-            clone.setSyllabus(target);
-            clone.setTitle(original.getTitle());
-            clone.setType(original.getType());
-            clone.setUrl(materialFiles.copyForTemplate(source.getId(), target.getId(), original.getUrl()));
-            clone.setAuthor(original.getAuthor());
-            clone.setPublisher(original.getPublisher());
-            clone.setMainMaterial(original.getMainMaterial());
-            clone.setNote(original.getNote());
-            if (original.getTopic() != null) {
-                SyllabusTopic mapped = topicMapping.get(original.getTopic().getId());
-                if (mapped == null) {
-                    throw new IllegalStateException("Source Material references an unknown Topic");
-                }
-                clone.setTopic(mapped);
-            }
-            materials.save(clone);
-        }
+        // Only the academic blueprint is cloned. Legacy materials are left on
+        // the original Syllabus and never copied to new Drafts.
 
         // Preserve CLO coverage in the independent copy (never reference source entities).
         for (SyllabusTopicCloLink original : coverageLinks.findAllForSyllabus(source.getId())) {

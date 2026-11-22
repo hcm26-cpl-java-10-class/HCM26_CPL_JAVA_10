@@ -25,7 +25,7 @@ import { courseApi } from "@/api/features/demo/course.api";
 import { syllabusApi, type SyllabusSection, type Topic } from "@/api/features/demo/syllabus.api";
 import { COURSE_LEVEL_OPTIONS, type CourseLevel } from "@/types";
 import GeneralInformationPanel from "./GeneralInformationPanel";
-import { CloPanel, MaterialsPanel } from "./SyllabusContentPanels";
+import { CloPanel } from "./SyllabusContentPanels";
 import SyllabusWorkflowPanel from "./SyllabusWorkflowPanel";
 import { flattenCategoryTree, recommendCategoryIds, recommendCourseLevel } from "./courseFromSyllabusSuggestions";
 import {
@@ -74,8 +74,10 @@ export default function SyllabusCourseWorkspacePage() {
   const query = useQuery({ queryKey: ["syllabus", syllabusId], queryFn: () => syllabusApi.get(syllabusId), enabled: validId });
   const progressQuery = useQuery({ queryKey: ["syllabus-progress", syllabusId], queryFn: () => syllabusApi.progress(syllabusId), enabled: validId });
   const categoryQuery = useQuery({
-    queryKey: ["course-creation-category-tree", "active"],
-    queryFn: () => hasPermission("CATEGORY_READ") ? categoryApi.getTree(true) : courseApi.getCatalogCategories(),
+    queryKey: ["course-creation-category-tree", hasPermission("CATEGORY_READ") ? "all-active" : "catalog-fallback"],
+    // /categories/tree?onlyActive=true prunes categories without published Courses.
+    // The Course creation form must also offer unused active categories.
+    queryFn: () => hasPermission("CATEGORY_READ") ? categoryApi.getTree(false) : courseApi.getCatalogCategories(),
     enabled: validId && canReadCategories,
   });
   const categoryOptions = useMemo(() => flattenCategoryTree(categoryQuery.data ?? []), [categoryQuery.data]);
@@ -99,7 +101,6 @@ export default function SyllabusCourseWorkspacePage() {
   const [showInfo, setShowInfo] = useState(false);
   const [showClos, setShowClos] = useState(false);
   const [showSectionsAndTopics, setShowSectionsAndTopics] = useState(true);
-  const [showMaterials, setShowMaterials] = useState(false);
   const [showWorkflow, setShowWorkflow] = useState(false);
   const [categorySearch, setCategorySearch] = useState("");
   const initialOpenId = useRef<number | null>(null);
@@ -483,15 +484,6 @@ export default function SyllabusCourseWorkspacePage() {
                   </CollapsibleContent>
                 </Collapsible>
 
-                <Collapsible open={showMaterials} onOpenChange={setShowMaterials} className="rounded-lg border">
-                  <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm font-medium hover:bg-muted/40">
-                    <span>General Learning Materials</span>
-                    {showMaterials ? <ChevronDown className="size-4 shrink-0"/> : <ChevronRight className="size-4 shrink-0"/>}
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="border-t p-2 sm:p-3">
-                    <MaterialsPanel syllabusId={syllabusId} readOnly={published}/>
-                  </CollapsibleContent>
-                </Collapsible>
               </section>
 
               {/* Course remains session-only until the Syllabus is Published and the user confirms. */}

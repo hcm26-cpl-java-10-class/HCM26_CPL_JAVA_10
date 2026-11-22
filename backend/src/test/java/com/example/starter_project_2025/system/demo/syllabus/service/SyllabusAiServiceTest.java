@@ -39,7 +39,7 @@ class SyllabusAiServiceTest {
         links = mock(SyllabusTopicCloLinkRepository.class);
         materials = mock(SyllabusMaterialRepository.class);
         service = new SyllabusAiService(ai, new ObjectMapper(), syllabuses,
-                syllabusRepository, clos, sections, topics, links, materials);
+                syllabusRepository, clos, sections, topics, links);
     }
 
     private Draft valid() {
@@ -59,15 +59,14 @@ class SyllabusAiServiceTest {
         assertDoesNotThrow(() -> SyllabusAiService.validate(valid()));
     }
 
-    @Test void selectedMaterialMustHaveVerifiedUrl() {
+    @Test void oldMaterialSelectionsAreIgnoredInNewSyllabusBlueprint() {
         Draft d = valid();
-        var chosen = new MaterialDraft("Official Java documentation", "DOCUMENT", "", "", "",
-                false, "verify", null, null, true);
-        Draft invalid = new Draft(d.code(), d.name(), d.description(), d.teachingMethods(),
+        var oldPayload = new MaterialDraft("Old legacy link", "LINK", "", "", "",
+                false, "legacy", null, null, true);
+        Draft input = new Draft(d.code(), d.name(), d.description(), d.teachingMethods(),
                 d.degreeLevel(), d.timeAllocation(), d.studentResponsibilities(), d.requiredTools(),
-                d.scoringScale(), d.clos(), d.sections(), List.of(chosen));
-        assertThrows(BusinessValidationException.class, () -> SyllabusAiService.validate(invalid));
-        verifyNoInteractions(syllabuses, syllabusRepository);
+                d.scoringScale(), d.clos(), d.sections(), List.of(oldPayload));
+        assertDoesNotThrow(() -> SyllabusAiService.validate(input));
     }
 
     @Test void badCloMappingRejectedBeforeAnyDatabaseWrite() {
@@ -77,7 +76,7 @@ class SyllabusAiServiceTest {
                 List.of(new SectionDraft("Object Oriented Java", "", List.of(
                         new TopicDraft("Interfaces in Java", List.of(99))))), d.materials());
         assertThrows(BusinessValidationException.class, () -> service.save(invalid));
-        verifyNoInteractions(syllabuses, syllabusRepository, clos, sections, topics, links, materials);
+        verifyNoInteractions(syllabuses, syllabusRepository, clos, sections, topics, links);
     }
 
     @Test void generationReturnsPreviewOnlyAndNeverTrustsAiMaterialUrls() throws Exception {
@@ -99,10 +98,8 @@ class SyllabusAiServiceTest {
         Draft result = service.generate(request);
         assertEquals("JAV202", result.code());
         assertEquals("Modern Java Development", result.name());
-        assertFalse(result.materials().get(0).include());
-        assertEquals("", result.materials().get(0).url());
-        assertNull(result.materials().get(0).sectionIndex());
-        verifyNoInteractions(syllabuses, syllabusRepository, clos, sections, topics, links, materials);
+        assertTrue(result.materials().isEmpty(), "Syllabus blueprint must not carry course resources");
+        verifyNoInteractions(syllabuses, syllabusRepository, clos, sections, topics, links);
     }
 
     @Test void vietnameseInstructionsStillRequestEnglishSyllabusOutput() throws Exception {
@@ -130,7 +127,7 @@ class SyllabusAiServiceTest {
         assertTrue(systemPrompt.getValue().contains("ALL generated academic content in ENGLISH"));
         assertTrue(turns.getValue().toString().contains("REQUIRED OUTPUT LANGUAGE: English"));
         assertEquals("Undergraduate", result.degreeLevel());
-        verifyNoInteractions(syllabuses, syllabusRepository, clos, sections, topics, links, materials);
+        verifyNoInteractions(syllabuses, syllabusRepository, clos, sections, topics, links);
     }
 
     @Test void nonEnglishGeneratedTitleIsNotPresentedAsAnEnglishPreview() throws Exception {
@@ -148,7 +145,7 @@ class SyllabusAiServiceTest {
         assertThrows(com.example.starter_project_2025.exception.BadRequestException.class,
                 () -> service.generate(new GenerateRequest("HSF302", "Giới thiệu Spring Framework", "",
                         "Undergraduate", "Vietnamese", 2, 1, 2, "")));
-        verifyNoInteractions(syllabuses, syllabusRepository, clos, sections, topics, links, materials);
+        verifyNoInteractions(syllabuses, syllabusRepository, clos, sections, topics, links);
     }
 
     @Test void unknownTeachingLanguageIsRejectedBeforeCallingAi() {
@@ -164,7 +161,7 @@ class SyllabusAiServiceTest {
         verifyNoInteractions(ai);
     }
 
-    @Test void reviewedSavePersistsTopicCloLinksAndOnlySelectedMaterials() {
+    @Test void reviewedSavePersistsTopicCloLinksButNeverSyllabusMaterials() {
         Draft d = valid();
         var selected = new MaterialDraft("Official Java documentation", "DOCUMENT", "https://docs.oracle.com/en/java/",
                 "Oracle", "Oracle", true, "Verified official docs", 0, 1, true);
@@ -191,16 +188,55 @@ class SyllabusAiServiceTest {
 
         SaveResult result = service.save(reviewed);
         assertEquals(Long.valueOf(44L), result.id());
-        assertEquals(1, result.savedMaterialCount());
+        assertEquals(0, result.savedMaterialCount());
         verify(clos, times(2)).save(any());
         verify(sections).saveAndFlush(any());
         verify(topics, times(2)).saveAndFlush(any());
         verify(links, times(3)).save(any());
-        var materialCapture = org.mockito.ArgumentCaptor.forClass(SyllabusMaterial.class);
-        verify(materials).save(materialCapture.capture());
-        assertEquals("https://docs.oracle.com/en/java/", materialCapture.getValue().getUrl());
-        assertEquals("Inheritance and Interfaces", materialCapture.getValue().getTopic().getTitle());
+        verify(materials, never()).save(any());
         verify(syllabuses).updateInformation(eq(44L), any());
+    }
+
+    @Test void quickGenerateAcceptsSingleVietnamesePromptAndUnequalTopicCounts() throws Exception {
+        String json = """
+          {"name":"Introduction to SQL","description":"Relational databases and queries",
+           "teachingMethods":"Hands-on workshops","timeAllocation":"45 hours",
+           "studentResponsibilities":"Practice SQL queries","requiredTools":"SQL editor",
+           "scoringScale":10,
+           "clos":["Explain relational database concepts and tables",
+                   "Write and improve queries using standard SQL"],
+           "sections":[
+             {"title":"Relational Concepts","mission":"Understand relational data",
+              "topics":[{"title":"Tables and Keys","cloNumbers":[1]}]},
+             {"title":"SQL Queries","mission":"Practice querying datasets",
+              "topics":[{"title":"SELECT queries","cloNumbers":[2]},
+                        {"title":"JOIN operations","cloNumbers":[1,2]},
+                        {"title":"Aggregations","cloNumbers":[2]}]}],
+           "materials":[{"title":"Unverified resource","type":"LINK","url":"https://example.com"}]}
+          """;
+        when(ai.generateJson(anyString(), anyList(), anyDouble()))
+                .thenReturn(new ObjectMapper().readTree(json));
+        Draft draft = service.quickGenerate(new QuickGenerateRequest("tạo Syllabus về SQL"));
+        assertEquals("Introduction to SQL", draft.name());
+        assertTrue(draft.code().matches("AI-[A-F0-9]{10}"));
+        assertEquals(List.of(1, 3), draft.sections().stream().map(s -> s.topics().size()).toList());
+        assertTrue(draft.materials().isEmpty(), "No unverified materials should be added");
+        var systemPrompt = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(ai).generateJson(systemPrompt.capture(), anyList(), anyDouble());
+        assertTrue(systemPrompt.getValue().contains("INDEPENDENT 1-8 Topics"));
+        verifyNoInteractions(syllabuses, clos, sections, topics, links, materials);
+    }
+
+    @Test void quickGenerateRejectsBlankPromptBeforeCallingAi() {
+        assertThrows(BusinessValidationException.class,
+                () -> service.quickGenerate(new QuickGenerateRequest("  ")));
+        verifyNoInteractions(ai, syllabusRepository);
+    }
+
+    @Test void quickGenerateRejectsExcessivelyLongPromptBeforeCallingAi() {
+        assertThrows(BusinessValidationException.class,
+                () -> service.quickGenerate(new QuickGenerateRequest("X".repeat(2001))));
+        verifyNoInteractions(ai, syllabusRepository);
     }
 
 }

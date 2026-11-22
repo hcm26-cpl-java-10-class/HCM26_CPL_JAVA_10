@@ -212,11 +212,13 @@ public class SyllabusTopicService {
                 sectionId,
                 topicId
         );
-        if (materials.countByTopic_Id(topicId) > 0) {
-            fail(
-                    "materials",
-                    "Remove or unlink Learning Materials before deleting this Topic"
-            );
+        // Detach archived legacy Syllabus materials so an otherwise editable
+        // Topic is not blocked by a UI feature that no longer exists.
+        for (var item : materials.findBySyllabus_IdOrderByIdAsc(syllabusId)) {
+            if (item.getTopic() != null && topicId.equals(item.getTopic().getId())) {
+                item.setTopic(null);
+                materials.save(item);
+            }
         }
 
         coverageLinks.deleteAllForTopic(topicId);

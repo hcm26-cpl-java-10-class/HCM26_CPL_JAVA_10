@@ -108,9 +108,6 @@ class SyllabusTemplateServiceTest {
         });
         when(sections.findBySyllabus_IdOrderByOrderIndexAsc(1L)).thenReturn(List.of(originalSection));
         when(topics.findBySection_IdOrderByOrderIndexAsc(10L)).thenReturn(List.of(originalTopic));
-        when(materials.findBySyllabus_IdOrderByIdAsc(1L)).thenReturn(List.of(originalMaterial));
-        when(materialFiles.copyForTemplate(1L, 2L, "https://example.org/reference"))
-                .thenReturn("https://example.org/reference");
         when(sections.saveAndFlush(any())).thenAnswer(invocation -> {
             SyllabusSection value = invocation.getArgument(0);
             value.setId(20L);
@@ -135,11 +132,8 @@ class SyllabusTemplateServiceTest {
         assertSame(destination, cloCaptor.getValue().getSyllabus());
         assertEquals("CLO1", cloCaptor.getValue().getCode());
 
-        ArgumentCaptor<SyllabusMaterial> materialCaptor = ArgumentCaptor.forClass(SyllabusMaterial.class);
-        verify(materials).save(materialCaptor.capture());
-        assertSame(destination, materialCaptor.getValue().getSyllabus());
-        assertEquals(200L, materialCaptor.getValue().getTopic().getId());
-        assertNotSame(originalTopic, materialCaptor.getValue().getTopic());
+        // Copy remains an academic outline; legacy material rows are not copied.
+        verify(materials, never()).save(any());
         assertSame(original, originalMaterial.getSyllabus());
 
         ArgumentCaptor<SyllabusTopicCloLink> linkCaptor =

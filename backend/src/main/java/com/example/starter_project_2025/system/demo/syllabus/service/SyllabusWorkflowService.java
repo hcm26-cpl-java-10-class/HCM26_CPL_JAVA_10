@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 import com.example.starter_project_2025.system.demo.syllabus.entity.Syllabus;
 import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusCloRepository;
-import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusMaterialRepository;
 import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusRepository;
 import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusSectionRepository;
 import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusStatus;
@@ -29,7 +28,6 @@ public class SyllabusWorkflowService {
     private final SyllabusSectionRepository sections;
     private final SyllabusTopicRepository topics;
     private final SyllabusCloRepository clos;
-    private final SyllabusMaterialRepository materials;
 
     public record ProgressCheck(
             String key,
@@ -111,11 +109,6 @@ public class SyllabusWorkflowService {
                         "missions",
                         "Every Section has a Mission",
                         missionsReady
-                ),
-                new ProgressCheck(
-                        "materials",
-                        "At least one Learning Material",
-                        materials.countBySyllabus_Id(id) > 0
                 )
         );
 

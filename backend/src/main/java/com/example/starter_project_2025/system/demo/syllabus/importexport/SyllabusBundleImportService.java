@@ -79,7 +79,7 @@ public class SyllabusBundleImportService {
         try (Workbook workbook =
                      WorkbookFactory.create(file.getInputStream())) {
 
-            // Require all five M3 sheets.
+            // Only four academic programme sheets are required.
             Sheet syllabusSheet =
                     requiredSheet(workbook, "Syllabuses");
 
@@ -91,9 +91,6 @@ public class SyllabusBundleImportService {
 
             Sheet topicSheet =
                     requiredSheet(workbook, "Topics");
-
-            Sheet materialSheet =
-                    requiredSheet(workbook, "LearningMaterials");
 
             // Import in dependency order.
             int syllabusCount =
@@ -108,8 +105,9 @@ public class SyllabusBundleImportService {
             int topicCount =
                     importTopics(topicSheet);
 
-            int materialCount =
-                    importMaterials(materialSheet);
+            // Accept older five-sheet Excel files without importing legacy Syllabus
+            // material records. The fifth sheet is safely ignored.
+            int materialCount = 0;
 
             // NEW:
             // Do not report an empty template as a
