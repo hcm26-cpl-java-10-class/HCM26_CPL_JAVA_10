@@ -57,7 +57,7 @@ Backend mặc định chạy ở <http://localhost:8080>.
 
 ### 2.1. Không cần tạo database thủ công
 
-* Database là **H2 file mode**, đường dẫn `./data/fams_lms_after_merge` (tương đối so với thư mục `backend/`).
+* Database là **H2 file mode**, đường dẫn mặc định `./data/fams_lms_after_merge_fresh` (tương đối với thư mục chạy ứng dụng). Có thể thay bằng biến môi trường `DB_URL`.
 * Lần chạy đầu tiên, H2 tự tạo file `.mv.db` và Hibernate tự tạo bảng (`ddl-auto=update`).
 * Toàn bộ dữ liệu mẫu được **seed tự động** bởi các `CommandLineRunner`:
   users/vai trò, khóa học + giáo trình, 50 học viên (chia vào 5 phòng ban), và dữ liệu

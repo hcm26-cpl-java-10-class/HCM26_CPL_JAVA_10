@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotService;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Profile("!prod")
 @ConditionalOnProperty(prefix = "app.seed.team-allocation", name = "enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
+@StartupMutation
 public class ProjectTemplateSnapshotDataInitializer implements CommandLineRunner {
     private final ProjectTemplateRepository templates;
     private final ProjectTemplateSnapshotService versions;

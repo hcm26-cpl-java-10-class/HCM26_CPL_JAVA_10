@@ -184,6 +184,8 @@ export default function StudentExamTakingPage() {
         send: sendIntegrityEvents,
         sendEntryPhoto,
         onEntryPhotoSaved: () => void attemptQuery.refetch(),
+        supervisorStreaming: true,
+
     });
 
     const questionFont = useQuestionFontSize();

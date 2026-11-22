@@ -11,5 +11,7 @@ public interface ExamQuestionGradingConfigRepository extends JpaRepository<ExamQ
 
     Optional<ExamQuestionGradingConfig> findByExamIdAndQuestionId(Long examId, Long questionId);
 
+    void deleteByExamIdAndQuestionId(Long examId, Long questionId);
+
     List<ExamQuestionGradingConfig> findByExamId(Long examId);
 }

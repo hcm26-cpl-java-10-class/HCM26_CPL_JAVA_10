@@ -29,7 +29,6 @@ public class ExamProgressLockService {
     private final CourseEnrollmentRepository enrollmentRepository;
     private final LessonProgressRepository progressRepository;
     private final LessonRepository lessonRepository;
-    private final com.example.starter_project_2025.system.demo.course.CourseAssessmentService assessments;
     private final ExamRepository examRepository;
     private final UserRepository userRepository;
 
@@ -93,7 +92,6 @@ public class ExamProgressLockService {
             }
             return;
         }
-        assessments.assertReady(exam.getCourse().getId());
         LockState state = evaluate(exam, completed, new HashMap<>(), new HashMap<>());
         if (state.locked()) {
             throw new AccessDeniedException(state.reason());

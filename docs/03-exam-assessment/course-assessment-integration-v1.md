@@ -8,7 +8,8 @@ The Course Details page and Assessment Management → Curriculum Mapping now sha
 
 ## Grading policy
 
-- Every linked assessment must have an explicit weight; 0 means practice. The course's weights must total exactly 100% before assessed learning can start and final course grades can be calculated. Authors can build an incomplete plan while preparing the course.
+- Every linked assessment must have an explicit weight for a complete course grade plan; 0 means practice. The course's weights must total exactly 100% before a final course grade, course completion or certificate can be awarded. An incomplete course plan does not prevent students from starting an otherwise available individual assessment. Authors can build an incomplete plan while preparing the course.
+- Result Visibility `IMMEDIATE` makes each attempt's result available as soon as grading produces a score; it does not require a separate **Publish Results** action. `MANUAL_RELEASE` continues to require the teacher to publish results. An explicit unpublished or hidden publication keeps results unavailable.
 - Weighted assessments must be active and have active questions. Active assessment lessons must have matching linked assessments. Publishing a draft course uses the existing publishing validator plus the assessment-plan checks.
 - Final course grade, out of 10, is `sum((best fully graded attempt score / that attempt's maximum score) × 10 × assessment weight / 100)`.
 - Retakes use the best normalized, fully graded attempt. In-progress and pending-manual-review attempts do not contribute. An expired attempt counts only when it has a final score and submission timestamp, matching the existing assessment publication policy. Attempt maximum-score snapshots protect normalization when an assessment's scale changes later.
@@ -55,7 +56,7 @@ For a compatibility check, scan a fresh course with Quiz 20% and Final 80%; veri
 
 1. Extract the updated ZIP to a fresh folder. Start backend and frontend from that copy. Sign out/in to refresh the menu; Course Releases should be absent.
 2. As the course instructor or admin, prepare a test course with an introductory lesson, a Quiz lesson and an Exam lesson. Use the shared creation forms; add questions through Assessments.
-3. Set the Quiz weight to 20% and the Exam weight to 80%. Open Course Details or Curriculum Mapping. Confirm the plan is Ready and links point to the right course/section/lesson. An incomplete total or missing weight/questions should show an issue and prevent a new assessment attempt.
+3. Set the Quiz weight to 20% and the Exam weight to 80%. Open Course Details or Curriculum Mapping. Confirm the plan is Ready and links point to the right course/section/lesson. An incomplete total should show the remaining weight and keep the course grade incomplete, but should not block an otherwise available linked Quiz or Exam. Missing or invalid questions continue to block starting that assessment.
 4. Enroll a student and use the normal invitation flow. Confirm the Quiz is blocked until its preceding introductory lesson is completed. It should then open without manually completing the Quiz lesson itself.
 5. Score the Quiz 10/10 and the Exam 50/100. Leave one result unpublished. My Scores must not show a final grade or Passed yet. Pending manual grading must also prevent finalization.
 6. Publish both graded results. Expected course grade: `10 × 20% + 5 × 80% = 6.00/10`, Passed. Confirm the same result in My Scores, grade details, the staff course panel and analytics. The assessment lessons should complete automatically.

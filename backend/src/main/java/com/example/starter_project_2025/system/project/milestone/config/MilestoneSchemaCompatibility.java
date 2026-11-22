@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.config;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -18,6 +20,7 @@ import java.util.Locale;
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RequiredArgsConstructor
+@StartupMutation
 public class MilestoneSchemaCompatibility implements ApplicationRunner {
     private final DataSource dataSource;
     private final JdbcTemplate jdbc;

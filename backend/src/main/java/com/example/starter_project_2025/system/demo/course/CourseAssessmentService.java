@@ -58,6 +58,7 @@ public class CourseAssessmentService {
     }
     public Grade grade(Long courseId,Long studentId) {
         var published=publishedRepository.findByCourse_IdAndStudent_IdOrderByPositionAsc(courseId,studentId);
+        if (published.isEmpty()) published=publishedRepository.templateForCourse(courseId);
         if (!published.isEmpty()) return calculatePublished(published);
         return calculate(exams.findByCourseLink(courseId,null,null,false),
                 best(attempts.findAllByStudent_IdOrderByStartedAtDesc(studentId)),access::canStudentSeeScoreOnMyScores);

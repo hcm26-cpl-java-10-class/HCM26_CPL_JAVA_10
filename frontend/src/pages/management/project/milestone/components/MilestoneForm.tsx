@@ -270,7 +270,7 @@ export function MilestoneForm({
           <AlertDescription>
             <p>No eligible rubric is available. Create and publish one, then reload the options.</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button asChild type="button" size="sm" variant="outline"><a href="/rubrics" target="_blank" rel="noreferrer">Manage rubrics <ExternalLink className="size-4" /></a></Button>
+              <Button asChild type="button" size="sm" variant="outline"><a href="/rubrics" target="_blank" rel="opener">Manage rubrics <ExternalLink className="size-4" /></a></Button>
               <Button type="button" size="sm" variant="outline" onClick={onReloadOptions} disabled={reloadingOptions}><RefreshCw className="size-4" /> {reloadingOptions ? "Reloading..." : "Reload options"}</Button>
             </div>
           </AlertDescription>

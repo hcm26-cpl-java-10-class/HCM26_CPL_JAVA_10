@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.workspace.demo;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceSectionDtos;
 import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
 import com.example.starter_project_2025.system.project.workspace.service.MockWorkspaceSectionDataSource;
@@ -15,6 +17,7 @@ import javax.sql.DataSource;
 
 @Component @Order(30) @Profile("!test") @RequiredArgsConstructor
 @ConditionalOnProperty(name = "app.workspace.sections.mock-fixtures.enabled", havingValue = "true")
+@StartupMutation
 public class WorkspaceSectionMockInitializer implements CommandLineRunner {
     private final WorkspaceRepository workspaces;
     private final MockWorkspaceSectionDataSource mock;

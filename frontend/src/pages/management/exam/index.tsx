@@ -21,8 +21,8 @@ import {
 import { EXAM_CATEGORY_LABEL, type ExamCategory, type ExamDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookmarkPlus, BookOpen, CalendarClock, ClipboardCheck, Clock, Download, ListChecks, Plus, Search, Trophy, Upload, User } from "lucide-react";
-import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ExamConfigFields } from "./ExamConfigFields";
 import { ExportExamModal } from "./components/ExportExamModal";
@@ -92,7 +92,6 @@ function InfoRow({
 export default function ExamManagementPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [_searchParams] = useSearchParams();
   const [examSearch, setExamSearch] = useState("");
   const [examCategoryFilter, setExamCategoryFilter] = useState<ExamCategory | "ALL">("ALL");
   const [courseFilter, setCourseFilter] = useState<string>("ALL");
@@ -321,7 +320,7 @@ export default function ExamManagementPage() {
                   key={exam.id}
                   href={`/exams/${exam.id}`}
                   target="_blank"
-                  rel="noopener noreferrer"
+                  rel="opener"
                   aria-label={`Open exam ${exam.title} in a new tab`}
                   className="flex min-w-0 max-w-full cursor-pointer flex-col gap-3 rounded-lg border bg-card p-4 shadow-sm transition hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
@@ -386,6 +385,7 @@ export default function ExamManagementPage() {
               <DialogTitle>Create Exam</DialogTitle>
               <DialogDescription>Configure exam title, duration, and rules.</DialogDescription>
             </DialogHeader>
+
             <div className="min-h-0 flex-1 overflow-y-auto py-5 pr-1">
               <ExamConfigFields
                 title={newTitle}

@@ -21,6 +21,19 @@ public interface GradebookPublishedItemRepository extends JpaRepository<Gradeboo
     List<GradebookPublishedItem> findForStudents(@Param("courseIds") Collection<Long> courseIds,
                                                  @Param("studentIds") Collection<Long> studentIds);
 
+    /** Cot diem da Save cua course, diem de trong - dung cho sinh vien vao course sau lan Save cuoi. */
+    default List<GradebookPublishedItem> templateForCourse(Long courseId) {
+        List<GradebookPublishedItem> all = findByCourse_Id(courseId);
+        if (all.isEmpty()) return List.of();
+        Long first = all.get(0).getStudent().getId();
+        return all.stream().filter(i -> i.getStudent().getId().equals(first))
+                .sorted(java.util.Comparator.comparingInt(GradebookPublishedItem::getPosition))
+                .<GradebookPublishedItem>map(i -> GradebookPublishedItem.builder().course(i.getCourse()).position(i.getPosition())
+                        .columnType(i.getColumnType()).columnName(i.getColumnName()).examId(i.getExamId())
+                        .examTitle(i.getExamTitle()).weightPercent(i.getWeightPercent()).score(null).build())
+                .toList();
+    }
+
     @Modifying
     @Query("delete from GradebookPublishedItem i where i.course.id = :courseId")
     void deleteByCourse(@Param("courseId") Long courseId);

@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.workspace.service;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.rbac.permission.Permission;
 import com.example.starter_project_2025.system.rbac.permission.PermissionRepository;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +12,7 @@ import org.springframework.stereotype.Component;
 @Component
 @Order(1)
 @RequiredArgsConstructor
+@StartupMutation
 public class WorkspacePermissionInitializer implements CommandLineRunner {
     private final PermissionRepository permissions;
     @Override public void run(String... args) {
