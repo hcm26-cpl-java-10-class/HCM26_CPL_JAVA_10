@@ -1,3 +1,4 @@
+import RecommendedCoursesPage from "@/pages/student/RecommendedCoursesPage";
 import CourseLearnerGradesPage from "@/pages/management/demo/course/pages/CourseLearnerGradesPage";
 import ScoreManagementPage from "@/pages/management/exam/score-management";
 import ExamCurriculumPage from "@/pages/management/exam/curriculum/ExamCurriculumPage";
@@ -442,6 +443,7 @@ export const routes: RouteConfig[] = [
     isModuleDriven: false,
   },
 
+  { path: "/student/recommendations", component: RecommendedCoursesPage, requiredPermission: "ENROLLMENT_CREATE", isModuleDriven: false },
   // STUDENT
   {
     path: "/student",

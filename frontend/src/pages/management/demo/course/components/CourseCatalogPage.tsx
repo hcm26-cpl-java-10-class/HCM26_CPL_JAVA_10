@@ -31,7 +31,7 @@ import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
 import { CatalogPagination } from "./CatalogPagination.tsx";
 import { CourseCard, CourseCardSkeleton } from "./CourseCard.tsx";
 
-import { CourseRecommendations } from "./CourseRecommendations";
+
 
 const PAGE_SIZE = 12;
 const ALL = "all";
@@ -210,7 +210,7 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
         </section>
       )}
 
-      {!embedded && <CourseRecommendations search={urlSearch} />}
+      {!embedded && <Button variant="outline" onClick={() => navigate("/student/recommendations")}>For you · Recommended courses</Button>}
 
       <section className="space-y-1.5">
         <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_200px_170px_170px]">

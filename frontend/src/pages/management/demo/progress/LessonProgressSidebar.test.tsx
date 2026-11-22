@@ -19,3 +19,13 @@ it("shows results for section and final exams too",()=>{
  render(<LessonProgressSidebar onLessonSelect={()=>{}} progress={{...progress,assessmentOutcomes:{6:"FAILED",7:"PASSED"}}} exams={exams}/>);
  expect(screen.getByRole("img",{name:"Failed"})).toBeInTheDocument();expect(screen.getByRole("img",{name:"Passed"})).toBeInTheDocument();
 });
+it("marks only the selected assessment as current, not its contextual lesson",()=>{
+ render(<LessonProgressSidebar onLessonSelect={()=>{}} progress={progress} exams={[exam]} activeLessonId={10} activeExamId={5}/>);
+ expect(screen.getAllByRole("button",{current:"page"})).toHaveLength(1);
+ expect(screen.getByRole("button",{name:"Assessment A"})).toHaveAttribute("aria-current","page");
+ expect(screen.getByRole("button",{name:/Quiz lesson/})).not.toHaveAttribute("aria-current");
+});
+it("marks an ordinary selected lesson as current",()=>{
+ render(<LessonProgressSidebar onLessonSelect={()=>{}} progress={progress} exams={[exam]} activeLessonId={10}/>);
+ expect(screen.getByRole("button",{name:/Quiz lesson/})).toHaveAttribute("aria-current","page");
+});

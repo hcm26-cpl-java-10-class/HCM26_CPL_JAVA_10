@@ -1,7 +1,8 @@
+import { courseMappingReturnPath } from "@/utils/assessment-navigation";
 import { CourseAssessmentPanel } from "@/pages/management/demo/course/components/CourseAssessmentPanel";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useState, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -156,6 +157,8 @@ export default function ExamCurriculumPage() {
   const parsedCourseId = Number(searchParams.get("courseId"));
   const courseId = Number.isSafeInteger(parsedCourseId) && parsedCourseId > 0 ? parsedCourseId : 0;
 
+  const backToCourse = courseMappingReturnPath(searchParams.get("returnTo"), courseId);
+
   const [courseSearch, setCourseSearch] = useState("");
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<Set<number>>(new Set());
   const [linkModalOpen, setLinkModalOpen] = useState(false);
@@ -254,6 +257,7 @@ export default function ExamCurriculumPage() {
     <MainLayout>
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="flex flex-col gap-6">
+          <div><Button asChild variant="outline"><Link to={backToCourse}><ArrowLeft className="size-4" />{courseId > 0 ? "Back to course" : "Back to courses"}</Link></Button></div>
           {/* Header */}
           <div className="flex flex-wrap items-center justify-between gap-4 border-b pb-6">
             <div>
@@ -348,7 +352,7 @@ export default function ExamCurriculumPage() {
           ) : (
             /* ----------------- When Course IS Selected: Full Screen Section & Assessment View ----------------- */
             <div className="space-y-5">
-              <CourseAssessmentPanel courseId={courseId} />
+              <CourseAssessmentPanel courseId={courseId} showManageLinks={false} />
               {/* Top Bar with Course Switcher */}
               <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border/80 bg-card/70 backdrop-blur-xs p-4 shadow-xs">
                 <div className="flex items-center gap-3">

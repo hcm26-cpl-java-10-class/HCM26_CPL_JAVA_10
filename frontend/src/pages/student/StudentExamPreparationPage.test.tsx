@@ -5,7 +5,8 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { getExamPreparation, startOrResumeExam } from "@/api/exam.api";
-import StudentExamPreparationPage from "./StudentExamPreparationPage";
+import StudentExamPreparationPage, { AssessmentPreparationContent } from "./StudentExamPreparationPage";
+vi.mock("@/contexts/AuthContext",()=>({useAuth:()=>({user:{email:"prep@example.com"}})}));
 vi.mock("@/api/exam.api",()=>({getExamPreparation:vi.fn(),startOrResumeExam:vi.fn()}));
 vi.mock("@/components/layout/MainLayout",()=>({MainLayout:({children}:{children:ReactNode})=><main>{children}</main>}));
 const data={exam:{id:5,title:"Java Final",durationMinutes:60,maxAttempts:2,maxScore:10},questionCount:10,passScore:6,attemptsUsed:0,attemptsRemaining:2,canStart:true,canResume:false,unavailableReason:null,antiCheatEnabled:false,requireFullscreen:false,cameraProctoring:false,attempts:[]};
@@ -32,4 +33,26 @@ it("unpublished attempts show publication state and preserve course context into
  vi.mocked(getExamPreparation).mockResolvedValue({...data,attemptsUsed:1,attempts:[{summary:{id:9,attemptNumber:1,status:"SUBMITTED",resultPublished:false,finalScore:null},canReview:true}]} as never);
  const user=userEvent.setup();mount();expect(await screen.findByText("Result awaiting publication")).toBeInTheDocument();expect(screen.queryByText(/^Score:/)).not.toBeInTheDocument();
  await user.click(screen.getByRole("button",{name:"View my submission"}));expect(await screen.findByText(/Destination \/student\/exams\/attempts\/9\/review/)).toHaveTextContent("returnTo=%2Fenrollments%2F183%2Flearn%3FlessonId%3D8");
+});
+
+function embedded() { return render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><MemoryRouter><AssessmentPreparationContent id={5} returnTo="/enrollments/183/learn?lessonId=8&assessmentId=5" /></MemoryRouter></QueryClientProvider>); }
+it("embedded content preserves requirements without creating an attempt or another layout", async () => {
+ embedded(); expect(await screen.findByRole("heading", {name:"Java Final"})).toBeInTheDocument();
+ expect(screen.queryByRole("button", {name:"Back to course"})).not.toBeInTheDocument(); expect(startOrResumeExam).not.toHaveBeenCalled();
+});
+it("announces the latest failed retake once, retains its card and leaves best progress separate", async () => {
+ vi.mocked(getExamPreparation).mockResolvedValue({...data,attemptsUsed:2,attempts:[
+ {summary:{id:912,attemptNumber:2,status:"SUBMITTED",resultPublished:true,finalScore:3,passed:false},canReview:true},
+ {summary:{id:911,attemptNumber:1,status:"SUBMITTED",resultPublished:true,finalScore:9,passed:true},canReview:true}]} as never);
+ const view=embedded(); expect(await screen.findByText("This attempt did not pass")).toBeInTheDocument();
+ expect(await screen.findByRole("button",{name:"Dismiss assessment result"})).toBeInTheDocument();
+ await userEvent.click(screen.getByRole("button",{name:"Dismiss assessment result"}));
+ expect(screen.queryByRole("button",{name:"Dismiss assessment result"})).not.toBeInTheDocument();
+ view.unmount(); embedded(); await screen.findByText("This attempt did not pass");
+ expect(screen.queryByRole("button",{name:"Dismiss assessment result"})).not.toBeInTheDocument();
+});
+it.each([{status:"PENDING_REVIEW",resultPublished:true,finalScore:null,passed:null},{status:"SUBMITTED",resultPublished:false,finalScore:null,passed:null}])("keeps private and pending results neutral",async summary => {
+ vi.mocked(getExamPreparation).mockResolvedValue({...data,attempts:[{summary:{...summary,id:921,attemptNumber:1},canReview:false}]} as never);
+ embedded(); await screen.findByRole("heading",{name:"Java Final"});
+ expect(screen.queryByText("You passed!")).not.toBeInTheDocument(); expect(screen.queryByRole("button",{name:"Dismiss assessment result"})).not.toBeInTheDocument();
 });
