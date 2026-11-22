@@ -2,10 +2,10 @@ package com.example.starter_project_2025.system.git_integration.sync;
 
 import com.example.starter_project_2025.system.git_integration.config.GitHubAppProperties;
 import com.example.starter_project_2025.system.git_integration.domain.GitRepository;
-import com.example.starter_project_2025.system.git_integration.domain.GitRepositoryStatus;
 import com.example.starter_project_2025.system.git_integration.domain.GitSyncJob;
 import com.example.starter_project_2025.system.git_integration.domain.GitSyncJobStatus;
 import com.example.starter_project_2025.system.git_integration.domain.GitSyncJobType;
+import com.example.starter_project_2025.system.git_integration.domain.GitSyncPhase;
 import com.example.starter_project_2025.system.git_integration.repository.GitRepositoryRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitSyncJobRepository;
 import com.example.starter_project_2025.system.git_integration.service.GitRepositoryLinkWriter;
@@ -25,7 +25,7 @@ import java.util.Optional;
  * <ol>
  *   <li>a job PENDING/RUNNING is returned as is;</li>
  *   <li>a recent success is returned as is ("Sync now" cooldown, reconcile skip);</li>
- *   <li>a PARTIAL/FAILED job with a cursor is reset and resumes where it stopped (AC05);</li>
+ *   <li>a PARTIAL/FAILED job past its metadata step is reset and resumes where it stopped (SY-01 AC05, SY-02);</li>
  *   <li>a failed INITIAL job without a cursor is reset (a connection has one INITIAL job);</li>
  *   <li>otherwise a new job of the requested type is queued.</li>
  * </ol>
@@ -48,14 +48,14 @@ public class GitSyncJobQueue {
         this.clock = clock;
     }
 
-    /** {@code queued = false}: an existing job was returned. Empty when the connection is not ACTIVE. */
+    /** {@code queued = false}: an existing job was returned. Empty when the connection is not ACTIVE or ERROR. */
     public record Requested(GitSyncJob job, boolean queued) {
     }
 
     @Transactional
     public Optional<Requested> request(Long connectionId, GitSyncJobType type, Long requestedByUserId, LocalDateTime runAt) {
         GitRepository connection = connections.lockById(connectionId)
-                .filter(row -> row.getStatus() == GitRepositoryStatus.ACTIVE)
+                .filter(row -> row.getStatus().receivesEvents()) // GI-05: ERROR may sync (a success clears it)
                 .orElse(null);
         if (connection == null) return Optional.empty();
         LocalDateTime now = LocalDateTime.now(clock);
@@ -68,9 +68,8 @@ public class GitSyncJobQueue {
         }
 
         GitSyncJob job = null;
-        if (latest != null && latest.getCommitCursor() != null
-                && (latest.getStatus() == GitSyncJobStatus.PARTIAL || latest.getStatus() == GitSyncJobStatus.FAILED)) {
-            job = latest; // AC05: resume from the cursor
+        if (latest != null && resumable(latest)) {
+            job = latest; // resume at its step and cursor
         } else {
             job = jobs.findByDedupeKey(GitRepositoryLinkWriter.initialDedupeKey(connection.getId()))
                     .filter(initial -> initial.getStatus() == GitSyncJobStatus.FAILED)
@@ -99,6 +98,14 @@ public class GitSyncJobQueue {
         job = jobs.saveAndFlush(job);
         events.publishEvent(new GitSyncJobRequested(job.getId()));
         return Optional.of(new Requested(job, true));
+    }
+
+    /** A stopped job that got past its metadata step keeps its step, window and cursors: resuming continues it. */
+    public static boolean resumable(GitSyncJob job) {
+        boolean stopped = job.getStatus() == GitSyncJobStatus.PARTIAL || job.getStatus() == GitSyncJobStatus.FAILED;
+        boolean progressed = job.getCommitCursor() != null || job.getPrCursor() != null
+                || job.getPhase() == GitSyncPhase.PULL_REQUESTS;
+        return stopped && progressed;
     }
 
     private long recentSeconds(GitSyncJobType type) {

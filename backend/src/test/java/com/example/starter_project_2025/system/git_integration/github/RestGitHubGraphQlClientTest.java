@@ -2,7 +2,12 @@ package com.example.starter_project_2025.system.git_integration.github;
 
 import com.example.starter_project_2025.system.git_integration.config.GitHubAppProperties;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommitHistoryPage;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubActor;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubHistoryCommit;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubPullRequestNode;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubPullRequestPage;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubReviewNode;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubReviewPage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -158,6 +163,82 @@ class RestGitHubGraphQlClientTest {
                     assertThat(e.getKind()).isEqualTo(GitHubApiException.Kind.UNAVAILABLE);
                     assertThat(e.getMessage()).doesNotContain("ghs_secret");
                 });
+    }
+
+    @Test
+    void readsPullRequestsWithStatesOrderAndSubmittedReviewsOnly() {
+        server.expect(requestTo("https://api.github.com/graphql"))
+                .andExpect(jsonPath("$.variables.first").value(50))
+                .andExpect(jsonPath("$.variables.reviews").value(50))
+                .andExpect(jsonPath("$.query").value(org.hamcrest.Matchers.containsString("states: [OPEN, CLOSED, MERGED]")))
+                .andExpect(jsonPath("$.query").value(org.hamcrest.Matchers.containsString("orderBy: {field: UPDATED_AT, direction: DESC}")))
+                .andExpect(jsonPath("$.query").value(org.hamcrest.Matchers.containsString(
+                        "states: [APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]")))
+                .andExpect(jsonPath("$.query").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("PENDING"))))
+                .andRespond(withSuccess("""
+                        {"data": {"rateLimit": {"remaining": 4900, "resetAt": null, "cost": 26},
+                          "repository": {"pullRequests": {"totalCount": 2, "pageInfo": {"hasNextPage": false, "endCursor": "p2"},
+                            "nodes": [
+                              {"id": "PR_1", "databaseId": 11, "number": 6, "title": "Feat", "body": "b", "url": "u",
+                               "state": "MERGED", "merged": true, "isDraft": false, "createdAt": "2026-11-19T01:00:00Z",
+                               "updatedAt": "2026-11-20T01:00:00Z", "closedAt": "2026-11-20T01:00:00Z", "mergedAt": "2026-11-20T01:00:00Z",
+                               "headRefName": "feat/x", "headRefOid": "h1", "baseRefName": "main", "additions": 5, "deletions": 1,
+                               "changedFiles": 2, "commits": {"totalCount": 3}, "mergeCommit": {"oid": "m1"}, "mergedBy": {"login": "lead"},
+                               "author": {"login": "dependabot", "databaseId": 49699333},
+                               "reviews": {"pageInfo": {"hasNextPage": true, "endCursor": "r1"}, "nodes": [
+                                 {"databaseId": 101, "state": "APPROVED", "body": "", "url": "ru", "submittedAt": "2026-11-20T00:30:00Z",
+                                  "updatedAt": "2026-11-20T00:30:00Z", "commit": {"oid": "h1"}, "author": {"login": "lead", "databaseId": 5}}]}},
+                              {"id": "PR_2", "databaseId": 12, "number": 5, "title": "Old", "body": null, "url": "u2",
+                               "state": "CLOSED", "merged": false, "isDraft": true, "createdAt": "2026-11-18T01:00:00Z",
+                               "updatedAt": "2026-11-18T02:00:00Z", "closedAt": "2026-11-18T02:00:00Z", "mergedAt": null,
+                               "headRefName": "old", "headRefOid": "h2", "baseRefName": "main", "additions": 0, "deletions": 0,
+                               "changedFiles": 0, "commits": {"totalCount": 1}, "mergeCommit": null, "mergedBy": null, "author": null,
+                               "reviews": {"pageInfo": {"hasNextPage": false, "endCursor": null}, "nodes": []}}
+                            ]}}}}
+                        """, MediaType.APPLICATION_JSON));
+
+        GitHubPullRequestPage page = client.pullRequests("t", "team", "shop", null, 50, 50);
+
+        assertThat(page.repositoryFound()).isTrue();
+        assertThat(page.pullRequests()).hasSize(2);
+        GitHubPullRequestNode merged = page.pullRequests().get(0);
+        assertThat(merged.merged()).isTrue();
+        assertThat(merged.commitsCount()).isEqualTo(3);
+        assertThat(merged.mergeCommitOid()).isEqualTo("m1");
+        assertThat(merged.author()).isEqualTo(new GitHubActor("dependabot", 49699333L)); // a Bot
+        assertThat(merged.reviews()).singleElement().satisfies(review -> {
+            assertThat(review.databaseId()).isEqualTo(101L);
+            assertThat(review.state()).isEqualTo("APPROVED");
+            assertThat(review.author().login()).isEqualTo("lead");
+        });
+        assertThat(merged.reviewsHasNextPage()).isTrue();
+        assertThat(merged.reviewsEndCursor()).isEqualTo("r1");
+        assertThat(page.pullRequests().get(1).author()).isNull(); // deleted account
+        assertThat(page.pullRequests().get(1).draft()).isTrue();
+        assertThat(page.rateLimit().cost()).isEqualTo(26);
+    }
+
+    @Test
+    void readsTheFurtherReviewsOfAPullRequest() {
+        server.expect(requestTo("https://api.github.com/graphql"))
+                .andExpect(jsonPath("$.variables.id").value("PR_1"))
+                .andExpect(jsonPath("$.variables.after").value("r1"))
+                .andRespond(withSuccess("{\"data\":{\"node\":{\"reviews\":{\"pageInfo\":{\"hasNextPage\":false,\"endCursor\":\"r2\"},"
+                        + "\"nodes\":[{\"databaseId\":102,\"state\":\"COMMENTED\",\"author\":{\"login\":\"qa\",\"databaseId\":6}}]}}}}",
+                        MediaType.APPLICATION_JSON));
+
+        GitHubReviewPage page = client.pullRequestReviews("t", "PR_1", "r1", 100);
+
+        assertThat(page.reviews()).extracting(GitHubReviewNode::databaseId).containsExactly(102L);
+        assertThat(page.hasNextPage()).isFalse();
+    }
+
+    @Test
+    void pullRequestsOfARepositoryTheInstallationCannotSeeAreNotFound() {
+        server.expect(requestTo("https://api.github.com/graphql"))
+                .andRespond(withSuccess("{\"data\":{\"repository\":null},\"errors\":[{\"type\":\"NOT_FOUND\"}]}", MediaType.APPLICATION_JSON));
+
+        assertThat(client.pullRequests("t", "team", "gone", null, 50, 50).repositoryFound()).isFalse();
     }
 
     @Test

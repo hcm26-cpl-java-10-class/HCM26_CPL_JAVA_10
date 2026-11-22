@@ -262,15 +262,16 @@ class GitRepositoryBrowseIntegrationTest {
     // ---- Installation state (T5 / T6) ----------------------------------------------------------------
 
     @Test
-    void uninstalledAppMarksInstallationDisconnected() throws Exception {
+    void aTokenRefusedWith404PutsTheInstallationInError() throws Exception {
+        // GI-02: ERROR until GitHub confirms the removal ("deleted" webhook or "Check again").
         when(github.createInstallationToken(GITHUB_INSTALLATION_ID))
                 .thenThrow(new GitHubApiException(GitHubApiException.Kind.GONE, "token", 404));
 
         browse(readerToken, "")
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("GIT_INSTALLATION_NOT_ACTIVE"))
-                .andExpect(jsonPath("$.installationStatus").value("DISCONNECTED"));
-        assertThat(installations.findById(installationRowId).orElseThrow().getStatus()).isEqualTo(GitInstallationStatus.DISCONNECTED);
+                .andExpect(jsonPath("$.code").value("GIT_INSTALLATION_ERROR"))
+                .andExpect(jsonPath("$.installationStatus").value("ERROR"));
+        assertThat(installations.findById(installationRowId).orElseThrow().getStatus()).isEqualTo(GitInstallationStatus.ERROR);
     }
 
     @Test

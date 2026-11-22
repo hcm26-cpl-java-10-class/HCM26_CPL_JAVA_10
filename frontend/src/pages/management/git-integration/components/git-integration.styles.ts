@@ -54,6 +54,12 @@ export const STATUS_STYLES: Record<AnyStatus, { label: string; badge: string; do
     dot: "bg-slate-400",
     accent: "border-l-slate-300 dark:border-l-slate-600",
   },
+  ERROR: {
+    label: "Error",
+    badge: "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300",
+    dot: "bg-red-500",
+    accent: "border-l-red-500",
+  },
   DISCONNECTED: {
     label: "Disconnected",
     badge: "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300",

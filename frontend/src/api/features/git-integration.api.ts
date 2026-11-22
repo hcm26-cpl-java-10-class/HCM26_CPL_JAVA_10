@@ -1,6 +1,9 @@
 import { isAxiosError } from "axios";
 import axiosInstance from "@/api/axios";
 import type {
+  GitHubConnectionRecheck,
+  GitHubConnectionView,
+  GitInstallation,
   GitSyncRequestResult,
   GitAccountCallbackRequest,
   GitAccountConnectResponse,
@@ -65,6 +68,18 @@ export const gitIntegrationApi = {
   /** Issues a one-time state and returns the GitHub App install URL to send the browser to. */
   connect: async () => (await axiosInstance.post<GitHubConnectStartResponse>(`${BASE}/connect`)).data,
 
+  /** US-GI-02: "Check again" an installation with GitHub (Git Integration managers). */
+  recheckInstallation: async (id: number) =>
+    (await axiosInstance.post<GitInstallation>(`${BASE}/installations/${id}/recheck`)).data,
+
+  /** US-GI-02: GitHub connection of a project (a module shows its master's). */
+  githubConnection: async (projectId: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<GitHubConnectionView>(`${PROJECTS}/${projectId}/github/connection`, { signal })).data,
+
+  /** US-GI-02: "Check again" the project's connection (PM of the master, mentor, Git Integration manager). */
+  recheckConnection: async (projectId: number) =>
+    (await axiosInstance.post<GitHubConnectionRecheck>(`${PROJECTS}/${projectId}/github/connection/recheck`)).data,
+
   /** US-GI-04: repository of a project; a module returns its master project's repository. */
   projectRepository: async (projectId: number, signal?: AbortSignal) =>
     (await axiosInstance.get<ProjectRepositoryView>(`${PROJECTS}/${projectId}/repository`, { signal })).data,
@@ -72,6 +87,10 @@ export const gitIntegrationApi = {
   /** US-GI-04: link a repository to a master project (201 created, 200 already linked) and start the initial sync. */
   linkRepository: async (projectId: number, body: LinkRepositoryRequest) =>
     (await axiosInstance.post<ProjectRepositoryView>(`${PROJECTS}/${projectId}/repository`, body)).data,
+
+  /** US-GI-05: unlink the project's repository (it becomes INACTIVE; synchronized data is kept). */
+  unlinkRepository: async (projectId: number, repositoryId: number) =>
+    (await axiosInstance.post<ProjectRepositoryView>(`${PROJECTS}/${projectId}/repository/unlink`, { repositoryId })).data,
 
   /** US-GI-04: queue the synchronization again after it failed. */
   /** US-SY-01 "Sync now": 202 = queued (or resumed), 200 = a sync was already waiting, running or just done. */
@@ -96,6 +115,7 @@ export const gitIntegrationApi = {
         to: query.to || undefined,
         page: query.page ?? 0,
         size: query.size ?? 20,
+        repositoryId: query.repositoryId,
       },
       signal,
     })).data,
@@ -103,13 +123,19 @@ export const gitIntegrationApi = {
   /** US-SY-04: pull requests, most recently updated first, with each reviewer's current decision. */
   repositoryPullRequests: async (projectId: number, query: GitPullRequestQuery, signal?: AbortSignal) =>
     (await axiosInstance.get<GitPage<GitPullRequestItem>>(`${PROJECTS}/${projectId}/repository/pull-requests`, {
-      params: { state: query.state, q: query.q?.trim() || undefined, link: query.link, page: query.page ?? 0, size: query.size ?? 20 },
+      params: {
+        state: query.state, q: query.q?.trim() || undefined, link: query.link, page: query.page ?? 0, size: query.size ?? 20,
+        repositoryId: query.repositoryId,
+      },
       signal,
     })).data,
 
   /** WS-GH-02: activity of the period (today included) and the current state of the open pull requests. */
-  repositoryInsights: async (projectId: number, range: GitInsightsRange, signal?: AbortSignal) =>
-    (await axiosInstance.get<GitRepositoryInsights>(`${PROJECTS}/${projectId}/repository/insights`, { params: { range }, signal })).data,
+  repositoryInsights: async (projectId: number, range: GitInsightsRange, signal?: AbortSignal, repositoryId?: number) =>
+    (await axiosInstance.get<GitRepositoryInsights>(`${PROJECTS}/${projectId}/repository/insights`, {
+      params: { range, repositoryId },
+      signal,
+    })).data,
 
   /** WS-GH-02: branches commits were first pushed to, latest activity first. */
   repositoryBranches: async (projectId: number, q: string, limit = 50, signal?: AbortSignal) =>
@@ -119,8 +145,11 @@ export const gitIntegrationApi = {
     })).data,
 
   /** US-SY-04: one pull request with its reviews. */
-  pullRequestDetail: async (projectId: number, number: number, signal?: AbortSignal) =>
-    (await axiosInstance.get<GitPullRequestDetail>(`${PROJECTS}/${projectId}/repository/pull-requests/${number}`, { signal })).data,
+  pullRequestDetail: async (projectId: number, number: number, signal?: AbortSignal, repositoryId?: number) =>
+    (await axiosInstance.get<GitPullRequestDetail>(`${PROJECTS}/${projectId}/repository/pull-requests/${number}`, {
+      params: { repositoryId },
+      signal,
+    })).data,
 
   /** US-SY-05: commits and pull requests linked to a task (anyone who can open the task). */
   backlogItemGitLinks: async (itemId: number, page = 0, size = 20, signal?: AbortSignal) =>

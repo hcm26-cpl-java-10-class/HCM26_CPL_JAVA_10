@@ -10,13 +10,13 @@ import com.example.starter_project_2025.system.git_integration.domain.GitPullReq
 import com.example.starter_project_2025.system.git_integration.domain.GitPullRequestReview;
 import com.example.starter_project_2025.system.git_integration.domain.GitPullRequestState;
 import com.example.starter_project_2025.system.git_integration.domain.GitRepository;
-import com.example.starter_project_2025.system.git_integration.domain.GitRepositoryStatus;
 import com.example.starter_project_2025.system.git_integration.domain.GitReviewState;
 import com.example.starter_project_2025.system.git_integration.domain.GitWebhookEventStatus;
 import com.example.starter_project_2025.system.git_integration.dto.GitCommitItem;
 import com.example.starter_project_2025.system.git_integration.dto.GitPage;
 import com.example.starter_project_2025.system.git_integration.dto.GitPullRequestDetail;
 import com.example.starter_project_2025.system.git_integration.dto.GitPullRequestItem;
+import com.example.starter_project_2025.system.git_integration.dto.GitRepositoryLabel;
 import com.example.starter_project_2025.system.git_integration.dto.GitTaskRef;
 import com.example.starter_project_2025.system.git_integration.dto.TaskLinkFilter;
 import com.example.starter_project_2025.system.git_integration.dto.TaskLinkStats;
@@ -51,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -60,8 +61,13 @@ import java.util.stream.Collectors;
 
 /**
  * SY-04: read side of the data synchronized from webhooks, per project. A module
- * reads its master project's repository. The ACTIVE connection is used, or the
- * latest UNAVAILABLE one so its history stays visible.
+ * reads its master project's repository.
+ * <p>
+ * GI-05: analytics are per project, not per current repository: commits, pull
+ * requests and their counts cover every connection the master ever had (unlinked
+ * ones included), each item labelled with its repository; {@code repositoryId}
+ * narrows a list to one of them. The current repository (ACTIVE, ERROR or
+ * DISCONNECTED) is what new data comes from (webhook health, branches, link picker).
  */
 @Service
 @RequiredArgsConstructor
@@ -83,53 +89,95 @@ public class RepositoryActivityQueryService {
     private final ProjectScopeResolver scopes;
     private final GitTaskRefReader taskRefs;
 
-    /** {@code link}: SY-05 filter by task link verdict (null = all). */
+    /** {@code link}: SY-05 filter by task link verdict (null = all). GI-05 {@code repositoryId}: one connection (null = all). */
     public record CommitQuery(String q, String author, String branch, LocalDateTime from, LocalDateTime to,
-                              TaskLinkFilter link, int page, int size) {
+                              TaskLinkFilter link, int page, int size, Long repositoryId) {
+
+        public CommitQuery(String q, String author, String branch, LocalDateTime from, LocalDateTime to,
+                           TaskLinkFilter link, int page, int size) {
+            this(q, author, branch, from, to, link, page, size, null);
+        }
     }
 
-    public record PullRequestQuery(GitPullRequestState state, String q, TaskLinkFilter link, int page, int size) {
+    public record PullRequestQuery(GitPullRequestState state, String q, TaskLinkFilter link, int page, int size, Long repositoryId) {
+
+        public PullRequestQuery(GitPullRequestState state, String q, TaskLinkFilter link, int page, int size) {
+            this(state, q, link, page, size, null);
+        }
+    }
+
+    /**
+     * GI-05: the connections of a project's master: every one (analytics) by id, and the current one
+     * (null when none is linked now). Empty when the master never linked a repository.
+     */
+    public record ProjectRepositories(Project master, GitRepository current, Map<Long, GitRepository> byId) {
+
+        public boolean isEmpty() {
+            return byId.isEmpty();
+        }
+
+        public List<Long> ids() {
+            return List.copyOf(byId.keySet());
+        }
+
+        /** The ids a query reads: all, or the one asked for (404 when it is not one of the project's). */
+        public List<Long> select(Long repositoryId) {
+            if (repositoryId == null) return ids();
+            if (!byId.containsKey(repositoryId)) throw GitIntegrationException.repositoryNotLinked();
+            return List.of(repositoryId);
+        }
+
+        public GitRepositoryLabel label(Long repositoryId) {
+            GitRepository row = byId.get(repositoryId);
+            return row == null ? null : new GitRepositoryLabel(row.getId(), row.getFullName(), row.getStatus());
+        }
+
+        public List<GitRepositoryLabel> labels() {
+            return byId.values().stream().map(row -> label(row.getId())).toList();
+        }
     }
 
     @Transactional(readOnly = true)
     public RepositoryActivityView activity(Long projectId) {
-        Optional<GitRepository> found = repositoryOf(projectId);
-        if (found.isEmpty()) return RepositoryActivityView.none();
-        GitRepository repository = found.get();
+        ProjectRepositories scope = repositoriesOf(projectId);
+        if (scope.isEmpty()) return RepositoryActivityView.none();
+        List<Long> ids = scope.ids();
+        GitRepository current = scope.current();
 
         Map<GitPullRequestState, Long> byState = new EnumMap<>(GitPullRequestState.class);
-        for (Object[] row : pullRequests.countByState(repository.getId())) {
+        for (Object[] row : pullRequests.countByState(ids)) {
             byState.put((GitPullRequestState) row[0], (Long) row[1]);
         }
         return new RepositoryActivityView(
-                repository.getId(),
-                repository.getStatus(),
-                commits.countByRepositoryId(repository.getId()),
-                references.countSources(repository.getId(), GitArtifactType.COMMIT, BacklogReferenceStatus.LINKED),
-                commits.findFirstByRepositoryIdOrderByCommittedAtDescIdDesc(repository.getId())
+                current == null ? null : current.getId(),
+                current == null ? null : current.getStatus(),
+                commits.countByRepositoryIdIn(ids),
+                references.countSources(ids, GitArtifactType.COMMIT, BacklogReferenceStatus.LINKED),
+                commits.findFirstByRepositoryIdInOrderByCommittedAtDescIdDesc(ids)
                         .map(commit -> commitItem(commit, taskRefs.refsOf(GitArtifactType.COMMIT, List.of(commit.getId()))
-                                .getOrDefault(commit.getId(), List.of())))
+                                .getOrDefault(commit.getId(), List.of()), scope.label(commit.getRepositoryId())))
                         .orElse(null),
                 new RepositoryActivityView.PullRequestCounts(
                         byState.getOrDefault(GitPullRequestState.OPEN, 0L),
                         byState.getOrDefault(GitPullRequestState.MERGED, 0L),
                         byState.getOrDefault(GitPullRequestState.CLOSED, 0L)),
-                events.lastReceivedAt(repository.getId(), GitWebhookEventStatus.PROCESSED),
-                events.countByRepoExternalIdAndStatusIn(repository.getExternalId(), GitWebhookEventStore.PENDING),
-                events.countByRepositoryRefAndStatus(repository.getId(), GitWebhookEventStatus.FAILED));
+                current == null ? null : events.lastReceivedAt(current.getId(), GitWebhookEventStatus.PROCESSED),
+                current == null ? 0 : events.countByRepoExternalIdAndStatusIn(current.getExternalId(), GitWebhookEventStore.PENDING),
+                current == null ? 0 : events.countByRepositoryRefAndStatus(current.getId(), GitWebhookEventStatus.FAILED),
+                scope.labels());
     }
 
     @Transactional(readOnly = true)
     public GitPage<GitCommitItem> commits(Long projectId, CommitQuery query) {
         int page = Math.max(query.page(), 0);
         int size = clampSize(query.size());
-        Optional<GitRepository> found = repositoryOf(projectId);
-        if (found.isEmpty()) return GitPage.empty(page, size);
-        Long repositoryId = found.get().getId();
+        ProjectRepositories scope = repositoriesOf(projectId);
+        if (scope.isEmpty()) return GitPage.empty(page, size);
+        List<Long> repositoryIds = scope.select(query.repositoryId());
 
         Specification<GitCommit> spec = (root, cq, cb) -> {
             List<Predicate> where = new ArrayList<>();
-            where.add(cb.equal(root.get("repositoryId"), repositoryId));
+            where.add(root.get("repositoryId").in(repositoryIds));
             if (hasText(query.q())) {
                 String like = "%" + query.q().trim().toLowerCase(Locale.ROOT) + "%";
                 where.add(cb.or(cb.like(cb.lower(root.get("message")), like), cb.like(cb.lower(root.get("sha")), like)));
@@ -152,20 +200,21 @@ public class RepositoryActivityQueryService {
                 Sort.by(Sort.Order.desc("committedAt"), Sort.Order.desc("id"))));
         Map<Long, List<GitTaskRef>> refs = taskRefs.refsOf(GitArtifactType.COMMIT,
                 result.getContent().stream().map(GitCommit::getId).toList());
-        return GitPage.of(result, commit -> commitItem(commit, refs.getOrDefault(commit.getId(), List.of())));
+        return GitPage.of(result, commit -> commitItem(commit, refs.getOrDefault(commit.getId(), List.of()),
+                scope.label(commit.getRepositoryId())));
     }
 
     @Transactional(readOnly = true)
     public GitPage<GitPullRequestItem> pullRequests(Long projectId, PullRequestQuery query) {
         int page = Math.max(query.page(), 0);
         int size = clampSize(query.size());
-        Optional<GitRepository> found = repositoryOf(projectId);
-        if (found.isEmpty()) return GitPage.empty(page, size);
-        Long repositoryId = found.get().getId();
+        ProjectRepositories scope = repositoriesOf(projectId);
+        if (scope.isEmpty()) return GitPage.empty(page, size);
+        List<Long> repositoryIds = scope.select(query.repositoryId());
 
         Specification<GitPullRequest> spec = (root, cq, cb) -> {
             List<Predicate> where = new ArrayList<>();
-            where.add(cb.equal(root.get("repositoryId"), repositoryId));
+            where.add(root.get("repositoryId").in(repositoryIds));
             if (query.state() != null) where.add(cb.equal(root.get("state"), query.state()));
             if (hasText(query.q())) {
                 String q = query.q().trim();
@@ -187,17 +236,30 @@ public class RepositoryActivityQueryService {
         Map<Long, List<GitTaskRef>> refs = taskRefs.refsOf(GitArtifactType.PULL_REQUEST,
                 result.getContent().stream().map(GitPullRequest::getId).toList());
         return GitPage.of(result, pr -> pullRequestItem(pr, reviewsByPr.getOrDefault(pr.getId(), List.of()),
-                refs.getOrDefault(pr.getId(), List.of())));
+                refs.getOrDefault(pr.getId(), List.of()), scope.label(pr.getRepositoryId())));
     }
 
     @Transactional(readOnly = true)
     public GitPullRequestDetail pullRequest(Long projectId, int number) {
-        GitRepository repository = repositoryOf(projectId).orElseThrow(GitIntegrationException::pullRequestNotFound);
-        GitPullRequest pr = pullRequests.findByRepositoryIdAndNumber(repository.getId(), number)
+        return pullRequest(projectId, number, null);
+    }
+
+    /**
+     * GI-05: a number is unique within one repository only. {@code repositoryId} picks the
+     * repository; without it the current repository's pull request is preferred, then the newest.
+     */
+    @Transactional(readOnly = true)
+    public GitPullRequestDetail pullRequest(Long projectId, int number, Long repositoryId) {
+        ProjectRepositories scope = repositoriesOf(projectId);
+        if (scope.isEmpty()) throw GitIntegrationException.pullRequestNotFound();
+        List<Long> ids = scope.select(repositoryId);
+        Optional<GitPullRequest> preferred = repositoryId == null && scope.current() != null
+                ? pullRequests.findByRepositoryIdAndNumber(scope.current().getId(), number) : Optional.empty();
+        GitPullRequest pr = preferred.or(() -> pullRequests.findFirstByRepositoryIdInAndNumberOrderByIdDesc(ids, number))
                 .orElseThrow(GitIntegrationException::pullRequestNotFound);
         List<GitPullRequestReview> list = reviews.findByPullRequestIdOrderBySubmittedAtAscIdAsc(pr.getId());
         List<GitTaskRef> refs = taskRefs.refsOf(GitArtifactType.PULL_REQUEST, List.of(pr.getId())).getOrDefault(pr.getId(), List.of());
-        return new GitPullRequestDetail(pullRequestItem(pr, list, refs), pr.getBody(), pr.getMergedByLogin(), pr.getCommitsCount(),
+        return new GitPullRequestDetail(pullRequestItem(pr, list, refs, scope.label(pr.getRepositoryId())), pr.getBody(), pr.getMergedByLogin(), pr.getCommitsCount(),
                 list.stream().map(r -> new GitPullRequestDetail.Review(r.getId(), r.getReviewerLogin(), r.getState(),
                         r.getBody(), r.getCommitSha(), r.getSubmittedAt(), r.getDismissedAt(), r.getHtmlUrl())).toList());
     }
@@ -208,31 +270,37 @@ public class RepositoryActivityQueryService {
      */
     @Transactional(readOnly = true)
     public TaskLinkStats taskLinkStats(Long projectId) {
-        Optional<GitRepository> found = repositoryOf(projectId);
-        if (found.isEmpty()) return TaskLinkStats.none();
-        GitRepository repository = found.get();
+        ProjectRepositories scope = repositoriesOf(projectId);
+        if (scope.isEmpty()) return TaskLinkStats.none();
+        List<Long> ids = scope.ids();
         return new TaskLinkStats(
-                counts(repository.getId(), GitArtifactType.COMMIT, commits.countByRepositoryId(repository.getId())),
-                counts(repository.getId(), GitArtifactType.PULL_REQUEST, pullRequests.countByRepositoryId(repository.getId())),
-                links.countLinkedItems(repository.getId(), GitArtifactType.COMMIT),
-                backlog.countWithoutLinks(scopes.scope(repository.getProjectId()), SprintBacklogStatus.IN_PROGRESS,
+                counts(ids, GitArtifactType.COMMIT, commits.countByRepositoryIdIn(ids)),
+                counts(ids, GitArtifactType.PULL_REQUEST, pullRequests.countByRepositoryIdIn(ids)),
+                links.countLinkedItems(ids, GitArtifactType.COMMIT),
+                backlog.countWithoutLinks(scopes.scope(scope.master().getId()), SprintBacklogStatus.IN_PROGRESS,
                         GitArtifactType.COMMIT));
     }
 
-    /** SY-05: the repository a project reads (checks the caller may view the project). */
+    /** SY-05: the current repository of a project (checks the caller may view the project). */
     @Transactional(readOnly = true)
     public Optional<GitRepository> repositoryFor(Long projectId) {
-        return repositoryOf(projectId);
+        return Optional.ofNullable(repositoriesOf(projectId).current());
     }
 
-    private TaskLinkStats.Counts counts(Long repositoryId, GitArtifactType type, long total) {
+    /** GI-05: every connection of the project's master and its current one (checks the caller may view the project). */
+    @Transactional(readOnly = true)
+    public ProjectRepositories repositoriesFor(Long projectId) {
+        return repositoriesOf(projectId);
+    }
+
+    private TaskLinkStats.Counts counts(List<Long> repositoryIds, GitArtifactType type, long total) {
         Map<BacklogReferenceStatus, Long> byStatus = new EnumMap<>(BacklogReferenceStatus.class);
-        for (Object[] row : references.countSourcesByStatus(repositoryId, type)) {
+        for (Object[] row : references.countSourcesByStatus(repositoryIds, type)) {
             byStatus.put((BacklogReferenceStatus) row[0], (Long) row[1]);
         }
-        return new TaskLinkStats.Counts(total, references.countProcessedSources(repositoryId, type),
-                links.countLinkedArtifacts(repositoryId, type),
-                references.countUnlinkedMissingSources(repositoryId, type),
+        return new TaskLinkStats.Counts(total, references.countProcessedSources(repositoryIds, type),
+                links.countLinkedArtifacts(repositoryIds, type),
+                references.countUnlinkedMissingSources(repositoryIds, type),
                 byStatus.getOrDefault(BacklogReferenceStatus.INVALID, 0L),
                 byStatus.getOrDefault(BacklogReferenceStatus.OUTSIDE_PROJECT, 0L));
     }
@@ -276,18 +344,23 @@ public class RepositoryActivityQueryService {
         return cb.exists(sub);
     }
 
-    /** The project's (or its master's) repository connection: ACTIVE, else the latest UNAVAILABLE one. */
-    private Optional<GitRepository> repositoryOf(Long projectId) {
+    /** GI-05: the connections of the project's (or its master's) repository, newest link first. */
+    private ProjectRepositories repositoriesOf(Long projectId) {
         User user = access.requireUser();
         Project project = projectResolver.require(user, projectId);
         policy.requireCanView(user, project);
         Project master = projectResolver.masterOf(project);
-        return connections.findFirstByProjectIdAndStatus(master.getId(), GitRepositoryStatus.ACTIVE)
-                .or(() -> connections.findFirstByProjectIdOrderByIdDesc(master.getId())
-                        .filter(row -> row.getStatus() == GitRepositoryStatus.UNAVAILABLE));
+        Map<Long, GitRepository> byId = new LinkedHashMap<>();
+        connections.findByProjectIdOrderByLinkedAtDescIdDesc(master.getId()).forEach(row -> byId.put(row.getId(), row));
+        GitRepository current = byId.values().stream().filter(row -> row.getStatus().holdsProject()).findFirst().orElse(null);
+        return new ProjectRepositories(master, current, byId);
     }
 
     static GitCommitItem commitItem(GitCommit c, List<GitTaskRef> refs) {
+        return commitItem(c, refs, null);
+    }
+
+    static GitCommitItem commitItem(GitCommit c, List<GitTaskRef> refs, GitRepositoryLabel repository) {
         String message = c.getMessage() == null ? "" : c.getMessage();
         int newline = message.indexOf('\n');
         String headline = (newline < 0 ? message : message.substring(0, newline)).trim();
@@ -295,14 +368,19 @@ public class RepositoryActivityQueryService {
         String branch = ref != null && ref.startsWith("refs/heads/") ? ref.substring("refs/heads/".length()) : ref;
         return new GitCommitItem(c.getId(), c.getSha(), c.getSha().length() > 7 ? c.getSha().substring(0, 7) : c.getSha(),
                 headline, message, c.getAuthorName(), c.getAuthorLogin(), c.getCommittedAt(), c.getHtmlUrl(), branch,
-                c.getFilesChanged(), c.getParentCount() != null && c.getParentCount() > 1, refs);
+                c.getFilesChanged(), c.getParentCount() != null && c.getParentCount() > 1, refs, repository);
     }
 
     static GitPullRequestItem pullRequestItem(GitPullRequest pr, List<GitPullRequestReview> reviewList, List<GitTaskRef> refs) {
+        return pullRequestItem(pr, reviewList, refs, null);
+    }
+
+    static GitPullRequestItem pullRequestItem(GitPullRequest pr, List<GitPullRequestReview> reviewList, List<GitTaskRef> refs,
+                                              GitRepositoryLabel repository) {
         return new GitPullRequestItem(pr.getId(), pr.getNumber(), pr.getTitle(), pr.getState(), Boolean.TRUE.equals(pr.getDraft()),
                 pr.getAuthorLogin(), pr.getHeadRef(), pr.getBaseRef(), pr.getHtmlUrl(), pr.getAdditions(), pr.getDeletions(),
                 pr.getChangedFiles(), pr.getGithubCreatedAt(), pr.getGithubUpdatedAt(), pr.getMergedAt(), pr.getClosedAt(),
-                summary(reviewList), refs);
+                summary(reviewList), refs, repository);
     }
 
     /**

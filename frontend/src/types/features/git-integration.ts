@@ -4,9 +4,32 @@
  * Mirrors the backend DTOs.
  */
 
-export type GitIntegrationSummaryStatus = "CONNECTED" | "NOT_CONNECTED" | "SUSPENDED";
+export type GitIntegrationSummaryStatus = "CONNECTED" | "NOT_CONNECTED" | "SUSPENDED" | "ERROR";
 
-export type GitInstallationStatus = "CONNECTED" | "SUSPENDED" | "DISCONNECTED";
+/** US-GI-02: ERROR = GitHub refused the installation (token 401/404), not confirmed as removed. */
+export type GitInstallationStatus = "CONNECTED" | "SUSPENDED" | "DISCONNECTED" | "ERROR";
+
+/** US-GI-02: the GitHub connection of a project (its master's repository's installation). No token or secret. */
+export interface GitHubConnectionView {
+  status: GitInstallationStatus;
+  /** Why it is not connected: NOT_LINKED (no repository yet), UNINSTALLED, SUSPENDED_ON_GITHUB, TOKEN_REJECTED, INSTALLATION_NOT_FOUND… */
+  reason?: string | null;
+  since?: string | null;
+  account?: { installationRowId: number; login: string; type: string; manageUrl: string } | null;
+  repository?: { fullName: string; status: GitRepositoryConnectionStatus } | null;
+  lastVerifiedAt?: string | null;
+  lastCheckedAt?: string | null;
+  master: { id: number; code?: string | null; name?: string | null };
+  inherited: boolean;
+  otherConnectedAccounts: number;
+  actions: { canRecheck: boolean; canReconnect: boolean; canConnect: boolean; canLinkRepository: boolean };
+}
+
+export interface GitHubConnectionRecheck {
+  connection: GitHubConnectionView;
+  /** false: checked less than 30 seconds ago, nothing was asked to GitHub. */
+  checked: boolean;
+}
 
 export type GitOAuthOutcome =
   | "CONNECTED"
@@ -30,6 +53,20 @@ export interface GitInstallation {
   connectedByName?: string | null;
   connectedAt: string;
   lastVerifiedAt: string;
+  /** US-GI-02: why and since when it is in its status, and the last "Check again". */
+  statusReason?: string | null;
+  statusChangedAt?: string | null;
+  lastCheckedAt?: string | null;
+  /** Master projects whose repository is read through this installation; removing the App affects them all. */
+  projects?: GitInstallationProject[];
+}
+
+export interface GitInstallationProject {
+  id: number;
+  code?: string | null;
+  name?: string | null;
+  repositoryFullName: string;
+  repositoryStatus: GitRepositoryConnectionStatus;
 }
 
 export interface GitInstallationListResponse {
@@ -76,6 +113,12 @@ export type GitIntegrationErrorCode =
   | "GIT_PROJECT_NOT_MASTER"
   | "GIT_PROJECT_NOT_LINKABLE"
   | "GIT_PROJECT_ALREADY_LINKED"
+  /** US-GI-05: this repository is linked but DISCONNECTED / ERROR: sync it again or unlink it. */
+  | "GIT_REPOSITORY_NEEDS_ATTENTION"
+  /** US-GI-05: the project's repository changed since the page was loaded. */
+  | "GIT_REPOSITORY_CHANGED"
+  /** US-GI-05: "Sync again" checked GitHub a few seconds ago. */
+  | "GIT_RECHECK_TOO_SOON"
   | "GIT_REPOSITORY_IN_USE"
   | "GIT_REPOSITORY_NOT_ACCESSIBLE"
   | "GIT_REPOSITORY_ARCHIVED"
@@ -172,14 +215,25 @@ export interface GitRepositoryQuery {
 
 // ---- US-GI-04 · Link a repository to a master project ---------------------------------------------
 
-export type GitRepositoryConnectionStatus = "ACTIVE" | "INACTIVE" | "UNAVAILABLE";
+/**
+ * US-GI-05: ACTIVE; INACTIVE = unlinked by a user (data kept); DISCONNECTED = GitHub took the access away
+ * (still the project's repository until unlinked); ERROR = calling GitHub for it failed.
+ */
+export type GitRepositoryConnectionStatus = "ACTIVE" | "INACTIVE" | "DISCONNECTED" | "ERROR";
+
+/** US-GI-05: which repository of the project a commit / pull request came from. */
+export interface GitRepositoryLabel {
+  id: number;
+  fullName: string;
+  status: GitRepositoryConnectionStatus;
+}
 
 export type GitSyncJobType = "INITIAL" | "MANUAL" | "SCHEDULED" | "WEBHOOK";
 
 /** US-SY-01: PARTIAL = gave up after some commit pages were stored; it can resume from where it stopped. */
 export type GitSyncJobStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "PARTIAL" | "FAILED";
 
-export type GitSyncPhase = "METADATA" | "COMMITS" | "DONE";
+export type GitSyncPhase = "METADATA" | "COMMITS" | "PULL_REQUESTS" | "DONE";
 
 export interface GitSyncJob {
   id: number;
@@ -194,7 +248,12 @@ export interface GitSyncJob {
   stats: { branches?: number; branchesTruncated?: boolean; emptyRepository?: boolean; [key: string]: unknown };
   /** US-SY-01: step reached, commit import progress (all runs of the job). */
   phase?: GitSyncPhase;
-  progress?: { pages: number; inserted: number; existing: number; enriched: number };
+  progress?: {
+    pages: number; inserted: number; existing: number; enriched: number;
+    /** US-SY-02: pull requests and reviews stored by the job. */
+    pullRequests?: { pages: number; inserted: number; updated: number; unchanged: number };
+    reviews?: { inserted: number; updated: number };
+  };
   /** A PARTIAL / FAILED job that "Sync now" resumes from where it stopped. */
   resumable?: boolean;
   /** Waiting for the GitHub rate limit until then. */
@@ -224,9 +283,30 @@ export interface LinkedRepository {
   /** US-SY-01: commits stored for the repository, and when its whole history was last imported. */
   commitCount?: number;
   historySyncedAt?: string | null;
+  /** US-SY-02: pull requests stored for the repository, and when they were last read to the end. */
+  pullRequestCount?: number;
+  pullRequestsSyncedAt?: string | null;
+  /** US-GI-05: why it is not ACTIVE (REPOSITORY_ACCESS_REMOVED, INSTALLATION_DELETED, SYNC_FAILED…) and since when. */
+  statusReason?: string | null;
+  statusChangedAt?: string | null;
 }
 
-/** Repository of a project; a module shows its master project's repository (`inherited`). */
+/** US-GI-05: a repository unlinked from the master project; its data stays in the project's analytics. */
+export interface PreviousRepository {
+  id: number;
+  fullName: string;
+  htmlUrl: string;
+  linkedAt: string;
+  unlinkedAt?: string | null;
+  unlinkedBy?: { id: number; name?: string | null } | null;
+  commitCount: number;
+  pullRequestCount: number;
+}
+
+/**
+ * Repository of a project; a module shows its master project's repository (`inherited`), read-only.
+ * US-GI-05: `repository` is the current one (ACTIVE, ERROR or DISCONNECTED).
+ */
 export interface ProjectRepositoryView {
   project: { id: number; code: string; name: string; master: boolean };
   masterProject: { id: number; code: string; name: string; status: string; moduleCount: number };
@@ -235,6 +315,11 @@ export interface ProjectRepositoryView {
   latestSync: GitSyncJob | null;
   canLink: boolean;
   canSync: boolean;
+  /** US-GI-05: "Sync again" of a repository in ERROR / DISCONNECTED (GitHub is checked first). */
+  canResync: boolean;
+  /** US-GI-05: "Unlink repository" (PM of the master or Git Integration manager). */
+  canUnlink: boolean;
+  previousRepositories: PreviousRepository[];
 }
 
 export interface LinkRepositoryRequest {
@@ -273,6 +358,8 @@ export interface GitCommitItem {
   merge: boolean;
   /** US-SY-05: Task IDs mentioned by the message and their verdict. */
   taskRefs: GitTaskRef[];
+  /** US-GI-05: the repository it came from. */
+  repository?: GitRepositoryLabel | null;
 }
 
 // ---- US-SY-05: commits / pull requests linked to tasks ------------------------------------------
@@ -409,6 +496,8 @@ export interface GitPullRequestItem {
   reviewSummary: GitReviewSummary;
   /** US-SY-05: Task IDs of the title, branch and body, and their verdict. */
   taskRefs: GitTaskRef[];
+  /** US-GI-05: the repository it came from. */
+  repository?: GitRepositoryLabel | null;
 }
 
 export interface GitReviewItem {
@@ -431,7 +520,10 @@ export interface GitPullRequestDetail {
 }
 
 export interface GitRepositoryActivity {
-  /** Null (and every count 0) when no repository is linked. */
+  /**
+   * The current repository; null when none is linked now. US-GI-05: the counts and the last commit
+   * cover every repository the project ever linked (`repositories`).
+   */
   repositoryId: number | null;
   repositoryStatus: GitRepositoryConnectionStatus | null;
   commitCount: number;
@@ -445,6 +537,8 @@ export interface GitRepositoryActivity {
   pendingEvents: number;
   /** Webhook events that failed for good (can be replayed). */
   failedEvents: number;
+  /** US-GI-05: every repository the project linked, unlinked ones included. */
+  repositories?: GitRepositoryLabel[];
 }
 
 export interface GitCommitQuery {
@@ -458,6 +552,8 @@ export interface GitCommitQuery {
   to?: string;
   page?: number;
   size?: number;
+  /** US-GI-05: one repository of the project (all when absent). */
+  repositoryId?: number;
 }
 
 export interface GitPullRequestQuery {
@@ -466,6 +562,8 @@ export interface GitPullRequestQuery {
   link?: GitTaskLinkFilter;
   page?: number;
   size?: number;
+  /** US-GI-05: one repository of the project (all when absent). */
+  repositoryId?: number;
 }
 
 export type GitWebhookEventStatus = "RECEIVED" | "PROCESSING" | "PROCESSED" | "IGNORED" | "FAILED_RETRYABLE" | "FAILED";

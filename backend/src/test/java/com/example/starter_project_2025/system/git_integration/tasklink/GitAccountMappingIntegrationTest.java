@@ -63,6 +63,7 @@ class GitAccountMappingIntegrationTest extends AbstractTaskLinkIntegrationTest {
     private static final String API = "/api/v1/git-integration";
     private static final AtomicLong IDS = new AtomicLong(50_000);
 
+    @Autowired com.example.starter_project_2025.system.notification.NotificationRepository notifications;
     @Autowired GitContributorRepository contributors;
     @Autowired UserGitIdentityRepository identities;
     @Autowired GitOAuthStateRepository states;
@@ -454,6 +455,30 @@ class GitAccountMappingIntegrationTest extends AbstractTaskLinkIntegrationTest {
         mvc.perform(post(url + "/sync").header("Authorization", "Bearer " + pamToken))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.type").value("MANUAL"));
+    }
+
+    // ---- GI-02: the PM acts on the connection and is told when it breaks ------------------------------
+
+    @Test
+    void thePmMayCheckTheConnectionAgainAndIsToldWhenItBreaks() throws Exception {
+        String url = "/api/v1/git-integration/projects/" + masterId + "/github/connection";
+        mvc.perform(get(url).header("Authorization", "Bearer " + aliceToken))
+                .andExpect(jsonPath("$.status").value("CONNECTED"))
+                .andExpect(jsonPath("$.actions.canRecheck").value(false));
+        mvc.perform(post(url + "/recheck").header("Authorization", "Bearer " + aliceToken)).andExpect(status().isForbidden());
+
+        when(github.getInstallation(GITHUB_INSTALLATION_ID)).thenReturn(java.util.Optional.of(
+                new com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallation(GITHUB_INSTALLATION_ID,
+                        new com.example.starter_project_2025.system.git_integration.github.dto.GitHubAccount(1L, "hcm26-java-team", "Organization"),
+                        123L, "selected", "2026-11-21T10:00:00Z")));
+        mvc.perform(post(url + "/recheck").header("Authorization", "Bearer " + pamToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.connection.status").value("SUSPENDED"));
+
+        assertThat(notifications.findTop30ByUser_IdOrderByCreatedAtDesc(pam.getId()))
+                .extracting(com.example.starter_project_2025.system.notification.Notification::getTitle)
+                .containsExactly("GitHub connection needs attention");
+        assertThat(notifications.findTop30ByUser_IdOrderByCreatedAtDesc(alice.getId())).isEmpty(); // not a PM
     }
 
     // ---- AC11 ----------------------------------------------------------------------------------------

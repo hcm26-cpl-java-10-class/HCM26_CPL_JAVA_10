@@ -57,4 +57,13 @@ public interface GitProjectMembershipRepository extends Repository<ProjectMember
                                 where a.team = t and a.isActive = true and a.project.id in :scope))""")
     boolean isMentorOfScope(@Param("userId") Long userId, @Param("scope") Collection<Long> scope,
                             @Param("teamStatus") ProjectTeamStatus teamStatus);
+
+    /** GI-02: mentors of the active teams of the scope (directly or through a module assignment). */
+    @Query("""
+            select distinct t.assignedMentorId from ProjectTeam t
+             where t.assignedMentorId is not null and t.isActive = true and t.status = :teamStatus
+               and (t.project.id in :scope
+                    or exists (select a.id from TeamSubprojectAssignment a
+                                where a.team = t and a.isActive = true and a.project.id in :scope))""")
+    List<Long> mentorsOfScope(@Param("scope") Collection<Long> scope, @Param("teamStatus") ProjectTeamStatus teamStatus);
 }

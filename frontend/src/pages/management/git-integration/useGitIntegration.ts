@@ -35,14 +35,17 @@ export const gitIntegrationKeys = {
   pullRequests: (projectId: number, query: GitPullRequestQuery) =>
     ["git-integration", "pull-requests", projectId, query.state ?? "ALL", query.q ?? "", query.link ?? "ALL",
       query.page ?? 0, query.size ?? 20] as const,
-  pullRequest: (projectId: number, number: number) => ["git-integration", "pull-request", projectId, number] as const,
-  insights: (projectId: number, range: GitInsightsRange) => ["git-integration", "insights", projectId, range] as const,
+  pullRequest: (projectId: number, number: number, repositoryId?: number) =>
+    ["git-integration", "pull-request", projectId, number, repositoryId ?? null] as const,
+  insights: (projectId: number, range: GitInsightsRange, repositoryId?: number) =>
+    ["git-integration", "insights", projectId, range, repositoryId ?? null] as const,
   branches: (projectId: number, q: string) => ["git-integration", "branches", projectId, q] as const,
   backlogLinks: (itemId: number, page: number, size: number) => ["git-integration", "backlog-links", itemId, page, size] as const,
   backlogLinkSummary: (itemIds: number[]) => ["git-integration", "backlog-link-summary", itemIds] as const,
   taskLinkStats: (projectId: number) => ["git-integration", "task-link-stats", projectId] as const,
   pullRequestCandidates: (itemId: number, q: string) => ["git-integration", "pull-request-candidates", itemId, q] as const,
   githubAccounts: (projectId: number) => ["git-integration", "github-accounts", projectId] as const,
+  githubConnection: (projectId: number) => ["git-integration", "github-connection", projectId] as const,
   webhookEvents: (query: GitWebhookEventQuery) =>
     ["git-integration", "webhook-events", query.status ?? "ALL", query.eventType ?? "", query.projectId ?? null, query.page ?? 0, query.size ?? 20] as const,
 };
@@ -106,6 +109,26 @@ export function useLinkRepository(projectId: number) {
   });
 }
 
+/**
+ * US-GI-05: unlink the project's repository. The view is replaced by the answer, then every Git view
+ * of the project is refreshed (activity, insights, lists keep the unlinked repository's data).
+ */
+export function useUnlinkRepository(projectId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (repositoryId: number) => gitIntegrationApi.unlinkRepository(projectId, repositoryId),
+    onSuccess: view => {
+      queryClient.setQueryData(gitIntegrationKeys.projectRepository(projectId), view);
+      toast.success("Repository unlinked", { description: "Synchronized data stays in this project's analytics." });
+    },
+    onError: error => {
+      const message = errorMessage(gitIntegrationErrorCode(error), gitIntegrationHttpStatus(error));
+      toast.error(message.title, { description: message.description });
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["git-integration"] }),
+  });
+}
+
 /** US-GI-04: queue the synchronization again after it failed. */
 export function useRetrySync(projectId: number) {
   const queryClient = useQueryClient();
@@ -125,7 +148,11 @@ export function useRetrySync(projectId: number) {
       const message = errorMessage(gitIntegrationErrorCode(error), gitIntegrationHttpStatus(error));
       toast.error(message.title, { description: message.description });
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["git-integration", "project-repository"] }),
+    onSettled: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["git-integration", "project-repository"] }),
+      // US-GI-05: "Sync again" may have restored a repository: the connection banner changes too.
+      queryClient.invalidateQueries({ queryKey: ["git-integration", "github-connection"] }),
+    ]),
   });
 }
 
@@ -170,10 +197,11 @@ export function useRepositoryPullRequests(projectId: number | undefined, query: 
 const INSIGHTS_POLL_MS = 60_000;
 
 /** WS-GH-02: activity insights of the period; keeps the previous range on screen while the next loads. */
-export function useRepositoryInsights(projectId: number | undefined, range: GitInsightsRange, enabled = true) {
+export function useRepositoryInsights(projectId: number | undefined, range: GitInsightsRange, enabled = true,
+                                      repositoryId?: number) {
   return useQuery({
-    queryKey: gitIntegrationKeys.insights(projectId ?? 0, range),
-    queryFn: ({ signal }) => gitIntegrationApi.repositoryInsights(projectId!, range, signal),
+    queryKey: gitIntegrationKeys.insights(projectId ?? 0, range, repositoryId),
+    queryFn: ({ signal }) => gitIntegrationApi.repositoryInsights(projectId!, range, signal, repositoryId),
     enabled: enabled && projectId !== undefined,
     placeholderData: keepPreviousData,
     staleTime: INSIGHTS_POLL_MS,
@@ -196,10 +224,10 @@ export function useRepositoryBranches(projectId: number | undefined, q: string, 
 }
 
 /** Loaded only when a pull request is expanded. */
-export function usePullRequestDetail(projectId: number, number: number | undefined) {
+export function usePullRequestDetail(projectId: number, number: number | undefined, repositoryId?: number) {
   return useQuery({
-    queryKey: gitIntegrationKeys.pullRequest(projectId, number ?? 0),
-    queryFn: ({ signal }) => gitIntegrationApi.pullRequestDetail(projectId, number!, signal),
+    queryKey: gitIntegrationKeys.pullRequest(projectId, number ?? 0, repositoryId),
+    queryFn: ({ signal }) => gitIntegrationApi.pullRequestDetail(projectId, number!, signal, repositoryId),
     enabled: number !== undefined,
     retry: false,
   });
@@ -584,5 +612,74 @@ export function useAssignContributor(projectId: number) {
       toastAccountError(error);
     },
     onSettled: () => invalidateMapping(queryClient),
+  });
+}
+
+// ---- US-GI-02 · GitHub connection status ------------------------------------------------------------
+
+const CONNECTION_REASONS: Record<string, string> = {
+  CONNECTED: "The GitHub connection works.",
+  RECHECK_OK: "The GitHub connection works.",
+  SUSPENDED_ON_GITHUB: "The GitHub App is suspended on GitHub.",
+  UNINSTALLED: "The GitHub App was removed from GitHub.",
+  TOKEN_REJECTED: "GitHub refused the connection.",
+  INSTALLATION_NOT_FOUND: "GitHub could not find the App installation.",
+};
+
+/** US-GI-02: GitHub connection of a project; refreshed when the window gets focus (the user may come back from GitHub). */
+export function useGitHubConnection(projectId: number | undefined, enabled = true) {
+  return useQuery({
+    queryKey: gitIntegrationKeys.githubConnection(projectId ?? 0),
+    queryFn: ({ signal }) => gitIntegrationApi.githubConnection(projectId!, signal),
+    enabled: enabled && projectId !== undefined,
+    retry: false,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/** US-GI-02: everything that depends on whether GitHub can be read. */
+function invalidateConnection(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({
+    predicate: query => query.queryKey[0] === "git-integration"
+      && ["github-connection", "project-repository", "installations", "activity"].includes(String(query.queryKey[1])),
+  });
+}
+
+/** US-GI-02: "Check again" from a project. */
+export function useRecheckConnection(projectId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => gitIntegrationApi.recheckConnection(projectId),
+    onSuccess: ({ connection, checked }) => {
+      queryClient.setQueryData(gitIntegrationKeys.githubConnection(projectId), connection);
+      if (!checked) toast.info("Checked a moment ago", { description: "Try again in a few seconds." });
+      else if (connection.status === "CONNECTED") toast.success("GitHub connection works", { description: `Connected to ${connection.account?.login ?? "GitHub"}.` });
+      else toast.warning("GitHub connection still needs attention",
+        { description: CONNECTION_REASONS[connection.reason ?? ""] ?? "Reconnect GitHub to synchronize again." });
+      invalidateConnection(queryClient);
+    },
+    onError: error => {
+      const message = errorMessage(gitIntegrationErrorCode(error), gitIntegrationHttpStatus(error));
+      toast.error(message.title, { description: message.description });
+    },
+  });
+}
+
+/** US-GI-02: "Check again" an installation on the Git Integration page. */
+export function useRecheckInstallation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => gitIntegrationApi.recheckInstallation(id),
+    onSuccess: installation => {
+      if (installation.status === "CONNECTED") toast.success("GitHub connection works", { description: `${installation.accountLogin} is connected.` });
+      else toast.warning("GitHub connection still needs attention",
+        { description: CONNECTION_REASONS[installation.statusReason ?? ""] ?? "Reconnect GitHub to synchronize again." });
+      invalidateConnection(queryClient);
+    },
+    onError: error => {
+      const message = errorMessage(gitIntegrationErrorCode(error), gitIntegrationHttpStatus(error));
+      toast.error(message.title, { description: message.description });
+    },
   });
 }

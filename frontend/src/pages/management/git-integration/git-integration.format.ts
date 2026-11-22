@@ -87,3 +87,8 @@ export function initialsOf(value?: string | null) {
   const letters = words.length === 1 ? words[0].slice(0, 2) : words[0][0] + words[1][0];
   return letters.toUpperCase();
 }
+
+/** US-GI-02: the connection needs the PM (anything but CONNECTED, except "no repository linked", which the repository card covers). */
+export function connectionBroken(connection?: { status: string; reason?: string | null }) {
+  return !!connection && connection.status !== "CONNECTED" && connection.reason !== "NOT_LINKED";
+}

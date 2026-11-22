@@ -8,13 +8,13 @@ import com.example.starter_project_2025.system.git_integration.domain.GitCommit;
 import com.example.starter_project_2025.system.git_integration.domain.GitPullRequest;
 import com.example.starter_project_2025.system.git_integration.domain.GitPullRequestReview;
 import com.example.starter_project_2025.system.git_integration.domain.GitRepository;
-import com.example.starter_project_2025.system.git_integration.domain.GitRepositoryStatus;
 import com.example.starter_project_2025.system.git_integration.dto.BacklogGitLinkInfo;
 import com.example.starter_project_2025.system.git_integration.dto.BacklogGitLinkSummary;
 import com.example.starter_project_2025.system.git_integration.dto.BacklogGitLinksView;
 import com.example.starter_project_2025.system.git_integration.dto.GitCommitItem;
 import com.example.starter_project_2025.system.git_integration.dto.GitPage;
 import com.example.starter_project_2025.system.git_integration.dto.GitPullRequestItem;
+import com.example.starter_project_2025.system.git_integration.dto.GitRepositoryLabel;
 import com.example.starter_project_2025.system.git_integration.dto.LinkedPullRequestItem;
 import com.example.starter_project_2025.system.git_integration.dto.TaskLinkRecheckResult;
 import com.example.starter_project_2025.system.git_integration.exception.GitIntegrationException;
@@ -88,9 +88,10 @@ public class BacklogGitLinkService {
         Map<Long, GitCommit> commitById = commits.findAllById(commitLinks.getContent().stream()
                 .map(BacklogGitLink::getArtifactId).toList()).stream()
                 .collect(Collectors.toMap(GitCommit::getId, Function.identity()));
+        Map<Long, GitRepositoryLabel> commitLabels = labels(commitById.values().stream().map(GitCommit::getRepositoryId).toList());
         List<GitCommitItem> commitItems = commitLinks.getContent().stream()
                 .map(link -> commitById.get(link.getArtifactId())).filter(Objects::nonNull)
-                .map(commit -> RepositoryActivityQueryService.commitItem(commit, List.of()))
+                .map(commit -> RepositoryActivityQueryService.commitItem(commit, List.of(), commitLabels.get(commit.getRepositoryId())))
                 .toList();
 
         List<BacklogGitLink> prLinks = links.findByBacklogItemIdAndArtifactTypeOrderByArtifactAtDescIdDesc(itemId,
@@ -161,6 +162,7 @@ public class BacklogGitLinkService {
         Map<Long, BacklogReference> referenceById = references.findAllById(prLinks.stream()
                         .map(BacklogGitLink::getReferenceId).filter(Objects::nonNull).toList()).stream()
                 .collect(Collectors.toMap(BacklogReference::getId, Function.identity()));
+        Map<Long, GitRepositoryLabel> repositoryLabels = labels(byId.values().stream().map(GitPullRequest::getRepositoryId).toList());
         Map<Long, String> nameById = users.findAllById(prLinks.stream()
                         .map(BacklogGitLink::getLinkedByUserId).filter(Objects::nonNull).distinct().toList()).stream()
                 .collect(Collectors.toMap(User::getId, User::getFullName));
@@ -171,7 +173,7 @@ public class BacklogGitLinkService {
             if (pr == null) continue;
             BacklogReference ref = link.getReferenceId() == null ? null : referenceById.get(link.getReferenceId());
             GitPullRequestItem item = RepositoryActivityQueryService.pullRequestItem(pr,
-                    reviewsByPr.getOrDefault(pr.getId(), List.of()), List.of());
+                    reviewsByPr.getOrDefault(pr.getId(), List.of()), List.of(), repositoryLabels.get(pr.getRepositoryId()));
             result.add(new LinkedPullRequestItem(item, new BacklogGitLinkInfo(link.getId(), link.getLinkSource(),
                     link.getLinkSource() == BacklogLinkSource.AUTO && ref != null ? ref.getSourceField() : null,
                     link.getLinkedByUserId(),
@@ -181,13 +183,21 @@ public class BacklogGitLinkService {
         return result;
     }
 
-    /** Repository of the task's master project: the ACTIVE connection, else the latest one. */
+    /** Repository of the task's master project: the current one (GI-05: ACTIVE, ERROR, DISCONNECTED), else the latest. */
     public Optional<GitRepository> repositoryOfTask(Long projectId) {
         if (projectId == null) return Optional.empty();
         return projects.findById(projectId)
                 .map(projectResolver::masterOf)
-                .flatMap(master -> connections.findFirstByProjectIdAndStatus(master.getId(), GitRepositoryStatus.ACTIVE)
+                .flatMap(master -> connections.findCurrent(master.getId())
                         .or(() -> connections.findFirstByProjectIdOrderByIdDesc(master.getId())));
+    }
+
+    /** GI-05: labels of the repositories the given commits / pull requests came from. */
+    private Map<Long, GitRepositoryLabel> labels(Collection<Long> repositoryIds) {
+        if (repositoryIds.isEmpty()) return Map.of();
+        return connections.findAllById(repositoryIds.stream().distinct().toList()).stream()
+                .collect(Collectors.toMap(GitRepository::getId,
+                        row -> new GitRepositoryLabel(row.getId(), row.getFullName(), row.getStatus())));
     }
 
     private BacklogGitLinksView.RepositoryRef repositoryOf(Long projectId) {

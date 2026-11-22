@@ -100,6 +100,13 @@ const ERRORS: Record<string, GitIntegrationMessage> = {
     description: "The app was suspended or uninstalled on GitHub. Check the connection status, then try again.",
     action: "integration",
   },
+  // US-GI-02
+  GIT_INSTALLATION_ERROR: {
+    tone: "error",
+    title: "GitHub refused the connection",
+    description: "Check the GitHub connection again, or reconnect GitHub on the Git Integration page.",
+    action: "integration",
+  },
   GIT_RATE_LIMITED: {
     tone: "warning",
     title: "GitHub rate limit reached",
@@ -128,13 +135,31 @@ const ERRORS: Record<string, GitIntegrationMessage> = {
   GIT_PROJECT_ALREADY_LINKED: {
     tone: "warning",
     title: "This project already has a linked repository",
-    description: "A master project can have only one active repository.",
+    description: "A master project has one repository at a time. Unlink the current repository first, then link the new one.",
     action: "integration",
   },
   GIT_REPOSITORY_IN_USE: {
     tone: "warning",
     title: "This repository is already in use",
     description: "Each repository can be linked to only one master project.",
+    action: "integration",
+  },
+  GIT_REPOSITORY_NEEDS_ATTENTION: {
+    tone: "warning",
+    title: "This repository is already linked, but needs attention",
+    description: "GitHub no longer gives access to it or its last sync failed. Use \"Sync again\", or unlink it.",
+    action: "integration",
+  },
+  GIT_REPOSITORY_CHANGED: {
+    tone: "warning",
+    title: "The project's repository just changed",
+    description: "Someone else changed it a moment ago. Review the repository again before you continue.",
+    action: "integration",
+  },
+  GIT_RECHECK_TOO_SOON: {
+    tone: "info",
+    title: "Checked a moment ago",
+    description: "GitHub was asked a few seconds ago. Wait a little, then try again.",
     action: "integration",
   },
   GIT_REPOSITORY_NOT_ACCESSIBLE: {
@@ -201,7 +226,52 @@ const SYNC_ERRORS: Record<string, string> = {
   // US-SY-01: commit history.
   HISTORY_UNAVAILABLE: "GitHub stopped responding while the commit history was being imported.",
   HISTORY_FORBIDDEN: "The GitHub App is not allowed to read this repository's contents. Grant it \"Contents: Read\" on GitHub, then sync again.",
+  // US-SY-02: pull requests and reviews.
+  // US-GI-02
+  INSTALLATION_ERROR: "GitHub refused the connection. Check the GitHub connection again, or reconnect GitHub.",
+  PULL_REQUESTS_UNAVAILABLE: "GitHub stopped responding while the pull requests were being imported.",
+  PULL_REQUESTS_FORBIDDEN: "The GitHub App is not allowed to read this repository's pull requests. Grant it \"Pull requests: Read\" on GitHub, then sync again.",
+  // US-GI-05
+  REPOSITORY_UNLINKED: "The repository was unlinked from the project.",
+  REPOSITORY_DISCONNECTED: "GitHub no longer gives access to the repository.",
 };
+
+/** US-GI-05: why the project's repository is not ACTIVE, as a heading and an explanation. */
+const REPOSITORY_REASONS: Record<string, { title: string; description: string }> = {
+  REPOSITORY_ACCESS_REMOVED: {
+    title: "GitHub no longer gives access to this repository",
+    description: "It was removed from the GitHub App's repositories. Grant the App access to it again on GitHub, then check again.",
+  },
+  INSTALLATION_DELETED: {
+    title: "The GitHub App was uninstalled",
+    description: "The repository can't be read until the App is installed again on its account.",
+  },
+  REPOSITORY_DELETED: {
+    title: "This repository was deleted on GitHub",
+    description: "Unlink it and link the team's new repository.",
+  },
+  REPOSITORY_NOT_ACCESSIBLE: {
+    title: "GitHub couldn't find this repository",
+    description: "The App may have lost access, or the repository moved. Check again, or grant access on GitHub.",
+  },
+  SYNC_FAILED: {
+    title: "The last sync of this repository failed",
+    description: "Sync again to retry. New data isn't collected until a sync succeeds.",
+  },
+  REPOSITORY_LINKED_ELSEWHERE: {
+    title: "Another project now uses this repository",
+    description: "Access came back, but another project synchronizes it meanwhile. Unlink it here, or unlink it from the other project.",
+  },
+  LEGACY_UNAVAILABLE: {
+    title: "This repository is no longer accessible",
+    description: "Grant the GitHub App access to it again, or unlink it and link another repository.",
+  },
+};
+
+export function repositoryReasonMessage(reason?: string | null, status?: string) {
+  return (reason && REPOSITORY_REASONS[reason])
+    || (status === "ERROR" ? REPOSITORY_REASONS.SYNC_FAILED : REPOSITORY_REASONS.LEGACY_UNAVAILABLE);
+}
 
 export function syncErrorMessage(code?: string | null) {
   return (code && SYNC_ERRORS[code]) || "The synchronization could not be completed.";

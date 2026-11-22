@@ -22,7 +22,7 @@ import java.util.Optional;
 
 /**
  * SY-03 / SY-04: processes one stored event: claim (SKIP LOCKED) → read payload →
- * resolve installation and ACTIVE repository connection → run the handler →
+ * resolve installation and repository connection (ACTIVE / ERROR, GI-05) → run the handler →
  * record the outcome. Failures are classified for the retry policy (AC04): GitHub
  * network/5xx/rate-limit errors and unexpected errors are retried with backoff;
  * a missing permission or a removed installation fails the event at once.
@@ -86,9 +86,7 @@ public class GitWebhookEventProcessor {
         try {
             installation = event.installationId() == null ? null
                     : installations.findByProviderAndInstallationId(GitProvider.GITHUB, event.installationId()).orElse(null);
-            GitRepository repository = event.repoExternalId() == null ? null
-                    : connections.findFirstByProviderAndExternalIdAndStatus(GitProvider.GITHUB, event.repoExternalId(),
-                    GitRepositoryStatus.ACTIVE).orElse(null);
+            GitRepository repository = resolveRepository(event.eventType(), event.repoExternalId(), installation);
             Long tenantId = installation != null ? installation.getTenantId() : repository != null ? repository.getTenantId() : null;
             resolution = new GitWebhookEventStore.Resolution(tenantId,
                     installation == null ? null : installation.getId(), repository == null ? null : repository.getId());
@@ -134,5 +132,21 @@ public class GitWebhookEventProcessor {
 
     private long latencyMillis(LocalDateTime receivedAt) {
         return receivedAt == null ? -1 : Duration.between(receivedAt, LocalDateTime.now(clock)).toMillis();
+    }
+
+    /**
+     * GI-05: the connection an event is about. Only a connection that still receives events (ACTIVE
+     * or ERROR) is synchronized: events of an unlinked (INACTIVE) repository are ignored. A
+     * {@code repository} event (rename, transfer, deletion) also reaches a DISCONNECTED connection
+     * read through the sending installation, so its name stays current.
+     */
+    private GitRepository resolveRepository(String eventType, Long repoExternalId, GitInstallation installation) {
+        if (repoExternalId == null) return null;
+        GitRepository receiving = connections.findReceiving(GitProvider.GITHUB, repoExternalId).orElse(null);
+        if (receiving != null || !"repository".equals(eventType) || installation == null) return receiving;
+        return connections.findByInstallationRefAndExternalIdAndStatusIn(installation.getId(), repoExternalId,
+                        java.util.EnumSet.of(GitRepositoryStatus.DISCONNECTED)).stream()
+                .max(java.util.Comparator.comparing(GitRepository::getId))
+                .orElse(null);
     }
 }

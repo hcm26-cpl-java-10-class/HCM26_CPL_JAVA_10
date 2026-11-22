@@ -46,11 +46,12 @@ const TIME = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-di
 /** A job between two runs of a long import (or waiting for the rate limit) is still "syncing" to the user. */
 function pillState(job: GitSyncJob): PillState {
   if (job.status === "PENDING" && job.pausedUntil) return "PAUSED";
-  if (job.status === "PENDING" && (job.progress?.pages ?? 0) > 0) return "RUNNING";
+  const progressed = (job.progress?.pages ?? 0) > 0 || (job.progress?.pullRequests?.pages ?? 0) > 0 || job.phase === "PULL_REQUESTS";
+  if (job.status === "PENDING" && progressed) return "RUNNING";
   return job.status;
 }
 
-/** US-GI-04 / US-SY-01: state of the latest repository synchronization (text + icon, never colour alone). */
+/** US-GI-04 / US-SY-01 / US-SY-02: state of the latest repository synchronization (text + icon, never colour alone). */
 export function SyncStatusPill({ job, lastSyncedAt }: { job: GitSyncJob | null; lastSyncedAt?: string | null }) {
   if (!job) return null;
   const state = pillState(job);
@@ -58,17 +59,25 @@ export function SyncStatusPill({ job, lastSyncedAt }: { job: GitSyncJob | null; 
   const Icon = style.icon;
   const when = state === "SUCCEEDED" ? (lastSyncedAt ?? job.finishedAt) : undefined;
   const imported = job.progress?.inserted ?? 0;
+  const pulls = job.progress?.pullRequests;
+  const pullRequestsRead = pulls ? pulls.inserted + pulls.updated + pulls.unchanged : 0;
 
   let detail: string | undefined;
   let title: string | undefined = when ? formatDateTime(when) : undefined;
-  if (state === "RUNNING" && job.phase === "COMMITS" && imported > 0) {
+  if (state === "RUNNING" && job.phase === "PULL_REQUESTS" && pullRequestsRead > 0) {
+    detail = `${NUMBER.format(pullRequestsRead)} ${pullRequestsRead === 1 ? "pull request" : "pull requests"}`;
+    title = "Importing pull requests and their reviews";
+  } else if (state === "RUNNING" && job.phase === "PULL_REQUESTS") {
+    detail = "pull requests";
+    title = "Importing pull requests and their reviews";
+  } else if (state === "RUNNING" && job.phase === "COMMITS" && imported > 0) {
     detail = `${NUMBER.format(imported)} ${imported === 1 ? "commit" : "commits"}`;
     title = "Importing the commit history of the default branch";
   } else if (state === "PAUSED" && job.pausedUntil) {
     detail = `resumes ${TIME.format(new Date(job.pausedUntil))}`;
     title = `GitHub rate limit reached · resumes automatically at ${formatDateTime(job.pausedUntil)}`;
   } else if (state === "PARTIAL") {
-    title = `${NUMBER.format(imported)} commits imported before it stopped`;
+    title = `${NUMBER.format(imported)} commits and ${NUMBER.format(pulls?.inserted ?? 0)} pull requests imported before it stopped`;
   }
 
   return <span role="status" title={title}

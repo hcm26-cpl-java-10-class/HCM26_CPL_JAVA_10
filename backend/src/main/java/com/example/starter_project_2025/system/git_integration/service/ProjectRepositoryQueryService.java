@@ -8,6 +8,8 @@ import com.example.starter_project_2025.system.git_integration.dto.GitSyncJobVie
 import com.example.starter_project_2025.system.git_integration.dto.ProjectRepositoryView;
 import com.example.starter_project_2025.system.git_integration.repository.GitCommitRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitInstallationRepository;
+import com.example.starter_project_2025.system.git_integration.repository.GitPullRequestRepository;
+import com.example.starter_project_2025.system.git_integration.sync.GitSyncJobQueue;
 import com.example.starter_project_2025.system.git_integration.repository.GitRepositoryRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitSyncJobRepository;
 import com.example.starter_project_2025.system.project.domain.Project;
@@ -20,11 +22,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Map;
 
 /**
  * GI-04: the repository of a project as shown in the Workspace. A module shows
- * its master project's repository ({@code inherited = true}).
+ * its master project's repository ({@code inherited = true}), read-only (GI-05 AC05).
  */
 @Service
 @RequiredArgsConstructor
@@ -37,6 +40,7 @@ public class ProjectRepositoryQueryService {
     private final GitSyncJobRepository jobs;
     private final GitInstallationRepository installations;
     private final GitCommitRepository commits;
+    private final GitPullRequestRepository pullRequests;
     private final UserRepository users;
     private final ObjectMapper json;
 
@@ -52,19 +56,20 @@ public class ProjectRepositoryQueryService {
         Project master = projectResolver.masterOf(project);
         boolean inherited = !master.getId().equals(project.getId());
 
-        // The ACTIVE connection, or the latest one when it became UNAVAILABLE (so the UI can say so).
-        GitRepository connection = connections.findFirstByProjectIdAndStatus(master.getId(), GitRepositoryStatus.ACTIVE)
-                .or(() -> connections.findFirstByProjectIdOrderByIdDesc(master.getId())
-                        .filter(row -> row.getStatus() == GitRepositoryStatus.UNAVAILABLE))
-                .orElse(null);
+        // GI-05: the current repository (ACTIVE, ERROR or DISCONNECTED); the unlinked ones are listed apart.
+        List<GitRepository> all = connections.findByProjectIdOrderByLinkedAtDescIdDesc(master.getId());
+        GitRepository connection = all.stream().filter(row -> row.getStatus().holdsProject()).findFirst().orElse(null);
+        List<GitRepository> previous = all.stream().filter(row -> row.getStatus() == GitRepositoryStatus.INACTIVE).toList();
         GitSyncJob latestSync = connection == null ? null
                 : jobs.findFirstByRepositoryIdOrderByIdDesc(connection.getId()).orElse(null);
 
-        boolean active = connection != null && connection.getStatus() == GitRepositoryStatus.ACTIVE;
-        boolean manage = policy.canLink(user, master);
-        boolean canLink = !inherited && !active && manage && projectResolver.isLinkable(master);
+        GitRepositoryStatus status = connection == null ? null : connection.getStatus();
+        boolean manage = !inherited && policy.canManage(user, master);
+        boolean canLink = manage && connection == null && projectResolver.isLinkable(master);
         // SY-01: "Sync now" is offered at any time; a sync already waiting or running is returned as is.
-        boolean canSync = !inherited && active && policy.canSync(user, master);
+        boolean canSync = !inherited && status == GitRepositoryStatus.ACTIVE && policy.canSync(user, master);
+        boolean canResync = manage && (status == GitRepositoryStatus.ERROR || status == GitRepositoryStatus.DISCONNECTED);
+        boolean canUnlink = manage && connection != null;
 
         return new ProjectRepositoryView(
                 new ProjectRepositoryView.ProjectRef(project.getId(), project.getCode(), project.getName(), !inherited),
@@ -74,7 +79,10 @@ public class ProjectRepositoryQueryService {
                 connection == null ? null : repositoryView(connection),
                 latestSync == null ? null : jobView(latestSync),
                 canLink,
-                canSync);
+                canSync,
+                canResync,
+                canUnlink,
+                previous.stream().map(this::previousView).toList());
     }
 
     private ProjectRepositoryView.RepositoryView repositoryView(GitRepository row) {
@@ -88,19 +96,33 @@ public class ProjectRepositoryQueryService {
         return new ProjectRepositoryView.RepositoryView(row.getId(), row.getExternalId(), row.getOwnerLogin(),
                 row.getName(), row.getFullName(), row.getHtmlUrl(), row.getVisibility(), row.getDefaultBranch(),
                 row.getStatus(), installation, linkedBy, row.getLinkedAt(), row.getLastSyncedAt(),
-                commits.countByRepositoryId(row.getId()), row.getCommitHistorySyncedAt());
+                commits.countByRepositoryId(row.getId()), row.getCommitHistorySyncedAt(),
+                pullRequests.countByRepositoryId(row.getId()), row.getPullRequestsSyncedAt(),
+                row.getStatusReason(), row.getStatusChangedAt());
+    }
+
+    private ProjectRepositoryView.PreviousRepository previousView(GitRepository row) {
+        ProjectRepositoryView.UserRef unlinkedBy = row.getUnlinkedByUserId() == null ? null
+                : users.findById(row.getUnlinkedByUserId())
+                .map(user -> new ProjectRepositoryView.UserRef(user.getId(), user.getFullName()))
+                .orElse(new ProjectRepositoryView.UserRef(row.getUnlinkedByUserId(), null));
+        return new ProjectRepositoryView.PreviousRepository(row.getId(), row.getFullName(), row.getHtmlUrl(),
+                row.getLinkedAt(), row.getUnlinkedAt(), unlinkedBy,
+                commits.countByRepositoryId(row.getId()), pullRequests.countByRepositoryId(row.getId()));
     }
 
     GitSyncJobView jobView(GitSyncJob job) {
         Map<String, Object> stats = stats(job.getStatsJson());
-        boolean resumable = job.getCommitCursor() != null
-                && (job.getStatus() == GitSyncJobStatus.PARTIAL || job.getStatus() == GitSyncJobStatus.FAILED);
+        boolean resumable = GitSyncJobQueue.resumable(job);
         boolean paused = job.getStatus() == GitSyncJobStatus.PENDING && "RATE_LIMITED".equals(job.getErrorCode());
         return new GitSyncJobView(job.getId(), job.getType(), job.getStatus(), job.getAttemptCount(),
                 job.getMaxAttempts(), job.getNextRunAt(), job.getStartedAt(), job.getFinishedAt(),
                 job.getErrorCode(), stats, job.effectivePhase(),
                 new GitSyncJobView.Progress(job.pages(), number(stats, "commitsInserted"), number(stats, "commitsExisting"),
-                        number(stats, "commitsEnriched")),
+                        number(stats, "commitsEnriched"),
+                        new GitSyncJobView.PullRequests(job.prPages(), number(stats, "pullRequestsInserted"),
+                                number(stats, "pullRequestsUpdated"), number(stats, "pullRequestsUnchanged")),
+                        new GitSyncJobView.Reviews(number(stats, "reviewsInserted"), number(stats, "reviewsUpdated"))),
                 resumable, paused ? job.getNextRunAt() : null);
     }
 

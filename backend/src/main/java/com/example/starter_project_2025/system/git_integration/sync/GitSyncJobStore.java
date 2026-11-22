@@ -15,6 +15,7 @@ import com.example.starter_project_2025.system.git_integration.repository.GitIns
 import com.example.starter_project_2025.system.git_integration.repository.GitRepositoryRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitSyncJobRepository;
 import com.example.starter_project_2025.system.git_integration.service.GitRepositoryConnectionWriter;
+import com.example.starter_project_2025.system.git_integration.service.GitRepositoryReason;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -70,19 +71,33 @@ public class GitSyncJobStore {
      */
     public record ClaimedJob(Long jobId, Long repositoryId, Long installationRowId, long githubInstallationId,
                              long externalId, int attemptCount, int maxAttempts, GitSyncPhase phase,
-                             String commitCursor, LocalDateTime commitSince, String commitBranch, int pagesDone) {
+                             String commitCursor, LocalDateTime commitSince, String commitBranch, int pagesDone,
+                             String prCursor, LocalDateTime prSince, int prPagesDone) {
 
         public ClaimedJob(Long jobId, Long repositoryId, Long installationRowId, long githubInstallationId,
                           long externalId, int attemptCount, int maxAttempts) {
             this(jobId, repositoryId, installationRowId, githubInstallationId, externalId, attemptCount, maxAttempts,
-                    GitSyncPhase.METADATA, null, null, null, 0);
+                    GitSyncPhase.METADATA, null, null, null, 0, null, null, 0);
         }
 
         /** The job after its metadata step: the commit step starts from the first page of {@code since}. */
         public ClaimedJob startingCommits(LocalDateTime since, String branch) {
             return new ClaimedJob(jobId, repositoryId, installationRowId, githubInstallationId, externalId, attemptCount,
-                    maxAttempts, GitSyncPhase.COMMITS, null, since, branch, pagesDone);
+                    maxAttempts, GitSyncPhase.COMMITS, null, since, branch, pagesDone, prCursor, prSince, prPagesDone);
         }
+
+        /** SY-02: the job after its commit step: the pull request step starts from the first page. */
+        public ClaimedJob startingPullRequests(LocalDateTime since) {
+            return new ClaimedJob(jobId, repositoryId, installationRowId, githubInstallationId, externalId, attemptCount,
+                    maxAttempts, GitSyncPhase.PULL_REQUESTS, commitCursor, commitSince, commitBranch, pagesDone,
+                    null, since, prPagesDone);
+        }
+    }
+
+    /** SY-02: totals of one stored pull request page. */
+    public record PullRequestPage(String endCursor, int inserted, int updated, int unchanged, int enriched,
+                                  int reviewsInserted, int reviewsUpdated, boolean empty,
+                                  GitHubCommitHistoryPage.RateLimit rateLimit) {
     }
 
     /** SY-01: totals of one stored commit page. */
@@ -99,13 +114,16 @@ public class GitSyncJobStore {
             return Optional.empty();
         }
         GitRepository connection = connections.findById(job.getRepositoryId()).orElse(null);
-        if (connection == null || connection.getStatus() != GitRepositoryStatus.ACTIVE) {
-            finish(job, GitSyncJobStatus.FAILED, "REPOSITORY_NOT_ACTIVE", "The repository is no longer linked");
+        if (connection == null || !connection.getStatus().receivesEvents()) {
+            // GI-05: ERROR still synchronizes (a success clears it); INACTIVE / DISCONNECTED do not.
+            finishStopped(job, connection);
             return Optional.empty();
         }
         GitInstallation installation = installations.findById(connection.getInstallationRef()).orElse(null);
         if (installation == null || installation.getStatus() != GitInstallationStatus.CONNECTED) {
-            finish(job, GitSyncJobStatus.FAILED, "INSTALLATION_NOT_ACTIVE", "The GitHub connection is not active");
+            boolean error = installation != null && installation.getStatus() == GitInstallationStatus.ERROR;
+            finish(job, GitSyncJobStatus.FAILED, error ? "INSTALLATION_ERROR" : "INSTALLATION_NOT_ACTIVE",
+                    error ? "GitHub refused the connection; check the GitHub connection" : "The GitHub connection is not active");
             return Optional.empty();
         }
         job.setStatus(GitSyncJobStatus.RUNNING);
@@ -115,7 +133,8 @@ public class GitSyncJobStore {
         jobs.saveAndFlush(job); // optimistic lock: a concurrent claim fails here
         return Optional.of(new ClaimedJob(job.getId(), connection.getId(), installation.getId(),
                 installation.getInstallationId(), connection.getExternalId(), job.getAttemptCount(), job.getMaxAttempts(),
-                job.effectivePhase(), job.getCommitCursor(), job.getCommitSince(), job.getCommitBranch(), job.pages()));
+                job.effectivePhase(), job.getCommitCursor(), job.getCommitSince(), job.getCommitBranch(), job.pages(),
+                job.getPrCursor(), job.getPrSince(), job.prPages()));
     }
 
     /**
@@ -127,7 +146,7 @@ public class GitSyncJobStore {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ClaimedJob startCommits(ClaimedJob claimed, GitHubRepository repository, Map<String, Object> stats) {
         GitRepository connection = connections.findById(claimed.repositoryId()).orElse(null);
-        if (connection != null && connection.getStatus() == GitRepositoryStatus.ACTIVE) refreshSnapshot(connection, repository);
+        if (connection != null && connection.getStatus().receivesEvents()) refreshSnapshot(connection, repository);
         GitSyncJob job = jobs.findById(claimed.jobId()).orElseThrow();
         LocalDateTime historySyncedAt = connection == null ? null : connection.getCommitHistorySyncedAt();
         LocalDateTime since = job.getType() == GitSyncJobType.INITIAL || historySyncedAt == null
@@ -171,25 +190,86 @@ public class GitSyncJobStore {
     }
 
     /**
-     * SY-01: the whole commit window was read: the job succeeds, and the history counts as
-     * imported up to the job's creation (never moved back by an older job finishing late).
+     * SY-01: the whole commit window was read: the history counts as imported up to the job's
+     * creation (never moved back by an older job finishing late). SY-02: the job moves on to its
+     * pull request step, whose window is fixed here: INITIAL, or a repository whose pull requests
+     * were never read to the end, reads them all; otherwise down to the overlap before the last
+     * complete read.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void completeCommits(ClaimedJob claimed) {
+    public ClaimedJob completeCommits(ClaimedJob claimed) {
+        GitSyncJob job = jobs.findById(claimed.jobId()).orElseThrow();
+        GitRepository connection = connections.findById(claimed.repositoryId())
+                .filter(row -> row.getStatus().receivesEvents())
+                .orElse(null);
+        LocalDateTime mark = mark(job);
+        if (connection != null && (connection.getCommitHistorySyncedAt() == null || mark.isAfter(connection.getCommitHistorySyncedAt()))) {
+            connection.setCommitHistorySyncedAt(mark);
+        }
+        LocalDateTime pullRequestsSyncedAt = connection == null ? null : connection.getPullRequestsSyncedAt();
+        LocalDateTime since = job.getType() == GitSyncJobType.INITIAL || pullRequestsSyncedAt == null
+                ? null : pullRequestsSyncedAt.minus(properties.getSyncReconcileOverlap());
+        job.setPhase(GitSyncPhase.PULL_REQUESTS);
+        job.setPrSince(since);
+        job.setPrCursor(null);
+        return claimed.startingPullRequests(since);
+    }
+
+    /** SY-02: a pull request page is stored (with all its reviews): remember where to resume, add up the statistics. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void checkpointPullRequests(ClaimedJob claimed, PullRequestPage page) {
+        jobs.findById(claimed.jobId()).ifPresent(job -> {
+            if (page.endCursor() != null) job.setPrCursor(page.endCursor());
+            job.setPrPagesDone(job.prPages() + 1);
+            Map<String, Object> stats = new LinkedHashMap<>(readStats(job.getStatsJson()));
+            add(stats, "pullRequestsInserted", page.inserted());
+            add(stats, "pullRequestsUpdated", page.updated());
+            add(stats, "pullRequestsUnchanged", page.unchanged());
+            add(stats, "pullRequestsEnriched", page.enriched());
+            add(stats, "reviewsInserted", page.reviewsInserted());
+            add(stats, "reviewsUpdated", page.reviewsUpdated());
+            stats.put("pullRequestPages", job.getPrPagesDone());
+            if (page.empty()) stats.put("pullRequestsEmpty", true);
+            if (page.rateLimit() != null) {
+                stats.put("rateLimitRemaining", page.rateLimit().remaining());
+                if (page.rateLimit().resetAt() != null) stats.put("rateLimitResetAt", page.rateLimit().resetAt().toString());
+            }
+            job.setStatsJson(toJson(stats));
+        });
+    }
+
+    /** SY-02: GitHub refused the pull request cursor: read the window again from its first page. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void restartPullRequests(ClaimedJob claimed) {
+        jobs.findById(claimed.jobId()).ifPresent(job -> job.setPrCursor(null));
+    }
+
+    /**
+     * SY-02: the pull request window was read: the job succeeds, and the pull requests count as read
+     * up to the job's creation (only moves forward).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void completePullRequests(ClaimedJob claimed) {
         GitSyncJob job = jobs.findById(claimed.jobId()).orElse(null);
         if (job == null) return;
         LocalDateTime now = now();
+        LocalDateTime mark = mark(job);
         connections.findById(claimed.repositoryId())
-                .filter(row -> row.getStatus() == GitRepositoryStatus.ACTIVE)
+                .filter(row -> row.getStatus().receivesEvents())
                 .ifPresent(row -> {
-                    LocalDateTime mark = job.getCreatedAt() == null ? now : job.getCreatedAt();
-                    if (row.getCommitHistorySyncedAt() == null || mark.isAfter(row.getCommitHistorySyncedAt())) {
-                        row.setCommitHistorySyncedAt(mark);
+                    if (row.getPullRequestsSyncedAt() == null || mark.isAfter(row.getPullRequestsSyncedAt())) {
+                        row.setPullRequestsSyncedAt(mark);
                     }
                     row.setLastSyncedAt(now);
+                    connectionWriter.recover(row.getId()); // GI-05: ERROR → ACTIVE once a sync succeeds
                 });
         job.setPhase(GitSyncPhase.DONE);
         finish(job, GitSyncJobStatus.SUCCEEDED, null, null);
+    }
+
+    /** SY-01/SY-02: a complete read counts up to the job's creation, never later than what it really saw. */
+    private LocalDateTime mark(GitSyncJob job) {
+        return job.getCreatedAt() == null ? now() : job.getCreatedAt();
     }
 
     /** SY-01: this run read its share of pages: back in the queue at once, keeping the cursor; no attempt is used. */
@@ -204,17 +284,27 @@ public class GitSyncJobStore {
         });
     }
 
-    /** The installation lost access to the repository: the connection becomes UNAVAILABLE (frees the master). */
+    /**
+     * GitHub answered that the repository cannot be found. GI-05: the connection becomes ERROR (not
+     * DISCONNECTED: only GitHub's own events confirm a revoked access) and stays the project's repository.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void repositoryLost(ClaimedJob claimed, String errorCode, String message) {
-        connectionWriter.markUnavailable(claimed.repositoryId(), errorCode);
+        connectionWriter.markError(claimed.repositoryId(), GitRepositoryReason.REPOSITORY_NOT_ACCESSIBLE);
         jobs.findById(claimed.jobId()).ifPresent(job -> finish(job, GitSyncJobStatus.FAILED, errorCode, message));
+    }
+
+    /** GI-05: the connection was unlinked or disconnected while the job ran: it stops without touching the connection. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void stopped(ClaimedJob claimed) {
+        GitRepository connection = connections.findById(claimed.repositoryId()).orElse(null);
+        jobs.findById(claimed.jobId()).ifPresent(job -> finishStopped(job, connection));
     }
 
     /** A permanent failure: no further attempts (PARTIAL when commit pages were already stored). */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void fail(ClaimedJob claimed, String errorCode, String message) {
-        jobs.findById(claimed.jobId()).ifPresent(job -> finish(job, givenUp(job), errorCode, message));
+        jobs.findById(claimed.jobId()).ifPresent(job -> giveUp(claimed, job, errorCode, message));
     }
 
     /** A transient failure: queue another attempt with backoff, or give up after the last one. */
@@ -222,7 +312,7 @@ public class GitSyncJobStore {
     public void retryOrFail(ClaimedJob claimed, String errorCode, String message) {
         jobs.findById(claimed.jobId()).ifPresent(job -> {
             if (job.getAttemptCount() >= job.getMaxAttempts()) {
-                finish(job, givenUp(job), errorCode, message); // AC05: the cursor stays for a resume
+                giveUp(claimed, job, errorCode, message); // AC05: the cursor stays for a resume
                 return;
             }
             Duration wait = BACKOFF.get(Math.min(job.getAttemptCount(), BACKOFF.size()) - 1);
@@ -254,9 +344,31 @@ public class GitSyncJobStore {
         return jobs.findDueIds(GitSyncJobStatus.PENDING, now(), PageRequest.of(0, limit));
     }
 
-    /** SY-01 AC05: PARTIAL once some commit pages are stored, otherwise FAILED. Never SUCCEEDED. */
+    /**
+     * The job stops for good. GI-05: unless the failure is the installation's (GI-02 shows that
+     * connection banner), the repository connection becomes ERROR until a sync succeeds.
+     */
+    private void giveUp(ClaimedJob claimed, GitSyncJob job, String errorCode, String message) {
+        finish(job, givenUp(job), errorCode, message);
+        if (errorCode == null || !errorCode.startsWith("INSTALLATION_")) {
+            connectionWriter.markError(claimed.repositoryId(), GitRepositoryReason.SYNC_FAILED);
+        }
+    }
+
+    /** GI-05: why a job cannot run on its connection any more. */
+    private void finishStopped(GitSyncJob job, GitRepository connection) {
+        if (connection != null && connection.getStatus() == GitRepositoryStatus.DISCONNECTED) {
+            finish(job, GitSyncJobStatus.FAILED, "REPOSITORY_DISCONNECTED", "GitHub no longer gives access to the repository");
+        } else if (connection != null && connection.getStatus() == GitRepositoryStatus.INACTIVE) {
+            finish(job, GitSyncJobStatus.FAILED, "REPOSITORY_UNLINKED", "The repository was unlinked from the project");
+        } else {
+            finish(job, GitSyncJobStatus.FAILED, "REPOSITORY_NOT_ACTIVE", "The repository is no longer linked");
+        }
+    }
+
+    /** SY-01 AC05: PARTIAL once some commit or pull request pages are stored, otherwise FAILED. Never SUCCEEDED. */
     private static GitSyncJobStatus givenUp(GitSyncJob job) {
-        return job.pages() > 0 ? GitSyncJobStatus.PARTIAL : GitSyncJobStatus.FAILED;
+        return job.pages() + job.prPages() > 0 ? GitSyncJobStatus.PARTIAL : GitSyncJobStatus.FAILED;
     }
 
     private static void refreshSnapshot(GitRepository row, GitHubRepository repository) {

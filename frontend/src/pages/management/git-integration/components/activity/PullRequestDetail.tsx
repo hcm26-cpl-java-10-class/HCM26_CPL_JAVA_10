@@ -35,13 +35,15 @@ function Description({ body }: { body: string }) {
  * WS-GH-01: a pull request with its linked tasks, reviews and description. Shown in
  * the right column of the Pull requests view (large screens) or in a sheet.
  */
-export function PullRequestDetail({ projectId, number, onOpenTask, onClose }: {
+export function PullRequestDetail({ projectId, number, repositoryId, onOpenTask, onClose }: {
   projectId: number;
   number: number;
+  /** US-GI-05: the repository of the pull request (numbers repeat across repositories). */
+  repositoryId?: number;
   onOpenTask: (ref: GitTaskRef) => void;
   onClose?: () => void;
 }) {
-  const query = usePullRequestDetail(projectId, number);
+  const query = usePullRequestDetail(projectId, number, repositoryId);
 
   if (query.isPending) {
     return <div role="status" aria-label={`Loading pull request #${number}`} className="space-y-3 p-4 sm:p-5">

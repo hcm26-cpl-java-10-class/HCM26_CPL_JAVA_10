@@ -34,7 +34,7 @@ class GitRepositoryLinkSchemaTest {
         jdbc.update(INSERT_REPOSITORY, 10L, 100L, "ACTIVE", 10L, 100L);
         // History rows (NULL active keys) never collide.
         jdbc.update(INSERT_REPOSITORY, 10L, 200L, "INACTIVE", null, null);
-        jdbc.update(INSERT_REPOSITORY, 20L, 100L, "UNAVAILABLE", null, null);
+        jdbc.update(INSERT_REPOSITORY, 20L, 100L, "INACTIVE", null, null);
         // A second ACTIVE repository on project 10, or repository 100 ACTIVE elsewhere, is refused.
         assertThatThrownBy(() -> jdbc.update(INSERT_REPOSITORY, 10L, 300L, "ACTIVE", 10L, 300L))
                 .isInstanceOf(DataIntegrityViolationException.class);

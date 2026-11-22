@@ -6,8 +6,10 @@ import com.example.starter_project_2025.system.git_integration.domain.BacklogRef
 import com.example.starter_project_2025.system.git_integration.domain.BacklogReferenceStatus;
 import com.example.starter_project_2025.system.git_integration.domain.GitArtifactType;
 import com.example.starter_project_2025.system.git_integration.domain.GitCommitSource;
+import com.example.starter_project_2025.system.git_integration.domain.GitInstallationStatus;
 import com.example.starter_project_2025.system.git_integration.domain.GitOAuthOutcome;
 import com.example.starter_project_2025.system.git_integration.domain.GitOAuthPurpose;
+import com.example.starter_project_2025.system.git_integration.domain.GitRepositoryStatus;
 import com.example.starter_project_2025.system.git_integration.domain.GitSyncJobStatus;
 import com.example.starter_project_2025.system.git_integration.domain.GitSyncJobType;
 import com.example.starter_project_2025.system.git_integration.domain.GitSyncPhase;
@@ -69,7 +71,13 @@ public class GitTaskLinkEnumCheckMigration implements CommandLineRunner {
                     "phase", GitSyncPhase.values()),
             // SY-01: GRAPHQL_HISTORY. A VARCHAR enum still gets a CHECK (source IN (...)) from Hibernate.
             "git_commits", columns(
-                    "source", GitCommitSource.values()));
+                    "source", GitCommitSource.values()),
+            // GI-02: ERROR (a native ENUM on the databases created by GI-01).
+            "git_installations", columns(
+                    "status", GitInstallationStatus.values()),
+            // GI-05: DISCONNECTED, ERROR (UNAVAILABLE rows are converted by GitRepositoryStatusMigration).
+            "git_repositories", columns(
+                    "status", GitRepositoryStatus.values()));
 
     private final DataSource dataSource;
 

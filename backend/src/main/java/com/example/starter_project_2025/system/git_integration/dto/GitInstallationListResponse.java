@@ -4,8 +4,8 @@ import java.util.List;
 
 /**
  * Installations of the current tenant. {@code status} summarizes them:
- * CONNECTED if any is connected, SUSPENDED if none is but one is suspended,
- * NOT_CONNECTED otherwise.
+ * CONNECTED if any is connected, else ERROR (GI-02) if one is in error,
+ * SUSPENDED if one is suspended, NOT_CONNECTED otherwise.
  */
 public record GitInstallationListResponse(
         String status,

@@ -6,8 +6,9 @@ import com.example.starter_project_2025.system.git_integration.webhook.GitWebhoo
 import java.util.Optional;
 
 /**
- * SY-04 AC03: activity events are only synchronized for a repository linked ACTIVE
- * to a project, reached through the installation that sent the event. Otherwise
+ * SY-04 AC03: activity events are only synchronized for a repository linked to a
+ * project that still receives events (ACTIVE or ERROR, GI-05), reached through the
+ * installation that sent the event. Otherwise (not linked, unlinked, disconnected)
  * the event is IGNORED and nothing reaches the Analytics data.
  */
 final class LinkedRepositoryGuard {
@@ -17,7 +18,7 @@ final class LinkedRepositoryGuard {
 
     /** The IGNORED result when the event must not be synchronized; empty when it may. */
     static Optional<GitWebhookHandlerResult> check(GitWebhookContext context) {
-        if (context.repository() == null) {
+        if (context.repository() == null || !context.repository().getStatus().receivesEvents()) {
             return Optional.of(GitWebhookHandlerResult.ignored("Repository is not linked to a project or is not active"));
         }
         if (context.installation() != null && !context.installation().getId().equals(context.repository().getInstallationRef())) {

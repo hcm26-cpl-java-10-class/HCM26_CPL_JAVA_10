@@ -14,6 +14,7 @@ import com.example.starter_project_2025.system.git_integration.github.dto.GitHub
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommitHistoryPage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubHistoryCommit;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallationToken;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubPullRequestPage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubRepository;
 import com.example.starter_project_2025.system.git_integration.github.InstallationTokenProvider;
 import com.example.starter_project_2025.system.git_integration.sync.GitCommitReconcileJob;
@@ -74,6 +75,9 @@ class CommitHistorySyncIntegrationTest extends AbstractTaskLinkIntegrationTest {
                 "hcm26-java-team/webshop", new GitHubRepository.Owner("hcm26-java-team"),
                 "https://github.com/hcm26-java-team/webshop", true, "private", "main", false, false)));
         when(github.listBranches(anyString(), anyString(), anyString(), anyInt())).thenReturn(List.of(new GitHubBranch("main", true)));
+        // SY-02: the pull request step (covered by PullRequestSyncIntegrationTest) finds none.
+        when(graphql.pullRequests(anyString(), anyString(), anyString(), any(), anyInt(), anyInt()))
+                .thenReturn(new GitHubPullRequestPage(true, false, List.of(), false, null, 0, null));
     }
 
     // ---- AC01 · Initial sync -------------------------------------------------------------------------
@@ -86,6 +90,12 @@ class CommitHistorySyncIntegrationTest extends AbstractTaskLinkIntegrationTest {
         when(graphql.commitHistory(anyString(), anyString(), anyString(), isNull(), eq("c1"), anyInt()))
                 .thenReturn(page(List.of(commit("s1", 1, "dependabot[bot]", 9L)), false, "c2"));
 
+        runner.run(jobId);
+        // The two commit pages used the run's budget (2): the pull request step is left to the next run.
+        GitSyncJob handedOver = jobs.findById(jobId).orElseThrow();
+        assertThat(handedOver.getStatus()).isEqualTo(GitSyncJobStatus.PENDING);
+        assertThat(handedOver.getPhase()).isEqualTo(GitSyncPhase.PULL_REQUESTS);
+        assertThat(connections.findById(connectionId).orElseThrow().getCommitHistorySyncedAt()).isNotNull();
         runner.run(jobId);
 
         GitSyncJob job = jobs.findById(jobId).orElseThrow();
@@ -351,7 +361,7 @@ class CommitHistorySyncIntegrationTest extends AbstractTaskLinkIntegrationTest {
     }
 
     @Test
-    void losingAccessDuringTheHistoryMarksTheRepositoryUnavailable() {
+    void losingAccessDuringTheHistoryMarksTheRepositoryInError() {
         Long jobId = queue(GitSyncJobType.INITIAL);
         when(graphql.commitHistory(anyString(), anyString(), anyString(), any(), any(), anyInt()))
                 .thenReturn(GitHubCommitHistoryPage.notFound(null));
@@ -360,7 +370,9 @@ class CommitHistorySyncIntegrationTest extends AbstractTaskLinkIntegrationTest {
 
         assertThat(jobs.findById(jobId).orElseThrow().getStatus()).isEqualTo(GitSyncJobStatus.FAILED);
         assertThat(jobs.findById(jobId).orElseThrow().getErrorCode()).isEqualTo("REPOSITORY_NOT_ACCESSIBLE");
-        assertThat(connections.findById(connectionId).orElseThrow().getStatus()).isEqualTo(GitRepositoryStatus.UNAVAILABLE);
+        // GI-05: an API failure is ERROR (not confirmed as revoked); the repository stays the project's.
+        assertThat(connections.findById(connectionId).orElseThrow().getStatus()).isEqualTo(GitRepositoryStatus.ERROR);
+        assertThat(connections.findById(connectionId).orElseThrow().getStatusReason()).isEqualTo("REPOSITORY_NOT_ACCESSIBLE");
     }
 
     @Test
@@ -414,7 +426,7 @@ class CommitHistorySyncIntegrationTest extends AbstractTaskLinkIntegrationTest {
 
         tx.executeWithoutResult(status -> {
             jobs.deleteAll();
-            connections.findById(connectionId).orElseThrow().setStatus(GitRepositoryStatus.UNAVAILABLE);
+            connections.findById(connectionId).orElseThrow().setStatus(GitRepositoryStatus.DISCONNECTED);
         });
         assertThat(reconcile.reconcile()).isZero(); // only ACTIVE repositories
     }

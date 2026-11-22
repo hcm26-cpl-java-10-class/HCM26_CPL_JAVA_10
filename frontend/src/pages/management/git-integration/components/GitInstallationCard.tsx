@@ -7,6 +7,14 @@ import { formatDateTime, formatRelative, installationManageUrl } from "../git-in
 import { GitHubStatusBadge } from "./GitHubStatusBadge";
 import { STATUS_STYLES } from "./git-integration.styles";
 
+/** US-GI-02: why an installation is not connected, in words. */
+const STATUS_REASONS: Record<string, string> = {
+  SUSPENDED_ON_GITHUB: "Suspended on GitHub",
+  UNINSTALLED: "Removed from GitHub",
+  TOKEN_REJECTED: "GitHub refused the access token",
+  INSTALLATION_NOT_FOUND: "GitHub could not find the installation",
+};
+
 function repositoryLabel(selection?: string | null) {
   if (selection === "all") return "All repositories";
   if (selection === "selected") return "Selected repositories";
@@ -43,8 +51,17 @@ export function GitInstallationCard({ installation: connection, actions }: {
             <span className="inline-flex items-center gap-1">
               <FolderGit2 className="size-3.5" aria-hidden="true" />{repositoryLabel(connection.repositorySelection)}
             </span>
+            {connection.projects && connection.projects.length > 0 && <span title={connection.projects.map(project => project.name ?? project.repositoryFullName).join(", ")}>
+              Used by {connection.projects.length} {connection.projects.length === 1 ? "project" : "projects"}
+            </span>}
             {connection.githubUserLogin && <span>Authorized by <span className="font-medium text-foreground">@{connection.githubUserLogin}</span></span>}
           </p>
+          {connection.status !== "CONNECTED" && <p className="text-xs font-medium text-foreground">
+            {STATUS_REASONS[connection.statusReason ?? ""] ?? "Not connected"}
+            {connection.statusChangedAt && <span className="font-normal text-muted-foreground" title={formatDateTime(connection.statusChangedAt)}>
+              {" "}· since {formatRelative(connection.statusChangedAt)}
+            </span>}
+          </p>}
           <p className="text-[11px] text-muted-foreground">
             {connection.connectedByName ? <>Connected by {connection.connectedByName} · </> : null}
             <time dateTime={connection.connectedAt} title={formatDateTime(connection.connectedAt)}>

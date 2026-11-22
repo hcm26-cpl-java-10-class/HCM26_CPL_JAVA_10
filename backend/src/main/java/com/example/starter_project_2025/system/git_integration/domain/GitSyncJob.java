@@ -123,6 +123,18 @@ public class GitSyncJob extends BaseEntity {
     @Column(name = "pages_done")
     Integer pagesDone;
 
+    /** SY-02: GraphQL {@code endCursor} of the last pull request page stored; NULL before the first page. */
+    @Column(name = "pr_cursor", length = 255)
+    String prCursor;
+
+    /** SY-02: pull requests updated before this are not read again (NULL = all), fixed when the step starts. */
+    @Column(name = "pr_since")
+    LocalDateTime prSince;
+
+    /** SY-02: pull request pages stored by this job; NULL = 0. */
+    @Column(name = "pr_pages_done")
+    Integer prPagesDone;
+
     @Version
     @Column(name = "version")
     Long version;
@@ -133,5 +145,9 @@ public class GitSyncJob extends BaseEntity {
 
     public int pages() {
         return pagesDone == null ? 0 : pagesDone;
+    }
+
+    public int prPages() {
+        return prPagesDone == null ? 0 : prPagesDone;
     }
 }

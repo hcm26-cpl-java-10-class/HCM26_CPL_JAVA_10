@@ -24,7 +24,9 @@ public record GitPullRequestItem(
         LocalDateTime mergedAt,
         LocalDateTime closedAt,
         ReviewSummary reviewSummary,
-        List<GitTaskRef> taskRefs) {
+        List<GitTaskRef> taskRefs,
+        /* GI-05: the repository it came from (null where only one repository is shown). */
+        GitRepositoryLabel repository) {
 
     public record ReviewSummary(int approved, int changesRequested, int commented) {
         public static final ReviewSummary NONE = new ReviewSummary(0, 0, 0);

@@ -10,5 +10,16 @@ public enum GitInstallationStatus {
     /** The account owner suspended the app on GitHub. */
     SUSPENDED,
     /** Uninstalled on GitHub or disconnected from the platform; kept for history. */
-    DISCONNECTED
+    DISCONNECTED,
+    /**
+     * GI-02: GitHub refused an installation token (401) or reported the installation missing (404),
+     * not confirmed as uninstalled yet. Linked repositories stay; "Check again" or the next token
+     * decides (CONNECTED, SUSPENDED or DISCONNECTED).
+     */
+    ERROR;
+
+    /** GI-02: the platform cannot use the installation and someone should reconnect it. */
+    public boolean broken() {
+        return this != CONNECTED;
+    }
 }

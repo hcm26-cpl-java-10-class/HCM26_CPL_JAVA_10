@@ -17,6 +17,9 @@ public interface GitSyncJobRepository extends JpaRepository<GitSyncJob, Long> {
 
     Optional<GitSyncJob> findByDedupeKey(String dedupeKey);
 
+    /** GI-05: jobs of a connection in a status (PENDING ones are stopped when it is unlinked). */
+    List<GitSyncJob> findByRepositoryIdAndStatus(Long repositoryId, GitSyncJobStatus status);
+
     /** PENDING jobs whose time has come, oldest first. */
     @Query("select j.id from GitSyncJob j where j.status = :status and j.nextRunAt <= :now order by j.nextRunAt asc, j.id asc")
     List<Long> findDueIds(@Param("status") GitSyncJobStatus status, @Param("now") LocalDateTime now, Pageable page);

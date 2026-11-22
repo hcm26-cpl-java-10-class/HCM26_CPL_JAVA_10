@@ -76,8 +76,11 @@ function PanelError({ retrying, onRetry }: { retrying: boolean; onRetry: () => v
  * act on, latest commits). Below: the activity of the chosen period. Every tile and row is
  * a shortcut into the Commits or Pull requests view with the matching filter.
  */
-export function RepositoryInsights({ projectId, activity, repositoryName, defaultBranch, range, onRange, onNavigate, onOpenTask }: {
+export function RepositoryInsights({ projectId, activity, repositoryName, defaultBranch, range, onRange, onNavigate, onOpenTask,
+  repositoryId }: {
   projectId: number;
+  /** US-GI-05: one repository of the project; all of them (unlinked ones included) when absent. */
+  repositoryId?: number;
   activity: GitRepositoryActivity;
   repositoryName: string;
   defaultBranch?: string | null;
@@ -86,17 +89,17 @@ export function RepositoryInsights({ projectId, activity, repositoryName, defaul
   onNavigate: (target: GitHubTabTarget) => void;
   onOpenTask: (ref: GitTaskRef) => void;
 }) {
-  const insights = useRepositoryInsights(projectId, range);
+  const insights = useRepositoryInsights(projectId, range, true, repositoryId);
   const accounts = useGitHubAccounts(projectId);
-  const commitsQuery = useRepositoryCommits(projectId, { page: 0, size: 5 });
+  const commitsQuery = useRepositoryCommits(projectId, { page: 0, size: 5, repositoryId });
   const health = insights.data?.pullRequests;
   // Nothing to act on: the panel shows the latest merges instead of an empty block.
   const calm = !!health && health.attention.length === 0;
   const showRecent = !!health && health.attention.length < RECENT_WHEN_FEWER_THAN;
-  const merged = useRepositoryPullRequests(projectId, { state: "MERGED", page: 0, size: RECENT_MERGED }, showRecent);
+  const merged = useRepositoryPullRequests(projectId, { state: "MERGED", page: 0, size: RECENT_MERGED, repositoryId }, showRecent);
   const { commitCount, linkedCommitCount, pullRequests } = activity;
   const empty = commitCount === 0 && pullRequests.open + pullRequests.merged + pullRequests.closed === 0;
-  const go = (target: GitHubTabTarget) => onNavigate({ ...target, range });
+  const go = (target: GitHubTabTarget) => onNavigate({ repo: repositoryId, ...target, range });
 
   return <div className="min-w-0 space-y-4">
     <div className={cn("grid grid-cols-2 gap-2.5 sm:grid-cols-3", SHOW_AWAITING_REVIEW_TILE ? "lg:grid-cols-5" : "lg:grid-cols-4")}>

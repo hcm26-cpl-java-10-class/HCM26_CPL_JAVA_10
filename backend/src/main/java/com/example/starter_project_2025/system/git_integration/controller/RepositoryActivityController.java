@@ -49,8 +49,10 @@ public class RepositoryActivityController {
                                           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
                                           @RequestParam(required = false) TaskLinkFilter link,
                                           @RequestParam(defaultValue = "0") int page,
-                                          @RequestParam(defaultValue = "20") int size) {
-        return queryService.commits(projectId, new RepositoryActivityQueryService.CommitQuery(q, author, branch, from, to, link, page, size));
+                                          @RequestParam(defaultValue = "20") int size,
+                                          @RequestParam(required = false) Long repositoryId) {
+        return queryService.commits(projectId,
+                new RepositoryActivityQueryService.CommitQuery(q, author, branch, from, to, link, page, size, repositoryId));
     }
 
     @Operation(summary = "Pull requests, most recently updated first, with each reviewer's current decision")
@@ -60,22 +62,26 @@ public class RepositoryActivityController {
                                                     @RequestParam(required = false) String q,
                                                     @RequestParam(required = false) TaskLinkFilter link,
                                                     @RequestParam(defaultValue = "0") int page,
-                                                    @RequestParam(defaultValue = "20") int size) {
-        return queryService.pullRequests(projectId, new RepositoryActivityQueryService.PullRequestQuery(state, q, link, page, size));
+                                                    @RequestParam(defaultValue = "20") int size,
+                                                    @RequestParam(required = false) Long repositoryId) {
+        return queryService.pullRequests(projectId,
+                new RepositoryActivityQueryService.PullRequestQuery(state, q, link, page, size, repositoryId));
     }
 
     @Operation(summary = "A pull request with its reviews")
     @GetMapping("/pull-requests/{number}")
-    public GitPullRequestDetail pullRequest(@PathVariable Long projectId, @PathVariable int number) {
-        return queryService.pullRequest(projectId, number);
+    public GitPullRequestDetail pullRequest(@PathVariable Long projectId, @PathVariable int number,
+                                            @RequestParam(required = false) Long repositoryId) {
+        return queryService.pullRequest(projectId, number, repositoryId);
     }
 
     @Operation(summary = "WS-GH-02: activity of the period (7d, 30d, 90d; today included) — commits per day, contributors, "
             + "branches — and the current state of the open pull requests")
     @GetMapping("/insights")
     public RepositoryInsightsView insights(@PathVariable Long projectId,
-                                           @RequestParam(required = false) String range) {
-        return insightsService.insights(projectId, range);
+                                           @RequestParam(required = false) String range,
+                                           @RequestParam(required = false) Long repositoryId) {
+        return insightsService.insights(projectId, range, repositoryId);
     }
 
     @Operation(summary = "WS-GH-02: branches the commits were first pushed to, latest activity first; q matches the name")

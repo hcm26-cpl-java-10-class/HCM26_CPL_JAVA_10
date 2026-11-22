@@ -7,13 +7,19 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { GitRepositoryItem, LinkedRepository, ProjectRepositoryView } from "@/types/features/git-integration";
 import type { GitHubTabTarget } from "../github-tab.params";
-import { formatDateTime, installationManageUrl } from "../git-integration.format";
+import { connectionBroken, formatDateTime, installationManageUrl } from "../git-integration.format";
 import { syncErrorMessage } from "../git-integration.messages";
-import { syncInProgress, useGitInstallations, useLinkRepository, useProjectRepository, useRetrySync } from "../useGitIntegration";
+import {
+  syncInProgress, useGitHubConnection, useGitInstallations, useLinkRepository, useProjectRepository, useRetrySync, useUnlinkRepository,
+} from "../useGitIntegration";
+import { GitHubConnectionBanner, GitHubConnectionChip } from "./GitHubConnectionStatus";
 import { GitHubTile } from "./GitIntegrationHeader";
 import { LinkRepositoryDialog } from "./LinkRepositoryDialog";
 import { RepositoryActivitySummary } from "./RepositoryActivitySummary";
 import { RepositoryBrowserSheet } from "./RepositoryBrowserSheet";
+import {
+  PreviousRepositories, RepositoryManageMenu, RepositoryStatusAlert, RepositoryStatusBadge, UnlinkRepositoryDialog,
+} from "./RepositoryManagement";
 import { RepositoryVisibilityBadge, RepositoryVisibilityIcon } from "./RepositoryVisibilityBadge";
 import { SyncStatusPill } from "./SyncStatusPill";
 
@@ -37,7 +43,7 @@ function SharedFromMaster({ view }: { view: ProjectRepositoryView }) {
   </p>;
 }
 
-function RepositoryLine({ repository }: { repository: LinkedRepository }) {
+function RepositoryLine({ repository, menu }: { repository: LinkedRepository; menu?: ReactNode }) {
   return <div className="flex items-start gap-3">
     <span aria-hidden="true" className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
       <RepositoryVisibilityIcon visibility={repository.visibility} className="size-4" />
@@ -62,6 +68,7 @@ function RepositoryLine({ repository }: { repository: LinkedRepository }) {
         <ExternalLink />Open
       </a>
     </Button>
+    {menu}
   </div>;
 }
 
@@ -69,6 +76,9 @@ function RepositoryLine({ repository }: { repository: LinkedRepository }) {
  * US-GI-04: the GitHub repository of a project. A master project links one
  * repository (picked from the GitHub App's repositories); its modules show the
  * master's repository read-only.
+ * US-GI-05: the PM of the master (or a Git Integration manager) unlinks it from the "⋯" menu; a
+ * repository GitHub disconnected or that failed shows why, with "Check again / Sync again" and
+ * "Unlink"; repositories unlinked before are listed, their data still counting in the analytics.
  * WS-GH-01: on Overview the activity summary opens the GitHub tab (`onOpenActivity`);
  * the GitHub tab itself shows it as a one-line strip (`variant="strip"`, `showActivity={false}`).
  */
@@ -87,6 +97,11 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
   const connected = (installationsQuery.data?.installations ?? []).filter(item => item.status === "CONNECTED");
   const link = useLinkRepository(projectId);
   const retry = useRetrySync(projectId);
+  const unlink = useUnlinkRepository(projectId);
+  const [unlinking, setUnlinking] = useState(false);
+  // US-GI-02: the connection the repository is read through (account, status, PM's actions).
+  const connection = useGitHubConnection(projectId, !!view?.repository).data;
+  const broken = connectionBroken(connection);
 
   const [browsing, setBrowsing] = useState(false);
   const [chosenInstallationId, setChosenInstallationId] = useState<number>();
@@ -139,11 +154,19 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
   if (!view) return null;
   const repository = view.repository;
   const active = repository?.status === "ACTIVE";
+  const previous = view.previousRepositories ?? [];
+
+  function confirmUnlink() {
+    if (!repository) return;
+    unlink.mutate(repository.id, { onSettled: () => setUnlinking(false) });
+  }
   const sync = view.latestSync;
   const modules = view.masterProject.moduleCount;
   const syncing = syncInProgress(view);
   const stopped = active && (sync?.status === "FAILED" || sync?.status === "PARTIAL");
   const imported = sync?.progress?.inserted ?? 0;
+  const importedPulls = sync?.progress?.pullRequests?.inserted ?? 0;
+  const plural = (count: number, word: string) => `${count.toLocaleString("en-US")} ${word}${count === 1 ? "" : "s"}`;
 
   // US-SY-01: one click, at any time; disabled while a sync is waiting or running.
   const syncNowButton = active && view.canSync && <Button variant="outline" size="sm" className="h-8 shrink-0"
@@ -160,22 +183,18 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
 
   // Shown under the repository in both layouts (card on Overview, strip in the GitHub tab).
   const alerts = repository ? <>
-      {!active && <div role="alert" className="flex flex-wrap items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-900 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-100">
-        <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        <div className="min-w-0 flex-1 space-y-0.5">
-          <p className="text-sm font-medium">Repository is no longer accessible</p>
-          <p className="text-xs text-amber-800/90 dark:text-amber-200/80">
-            {syncErrorMessage(sync?.errorCode)} {view.canLink ? "Link another repository, or grant access again on GitHub and link it again." : ""}
-          </p>
-        </div>
-        {view.canLink && linkButton("Link another repository")}
-      </div>}
-      {stopped && sync && <div role="alert" className={sync.status === "PARTIAL"
+      {broken && connection && <GitHubConnectionBanner projectId={projectId} connection={connection} />}
+      {/* US-GI-05 AC04: DISCONNECTED / ERROR (the connection banner above covers a broken installation). */}
+      {!active && !broken && <RepositoryStatusAlert view={view} manageUrl={connection?.account?.manageUrl}
+        syncing={retry.isPending} onResync={() => retry.mutate()} onUnlink={() => setUnlinking(true)} />}
+      {stopped && sync && !broken && <div role="alert" className={sync.status === "PARTIAL"
         ? "flex flex-wrap items-center gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-900 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-100"
         : "flex flex-wrap items-center gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-red-900 dark:border-red-900 dark:bg-red-950/50 dark:text-red-100"}>
         {sync.status === "PARTIAL" ? <TriangleAlert className="size-4 shrink-0" aria-hidden="true" /> : <AlertCircle className="size-4 shrink-0" aria-hidden="true" />}
         <p className="min-w-0 flex-1 text-xs">
-          {sync.status === "PARTIAL" && <span className="font-medium">Imported {imported.toLocaleString("en-US")} {imported === 1 ? "commit" : "commits"}, then it stopped. </span>}
+          {sync.status === "PARTIAL" && <span className="font-medium">
+            Imported {plural(imported, "commit")}{importedPulls > 0 && ` and ${plural(importedPulls, "pull request")}`}, then it stopped.{" "}
+          </span>}
           {syncErrorMessage(sync.errorCode)}
           {sync.resumable && view.canSync && " Resuming continues where it stopped."}
         </p>
@@ -198,7 +217,7 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
             {view.inherited ? "Modules use the master project's repository. It appears here once the master project links one."
               : view.canLink ? `Link the team's GitHub repository so the system can collect commits and pull requests.${modules > 0 ? ` All ${modules} ${modules === 1 ? "module" : "modules"} will share it.` : ""}`
               : ["COMPLETED", "CANCELLED"].includes(view.masterProject.status) ? "This project has ended, so a repository can no longer be linked."
-              : "Ask a person who manages Git Integration to link the project's repository."}
+              : "Ask the project manager to link the project's repository."}
           </p>
           {view.canLink && !installationsQuery.isPending && connected.length === 0 && <p className="text-[11px] text-muted-foreground">
             Install the GitHub App on your GitHub account or organization first.
@@ -206,16 +225,18 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
         </div>
       </div>
       {view.canLink && linkButton("Link GitHub repository")}
+      <PreviousRepositories repositories={previous} className="basis-full" />
     </div>;
   } else {
     body = <div className="space-y-3">
-      <RepositoryLine repository={repository} />
+      <RepositoryLine repository={repository} menu={<RepositoryManageMenu view={view} onUnlink={() => setUnlinking(true)} />} />
       {alerts}
       {/* US-SY-04: data synchronized from webhooks (also shown, read-only, while the repository is unavailable). */}
       {showActivity && <RepositoryActivitySummary projectId={view.project.id} repositoryName={repository.fullName} onOpen={onOpenActivity} />}
       {active && !view.inherited && modules > 0 && <p className="text-[11px] text-muted-foreground">
         Shared with {modules} {modules === 1 ? "module" : "modules"} of this project.
       </p>}
+      <PreviousRepositories repositories={previous} />
     </div>;
   }
 
@@ -226,11 +247,13 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
     <LinkRepositoryDialog repository={selected} masterName={view.masterProject.name} moduleCount={modules}
       pending={link.isPending} error={link.error} manageUrl={manageUrl}
       onConfirm={confirmLink} onClose={() => { setSelected(null); link.reset(); }} />
+    {view.canUnlink && <UnlinkRepositoryDialog view={view} open={unlinking} pending={unlink.isPending}
+      onConfirm={confirmUnlink} onCancel={() => setUnlinking(false)} />}
   </>;
 
   // WS-GH-02: one line in the GitHub tab, where the repository is context rather than content.
   if (variant === "strip" && repository) {
-    const hasAlert = !active || stopped;
+    const hasAlert = !active || stopped || broken;
     return <section aria-label="GitHub repository" className="min-w-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 sm:px-5">
         <GitHubTile size="sm" />
@@ -247,30 +270,30 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
             <CornerLeftUp className="size-3" aria-hidden="true" />Shared from {view.masterProject.code}
           </span>}
         </div>
+        {connection && <GitHubConnectionChip projectId={projectId} connection={connection} />}
         {extra}
         {active ? <SyncStatusPill job={sync} lastSyncedAt={repository.lastSyncedAt} />
-          : <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
-            <TriangleAlert className="size-3.5" aria-hidden="true" />Unavailable
-          </span>}
-        {!stopped && syncNowButton}
+          : <RepositoryStatusBadge status={repository.status} />}
+        {!stopped && !broken && syncNowButton}
         <Button variant="outline" size="sm" className="h-8 shrink-0" asChild>
           <a href={repository.htmlUrl} target="_blank" rel="noopener noreferrer" aria-label={`Open ${repository.fullName} on GitHub (new tab)`}>
             <ExternalLink />Open
           </a>
         </Button>
+        <RepositoryManageMenu view={view} onUnlink={() => setUnlinking(true)} />
       </div>
       {hasAlert && <div className="space-y-2 px-4 pb-3 sm:px-5">{alerts}</div>}
+      {previous.length > 0 && <div className="px-4 pb-3 sm:px-5"><PreviousRepositories repositories={previous} /></div>}
       {dialogs}
     </section>;
   }
 
   return <section aria-label="GitHub repository" className="min-w-0">
     <Header>
+      {connection && <GitHubConnectionChip projectId={projectId} connection={connection} />}
       {active && <SyncStatusPill job={sync} lastSyncedAt={repository.lastSyncedAt} />}
-      {!stopped && syncNowButton}
-      {repository && !active && <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
-        <TriangleAlert className="size-3.5" aria-hidden="true" />Unavailable
-      </span>}
+      {!stopped && !broken && syncNowButton}
+      {repository && !active && <RepositoryStatusBadge status={repository.status} />}
     </Header>
     <div className="space-y-3 p-4 sm:p-5">
       {view.inherited && <SharedFromMaster view={view} />}

@@ -30,12 +30,14 @@ import java.time.LocalDateTime;
  * writes it. Rows are never deleted: unlinking or losing access changes
  * {@code status} so history stays available.
  * <p>
- * GI-04: {@code active_project_id} / {@code active_external_id} mirror
- * {@code project_id} / {@code external_id} only while the row is ACTIVE and are
- * NULL otherwise. Their unique constraints enforce, in the database and under
- * concurrency, "at most one ACTIVE repository per master project" and "a
- * repository is ACTIVE in at most one project" (H2 and MySQL have no partial
- * unique indexes; unique columns accept many NULLs).
+ * GI-04 / GI-05: {@code active_project_id} mirrors {@code project_id} while the
+ * row is the project's current repository (any status but INACTIVE), and
+ * {@code active_external_id} mirrors {@code external_id} while GitHub still
+ * sends its events (ACTIVE or ERROR); NULL otherwise. Their unique constraints
+ * enforce, in the database and under concurrency, "at most one current
+ * repository per master project" and "a repository is synchronized in at most
+ * one project" (H2 and MySQL have no partial unique indexes; unique columns
+ * accept many NULLs).
  */
 @Entity
 @Table(
@@ -111,6 +113,14 @@ public class GitRepository extends BaseEntity {
     @Column(name = "last_synced_at")
     LocalDateTime lastSyncedAt;
 
+    /** GI-05: why the connection is not ACTIVE (see {@code GitRepositoryReason}); NULL while ACTIVE. */
+    @Column(name = "status_reason", length = 50)
+    String statusReason;
+
+    /** GI-05: when {@code status} last changed. */
+    @Column(name = "status_changed_at")
+    LocalDateTime statusChangedAt;
+
     /**
      * SY-01: creation time of the last sync job that imported the commit history to the end; later
      * syncs read from one day before it. NULL = the whole history was never imported (also every
@@ -119,11 +129,18 @@ public class GitRepository extends BaseEntity {
     @Column(name = "commit_history_synced_at")
     LocalDateTime commitHistorySyncedAt;
 
-    /** = {@code project_id} while ACTIVE, NULL otherwise. Maintained by {@link #syncActiveKeys()}. */
+    /**
+     * SY-02: creation time of the last sync job that read the pull requests to the end; later syncs
+     * stop at pull requests updated more than a day before it. NULL = never read them all.
+     */
+    @Column(name = "pull_requests_synced_at")
+    LocalDateTime pullRequestsSyncedAt;
+
+    /** = {@code project_id} unless INACTIVE, NULL otherwise. Maintained by {@link #syncActiveKeys()}. */
     @Column(name = "active_project_id")
     Long activeProjectId;
 
-    /** = {@code external_id} while ACTIVE, NULL otherwise. Maintained by {@link #syncActiveKeys()}. */
+    /** = {@code external_id} while ACTIVE or ERROR, NULL otherwise. Maintained by {@link #syncActiveKeys()}. */
     @Column(name = "active_external_id")
     Long activeExternalId;
 
@@ -134,8 +151,7 @@ public class GitRepository extends BaseEntity {
     @PrePersist
     @PreUpdate
     void syncActiveKeys() {
-        boolean active = status == GitRepositoryStatus.ACTIVE;
-        activeProjectId = active ? projectId : null;
-        activeExternalId = active ? externalId : null;
+        activeProjectId = status != null && status.holdsProject() ? projectId : null;
+        activeExternalId = status != null && status.receivesEvents() ? externalId : null;
     }
 }

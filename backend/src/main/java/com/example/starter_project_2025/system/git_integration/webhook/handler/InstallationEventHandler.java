@@ -3,7 +3,9 @@ package com.example.starter_project_2025.system.git_integration.webhook.handler;
 import com.example.starter_project_2025.system.git_integration.domain.GitInstallation;
 import com.example.starter_project_2025.system.git_integration.domain.GitInstallationStatus;
 import com.example.starter_project_2025.system.git_integration.github.InstallationTokenProvider;
+import com.example.starter_project_2025.system.git_integration.service.GitInstallationReason;
 import com.example.starter_project_2025.system.git_integration.service.GitInstallationWriter;
+import com.example.starter_project_2025.system.git_integration.service.GitRepositoryReason;
 import com.example.starter_project_2025.system.git_integration.service.GitRepositoryConnectionWriter;
 import com.example.starter_project_2025.system.git_integration.service.InstallationRepositoryCache;
 import com.example.starter_project_2025.system.git_integration.webhook.GitWebhookContext;
@@ -45,15 +47,16 @@ public class InstallationEventHandler implements GitWebhookEventHandler {
             case "deleted" -> {
                 // T6: the app was uninstalled; linked repositories can no longer be read.
                 installationWriter.transition(installation.getId(),
-                        EnumSet.of(GitInstallationStatus.CONNECTED, GitInstallationStatus.SUSPENDED),
-                        GitInstallationStatus.DISCONNECTED, "webhook-installation-deleted");
-                int repositories = connectionWriter.markUnavailableByInstallation(installation.getId(), "INSTALLATION_DELETED");
+                        EnumSet.of(GitInstallationStatus.CONNECTED, GitInstallationStatus.SUSPENDED, GitInstallationStatus.ERROR),
+                        GitInstallationStatus.DISCONNECTED, GitInstallationReason.UNINSTALLED);
+                int repositories = connectionWriter.disconnectByInstallation(installation.getId(), GitRepositoryReason.INSTALLATION_DELETED);
                 forget(installation);
-                yield GitWebhookHandlerResult.processed(repositories + " repository connection(s) marked unavailable");
+                yield GitWebhookHandlerResult.processed(repositories + " repository connection(s) disconnected");
             }
             case "suspend" -> {
-                boolean changed = installationWriter.transition(installation.getId(), EnumSet.of(GitInstallationStatus.CONNECTED),
-                        GitInstallationStatus.SUSPENDED, "webhook-installation-suspend");
+                boolean changed = installationWriter.transition(installation.getId(),
+                        EnumSet.of(GitInstallationStatus.CONNECTED, GitInstallationStatus.ERROR),
+                        GitInstallationStatus.SUSPENDED, GitInstallationReason.SUSPENDED_ON_GITHUB);
                 forget(installation);
                 yield changed ? GitWebhookHandlerResult.processed()
                         : GitWebhookHandlerResult.ignored("Installation is " + installation.getStatus());
@@ -61,7 +64,7 @@ public class InstallationEventHandler implements GitWebhookEventHandler {
             case "unsuspend" -> {
                 // T4 only from SUSPENDED: a late unsuspend must not revive a removed installation.
                 boolean changed = installationWriter.transition(installation.getId(), EnumSet.of(GitInstallationStatus.SUSPENDED),
-                        GitInstallationStatus.CONNECTED, "webhook-installation-unsuspend");
+                        GitInstallationStatus.CONNECTED, GitInstallationReason.UNSUSPENDED);
                 yield changed ? GitWebhookHandlerResult.processed()
                         : GitWebhookHandlerResult.ignored("Installation is " + installation.getStatus());
             }

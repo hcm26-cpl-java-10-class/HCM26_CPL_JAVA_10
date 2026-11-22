@@ -177,6 +177,25 @@ public class GitIntegrationException extends RuntimeException {
                 "GitHub App không có quyền truy cập repository này");
     }
 
+    /** GI-05: this repository is the project's repository but DISCONNECTED / ERROR: sync it again or unlink it. */
+    public static GitIntegrationException repositoryNeedsAttention(Object repository) {
+        return withDetails(HttpStatus.CONFLICT, "GIT_REPOSITORY_NEEDS_ATTENTION",
+                "Repository này đang được liên kết nhưng bị mất kết nối hoặc lỗi. Hãy đồng bộ lại hoặc hủy liên kết",
+                Map.of("repository", repository));
+    }
+
+    /** GI-05: the project's repository changed since the page was loaded (unlink of another connection). */
+    public static GitIntegrationException repositoryChanged() {
+        return new GitIntegrationException(HttpStatus.CONFLICT, "GIT_REPOSITORY_CHANGED",
+                "Repository của project vừa thay đổi. Hãy tải lại và kiểm tra lần nữa");
+    }
+
+    /** GI-05: "Sync again" is limited to one GitHub check per connection every few seconds. */
+    public static GitIntegrationException recheckTooSoon() {
+        return new GitIntegrationException(HttpStatus.TOO_MANY_REQUESTS, "GIT_RECHECK_TOO_SOON",
+                "Vừa kiểm tra xong. Hãy thử lại sau ít giây");
+    }
+
     public static GitIntegrationException repositoryArchived() {
         return new GitIntegrationException(HttpStatus.UNPROCESSABLE_ENTITY, "GIT_REPOSITORY_ARCHIVED",
                 "Repository đã được lưu trữ (archived) hoặc bị vô hiệu hóa trên GitHub nên không thể liên kết");
@@ -201,6 +220,17 @@ public class GitIntegrationException extends RuntimeException {
     public static GitIntegrationException installationNotActive(String installationStatus) {
         return new GitIntegrationException(HttpStatus.CONFLICT, "GIT_INSTALLATION_NOT_ACTIVE",
                 "Kết nối GitHub hiện không hoạt động", null, installationStatus);
+    }
+
+    /** GI-02: GitHub refused the installation (token 401/404); "Check again" or reconnect. */
+    public static GitIntegrationException installationError() {
+        return new GitIntegrationException(HttpStatus.CONFLICT, "GIT_INSTALLATION_ERROR",
+                "GitHub từ chối kết nối. Hãy kiểm tra lại kết nối GitHub", null, "ERROR");
+    }
+
+    /** GI-02: an installation in the given status, as the error a user request gets. */
+    public static GitIntegrationException installationBroken(String installationStatus) {
+        return "ERROR".equals(installationStatus) ? installationError() : installationNotActive(installationStatus);
     }
 
     public static GitIntegrationException rateLimited(Long retryAfterSeconds) {

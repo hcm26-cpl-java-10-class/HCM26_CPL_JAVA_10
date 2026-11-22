@@ -48,24 +48,24 @@ public interface BacklogReferenceRepository extends JpaRepository<BacklogReferen
     /** Per status, how many distinct commits / pull requests of a repository have at least one such reference. */
     @Query("""
             select r.status, count(distinct r.sourceId) from BacklogReference r
-             where r.repositoryId = :repositoryId and r.sourceType = :type
+             where r.repositoryId in :repositoryIds and r.sourceType = :type
              group by r.status""")
-    List<Object[]> countSourcesByStatus(@Param("repositoryId") Long repositoryId, @Param("type") GitArtifactType type);
+    List<Object[]> countSourcesByStatus(@Param("repositoryIds") Collection<Long> repositoryIds, @Param("type") GitArtifactType type);
 
     /** Sources with no Task ID that are not linked to any task either (TM-03: a manual link). */
     @Query("""
             select count(distinct r.sourceId) from BacklogReference r
-             where r.repositoryId = :repositoryId and r.sourceType = :type
+             where r.repositoryId in :repositoryIds and r.sourceType = :type
                and r.status = com.example.starter_project_2025.system.git_integration.domain.BacklogReferenceStatus.MISSING
                and not exists (select l.id from BacklogGitLink l where l.artifactType = :type and l.artifactId = r.sourceId)""")
-    long countUnlinkedMissingSources(@Param("repositoryId") Long repositoryId, @Param("type") GitArtifactType type);
+    long countUnlinkedMissingSources(@Param("repositoryIds") Collection<Long> repositoryIds, @Param("type") GitArtifactType type);
 
-    @Query("select count(distinct r.sourceId) from BacklogReference r where r.repositoryId = :repositoryId and r.sourceType = :type")
-    long countProcessedSources(@Param("repositoryId") Long repositoryId, @Param("type") GitArtifactType type);
+    @Query("select count(distinct r.sourceId) from BacklogReference r where r.repositoryId in :repositoryIds and r.sourceType = :type")
+    long countProcessedSources(@Param("repositoryIds") Collection<Long> repositoryIds, @Param("type") GitArtifactType type);
 
     @Query("""
             select count(distinct r.sourceId) from BacklogReference r
-             where r.repositoryId = :repositoryId and r.sourceType = :type and r.status = :status""")
-    long countSources(@Param("repositoryId") Long repositoryId, @Param("type") GitArtifactType type,
+             where r.repositoryId in :repositoryIds and r.sourceType = :type and r.status = :status""")
+    long countSources(@Param("repositoryIds") Collection<Long> repositoryIds, @Param("type") GitArtifactType type,
                       @Param("status") BacklogReferenceStatus status);
 }

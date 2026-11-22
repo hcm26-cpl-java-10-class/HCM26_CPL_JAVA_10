@@ -23,6 +23,8 @@ export interface GitHubTabState {
   pr?: number;
   /** US-GI-06: a contributor highlighted in the Members view. */
   contributor?: number;
+  /** US-GI-05: one repository of the project (`git_repositories.id`); all of them when absent. Kept across views. */
+  repo?: number;
   page: number;
 }
 
@@ -32,7 +34,7 @@ export type GitHubTabTarget = Partial<Omit<GitHubTabState, "view">> & { view: Gi
 export type GitHubTabPatch = Partial<Omit<GitHubTabState, "view">> & { view?: GitHubView };
 
 export const GITHUB_TAB = "github";
-export const GITHUB_TAB_PARAMS = ["view", "range", "q", "author", "branch", "link", "from", "to", "state", "pr", "contributor", "page"] as const;
+export const GITHUB_TAB_PARAMS = ["view", "range", "q", "author", "branch", "link", "from", "to", "state", "pr", "contributor", "repo", "page"] as const;
 export const DEFAULT_INSIGHTS_RANGE: GitInsightsRange = "30d";
 
 const VIEWS: readonly GitHubView[] = ["insights", "commits", "pulls", "members"];
@@ -82,6 +84,7 @@ export function parseGitHubTabParams(params: URLSearchParams): GitHubTabState {
     state: oneOf(STATES, params.get("state")),
     pr: positiveInt(params.get("pr")),
     contributor: positiveInt(params.get("contributor")),
+    repo: positiveInt(params.get("repo")),
     page: positiveInt(params.get("page")) ?? 0,
   };
 }
@@ -106,6 +109,7 @@ function write(next: URLSearchParams, state: GitHubTabState) {
   if (state.state) next.set("state", state.state);
   if (state.pr !== undefined) next.set("pr", String(state.pr));
   if (state.contributor !== undefined) next.set("contributor", String(state.contributor));
+  if (state.repo !== undefined) next.set("repo", String(state.repo));
   if (state.page > 0) next.set("page", String(state.page));
   return next;
 }

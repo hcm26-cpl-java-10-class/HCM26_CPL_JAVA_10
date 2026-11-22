@@ -58,6 +58,11 @@ public class GitProjectMembership {
         return !scope.isEmpty() && memberships.isMentorOfScope(userId, scope, ProjectTeamStatus.ACTIVE);
     }
 
+    /** GI-02: user ids of the mentors of the scope's active teams. */
+    public List<Long> mentorIds(Set<Long> scope) {
+        return scope.isEmpty() ? List.of() : memberships.mentorsOfScope(scope, ProjectTeamStatus.ACTIVE);
+    }
+
     private static String fullName(MemberRow row) {
         String first = row.getFirstName() == null ? "" : row.getFirstName().trim();
         String last = row.getLastName() == null ? "" : row.getLastName().trim();

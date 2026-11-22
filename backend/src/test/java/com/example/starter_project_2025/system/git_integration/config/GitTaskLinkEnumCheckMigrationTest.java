@@ -93,6 +93,31 @@ class GitTaskLinkEnumCheckMigrationTest {
     }
 
     @Test
+    void syncJobsAcceptThePullRequestPhase() throws Exception {
+        // SY-02: SY-01 created git_sync_jobs.phase as VARCHAR with a CHECK of METADATA, COMMITS, DONE
+        // (the exact clause found on the real database).
+        jdbc.execute("create table git_sync_jobs(id bigint primary key, "
+                + "phase varchar(30) check (phase in ('METADATA','COMMITS','DONE')))");
+
+        assertThat(migration.migrate()).hasSize(1);
+
+        jdbc.update("insert into git_sync_jobs values (1, 'PULL_REQUESTS')");
+        assertThat(migration.migrate()).isEmpty();
+    }
+
+    @Test
+    void installationsAcceptTheErrorStatus() throws Exception {
+        // GI-02: GI-01 created git_installations.status as a native enum (as found on the real database).
+        jdbc.execute("create table git_installations(id bigint primary key, "
+                + "status enum('CONNECTED','SUSPENDED','DISCONNECTED') not null)");
+
+        assertThat(migration.migrate()).containsExactly("git_installations.STATUS");
+
+        jdbc.update("insert into git_installations values (1, 'ERROR')");
+        assertThat(migration.migrate()).isEmpty();
+    }
+
+    @Test
     void newDatabasesAreLeftAlone() throws Exception {
         assertThat(migration.migrate()).isEmpty(); // no table yet
     }

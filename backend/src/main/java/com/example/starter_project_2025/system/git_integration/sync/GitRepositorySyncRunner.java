@@ -8,8 +8,7 @@ import com.example.starter_project_2025.system.git_integration.github.GitHubApiE
 import com.example.starter_project_2025.system.git_integration.github.InstallationTokenProvider;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubBranch;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubRepository;
-import com.example.starter_project_2025.system.git_integration.service.GitInstallationWriter;
-import com.example.starter_project_2025.system.git_integration.service.InstallationRepositoryCache;
+import com.example.starter_project_2025.system.git_integration.service.InstallationHealth;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -24,8 +23,9 @@ import java.util.Optional;
  * GI-04: runs one synchronization job. Every run confirms the installation can still read the
  * repository (by its stable id, so a rename does not matter). The metadata step (once per job)
  * refreshes the snapshot (name, owner, URL, default branch, visibility) and counts the branches;
- * SY-01: the commit step then imports the history of the default branch, resuming from the
- * job's cursor when a previous run stopped.
+ * SY-01: the commit step then imports the history of the default branch; SY-02: the pull request
+ * step imports pull requests and their reviews. A job resumes at the step (and cursor) where a
+ * previous run stopped; both steps share the run's page budget ({@code sync-max-pages-per-run}).
  */
 @Slf4j
 @Component
@@ -37,10 +37,10 @@ public class GitRepositorySyncRunner {
     private final GitSyncJobStore store;
     private final GitHubApiClient github;
     private final InstallationTokenProvider tokens;
-    private final InstallationRepositoryCache cache;
-    private final GitInstallationWriter installationWriter;
+    private final InstallationHealth health;
     private final GitHubAppProperties properties;
     private final CommitHistorySyncStep commitStep;
+    private final PullRequestSyncStep pullRequestStep;
 
     public void run(Long jobId) {
         Optional<GitSyncJobStore.ClaimedJob> claimed;
@@ -54,7 +54,7 @@ public class GitRepositorySyncRunner {
 
     private void execute(GitSyncJobStore.ClaimedJob claimed) {
         GitSyncJobStore.ClaimedJob job = claimed;
-        boolean commits = false;
+        GitSyncPhase step = GitSyncPhase.METADATA;
         try {
             String token = tokens.token(job.githubInstallationId());
             Optional<GitHubRepository> repository = github.getRepository(token, job.externalId());
@@ -69,16 +69,38 @@ public class GitRepositorySyncRunner {
                 log.info("Repository metadata synchronized: jobId={}, repositoryId={}, attempt={}, stats={}",
                         job.jobId(), job.repositoryId(), job.attemptCount(), stats);
             }
-            commits = true;
-            CommitHistorySyncStep.Outcome outcome = commitStep.run(job, repository.get().ownerLogin(), repository.get().name());
-            if (outcome == CommitHistorySyncStep.Outcome.REPOSITORY_LOST) {
-                store.repositoryLost(job, "REPOSITORY_NOT_ACCESSIBLE", "The GitHub App can no longer access the repository");
+            String owner = repository.get().ownerLogin();
+            String name = repository.get().name();
+            int budget = properties.getSyncMaxPagesPerRun();
+            if (job.phase() == GitSyncPhase.METADATA || job.phase() == GitSyncPhase.COMMITS) {
+                step = GitSyncPhase.COMMITS;
+                SyncStepResult commits = commitStep.run(job, owner, name, budget);
+                if (commits.outcome() != SyncStepResult.Outcome.DONE) {
+                    finishStep(commits);
+                    return;
+                }
+                job = commits.job();
+                budget -= commits.pages();
+                if (budget <= 0) {
+                    store.yieldRun(job); // the pull request step starts in the next run
+                    return;
+                }
             }
+            step = GitSyncPhase.PULL_REQUESTS;
+            finishStep(pullRequestStep.run(job, owner, name, budget));
         } catch (GitHubApiException e) {
-            handleGitHubFailure(job, e, commits);
+            handleGitHubFailure(job, e, step);
         } catch (RuntimeException e) {
             log.warn("Repository sync failed unexpectedly: jobId={}, error={}", job.jobId(), e.getClass().getSimpleName(), e);
             store.retryOrFail(job, "SYNC_ERROR", "Unexpected error while synchronizing");
+        }
+    }
+
+    private void finishStep(SyncStepResult result) {
+        if (result.outcome() == SyncStepResult.Outcome.REPOSITORY_LOST) {
+            store.repositoryLost(result.job(), "REPOSITORY_NOT_ACCESSIBLE", "The GitHub App can no longer access the repository");
+        } else if (result.outcome() == SyncStepResult.Outcome.REPOSITORY_STOPPED) {
+            store.stopped(result.job());
         }
     }
 
@@ -98,40 +120,47 @@ public class GitRepositorySyncRunner {
         if (truncated) stats.put("branchesTruncated", true);
     }
 
-    private void handleGitHubFailure(GitSyncJobStore.ClaimedJob job, GitHubApiException e, boolean commits) {
+    private void handleGitHubFailure(GitSyncJobStore.ClaimedJob job, GitHubApiException e, GitSyncPhase step) {
+        String unavailable = switch (step) {
+            case COMMITS -> "HISTORY_UNAVAILABLE";
+            case PULL_REQUESTS -> "PULL_REQUESTS_UNAVAILABLE";
+            default -> "PROVIDER_UNAVAILABLE";
+        };
         switch (e.getKind()) {
             case GONE -> {
-                forget(job.githubInstallationId());
-                installationWriter.markStatus(job.installationRowId(), GitInstallationStatus.DISCONNECTED, "sync-token-404");
-                store.repositoryLost(job, "INSTALLATION_DISCONNECTED", "The GitHub App was uninstalled");
+                // GI-02: ERROR, not DISCONNECTED: the repository stays linked until GitHub confirms the removal.
+                health.failed(job.installationRowId(), job.githubInstallationId(), e);
+                store.fail(job, "INSTALLATION_ERROR", "GitHub refused the connection; check the GitHub connection");
             }
             case SUSPENDED -> {
-                forget(job.githubInstallationId());
-                installationWriter.markStatus(job.installationRowId(), GitInstallationStatus.SUSPENDED, "sync-token-suspended");
+                health.failed(job.installationRowId(), job.githubInstallationId(), e);
                 store.fail(job, "INSTALLATION_SUSPENDED", "The GitHub App installation is suspended");
             }
             case RATE_LIMITED -> store.postpone(job, e.getRetryAfterSeconds());
             case REJECTED -> {
                 if (e.getHttpStatus() == 401) {
-                    tokens.invalidate(job.githubInstallationId());
-                    store.retryOrFail(job, commits ? "HISTORY_UNAVAILABLE" : "PROVIDER_UNAVAILABLE", "GitHub refused the access token");
-                } else if (commits) {
+                    GitInstallationStatus broken = health.failed(job.installationRowId(), job.githubInstallationId(), e);
+                    if (broken == GitInstallationStatus.ERROR) {
+                        store.fail(job, "INSTALLATION_ERROR", "GitHub refused the connection; check the GitHub connection");
+                    } else {
+                        store.retryOrFail(job, unavailable, "GitHub refused the access token"); // first 401: a fresh token next time
+                    }
+                } else if (step == GitSyncPhase.COMMITS) {
                     // 403/422: the App cannot read contents (permission "Contents: Read" missing or revoked).
                     log.warn("Commit history refused: jobId={}, reason={}", job.jobId(), e.getMessage());
                     store.fail(job, "HISTORY_FORBIDDEN", "The GitHub App is not allowed to read the repository contents");
+                } else if (step == GitSyncPhase.PULL_REQUESTS) {
+                    // The App lacks "Pull requests: Read"; the commits already imported are kept (PARTIAL).
+                    log.warn("Pull requests refused: jobId={}, reason={}", job.jobId(), e.getMessage());
+                    store.fail(job, "PULL_REQUESTS_FORBIDDEN", "The GitHub App is not allowed to read the pull requests");
                 } else {
                     store.retryOrFail(job, "PROVIDER_UNAVAILABLE", "GitHub could not be reached");
                 }
             }
             default -> {
                 log.warn("Repository sync attempt failed: jobId={}, attempt={}, reason={}", job.jobId(), job.attemptCount(), e.getMessage());
-                store.retryOrFail(job, commits ? "HISTORY_UNAVAILABLE" : "PROVIDER_UNAVAILABLE", "GitHub could not be reached");
+                store.retryOrFail(job, unavailable, "GitHub could not be reached");
             }
         }
-    }
-
-    private void forget(long installationId) {
-        tokens.invalidate(installationId);
-        cache.evict(installationId);
     }
 }

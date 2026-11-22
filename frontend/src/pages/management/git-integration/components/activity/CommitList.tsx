@@ -9,6 +9,7 @@ import type { GitHubLinkFilter, GitHubTabPatch, GitHubTabState } from "../../git
 import { dayKey, formatDateTime, formatDayLabel, formatRelative } from "../../git-integration.format";
 import { apiBounds, spanLabel } from "../../insights.utils";
 import { useRecheckTaskLinks, useRepositoryCommits } from "../../useGitIntegration";
+import { RepositoryLabelChip } from "../RepositoryManagement";
 import { TaskRefChips } from "../TaskRefChips";
 import { ContributorAvatar } from "./ContributorAvatar";
 import { EmptyState, ErrorState, FilterChips, ListSkeleton, Pager, SearchBox, Segmented, type ActiveFilter } from "./ActivityControls";
@@ -64,6 +65,8 @@ export function CommitRow({ commit, onAuthor, onBranch, onOpenTask, compact = fa
           </button>
           : <span className="inline-flex max-w-56 items-center gap-1 font-mono"><GitBranch className="size-3 shrink-0" aria-hidden="true" /><span className="truncate">{commit.branch}</span></span>)}
         <time dateTime={commit.committedAt} title={formatDateTime(commit.committedAt)}>{formatRelative(commit.committedAt)}</time>
+        {/* US-GI-05: data of a repository unlinked from the project keeps its label. */}
+        {commit.repository?.status === "INACTIVE" && <RepositoryLabelChip repository={commit.repository} />}
         {!compact && commit.filesChanged != null && <span className="hidden sm:inline">· {commit.filesChanged} {commit.filesChanged === 1 ? "file" : "files"}</span>}
         {compact && refs.length > 0 && <TaskRefChips refs={refs} onOpen={onOpenTask} />}
       </div>
@@ -92,7 +95,7 @@ function groupByDay(commits: GitCommitItem[]) {
   return groups;
 }
 
-type CommitFilters = Pick<GitHubTabState, "q" | "author" | "branch" | "link" | "from" | "to" | "page">;
+type CommitFilters = Pick<GitHubTabState, "q" | "author" | "branch" | "link" | "from" | "to" | "page" | "repo">;
 
 /**
  * WS-GH-01: commits of the project's repository grouped by day, with sticky day headers.
@@ -104,8 +107,10 @@ export function CommitList({ projectId, filters, onChange, onOpenTask }: {
   onChange: (patch: GitHubTabPatch) => void;
   onOpenTask: (ref: GitTaskRef) => void;
 }) {
-  const { q, author, branch, link, from, to, page } = filters;
-  const query = useRepositoryCommits(projectId, { q: q || undefined, author, branch, link, ...apiBounds(from, to), page, size: PAGE_SIZE });
+  const { q, author, branch, link, from, to, page, repo } = filters;
+  const query = useRepositoryCommits(projectId, {
+    q: q || undefined, author, branch, link, ...apiBounds(from, to), page, size: PAGE_SIZE, repositoryId: repo,
+  });
   const { hasPermission } = usePermissions();
   const recheck = useRecheckTaskLinks(projectId);
   const top = useRef<HTMLDivElement>(null);

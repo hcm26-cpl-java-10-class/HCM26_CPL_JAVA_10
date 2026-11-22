@@ -39,11 +39,11 @@ public interface BacklogGitLinkRepository extends JpaRepository<BacklogGitLink, 
     List<Object[]> countByItems(@Param("itemIds") Collection<Long> itemIds);
 
     /** Commits / pull requests of a repository linked to at least one task, AUTO or MANUAL. */
-    @Query("select count(distinct l.artifactId) from BacklogGitLink l where l.repositoryId = :repositoryId and l.artifactType = :type")
-    long countLinkedArtifacts(@Param("repositoryId") Long repositoryId, @Param("type") GitArtifactType type);
+    @Query("select count(distinct l.artifactId) from BacklogGitLink l where l.repositoryId in :repositoryIds and l.artifactType = :type")
+    long countLinkedArtifacts(@Param("repositoryIds") Collection<Long> repositoryIds, @Param("type") GitArtifactType type);
 
-    @Query("select count(distinct l.backlogItemId) from BacklogGitLink l where l.repositoryId = :repositoryId and l.artifactType = :type")
-    long countLinkedItems(@Param("repositoryId") Long repositoryId, @Param("type") GitArtifactType type);
+    @Query("select count(distinct l.backlogItemId) from BacklogGitLink l where l.repositoryId in :repositoryIds and l.artifactType = :type")
+    long countLinkedItems(@Param("repositoryIds") Collection<Long> repositoryIds, @Param("type") GitArtifactType type);
 
     /** Removes the automatic link a reference produced (manual links are never removed automatically). */
     @Modifying(flushAutomatically = true)

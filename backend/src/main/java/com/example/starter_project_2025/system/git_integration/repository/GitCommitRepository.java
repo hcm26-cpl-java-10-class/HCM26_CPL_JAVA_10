@@ -20,12 +20,22 @@ public interface GitCommitRepository extends JpaRepository<GitCommit, Long>, Jpa
 
     long countByRepositoryId(Long repositoryId);
 
+    /** GI-05: commits of all the connections of a project. */
+    long countByRepositoryIdIn(Collection<Long> repositoryIds);
+
+    /** GI-05: commits per connection, as rows of (repositoryId, count). */
+    @Query("select c.repositoryId, count(c) from GitCommit c where c.repositoryId in :repositoryIds group by c.repositoryId")
+    List<Object[]> countGroupedByRepository(@Param("repositoryIds") Collection<Long> repositoryIds);
+
     /** SY-01: stored commits among {@code shas}, to fill what a push payload lacked. */
     List<GitCommit> findByRepositoryIdAndShaIn(Long repositoryId, Collection<String> shas);
 
     Optional<GitCommit> findFirstByRepositoryIdAndSha(Long repositoryId, String sha);
 
     Optional<GitCommit> findFirstByRepositoryIdOrderByCommittedAtDescIdDesc(Long repositoryId);
+
+    /** GI-05: the latest commit among the connections of a project. */
+    Optional<GitCommit> findFirstByRepositoryIdInOrderByCommittedAtDescIdDesc(Collection<Long> repositoryIds);
 
     /** WS-GH-02: the columns insights need of one commit. */
     interface CommitStatRow {
@@ -43,9 +53,9 @@ public interface GitCommitRepository extends JpaRepository<GitCommit, Long>, Jpa
             select c.committedAt as committedAt, c.authorLogin as authorLogin, c.authorName as authorName,
                    c.firstSeenRef as firstSeenRef, c.authorGithubId as authorGithubId, c.authorEmail as authorEmail
               from GitCommit c
-             where c.repositoryId = :repositoryId and c.committedAt >= :from and c.committedAt < :to
+             where c.repositoryId in :repositoryIds and c.committedAt >= :from and c.committedAt < :to
              order by c.committedAt desc, c.id desc""")
-    List<CommitStatRow> statsBetween(@Param("repositoryId") Long repositoryId, @Param("from") LocalDateTime from,
+    List<CommitStatRow> statsBetween(@Param("repositoryIds") Collection<Long> repositoryIds, @Param("from") LocalDateTime from,
                                      @Param("to") LocalDateTime to, Pageable page);
 
     /** GI-06: all-time commits of a master project per author identity (several rows per person are merged in Java). */

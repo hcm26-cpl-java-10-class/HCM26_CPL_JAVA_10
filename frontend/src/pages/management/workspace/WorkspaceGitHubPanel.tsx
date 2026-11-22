@@ -19,6 +19,7 @@ import { CommitList } from "@/pages/management/git-integration/components/activi
 import { PullRequestsView } from "@/pages/management/git-integration/components/activity/PullRequestList";
 import { RepositoryInsights } from "@/pages/management/git-integration/components/activity/RepositoryInsights";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { isConnectBannerSnoozed, snoozeConnectBanner } from "@/pages/management/git-integration/git-integration.storage";
 
 const CARD = "min-w-0 gap-0 overflow-hidden border-slate-200/80 py-0 shadow-none dark:border-border";
@@ -62,10 +63,33 @@ function EmptyHistory({ importing, branch }: { importing: boolean; branch?: stri
   </div>;
 }
 
+/** US-GI-05: narrows Insights, Commits and Pull requests to one repository when the project linked several. */
+function RepositoryFilter({ activity, value, onChange }: {
+  activity: GitRepositoryActivity;
+  value?: number;
+  onChange: (repo: number | undefined) => void;
+}) {
+  const repositories = activity.repositories ?? [];
+  if (repositories.length < 2) return null;
+  return <Select value={value === undefined ? "all" : String(value)} onValueChange={next => onChange(next === "all" ? undefined : Number(next))}>
+    <SelectTrigger size="sm" aria-label="Repository" className="h-8 max-w-64 text-xs">
+      <SelectValue />
+    </SelectTrigger>
+    <SelectContent align="end">
+      <SelectItem value="all">All repositories</SelectItem>
+      {repositories.map(repository => <SelectItem key={repository.id} value={String(repository.id)}>
+        {repository.fullName}{repository.status === "INACTIVE" ? " (unlinked)" : ""}
+      </SelectItem>)}
+    </SelectContent>
+  </Select>;
+}
+
 /**
  * WS-GH-01: GitHub tab of a workspace (`?tab=github`). The repository card on top
  * (link, sync state, alerts) followed by Insights, Commits and Pull requests of the
  * project's repository — a module reads its master's. All state lives in the URL.
+ * US-GI-05: the views cover every repository the project linked (unlinked ones included, labelled),
+ * so they stay available after an unlink; `repo` narrows them to one.
  */
 export function WorkspaceGitHubPanel({ projectId, assignedProjectIds }: {
   projectId: number;
@@ -76,7 +100,9 @@ export function WorkspaceGitHubPanel({ projectId, assignedProjectIds }: {
   const state = parseGitHubTabParams(params);
   const repository = useProjectRepository(projectId);
   const linked = !!repository.data?.repository;
-  const activity = useRepositoryActivity(projectId, linked);
+  // US-GI-05: the data of unlinked repositories stays visible.
+  const hasData = linked || (repository.data?.previousRepositories?.length ?? 0) > 0;
+  const activity = useRepositoryActivity(projectId, hasData);
   // US-GI-06: one request feeds the Connect banner, the Members view and its count.
   const accounts = useGitHubAccounts(projectId, linked);
   const overview = accounts.data;
@@ -119,15 +145,20 @@ export function WorkspaceGitHubPanel({ projectId, assignedProjectIds }: {
       </span>}</> },
   ];
 
+  // Shown on Insights when nothing is linked now (only unlinked repositories).
+  const repositoryName = repository.data?.repository?.fullName ?? repository.data?.previousRepositories?.[0]?.fullName ?? "the repository";
+  const repo = data?.repositories?.some(item => item.id === state.repo) ? state.repo : undefined;
+  const filters = { ...state, repo };
+
   let content: ReactNode = null;
-  if (linked) {
+  if (hasData) {
     if (state.view === "commits") {
-      content = <div className={LIST_CARD}><CommitList projectId={projectId} filters={state} onChange={update} onOpenTask={openTask} /></div>;
+      content = <div className={LIST_CARD}><CommitList projectId={projectId} filters={filters} onChange={update} onOpenTask={openTask} /></div>;
     } else if (state.view === "members") {
       content = <MembersView projectId={projectId} overview={overview} loading={accounts.isPending} error={accounts.isError}
         onRetry={() => void accounts.refetch()} highlight={state.contributor} />;
     } else if (state.view === "pulls") {
-      content = <div className={LIST_CARD}><PullRequestsView projectId={projectId} filters={state} onChange={update} onOpenTask={openTask} /></div>;
+      content = <div className={LIST_CARD}><PullRequestsView projectId={projectId} filters={filters} onChange={update} onOpenTask={openTask} /></div>;
     } else if (activity.isPending) {
       content = <div role="status" aria-label="Loading insights" className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
         {[0, 1, 2, 3].map(index => <Skeleton key={index} className="h-[78px] rounded-xl" />)}
@@ -141,8 +172,8 @@ export function WorkspaceGitHubPanel({ projectId, assignedProjectIds }: {
       || (repository.data?.latestSync?.status === "SUCCEEDED" && repository.data.latestSync.stats.emptyRepository === true))) {
       content = <EmptyHistory importing={syncInProgress(repository.data)} branch={repository.data?.repository?.defaultBranch} />;
     } else {
-      content = <RepositoryInsights projectId={projectId} activity={data} repositoryName={repository.data!.repository!.fullName}
-        defaultBranch={repository.data!.repository!.defaultBranch} range={state.range}
+      content = <RepositoryInsights projectId={projectId} activity={data} repositoryName={repositoryName} repositoryId={repo}
+        defaultBranch={repository.data?.repository?.defaultBranch} range={state.range}
         onRange={range => update({ range })} onNavigate={navigate} onOpenTask={openTask} />;
     }
   }
@@ -158,11 +189,14 @@ export function WorkspaceGitHubPanel({ projectId, assignedProjectIds }: {
     </Card>
     {showBanner && <ConnectAccountBanner projectId={projectId} overview={overview!}
       onSnooze={() => { snoozeConnectBanner(overview!.master.id); setSnoozedNow(true); }} />}
-    {linked && <>
+    {hasData && <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Segmented label="GitHub views" value={state.view} options={views}
-          onChange={view => navigate({ view, range: state.range })} />
-        {data && <SyncHealth activity={data} />}
+          onChange={view => navigate({ view, range: state.range, repo })} />
+        <div className="flex flex-wrap items-center gap-2">
+          {data && !inMembers && <RepositoryFilter activity={data} value={repo} onChange={next => update({ repo: next, pr: undefined })} />}
+          {data && linked && <SyncHealth activity={data} />}
+        </div>
       </div>
       {content}
     </>}

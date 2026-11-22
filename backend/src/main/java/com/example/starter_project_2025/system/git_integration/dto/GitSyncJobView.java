@@ -28,7 +28,17 @@ public record GitSyncJobView(
         boolean resumable,
         LocalDateTime pausedUntil) {
 
-    /** Commit pages stored, and commits inserted / already stored / completed (all runs of the job). */
-    public record Progress(int pages, long inserted, long existing, long enriched) {
+    /**
+     * Commit pages stored, and commits inserted / already stored / completed (all runs of the job).
+     * SY-02: pull requests and reviews stored by the job.
+     */
+    public record Progress(int pages, long inserted, long existing, long enriched,
+                           PullRequests pullRequests, Reviews reviews) {
+    }
+
+    public record PullRequests(int pages, long inserted, long updated, long unchanged) {
+    }
+
+    public record Reviews(long inserted, long updated) {
     }
 }

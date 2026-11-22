@@ -16,7 +16,11 @@ import com.example.starter_project_2025.system.git_integration.github.GitHubApiC
 import com.example.starter_project_2025.system.git_integration.github.GitHubApiException;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallation;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubUser;
+import com.example.starter_project_2025.system.git_integration.domain.GitRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitInstallationRepository;
+import com.example.starter_project_2025.system.git_integration.repository.GitRepositoryRepository;
+import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -57,6 +62,8 @@ public class GitInstallationService {
     private final GitHubAppProperties properties;
     private final GitInstallationRepository installations;
     private final UserRepository users;
+    private final GitRepositoryRepository connections;
+    private final ProjectRepository projects;
 
     /** Authorize, then hand back the GitHub install URL carrying a fresh state. */
     public GitHubConnectStartResponse startConnect() {
@@ -145,7 +152,7 @@ public class GitInstallationService {
                 ? "Đã cập nhật kết nối GitHub"
                 : "Kết nối GitHub thành công";
         return new GitHubCallbackResponse(result.outcome(), message,
-                toResponse(result.installation(), Map.of(user.getId(), user)));
+                toResponse(result.installation(), Map.of(user.getId(), user), linkedProjects(result.installation())));
     }
 
     @Transactional(readOnly = true)
@@ -159,13 +166,17 @@ public class GitInstallationService {
                         .map(GitInstallation::getConnectedByUserId).filter(Objects::nonNull).distinct().toList())
                 .stream().collect(Collectors.toMap(User::getId, Function.identity()));
 
+        Map<Long, List<GitInstallationResponse.LinkedProject>> linked = linkedProjects(rows.stream().map(GitInstallation::getId).toList());
         return new GitInstallationListResponse(summarize(rows), access.canManage(user),
-                rows.stream().map(row -> toResponse(row, connectedBy)).toList());
+                rows.stream().map(row -> toResponse(row, connectedBy, linked.getOrDefault(row.getId(), List.of()))).toList());
     }
 
     private static String summarize(List<GitInstallation> rows) {
         if (rows.stream().anyMatch(row -> row.getStatus() == GitInstallationStatus.CONNECTED)) {
             return "CONNECTED";
+        }
+        if (rows.stream().anyMatch(row -> row.getStatus() == GitInstallationStatus.ERROR)) {
+            return "ERROR";
         }
         if (rows.stream().anyMatch(row -> row.getStatus() == GitInstallationStatus.SUSPENDED)) {
             return "SUSPENDED";
@@ -189,12 +200,43 @@ public class GitInstallationService {
         }
     }
 
-    private static GitInstallationResponse toResponse(GitInstallation row, Map<Long, User> usersById) {
+    private List<GitInstallationResponse.LinkedProject> linkedProjects(GitInstallation row) {
+        return linkedProjects(List.of(row.getId())).getOrDefault(row.getId(), List.of());
+    }
+
+    /** Master projects whose current repository (ACTIVE, ERROR or DISCONNECTED) is read through each installation. */
+    private Map<Long, List<GitInstallationResponse.LinkedProject>> linkedProjects(List<Long> installationRowIds) {
+        if (installationRowIds.isEmpty()) return Map.of();
+        List<GitRepository> repositories = connections.findByInstallationRefInAndStatusIn(installationRowIds, GitRepositoryRepository.CURRENT);
+        Map<Long, Project> byId = projects.findAllById(repositories.stream().map(GitRepository::getProjectId).distinct().toList())
+                .stream().collect(Collectors.toMap(Project::getId, Function.identity()));
+        return repositories.stream()
+                .filter(repository -> byId.containsKey(repository.getProjectId()))
+                .sorted(Comparator.comparing(GitRepository::getFullName, String.CASE_INSENSITIVE_ORDER))
+                .collect(Collectors.groupingBy(GitRepository::getInstallationRef, Collectors.mapping(repository -> {
+                    Project project = byId.get(repository.getProjectId());
+                    return new GitInstallationResponse.LinkedProject(project.getId(), project.getCode(), project.getName(),
+                            repository.getFullName(), repository.getStatus());
+                }, Collectors.toList())));
+    }
+
+    private static GitInstallationResponse toResponse(GitInstallation row, Map<Long, User> usersById,
+                                                      List<GitInstallationResponse.LinkedProject> linked) {
         User by = usersById.get(row.getConnectedByUserId());
         String name = by == null ? null
                 : (by.getFirstName() + (by.getLastName() == null ? "" : " " + by.getLastName())).trim();
         return new GitInstallationResponse(row.getId(), row.getInstallationId(), row.getStatus(),
                 row.getAccountLogin(), row.getAccountType(), row.getRepositorySelection(), row.getGithubUserLogin(),
-                row.getConnectedByUserId(), name, row.getConnectedAt(), row.getLastVerifiedAt());
+                row.getConnectedByUserId(), name, row.getConnectedAt(), row.getLastVerifiedAt(),
+                row.getStatusReason(), row.getStatusChangedAt(), row.getLastCheckedAt(), linked);
+    }
+
+    /** GI-02: one installation as listed (after "Check again"). */
+    @Transactional(readOnly = true)
+    public GitInstallationResponse installation(Long installationRowId) {
+        GitInstallation row = installations.findById(installationRowId).orElseThrow(GitIntegrationException::installationNotFound);
+        Map<Long, User> by = row.getConnectedByUserId() == null ? Map.of()
+                : users.findById(row.getConnectedByUserId()).map(user -> Map.of(user.getId(), user)).orElse(Map.of());
+        return toResponse(row, by, linkedProjects(row));
     }
 }

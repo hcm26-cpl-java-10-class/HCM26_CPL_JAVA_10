@@ -7,7 +7,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 /**
  * SY-03: what a handler receives. {@code installation} and {@code repository} are
  * resolved from the payload ids (null when the platform does not know them);
- * {@code repository} is the ACTIVE connection of {@code payload.repository.id}.
+ * {@code repository} is the connection of {@code payload.repository.id} that receives events
+ * (ACTIVE or ERROR; for {@code repository} events also a DISCONNECTED one, GI-05).
  */
 public record GitWebhookContext(
         Long eventId,

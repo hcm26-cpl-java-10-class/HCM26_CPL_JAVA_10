@@ -16,6 +16,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -64,9 +66,23 @@ public class GitInstallation extends BaseEntity {
     @Column(name = "repository_selection", length = 20)
     String repositorySelection;
 
+    // GI-02: VARCHAR, not a native ENUM, so new statuses (ERROR) need no schema change.
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", nullable = false, length = 20)
     GitInstallationStatus status;
+
+    /** GI-02: why the status last changed, e.g. TOKEN_REJECTED, UNINSTALLED, RECHECK_OK; never sensitive data. */
+    @Column(name = "status_reason", length = 50)
+    String statusReason;
+
+    /** GI-02: when the status last changed. */
+    @Column(name = "status_changed_at")
+    LocalDateTime statusChangedAt;
+
+    /** GI-02: last "Check again" (verified or not), for its cooldown; {@code last_verified_at} is the last success. */
+    @Column(name = "last_checked_at")
+    LocalDateTime lastCheckedAt;
 
     @Column(name = "connected_by_user_id", nullable = false)
     Long connectedByUserId;

@@ -5,6 +5,8 @@ import com.example.starter_project_2025.system.git_integration.domain.GitPullReq
 import com.example.starter_project_2025.system.git_integration.domain.GitReviewState;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommit;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubHistoryCommit;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubPullRequestNode;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubReviewNode;
 import com.example.starter_project_2025.system.git_integration.ingestion.model.IncomingCommit;
 import com.example.starter_project_2025.system.git_integration.ingestion.model.IncomingPullRequest;
 import com.example.starter_project_2025.system.git_integration.ingestion.model.IncomingReview;
@@ -18,6 +20,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.Map;
+import java.util.Optional;
 
 import static com.example.starter_project_2025.system.git_integration.webhook.GitWebhookJson.at;
 import static com.example.starter_project_2025.system.git_integration.webhook.GitWebhookJson.limit;
@@ -107,6 +110,65 @@ public class GitHubPayloadMapper {
                 null,
                 commit.parentCount(),
                 GitCommitSource.GRAPHQL_HISTORY);
+    }
+
+    /**
+     * SY-02: a pull request of the GraphQL list. Merged wins over the state (AC03): a pull request
+     * closed without merging is CLOSED (AC04), the same rule as {@link #pullRequest(JsonNode)}.
+     */
+    public IncomingPullRequest historyPullRequest(GitHubPullRequestNode pr) {
+        LocalDateTime createdAt = time(pr.createdAt());
+        LocalDateTime updatedAt = time(pr.updatedAt());
+        if (updatedAt == null) updatedAt = createdAt != null ? createdAt : now();
+        LocalDateTime mergedAt = time(pr.mergedAt());
+        GitPullRequestState state = pr.merged() || mergedAt != null ? GitPullRequestState.MERGED
+                : "CLOSED".equalsIgnoreCase(pr.state()) ? GitPullRequestState.CLOSED : GitPullRequestState.OPEN;
+        return new IncomingPullRequest(
+                pr.databaseId(),
+                pr.number(),
+                limit(orDefault(pr.title(), "#" + pr.number()), 500),
+                limit(pr.body(), 4000),
+                state,
+                pr.draft(),
+                limit(pr.author() == null ? null : pr.author().login(), 100),
+                pr.author() == null ? null : pr.author().databaseId(),
+                limit(pr.headRefName(), 255),
+                limit(pr.headRefOid(), 64),
+                limit(pr.baseRefName(), 255),
+                limit(pr.mergeCommitOid(), 64),
+                limit(pr.mergedByLogin(), 100),
+                pr.commitsCount(),
+                pr.additions(),
+                pr.deletions(),
+                pr.changedFiles(),
+                limit(pr.url(), 500),
+                createdAt == null ? updatedAt : createdAt,
+                updatedAt,
+                time(pr.closedAt()),
+                mergedAt);
+    }
+
+    /**
+     * SY-02: a submitted review of the GraphQL list. Its version is the {@code updatedAt} of the pull
+     * request it was read with, the same measure as webhook reviews ({@link #review}), with rank 0 so
+     * a webhook version of the same moment wins. Empty for an unknown or PENDING state (AC06).
+     */
+    public Optional<IncomingReview> historyReview(GitHubReviewNode review, LocalDateTime pullRequestUpdatedAt) {
+        GitReviewState state = GitReviewState.fromGitHub(review.state()).orElse(null);
+        if (review.databaseId() == null || state == null || state == GitReviewState.PENDING) return Optional.empty();
+        LocalDateTime submittedAt = time(review.submittedAt());
+        LocalDateTime source = pullRequestUpdatedAt != null ? pullRequestUpdatedAt : submittedAt != null ? submittedAt : now();
+        return Optional.of(new IncomingReview(
+                review.databaseId(),
+                limit(review.author() == null ? null : review.author().login(), 100),
+                review.author() == null ? null : review.author().databaseId(),
+                state,
+                limit(review.body(), 4000),
+                limit(review.commitOid(), 64),
+                submittedAt,
+                limit(review.url(), 500),
+                source,
+                0));
     }
 
     /** The {@code pull_request} object of a pull_request or pull_request_review payload. */

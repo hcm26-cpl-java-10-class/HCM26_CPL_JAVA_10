@@ -1,7 +1,9 @@
 package com.example.starter_project_2025.system.git_integration.github;
 
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallationToken;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -24,9 +26,18 @@ public class InstallationTokenProvider {
     /** SY-04: tokens that can also read repository contents (commits), cached separately. */
     private final Map<Long, GitHubInstallationToken> contentsTokens = new ConcurrentHashMap<>();
 
-    public InstallationTokenProvider(GitHubApiClient github, @Qualifier("gitIntegrationClock") Clock clock) {
+    private final ApplicationEventPublisher events;
+
+    public InstallationTokenProvider(GitHubApiClient github, Clock clock) {
+        this(github, clock, event -> { });
+    }
+
+    @Autowired
+    public InstallationTokenProvider(GitHubApiClient github, @Qualifier("gitIntegrationClock") Clock clock,
+                                     ApplicationEventPublisher events) {
         this.github = github;
         this.clock = clock;
+        this.events = events;
     }
 
     public String token(long installationId) {
@@ -36,6 +47,7 @@ public class InstallationTokenProvider {
         }
         GitHubInstallationToken fresh = github.createInstallationToken(installationId);
         tokens.put(installationId, fresh);
+        events.publishEvent(new InstallationTokenIssuedEvent(installationId));
         return fresh.token();
     }
 
@@ -47,6 +59,7 @@ public class InstallationTokenProvider {
         }
         GitHubInstallationToken fresh = github.createContentsToken(installationId);
         contentsTokens.put(installationId, fresh);
+        events.publishEvent(new InstallationTokenIssuedEvent(installationId));
         return fresh.token();
     }
 

@@ -96,33 +96,44 @@ public class RepositoryInsightsQueryService {
 
     @Transactional(readOnly = true)
     public RepositoryInsightsView insights(Long projectId, String rawRange) {
+        return insights(projectId, rawRange, null);
+    }
+
+    /**
+     * GI-05: insights of the project, over every repository it ever linked (unlinked ones included),
+     * or of the one {@code repositoryId} names. {@code repositoryId} of the view is the current
+     * repository (or the one asked for).
+     */
+    @Transactional(readOnly = true)
+    public RepositoryInsightsView insights(Long projectId, String rawRange, Long repositoryId) {
         InsightsRange range = InsightsRange.parse(rawRange);
         LocalDateTime now = LocalDateTime.now(clock);
         LocalDate to = now.toLocalDate();
         LocalDate from = to.minusDays(range.days() - 1L);
         Map<LocalDate, long[]> days = emptyDays(from, to);
 
-        Optional<GitRepository> found = activity.repositoryFor(projectId);
-        if (found.isEmpty()) {
+        RepositoryActivityQueryService.ProjectRepositories scope = activity.repositoriesFor(projectId);
+        if (scope.isEmpty()) {
             return new RepositoryInsightsView(null, range.key(), from, to, now, Summary.NONE, daily(days), List.of(), 0,
                     List.of(), new PullRequestHealth(0, 0, 0, 0, STALE_DAYS, List.of()), false);
         }
-        Long repositoryId = found.get().getId();
+        List<Long> repositoryIds = scope.select(repositoryId);
+        Long viewRepositoryId = repositoryId != null ? repositoryId : scope.current() != null ? scope.current().getId() : null;
         LocalDateTime start = from.atStartOfDay();
         LocalDateTime end = to.plusDays(1).atStartOfDay();
 
-        List<CommitStatRow> commitRows = commits.statsBetween(repositoryId, start, end, PageRequest.of(0, maxCommits + 1));
+        List<CommitStatRow> commitRows = commits.statsBetween(repositoryIds, start, end, PageRequest.of(0, maxCommits + 1));
         boolean truncated = commitRows.size() > maxCommits;
         if (truncated) commitRows = commitRows.subList(0, maxCommits);
-        List<PullRequestStatRow> opened = pullRequests.openedBetween(repositoryId, start, end);
-        List<PullRequestStatRow> merged = pullRequests.mergedBetween(repositoryId, start, end);
-        List<ReviewStatRow> reviewRows = reviews.submittedBetween(repositoryId, start, end);
+        List<PullRequestStatRow> opened = pullRequests.openedBetween(repositoryIds, start, end);
+        List<PullRequestStatRow> merged = pullRequests.mergedBetween(repositoryIds, start, end);
+        List<ReviewStatRow> reviewRows = reviews.submittedBetween(repositoryIds, start, end);
 
         commitRows.forEach(row -> count(days, row.getCommittedAt(), 0));
         opened.forEach(row -> count(days, row.getGithubCreatedAt(), 1));
         merged.forEach(row -> count(days, row.getMergedAt(), 2));
 
-        ContributorDirectory directory = new ContributorDirectory(contributorRows.findByMasterProjectIdOrderByIdAsc(found.get().getProjectId()));
+        ContributorDirectory directory = new ContributorDirectory(contributorRows.findByMasterProjectIdOrderByIdAsc(scope.master().getId()));
         Map<String, Tally> people = contributors(commitRows, opened, reviewRows, directory);
         nameMembers(people.values());
         List<ContributorStat> top = people.values().stream()
@@ -137,8 +148,8 @@ public class RepositoryInsightsQueryService {
         long activeDays = days.values().stream().filter(counts -> counts[0] > 0).count();
         Summary summary = new Summary(commitRows.size(), activeDays, people.size(), opened.size(), merged.size(),
                 medianHoursToMerge(merged));
-        return new RepositoryInsightsView(repositoryId, range.key(), from, to, now, summary, daily(days), top,
-                Math.max(0, people.size() - TOP_CONTRIBUTORS), branchesOf(commitRows), pullRequestHealth(repositoryId, now),
+        return new RepositoryInsightsView(viewRepositoryId, range.key(), from, to, now, summary, daily(days), top,
+                Math.max(0, people.size() - TOP_CONTRIBUTORS), branchesOf(commitRows), pullRequestHealth(scope, repositoryIds, now),
                 truncated);
     }
 
@@ -338,10 +349,11 @@ public class RepositoryInsightsQueryService {
         return null;
     }
 
-    private PullRequestHealth pullRequestHealth(Long repositoryId, LocalDateTime now) {
-        List<GitPullRequest> open = pullRequests.findByRepositoryIdAndStateOrderByGithubUpdatedAtAscIdAsc(repositoryId,
+    private PullRequestHealth pullRequestHealth(RepositoryActivityQueryService.ProjectRepositories scope, List<Long> repositoryIds,
+                                                LocalDateTime now) {
+        List<GitPullRequest> open = pullRequests.findByRepositoryIdInAndStateOrderByGithubUpdatedAtAscIdAsc(repositoryIds,
                 GitPullRequestState.OPEN, PageRequest.of(0, MAX_OPEN_PULL_REQUESTS));
-        long openCount = open.size() < MAX_OPEN_PULL_REQUESTS ? open.size() : pullRequests.countByState(repositoryId).stream()
+        long openCount = open.size() < MAX_OPEN_PULL_REQUESTS ? open.size() : pullRequests.countByState(repositoryIds).stream()
                 .filter(row -> row[0] == GitPullRequestState.OPEN).mapToLong(row -> (Long) row[1]).sum();
         if (open.isEmpty()) return new PullRequestHealth(openCount, 0, 0, 0, STALE_DAYS, List.of());
 
@@ -365,7 +377,7 @@ public class RepositoryInsightsQueryService {
         List<AttentionItem> attention = first.stream()
                 .map(entry -> new AttentionItem(entry.getKey(), RepositoryActivityQueryService.pullRequestItem(entry.getValue(),
                         reviewsByPr.getOrDefault(entry.getValue().getId(), List.of()),
-                        refs.getOrDefault(entry.getValue().getId(), List.of()))))
+                        refs.getOrDefault(entry.getValue().getId(), List.of()), scope.label(entry.getValue().getRepositoryId()))))
                 .toList();
         return new PullRequestHealth(openCount, byReason.get(Attention.AWAITING_REVIEW).size(),
                 byReason.get(Attention.CHANGES_REQUESTED).size(), byReason.get(Attention.STALE).size(), STALE_DAYS, attention);

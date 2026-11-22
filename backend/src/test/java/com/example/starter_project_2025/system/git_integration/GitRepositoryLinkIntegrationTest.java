@@ -13,6 +13,7 @@ import com.example.starter_project_2025.system.git_integration.github.GitHubApiC
 import com.example.starter_project_2025.system.git_integration.github.GitHubApiException;
 import com.example.starter_project_2025.system.git_integration.github.GitHubGraphQlClient;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommitHistoryPage;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubPullRequestPage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubBranch;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallationToken;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubRepository;
@@ -191,6 +192,8 @@ class GitRepositoryLinkIntegrationTest {
                 .thenReturn(new GitHubInstallationToken("ghs_contents", Instant.now().plusSeconds(3600)));
         when(graphql.commitHistory(anyString(), anyString(), anyString(), any(), any(), anyInt()))
                 .thenReturn(new GitHubCommitHistoryPage(true, false, "main", "abc", List.of(), false, null, 0, null));
+        when(graphql.pullRequests(anyString(), anyString(), anyString(), any(), anyInt(), anyInt()))
+                .thenReturn(new GitHubPullRequestPage(true, false, List.of(), false, null, 0, null));
     }
 
     // ---- AC01 ----------------------------------------------------------------------------------------
@@ -300,15 +303,18 @@ class GitRepositoryLinkIntegrationTest {
     }
 
     @Test
-    void ac04UninstalledAppMarksInstallationDisconnected() throws Exception {
+    void ac04ATokenRefusedWith404PutsTheInstallationInError() throws Exception {
+        // GI-02: a 404 for the token is ERROR; only the "deleted" webhook or "Check again" confirms DISCONNECTED.
         when(github.createInstallationToken(GITHUB_INSTALLATION_ID))
                 .thenThrow(new GitHubApiException(GitHubApiException.Kind.GONE, "create installation token", 404));
 
         link(managerToken, masterId, installationRowId, REPO_ECOMMERCE)
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("GIT_INSTALLATION_NOT_ACTIVE"))
-                .andExpect(jsonPath("$.installationStatus").value("DISCONNECTED"));
-        assertThat(installations.findById(installationRowId).orElseThrow().getStatus()).isEqualTo(GitInstallationStatus.DISCONNECTED);
+                .andExpect(jsonPath("$.code").value("GIT_INSTALLATION_ERROR"))
+                .andExpect(jsonPath("$.installationStatus").value("ERROR"));
+        GitInstallation row = installations.findById(installationRowId).orElseThrow();
+        assertThat(row.getStatus()).isEqualTo(GitInstallationStatus.ERROR);
+        assertThat(row.getStatusReason()).isEqualTo("INSTALLATION_NOT_FOUND");
     }
 
     @Test
@@ -453,7 +459,7 @@ class GitRepositoryLinkIntegrationTest {
     // ---- Synchronization -----------------------------------------------------------------------------
 
     @Test
-    void syncFindingTheRepositoryGoneMarksItUnavailableAndFreesTheMaster() throws Exception {
+    void syncFindingTheRepositoryGoneMarksItInErrorUntilItIsUnlinked() throws Exception {
         Long jobId = linkAndGetJob();
         when(github.getRepository(anyString(), eq(REPO_ECOMMERCE))).thenReturn(Optional.empty());
 
@@ -461,9 +467,22 @@ class GitRepositoryLinkIntegrationTest {
 
         assertThat(jobs.findById(jobId).orElseThrow().getStatus()).isEqualTo(GitSyncJobStatus.FAILED);
         assertThat(jobs.findById(jobId).orElseThrow().getErrorCode()).isEqualTo("REPOSITORY_NOT_ACCESSIBLE");
-        view(managerToken, masterId)
-                .andExpect(jsonPath("$.repository.status").value("UNAVAILABLE"))
-                .andExpect(jsonPath("$.canLink").value(true));
+        // GI-05: ERROR keeps the repository on the master; changing it is "unlink, then link".
+        String body = view(managerToken, masterId)
+                .andExpect(jsonPath("$.repository.status").value("ERROR"))
+                .andExpect(jsonPath("$.repository.statusReason").value("REPOSITORY_NOT_ACCESSIBLE"))
+                .andExpect(jsonPath("$.canLink").value(false))
+                .andExpect(jsonPath("$.canResync").value(true))
+                .andExpect(jsonPath("$.canUnlink").value(true))
+                .andReturn().getResponse().getContentAsString();
+        link(managerToken, masterId, installationRowId, REPO_OTHER)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("GIT_PROJECT_ALREADY_LINKED"));
+
+        Long repositoryId = ((Number) com.jayway.jsonpath.JsonPath.read(body, "$.repository.id")).longValue();
+        mvc.perform(post(url(masterId) + "/unlink").header("Authorization", "Bearer " + managerToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"repositoryId\": " + repositoryId + "}"))
+                .andExpect(status().isOk());
         link(managerToken, masterId, installationRowId, REPO_OTHER).andExpect(status().isCreated());
     }
 
@@ -490,7 +509,12 @@ class GitRepositoryLinkIntegrationTest {
         GitSyncJob failed = jobs.findById(jobId).orElseThrow();
         assertThat(failed.getStatus()).isEqualTo(GitSyncJobStatus.FAILED);
         assertThat(failed.getAttemptCount()).isEqualTo(3);
-        view(managerToken, masterId).andExpect(jsonPath("$.canSync").value(true));
+        // GI-05: a sync that gave up puts the repository in ERROR; "Sync again" checks GitHub and restores it.
+        view(managerToken, masterId)
+                .andExpect(jsonPath("$.repository.status").value("ERROR"))
+                .andExpect(jsonPath("$.repository.statusReason").value("SYNC_FAILED"))
+                .andExpect(jsonPath("$.canSync").value(false))
+                .andExpect(jsonPath("$.canResync").value(true));
 
         mvc.perform(post(url(masterId) + "/sync").header("Authorization", "Bearer " + managerToken))
                 .andExpect(status().isAccepted())

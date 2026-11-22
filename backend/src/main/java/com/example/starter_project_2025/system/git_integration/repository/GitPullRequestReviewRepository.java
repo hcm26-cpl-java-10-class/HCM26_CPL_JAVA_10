@@ -30,9 +30,9 @@ public interface GitPullRequestReviewRepository extends JpaRepository<GitPullReq
     @Query("""
             select r.reviewerLogin as reviewerLogin, r.reviewerGithubId as reviewerGithubId, r.submittedAt as submittedAt
               from GitPullRequestReview r
-             where r.repositoryId = :repositoryId and r.submittedAt >= :from and r.submittedAt < :to
+             where r.repositoryId in :repositoryIds and r.submittedAt >= :from and r.submittedAt < :to
                and r.state <> com.example.starter_project_2025.system.git_integration.domain.GitReviewState.PENDING""")
-    List<ReviewStatRow> submittedBetween(@Param("repositoryId") Long repositoryId, @Param("from") LocalDateTime from,
+    List<ReviewStatRow> submittedBetween(@Param("repositoryIds") Collection<Long> repositoryIds, @Param("from") LocalDateTime from,
                                          @Param("to") LocalDateTime to);
 
     /** GI-06: all-time submitted reviews of a master project per reviewer. */

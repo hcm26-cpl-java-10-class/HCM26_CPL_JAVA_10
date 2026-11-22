@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.git_integration.webhook.handler;
 
 import com.example.starter_project_2025.system.git_integration.domain.GitRepository;
 import com.example.starter_project_2025.system.git_integration.service.GitRepositoryConnectionWriter;
+import com.example.starter_project_2025.system.git_integration.service.GitRepositoryReason;
 import com.example.starter_project_2025.system.git_integration.service.InstallationRepositoryCache;
 import com.example.starter_project_2025.system.git_integration.webhook.GitWebhookContext;
 import com.example.starter_project_2025.system.git_integration.webhook.GitWebhookEventHandler;
@@ -15,8 +16,9 @@ import java.util.Set;
 
 /**
  * SY-03: {@code repository} events for a linked repository keep the stored
- * snapshot current (rename, transfer, visibility) and mark it UNAVAILABLE when
- * it is deleted. Repositories that are not linked are ignored.
+ * snapshot current (rename, transfer, visibility) and GI-05: mark it DISCONNECTED
+ * when it is deleted. The snapshot is refreshed for a DISCONNECTED connection too
+ * (the processor resolves it for this event); repositories not linked are ignored.
  */
 @Component
 @RequiredArgsConstructor
@@ -43,8 +45,9 @@ public class RepositoryEventHandler implements GitWebhookEventHandler {
             cache.evict(context.installation().getInstallationId()); // names/visibility in the browser list changed
         }
         if ("deleted".equals(action)) {
-            connectionWriter.markUnavailable(connection.getId(), "REPOSITORY_DELETED");
-            return GitWebhookHandlerResult.processed("Repository connection marked unavailable");
+            boolean changed = connectionWriter.disconnect(connection.getId(), GitRepositoryReason.REPOSITORY_DELETED);
+            return changed ? GitWebhookHandlerResult.processed("Repository connection disconnected")
+                    : GitWebhookHandlerResult.ignored("Repository connection is " + connection.getStatus());
         }
         if (SNAPSHOT_ACTIONS.contains(action)) {
             JsonNode repository = GitWebhookJson.at(context.payload(), "repository");

@@ -17,6 +17,7 @@ import com.example.starter_project_2025.system.git_integration.repository.GitIns
 import com.example.starter_project_2025.system.git_integration.repository.GitProjectLookupRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitRepositoryRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitSyncJobRepository;
+import com.example.starter_project_2025.system.git_integration.sync.GitSyncJobQueue;
 import com.example.starter_project_2025.system.git_integration.sync.GitSyncJobRequested;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.rbac.user.User;
@@ -34,6 +35,11 @@ import java.util.Optional;
  * before GitHub is called; {@link #create} runs after, locks the master project,
  * re-checks (things may have changed meanwhile) and writes the connection
  * together with its initial sync job.
+ * <p>
+ * GI-05: a master keeps its current repository (ACTIVE, ERROR or DISCONNECTED) until
+ * it is unlinked, so changing repositories is "unlink, then link". Linking again the
+ * repository this project unlinked before re-activates that connection (its data is
+ * not imported a second time) and queues a sync of what changed meanwhile.
  */
 @Service
 public class GitRepositoryLinkWriter {
@@ -46,12 +52,14 @@ public class GitRepositoryLinkWriter {
     private final GitSyncJobRepository jobs;
     private final ApplicationEventPublisher events;
     private final GitHubAppProperties properties;
+    private final GitSyncJobQueue queue;
     private final Clock clock;
 
     public GitRepositoryLinkWriter(GitProjectResolver projectResolver, GitProjectLookupRepository projects,
                                    GitRepositoryLinkPolicy policy, GitInstallationRepository installations,
                                    GitRepositoryRepository connections, GitSyncJobRepository jobs,
                                    ApplicationEventPublisher events, GitHubAppProperties properties,
+                                   GitSyncJobQueue queue,
                                    @Qualifier("gitIntegrationClock") Clock clock) {
         this.projectResolver = projectResolver;
         this.projects = projects;
@@ -61,6 +69,7 @@ public class GitRepositoryLinkWriter {
         this.jobs = jobs;
         this.events = events;
         this.properties = properties;
+        this.queue = queue;
         this.clock = clock;
     }
 
@@ -105,6 +114,11 @@ public class GitRepositoryLinkWriter {
         }
 
         LocalDateTime now = LocalDateTime.now(clock);
+        Optional<GitRepository> unlinked = connections.findFirstByProjectIdAndProviderAndExternalIdAndStatusOrderByIdDesc(
+                master.getId(), GitProvider.GITHUB, repository.id(), GitRepositoryStatus.INACTIVE);
+        if (unlinked.isPresent()) {
+            return Optional.of(relink(user, plan, repository, unlinked.get(), now));
+        }
         GitRepository connection = connections.saveAndFlush(GitRepository.builder()
                 .tenantId(plan.tenantId())
                 .projectId(master.getId())
@@ -136,26 +150,54 @@ public class GitRepositoryLinkWriter {
         return Optional.of(new Created(connection, job));
     }
 
+    /** GI-05: the same repository linked again to the same project: the unlinked connection becomes ACTIVE. */
+    private Created relink(User user, Plan plan, GitHubRepository repository, GitRepository row, LocalDateTime now) {
+        row.setInstallationRef(plan.installationRowId());
+        row.setOwnerLogin(repository.ownerLogin());
+        row.setName(repository.name());
+        row.setFullName(repository.fullName());
+        row.setHtmlUrl(repository.htmlUrl());
+        row.setVisibility(repository.resolvedVisibility());
+        row.setDefaultBranch(repository.defaultBranch());
+        row.setStatus(GitRepositoryStatus.ACTIVE);
+        row.setStatusReason(null);
+        row.setStatusChangedAt(now);
+        row.setLinkedByUserId(user.getId());
+        row.setLinkedAt(now);
+        row.setUnlinkedByUserId(null);
+        row.setUnlinkedAt(null);
+        GitRepository connection = connections.saveAndFlush(row);
+        events.publishEvent(new GitRepositoryStatusChangedEvent(connection.getTenantId(), connection.getId(),
+                connection.getProjectId(), connection.getFullName(), GitRepositoryStatus.INACTIVE, GitRepositoryStatus.ACTIVE, null));
+        // Commits since the last complete import (with overlap), or everything when it never completed.
+        GitSyncJob job = queue.request(connection.getId(), GitSyncJobType.MANUAL, user.getId(), now)
+                .map(GitSyncJobQueue.Requested::job)
+                .orElseThrow(GitIntegrationException::repositoryNotLinked);
+        return new Created(connection, job);
+    }
+
     public static String initialDedupeKey(Long repositoryId) {
         return GitSyncJobType.INITIAL.name() + ":" + repositoryId;
     }
 
     /**
      * Empty when the link may proceed; the connection itself when this repository is already
-     * ACTIVE on this project (idempotent retry). Throws AC02 / AC03 otherwise.
+     * ACTIVE on this project (idempotent retry). Throws AC02 / AC03 otherwise. GI-05: a current
+     * repository in ERROR / DISCONNECTED still occupies the project (unlink it first).
      */
     private Optional<GitRepository> existingOrConflict(Long projectId, Long externalId, Long tenantId) {
-        Optional<GitRepository> current = connections.findFirstByProjectIdAndStatus(projectId, GitRepositoryStatus.ACTIVE);
+        Optional<GitRepository> current = connections.findCurrent(projectId);
         if (current.isPresent()) {
-            if (current.get().getExternalId().equals(externalId)) {
-                return current;
-            }
             GitRepository linked = current.get();
-            throw GitIntegrationException.projectAlreadyLinked(new GitLinkDetails.RepositorySummary(
-                    linked.getExternalId(), linked.getFullName(), linked.getHtmlUrl(), linked.getDefaultBranch()));
+            GitLinkDetails.RepositorySummary summary = new GitLinkDetails.RepositorySummary(
+                    linked.getExternalId(), linked.getFullName(), linked.getHtmlUrl(), linked.getDefaultBranch());
+            if (linked.getExternalId().equals(externalId)) {
+                if (linked.getStatus() == GitRepositoryStatus.ACTIVE) return current;
+                throw GitIntegrationException.repositoryNeedsAttention(summary);
+            }
+            throw GitIntegrationException.projectAlreadyLinked(summary);
         }
-        Optional<GitRepository> elsewhere = connections.findFirstByProviderAndExternalIdAndStatus(
-                GitProvider.GITHUB, externalId, GitRepositoryStatus.ACTIVE);
+        Optional<GitRepository> elsewhere = connections.findReceiving(GitProvider.GITHUB, externalId);
         if (elsewhere.isPresent()) {
             // A project of another tenant is never named (not even by id).
             GitLinkDetails.ProjectSummary linkedProject = projects.findById(elsewhere.get().getProjectId())

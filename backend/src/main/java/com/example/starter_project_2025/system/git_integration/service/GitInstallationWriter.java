@@ -10,6 +10,7 @@ import com.example.starter_project_2025.system.git_integration.github.dto.GitHub
 import com.example.starter_project_2025.system.git_integration.repository.GitInstallationRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,11 +29,13 @@ import java.util.Set;
 public class GitInstallationWriter {
 
     private final GitInstallationRepository installations;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
-    public GitInstallationWriter(GitInstallationRepository installations,
+    public GitInstallationWriter(GitInstallationRepository installations, ApplicationEventPublisher events,
                                  @Qualifier("gitIntegrationClock") Clock clock) {
         this.installations = installations;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -70,49 +73,54 @@ public class GitInstallationWriter {
         row.setGithubUserLogin(githubUser.login());
         row.setConnectedAt(now);
         row.setLastVerifiedAt(now);
+        if (from != to) {
+            row.setStatusReason(to == GitInstallationStatus.SUSPENDED ? GitInstallationReason.SUSPENDED_ON_GITHUB : GitInstallationReason.CONNECTED);
+            row.setStatusChangedAt(now);
+        }
 
         GitInstallation saved = installations.saveAndFlush(row);
+        if (from != null && from != to) publish(saved, from, to, saved.getStatusReason());
         log.info("GitHub installation transition: installationId={}, tenantId={}, {} -> {}, trigger=callback, actorUserId={}",
                 verified.id(), tenantId, from == null ? "NONE" : from, to, userId);
         return new UpsertResult(saved, existing.isPresent() ? GitOAuthOutcome.RECONNECTED : GitOAuthOutcome.CONNECTED);
     }
 
     /**
-     * T5 (→ SUSPENDED) / T6 (→ DISCONNECTED) detected by the system, e.g. when
-     * GitHub refuses an installation token. No-op when already in that status.
+     * The only status transition (SY-03 webhooks, GI-02 failures and "Check again"), applied only
+     * from the allowed states: GitHub does not guarantee delivery order, e.g. a late "unsuspend"
+     * must not revive a removed installation. GI-02: records the reason and time and publishes
+     * {@link GitInstallationStatusChangedEvent}. Returns true when the status changed.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void markStatus(Long installationRowId, GitInstallationStatus to, String trigger) {
-        installations.findById(installationRowId).ifPresent(row -> {
-            GitInstallationStatus from = row.getStatus();
-            if (from == to) {
-                return;
-            }
-            row.setStatus(to);
-            row.setLastVerifiedAt(LocalDateTime.now(clock));
-            log.info("GitHub installation transition: installationId={}, tenantId={}, {} -> {}, trigger={}, actor=system",
-                    row.getInstallationId(), row.getTenantId(), from, to, trigger);
-        });
-    }
-
-    /**
-     * SY-03: a webhook-driven transition, applied only from the allowed states (GitHub does
-     * not guarantee delivery order, e.g. a late "unsuspend" must not revive a removed installation).
-     * Returns true when the status changed.
-     */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean transition(Long installationRowId, Set<GitInstallationStatus> from, GitInstallationStatus to, String trigger) {
+    public boolean transition(Long installationRowId, Set<GitInstallationStatus> from, GitInstallationStatus to, String reason) {
         return installations.findById(installationRowId).map(row -> {
             GitInstallationStatus current = row.getStatus();
             if (current == to || !from.contains(current)) {
                 return false;
             }
+            LocalDateTime now = LocalDateTime.now(clock);
             row.setStatus(to);
-            row.setLastVerifiedAt(LocalDateTime.now(clock));
-            log.info("GitHub installation transition: installationId={}, tenantId={}, {} -> {}, trigger={}, actor=github",
-                    row.getInstallationId(), row.getTenantId(), current, to, trigger);
+            row.setStatusReason(reason);
+            row.setStatusChangedAt(now);
+            if (to == GitInstallationStatus.CONNECTED) row.setLastVerifiedAt(now);
+            log.info("GitHub installation transition: installationId={}, tenantId={}, {} -> {}, reason={}",
+                    row.getInstallationId(), row.getTenantId(), current, to, reason);
+            publish(row, current, to, reason);
             return true;
         }).orElse(false);
+    }
+
+    /** GI-02: "Check again" was run (cooldown), whatever it found. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void touchChecked(Long installationRowId, String accountLogin) {
+        installations.findById(installationRowId).ifPresent(row -> {
+            row.setLastCheckedAt(LocalDateTime.now(clock));
+            if (accountLogin != null && !accountLogin.isBlank()) row.setAccountLogin(accountLogin); // renamed on GitHub
+        });
+    }
+
+    private void publish(GitInstallation row, GitInstallationStatus from, GitInstallationStatus to, String reason) {
+        events.publishEvent(new GitInstallationStatusChangedEvent(row.getTenantId(), row.getId(), row.getAccountLogin(), from, to, reason));
     }
 
     /** SY-03: GitHub confirmed the installation (e.g. new permissions accepted) without a status change. */

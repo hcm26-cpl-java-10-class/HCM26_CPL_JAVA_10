@@ -127,7 +127,12 @@ public class GitHubAppProperties {
     /** SY-01: commits per GraphQL history page (GitHub allows at most 100). */
     private int syncCommitPageSize = 100;
 
-    /** SY-01: commit pages one run of a job imports before it yields the worker to other repositories. */
+    /** SY-02: pull requests per GraphQL page, and submitted reviews read with each of them. */
+    private int syncPullRequestPageSize = 50;
+
+    private int syncReviewPageSize = 50;
+
+    /** SY-01: commit (SY-02: and pull request) pages one run of a job imports before it yields the worker. */
     private int syncMaxPagesPerRun = 50;
 
     /** SY-01: below this many GraphQL points left, a job stops after the current page and resumes at reset. */
@@ -212,6 +217,9 @@ public class GitHubAppProperties {
         }
         if (syncCommitPageSize < 1 || syncCommitPageSize > 100) {
             missing.add("app.github.sync-commit-page-size must be between 1 and 100");
+        }
+        if (syncPullRequestPageSize < 1 || syncPullRequestPageSize > 100 || syncReviewPageSize < 1 || syncReviewPageSize > 100) {
+            missing.add("app.github.sync-pull-request-page-size / sync-review-page-size must be between 1 and 100");
         }
         if (syncMaxPagesPerRun < 1) {
             missing.add("app.github.sync-max-pages-per-run must be at least 1");

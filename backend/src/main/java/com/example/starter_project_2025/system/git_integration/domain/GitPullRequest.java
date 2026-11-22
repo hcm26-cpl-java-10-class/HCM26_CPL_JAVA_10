@@ -135,6 +135,10 @@ public class GitPullRequest extends BaseEntity {
     @Column(name = "last_event_id")
     Long lastEventId;
 
+    /** SY-02: the sync job that wrote the current version; NULL when a webhook did ({@code last_event_id}). */
+    @Column(name = "last_sync_job_id")
+    Long lastSyncJobId;
+
     @Version
     @Column(name = "version")
     Long version;

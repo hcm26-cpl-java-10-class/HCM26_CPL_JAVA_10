@@ -2,7 +2,6 @@ package com.example.starter_project_2025.system.git_integration.sync;
 
 import com.example.starter_project_2025.system.git_integration.config.GitHubAppProperties;
 import com.example.starter_project_2025.system.git_integration.domain.GitRepository;
-import com.example.starter_project_2025.system.git_integration.domain.GitRepositoryStatus;
 import com.example.starter_project_2025.system.git_integration.github.GitHubGraphQlClient;
 import com.example.starter_project_2025.system.git_integration.github.InstallationTokenProvider;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommitHistoryPage;
@@ -27,22 +26,11 @@ import java.util.List;
  * anywhere resumes at the first page not stored. A run reads at most
  * {@code sync-max-pages-per-run} pages, then yields the worker; it pauses until the reset
  * when the GraphQL quota runs low. Never reports success while GitHub has a next page.
+ * SY-02: a finished commit step hands the job over to the pull request step.
  */
 @Slf4j
 @Component
 public class CommitHistorySyncStep {
-
-    /** How the commit step of one run ended. */
-    public enum Outcome {
-        /** The whole window was read: the job succeeded. */
-        DONE,
-        /** This run read its share of pages: queued again to continue. */
-        YIELDED,
-        /** The GraphQL quota is low: queued again after the reset. */
-        PAUSED,
-        /** The installation can no longer read the repository. */
-        REPOSITORY_LOST
-    }
 
     private final GitHubGraphQlClient graphql;
     private final InstallationTokenProvider tokens;
@@ -66,8 +54,11 @@ public class CommitHistorySyncStep {
         this.clock = clock;
     }
 
-    /** Runs the commit step of a claimed job; GitHub failures are thrown for the runner to classify. */
-    public Outcome run(GitSyncJobStore.ClaimedJob job, String owner, String name) {
+    /**
+     * Runs the commit step of a claimed job with at most {@code budget} pages; GitHub failures are
+     * thrown for the runner to classify.
+     */
+    public SyncStepResult run(GitSyncJobStore.ClaimedJob job, String owner, String name, int budget) {
         OffsetDateTime since = job.commitSince() == null ? null : job.commitSince().atZone(clock.getZone()).toOffsetDateTime();
         String cursor = job.commitCursor();
         boolean firstPageOfWindow = cursor == null && job.pagesDone() == 0;
@@ -76,7 +67,7 @@ public class CommitHistorySyncStep {
         while (true) {
             String token = tokens.contentsToken(job.githubInstallationId()); // cached; renewed before it expires
             GitHubCommitHistoryPage page = graphql.commitHistory(token, owner, name, since, cursor, properties.getSyncCommitPageSize());
-            if (!page.repositoryFound()) return Outcome.REPOSITORY_LOST;
+            if (!page.repositoryFound()) return SyncStepResult.of(SyncStepResult.Outcome.REPOSITORY_LOST, job, pages);
             if (page.cursorRejected()) {
                 // The branch was rewritten under the cursor: read the window again (stored SHAs are skipped).
                 log.info("Commit history cursor rejected, restarting the window: jobId={}, repositoryId={}", job.jobId(), job.repositoryId());
@@ -85,9 +76,9 @@ public class CommitHistorySyncStep {
                 continue;
             }
             GitRepository repository = connections.findById(job.repositoryId())
-                    .filter(row -> row.getStatus() == GitRepositoryStatus.ACTIVE)
+                    .filter(row -> row.getStatus().receivesEvents())
                     .orElse(null);
-            if (repository == null) return Outcome.REPOSITORY_LOST; // unlinked while running
+            if (repository == null) return SyncStepResult.of(SyncStepResult.Outcome.REPOSITORY_STOPPED, job, pages); // unlinked while running
             String branch = page.defaultBranch() != null ? page.defaultBranch() : job.commitBranch();
             List<IncomingCommit> commits = page.commits().stream().map(mapper::historyCommit).toList();
             GitIngestionService.CommitIngestResult result = GitIngestionRetry.onConflict(() ->
@@ -101,10 +92,10 @@ public class CommitHistorySyncStep {
             if (page.endCursor() != null) cursor = page.endCursor();
 
             if (!page.hasNextPage()) {
-                store.completeCommits(job);
+                GitSyncJobStore.ClaimedJob next = store.completeCommits(job);
                 log.info("Commit history synchronized: jobId={}, repositoryId={}, pagesThisRun={}, insertedThisRun={}",
                         job.jobId(), job.repositoryId(), pages, inserted);
-                return Outcome.DONE;
+                return SyncStepResult.of(SyncStepResult.Outcome.DONE, next, pages);
             }
             GitHubCommitHistoryPage.RateLimit limit = page.rateLimit();
             if (limit != null && limit.remaining() < properties.getSyncRateLimitReserve()) {
@@ -112,13 +103,13 @@ public class CommitHistorySyncStep {
                 store.postpone(job, wait);
                 log.info("Commit history paused for the GitHub rate limit: jobId={}, remaining={}, resumeInSeconds={}",
                         job.jobId(), limit.remaining(), wait);
-                return Outcome.PAUSED;
+                return SyncStepResult.of(SyncStepResult.Outcome.PAUSED, job, pages);
             }
-            if (pages >= properties.getSyncMaxPagesPerRun()) {
+            if (pages >= budget) {
                 store.yieldRun(job);
                 log.info("Commit history run yielded: jobId={}, repositoryId={}, pagesThisRun={}, insertedThisRun={}",
                         job.jobId(), job.repositoryId(), pages, inserted);
-                return Outcome.YIELDED;
+                return SyncStepResult.of(SyncStepResult.Outcome.YIELDED, job, pages);
             }
         }
     }

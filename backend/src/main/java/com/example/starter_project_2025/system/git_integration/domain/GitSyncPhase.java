@@ -6,5 +6,7 @@ public enum GitSyncPhase {
     METADATA,
     /** Import the commit history of the default branch, page by page (SY-01). */
     COMMITS,
+    /** Import pull requests (open, closed, merged) and their submitted reviews, page by page (SY-02). */
+    PULL_REQUESTS,
     DONE
 }

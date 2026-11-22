@@ -12,6 +12,7 @@ import type { GitInstallation, GitInstallationListResponse } from "@/types/featu
 import { getHomePathByRole } from "@/utils/rbac.utils";
 import { ConnectGitHubButton } from "./components/ConnectGitHubButton";
 import { ConnectStepsInfo } from "./components/ConnectStepsInfo";
+import { DisconnectGitHubAction } from "./components/DisconnectGitHubAction";
 import { GitHubStatusBadge } from "./components/GitHubStatusBadge";
 import { GitInstallationCard } from "./components/GitInstallationCard";
 import { GitIntegrationHeader } from "./components/GitIntegrationHeader";
@@ -19,7 +20,7 @@ import { GitIntegrationStateCard } from "./components/GitIntegrationPageState";
 import { RepositoryBrowserSheet } from "./components/RepositoryBrowserSheet";
 import { WebhookDeliveryLog } from "./components/WebhookDeliveryLog";
 import { clearPendingConnect, readPendingConnect } from "./git-integration.storage";
-import { useGitInstallations } from "./useGitIntegration";
+import { useGitInstallations, useRecheckInstallation } from "./useGitIntegration";
 
 function Shell({ children }: { children: ReactNode }) {
   return <MainLayout contentClassName="bg-slate-50/70 dark:bg-background" pathName={{ "git-integration": "Git Integration" }}>
@@ -88,7 +89,9 @@ function Hero({ data }: { data: GitInstallationListResponse }) {
         <p className="max-w-xl text-sm leading-6 text-muted-foreground">
           {data.status === "SUSPENDED"
             ? "GitHub reports the installation as suspended. Ask the account owner to unsuspend it on GitHub, then reconnect."
-            : "Install the app once per GitHub account or organization. Projects choose repositories from these connections."}
+            : data.status === "ERROR"
+              ? "GitHub refused a connection below. Check it again; if it still fails, reconnect it."
+              : "Install the app once per GitHub account or organization. Projects choose repositories from these connections."}
         </p>
       </div>
       {data.canManage ? <ConnectGitHubButton label="Connect another account" variant="outline" /> : <ReadOnlyNote />}
@@ -194,15 +197,27 @@ export default function GitIntegrationIndexPage() {
 
 /**
  * Actions that make sense for each installation state: browsing for a working
- * connection, reconnecting only when the connection is suspended or removed.
+ * connection (and, for a manager, disconnecting it); US-GI-02: "Check again" (asks GitHub) first for a
+ * broken one, then reconnecting.
  */
 function InstallationActions({ installation, canManage, onBrowse }: {
   installation: GitInstallation;
   canManage: boolean;
   onBrowse: () => void;
 }) {
+  const recheck = useRecheckInstallation();
   if (installation.status === "CONNECTED") {
-    return <Button size="sm" onClick={onBrowse}><FolderGit2 />View repositories</Button>;
+    return <>
+      <Button size="sm" onClick={onBrowse}><FolderGit2 />View repositories</Button>
+      {canManage && <DisconnectGitHubAction installation={installation} />}
+    </>;
   }
-  return canManage ? <ConnectGitHubButton label="Reconnect" variant="secondary" size="sm" /> : null;
+  if (!canManage) return null;
+  return <>
+    {installation.status !== "DISCONNECTED" && <Button size="sm" variant={installation.status === "ERROR" ? "default" : "outline"}
+      disabled={recheck.isPending} onClick={() => recheck.mutate(installation.id)}>
+      <RefreshCw className={recheck.isPending ? "animate-spin motion-reduce:animate-none" : undefined} />Check again
+    </Button>}
+    <ConnectGitHubButton label="Reconnect" variant="secondary" size="sm" />
+  </>;
 }

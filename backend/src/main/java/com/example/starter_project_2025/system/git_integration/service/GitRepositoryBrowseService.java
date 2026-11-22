@@ -4,7 +4,6 @@ import com.example.starter_project_2025.system.git_integration.domain.GitInstall
 import com.example.starter_project_2025.system.git_integration.domain.GitInstallationStatus;
 import com.example.starter_project_2025.system.git_integration.domain.GitProvider;
 import com.example.starter_project_2025.system.git_integration.domain.GitRepository;
-import com.example.starter_project_2025.system.git_integration.domain.GitRepositoryStatus;
 import com.example.starter_project_2025.system.git_integration.dto.GitRepositoryItem;
 import com.example.starter_project_2025.system.git_integration.dto.GitRepositoryPage;
 import com.example.starter_project_2025.system.git_integration.exception.GitIntegrationException;
@@ -53,19 +52,19 @@ public class GitRepositoryBrowseService {
     private final GitRepositoryRepository repositoryConnections;
     private final ProjectRepository projects;
     private final InstallationRepositoryCache cache;
-    private final GitInstallationWriter writer;
+    private final GitHubFailures failures;
     private final Clock clock;
 
     public GitRepositoryBrowseService(GitIntegrationAccessService access, GitInstallationRepository installations,
                                       GitRepositoryRepository repositoryConnections, ProjectRepository projects,
-                                      InstallationRepositoryCache cache, GitInstallationWriter writer,
+                                      InstallationRepositoryCache cache, GitHubFailures failures,
                                       @Qualifier("gitIntegrationClock") Clock clock) {
         this.access = access;
         this.installations = installations;
         this.repositoryConnections = repositoryConnections;
         this.projects = projects;
         this.cache = cache;
-        this.writer = writer;
+        this.failures = failures;
         this.clock = clock;
     }
 
@@ -81,7 +80,7 @@ public class GitRepositoryBrowseService {
                 .filter(row -> row.getTenantId().equals(tenantId) && Boolean.TRUE.equals(row.getIsActive()))
                 .orElseThrow(GitIntegrationException::installationNotFound);
         if (installation.getStatus() != GitInstallationStatus.CONNECTED) {
-            throw GitIntegrationException.installationNotActive(installation.getStatus().name());
+            throw GitIntegrationException.installationBroken(installation.getStatus().name());
         }
 
         InstallationRepositoryCache.Result result = load(installation, refresh);
@@ -121,36 +120,20 @@ public class GitRepositoryBrowseService {
                 result.fromCache(), result.snapshot().truncated());
     }
 
-    /** GitHub failures become explicit errors; an installation found gone/suspended is updated (T6/T5). */
+    /** GitHub failures become explicit errors; a broken installation is recorded (GI-02, {@link InstallationHealth}). */
     private InstallationRepositoryCache.Result load(GitInstallation installation, boolean refresh) {
         long installationId = installation.getInstallationId();
         try {
             return cache.get(installationId, refresh);
         } catch (GitHubApiException e) {
-            switch (e.getKind()) {
-                case GONE -> {
-                    cache.evict(installationId);
-                    writer.markStatus(installation.getId(), GitInstallationStatus.DISCONNECTED, "installation-token-404");
-                    throw GitIntegrationException.installationNotActive(GitInstallationStatus.DISCONNECTED.name());
-                }
-                case SUSPENDED -> {
-                    cache.evict(installationId);
-                    writer.markStatus(installation.getId(), GitInstallationStatus.SUSPENDED, "installation-token-suspended");
-                    throw GitIntegrationException.installationNotActive(GitInstallationStatus.SUSPENDED.name());
-                }
-                case RATE_LIMITED -> throw GitIntegrationException.rateLimited(e.getRetryAfterSeconds());
-                default -> {
-                    log.warn("GitHub repository listing failed: installationId={}, reason={}", installationId, e.getMessage());
-                    throw GitIntegrationException.providerUnavailable();
-                }
-            }
+            throw failures.toBusinessError(installation, e, "list-repositories");
         }
     }
 
     private List<GitRepositoryItem> toItems(List<GitHubRepository> repositories, Long tenantId, Long projectId) {
         List<Long> ids = repositories.stream().map(GitHubRepository::id).filter(Objects::nonNull).toList();
         Map<Long, GitRepository> activeByExternalId = ids.isEmpty() ? Map.of()
-                : repositoryConnections.findByProviderAndExternalIdInAndStatus(GitProvider.GITHUB, ids, GitRepositoryStatus.ACTIVE)
+                : repositoryConnections.findByProviderAndExternalIdInAndStatusIn(GitProvider.GITHUB, ids, GitRepositoryRepository.RECEIVING)
                 .stream().collect(Collectors.toMap(GitRepository::getExternalId, Function.identity(), (first, second) -> first));
         Map<Long, Project> projectsById = activeByExternalId.isEmpty() ? Map.of()
                 : projects.findAllById(activeByExternalId.values().stream().map(GitRepository::getProjectId).distinct().toList())

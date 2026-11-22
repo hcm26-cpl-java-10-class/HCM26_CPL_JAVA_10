@@ -20,5 +20,7 @@ public record GitCommitItem(
         String branch,
         Integer filesChanged,
         boolean merge,
-        List<GitTaskRef> taskRefs) {
+        List<GitTaskRef> taskRefs,
+        /* GI-05: the repository it came from (null where only one repository is shown). */
+        GitRepositoryLabel repository) {
 }

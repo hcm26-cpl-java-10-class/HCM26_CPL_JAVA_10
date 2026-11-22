@@ -85,8 +85,20 @@ public class GitIngestionService {
         }
     }
 
-    public record PullRequestUpsert(Long pullRequestId, boolean applied, boolean created, LocalDateTime storedUpdatedAt) {
+    /** @param enriched SY-02 sync: same version, only columns still NULL were filled (no event) */
+    public record PullRequestUpsert(Long pullRequestId, boolean applied, boolean created, LocalDateTime storedUpdatedAt,
+                                    boolean enriched) {
+        public PullRequestUpsert(Long pullRequestId, boolean applied, boolean created, LocalDateTime storedUpdatedAt) {
+            this(pullRequestId, applied, created, storedUpdatedAt, false);
+        }
     }
+
+    /**
+     * SY-02: how a pull request version is compared with the stored one. WEBHOOK overwrites unless
+     * older (several actions share one {@code updated_at}); SYNC overwrites only a strictly newer
+     * version, fills the missing columns of the same version and publishes nothing for it.
+     */
+    public enum UpsertMode { WEBHOOK, SYNC }
 
     public record ReviewUpsert(Long reviewId, boolean applied, boolean created) {
     }
@@ -191,24 +203,37 @@ public class GitIngestionService {
     @Transactional
     public PullRequestUpsert upsertPullRequest(GitRepository repository, IncomingPullRequest pr, String action,
                                                Long webhookEventId) {
+        return upsertPullRequest(repository, pr, action, IngestOrigin.webhook(webhookEventId), UpsertMode.WEBHOOK);
+    }
+
+    @Transactional
+    public PullRequestUpsert upsertPullRequest(GitRepository repository, IncomingPullRequest pr, String action,
+                                               IngestOrigin origin, UpsertMode mode) {
+        Long webhookEventId = origin.webhookEventId();
         Optional<GitPullRequest> stored = pullRequests.findByRepositoryIdAndNumber(repository.getId(), pr.number());
         if (stored.isEmpty()) {
             GitPullRequest row = GitPullRequest.builder()
                     .tenantId(repository.getTenantId()).projectId(repository.getProjectId())
                     .repositoryId(repository.getId()).repoExternalId(repository.getExternalId())
                     .build(); // builder: applies BaseEntity defaults (is_active)
-            apply(row, pr, action, webhookEventId);
+            apply(row, pr, action, origin);
             pullRequests.saveAndFlush(row); // a concurrent insert fails on uk_git_pr_repo_number
             publishPullRequest(row, action, true);
             return new PullRequestUpsert(row.getId(), true, true, row.getGithubUpdatedAt());
         }
         GitPullRequest row = stored.get();
+        if (mode == UpsertMode.SYNC && !pr.updatedAt().isAfter(row.getGithubUpdatedAt())) {
+            // Same version: only what a webhook payload lacked (counters of a review payload, ids).
+            boolean enriched = pr.updatedAt().isEqual(row.getGithubUpdatedAt()) && fillMissing(row, pr);
+            if (enriched) pullRequests.saveAndFlush(row);
+            return new PullRequestUpsert(row.getId(), false, false, row.getGithubUpdatedAt(), enriched);
+        }
         boolean older = pr.updatedAt().isBefore(row.getGithubUpdatedAt());
         boolean sameEvent = webhookEventId != null && webhookEventId.equals(row.getLastEventId());
         if (older || sameEvent) {
             return new PullRequestUpsert(row.getId(), false, false, row.getGithubUpdatedAt()); // AC05 / replay
         }
-        apply(row, pr, action, webhookEventId);
+        apply(row, pr, action, origin);
         pullRequests.saveAndFlush(row); // a concurrent update fails on @Version
         publishPullRequest(row, action, false);
         return new PullRequestUpsert(row.getId(), true, false, row.getGithubUpdatedAt());
@@ -217,13 +242,20 @@ public class GitIngestionService {
     @Transactional
     public ReviewUpsert upsertReview(GitRepository repository, Long pullRequestId, IncomingReview review, String action,
                                      Long webhookEventId) {
+        return upsertReview(repository, pullRequestId, review, action, IngestOrigin.webhook(webhookEventId));
+    }
+
+    /** The newer (source time, then action rank) version of a review wins, whatever brought it (webhook or sync). */
+    @Transactional
+    public ReviewUpsert upsertReview(GitRepository repository, Long pullRequestId, IncomingReview review, String action,
+                                     IngestOrigin origin) {
         Optional<GitPullRequestReview> stored = reviews.findByRepositoryIdAndExternalId(repository.getId(), review.externalId());
         if (stored.isEmpty()) {
             GitPullRequestReview row = GitPullRequestReview.builder()
                     .tenantId(repository.getTenantId()).projectId(repository.getProjectId())
                     .repositoryId(repository.getId()).pullRequestId(pullRequestId).externalId(review.externalId())
                     .build();
-            apply(row, review, action, webhookEventId);
+            apply(row, review, action, origin);
             reviews.saveAndFlush(row);
             publishReview(row, action, true);
             return new ReviewUpsert(row.getId(), true, true);
@@ -234,13 +266,13 @@ public class GitIngestionService {
         if (!newer) {
             return new ReviewUpsert(row.getId(), false, false); // AC05: older, equal or replayed
         }
-        apply(row, review, action, webhookEventId);
+        apply(row, review, action, origin);
         reviews.saveAndFlush(row);
         publishReview(row, action, false);
         return new ReviewUpsert(row.getId(), true, false);
     }
 
-    private static void apply(GitPullRequest row, IncomingPullRequest pr, String action, Long webhookEventId) {
+    private static void apply(GitPullRequest row, IncomingPullRequest pr, String action, IngestOrigin origin) {
         row.setExternalId(pr.externalId() == null ? Long.valueOf(pr.number()) : pr.externalId());
         row.setNumber(pr.number());
         row.setTitle(pr.title());
@@ -265,10 +297,25 @@ public class GitIngestionService {
         row.setClosedAt(pr.closedAt());
         row.setMergedAt(pr.mergedAt());
         row.setLastAction(GitWebhookJson.limit(action, 50));
-        row.setLastEventId(webhookEventId);
+        row.setLastEventId(origin.webhookEventId());
+        row.setLastSyncJobId(origin.syncJobId());
     }
 
-    private void apply(GitPullRequestReview row, IncomingReview review, String action, Long webhookEventId) {
+    /** SY-02: fills the columns of a stored pull request that are still NULL; returns true when one was. */
+    private static boolean fillMissing(GitPullRequest row, IncomingPullRequest pr) {
+        boolean changed = false;
+        if (row.getCommitsCount() == null && pr.commitsCount() != null) { row.setCommitsCount(pr.commitsCount()); changed = true; }
+        if (row.getAdditions() == null && pr.additions() != null) { row.setAdditions(pr.additions()); changed = true; }
+        if (row.getDeletions() == null && pr.deletions() != null) { row.setDeletions(pr.deletions()); changed = true; }
+        if (row.getChangedFiles() == null && pr.changedFiles() != null) { row.setChangedFiles(pr.changedFiles()); changed = true; }
+        if (row.getMergeCommitSha() == null && pr.mergeCommitSha() != null) { row.setMergeCommitSha(pr.mergeCommitSha()); changed = true; }
+        if (row.getMergedByLogin() == null && pr.mergedByLogin() != null) { row.setMergedByLogin(pr.mergedByLogin()); changed = true; }
+        if (row.getAuthorGithubId() == null && pr.authorGithubId() != null) { row.setAuthorGithubId(pr.authorGithubId()); changed = true; }
+        if (row.getHtmlUrl() == null && pr.htmlUrl() != null) { row.setHtmlUrl(pr.htmlUrl()); changed = true; }
+        return changed;
+    }
+
+    private void apply(GitPullRequestReview row, IncomingReview review, String action, IngestOrigin origin) {
         row.setReviewerLogin(review.reviewerLogin());
         row.setReviewerGithubId(review.reviewerGithubId());
         row.setState(review.state());
@@ -282,7 +329,8 @@ public class GitIngestionService {
             row.setDismissedAt(LocalDateTime.now(clock));
         }
         row.setLastAction(GitWebhookJson.limit(action, 50));
-        row.setLastEventId(webhookEventId);
+        row.setLastEventId(origin.webhookEventId());
+        row.setLastSyncJobId(origin.syncJobId());
     }
 
     private void publishPullRequest(GitPullRequest row, String action, boolean created) {

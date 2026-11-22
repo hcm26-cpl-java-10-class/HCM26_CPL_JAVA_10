@@ -377,14 +377,16 @@ class GitHubWebhookIntegrationTest {
     // ---- AC07: app permission events ----------------------------------------------------------------
 
     @Test
-    void ac07UninstalledAppDisconnectsInstallationAndFreesLinkedRepositories() throws Exception {
+    void ac07UninstalledAppDisconnectsInstallationAndItsLinkedRepositories() throws Exception {
         Long id = deliverAndProcess("installation", "{\"action\":\"deleted\",\"installation\":{\"id\":556677}}");
 
         assertThat(events.findById(id).orElseThrow().getStatus()).isEqualTo(GitWebhookEventStatus.PROCESSED);
         assertThat(events.findById(id).orElseThrow().getInstallationRef()).isEqualTo(installationRowId);
         assertThat(installations.findById(installationRowId).orElseThrow().getStatus()).isEqualTo(GitInstallationStatus.DISCONNECTED);
-        assertThat(connections.findById(connectionId).orElseThrow().getStatus()).isEqualTo(GitRepositoryStatus.UNAVAILABLE);
+        assertThat(connections.findById(connectionId).orElseThrow().getStatus()).isEqualTo(GitRepositoryStatus.DISCONNECTED);
         assertThat(connections.findFirstByProjectIdAndStatus(masterId, GitRepositoryStatus.ACTIVE)).isEmpty();
+        // GI-05: still the master's repository (the PM is warned and unlinks it to change repositories).
+        assertThat(connections.findCurrent(masterId)).map(row -> row.getId()).contains(connectionId);
     }
 
     @Test
@@ -408,13 +410,14 @@ class GitHubWebhookIntegrationTest {
     }
 
     @Test
-    void ac07RepositoryRemovedFromTheAppBecomesUnavailable() throws Exception {
+    void ac07RepositoryRemovedFromTheAppBecomesDisconnected() throws Exception {
         Long id = deliverAndProcess("installation_repositories", """
                 {"action":"removed","repository_selection":"selected","installation":{"id":556677},
                  "repositories_added":[],"repositories_removed":[{"id":9001,"full_name":"hcm26-java-team/ecommerce"}]}""");
 
         assertThat(events.findById(id).orElseThrow().getStatus()).isEqualTo(GitWebhookEventStatus.PROCESSED);
-        assertThat(connections.findById(connectionId).orElseThrow().getStatus()).isEqualTo(GitRepositoryStatus.UNAVAILABLE);
+        assertThat(connections.findById(connectionId).orElseThrow().getStatus()).isEqualTo(GitRepositoryStatus.DISCONNECTED);
+        assertThat(connections.findById(connectionId).orElseThrow().getStatusReason()).isEqualTo("REPOSITORY_ACCESS_REMOVED");
         assertThat(installations.findById(installationRowId).orElseThrow().getStatus()).isEqualTo(GitInstallationStatus.CONNECTED);
     }
 
