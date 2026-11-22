@@ -824,7 +824,7 @@ public class ExamAttemptService {
         response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore()));
         response.setPassScore(attempt.getPassScore());
 
-        // Diem chi duoc cong bo khi giao vien bam "Publish Results".
+        // Result Visibility controls automatic availability; publication can override it.
         boolean resultPublished = resultAccessService.isResultPublished(attempt.getExam());
         response.setResultPublished(resultPublished);
 
@@ -904,7 +904,7 @@ public class ExamAttemptService {
         response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore()));
         response.setPassScore(ExamScoring.effectivePassScore(attempt));
 
-        // Diem chi duoc hien thi khi giao vien da cong bo ket qua.
+        // Result visibility and the explicit publication state control score availability.
         boolean resultPublished = resultAccessService.isResultPublished(attempt.getExam());
         response.setResultPublished(resultPublished);
         if (resultPublished) {

@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Backend Demo (H2 Mock Data)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
     <envs>
-      <env name="DB_URL" value="jdbc:h2:file:./data/demo/fams_lms_legacy_plus_demo;DB_CLOSE_ON_EXIT=FALSE" />
+      <env name="DB_URL" value="jdbc:h2:file:$PROJECT_DIR$/backend/data/demo/fams_lms_legacy_plus_demo;DB_CLOSE_ON_EXIT=FALSE" />
       <env name="DB_DRIVER" value="org.h2.Driver" />
       <env name="DB_DIALECT" value="org.hibernate.dialect.H2Dialect" />
       <env name="DB_USERNAME" value="sa" />

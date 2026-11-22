@@ -1,7 +1,7 @@
 import { CourseAssessmentPanel } from "@/pages/management/demo/course/components/CourseAssessmentPanel";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useState, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -106,15 +106,13 @@ function SectionLessonsList({
               {lessonExam ? (
                 <div className="flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-xs">
                   <ClipboardCheck className="size-3.5 text-indigo-500 shrink-0" />
-                  <a
-                    href={`/exams/${lessonExam.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <Link
+                    to={`/exams/${lessonExam.id}`}
                     className="font-medium text-foreground hover:text-primary hover:underline truncate max-w-[180px]"
                     title={lessonExam.title}
                   >
                     {lessonExam.title}
-                  </a>
+                  </Link>
                   <Badge variant="outline" className="text-[10px] px-1 py-0 border-indigo-500/40 text-indigo-400">
                     {EXAM_CATEGORY_LABEL[lessonExam.category] || lessonExam.category}
                   </Badge>

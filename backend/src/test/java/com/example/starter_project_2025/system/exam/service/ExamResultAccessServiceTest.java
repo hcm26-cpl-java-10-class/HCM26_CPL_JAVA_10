@@ -95,7 +95,32 @@ class ExamResultAccessServiceTest {
     @Test
     void myScoresDeniesWhenNoPublicationConfigured() {
         when(publicationRepository.findByExam_Id(1L)).thenReturn(Optional.empty());
+        exam.setResultVisibility(ResultVisibility.MANUAL_RELEASE);
         assertFalse(service.canStudentSeeScoreOnMyScores(exam));
+    }
+
+    @Test
+    void immediateVisibilityReleasesResultsWithoutSeparatePublication() {
+        when(publicationRepository.findByExam_Id(1L)).thenReturn(Optional.empty());
+        assertTrue(service.isResultPublished(exam));
+        assertTrue(service.canStudentViewScore(exam));
+        assertTrue(service.canStudentSeeScoreOnMyScores(exam));
+    }
+
+    @Test
+    void explicitUnpublishedRecordOverridesImmediateVisibility() {
+        publication.setPublished(false);
+        assertFalse(service.isResultPublished(exam));
+        assertFalse(service.canStudentViewScore(exam));
+        assertFalse(service.canStudentSeeScoreOnMyScores(exam));
+    }
+
+    @Test
+    void manualReleaseStillRequiresExplicitPublication() {
+        when(publicationRepository.findByExam_Id(1L)).thenReturn(Optional.empty());
+        exam.setResultVisibility(ResultVisibility.MANUAL_RELEASE);
+        assertFalse(service.isResultPublished(exam));
+        assertFalse(service.canStudentViewScore(exam));
     }
 
     @Test
