@@ -24,7 +24,7 @@ describe("learner presentation and navigation", () => {
   it("preserves safe learner return context without changing management defaults", () => {
     const path="/enrollments/183/learn?lessonId=5#lesson";
     expect(learnerAssessmentReturnPath(path)).toBe(path);
-    expect(assessmentPreparationPath(5,path)).toContain(encodeURIComponent(path));
+    expect(assessmentPreparationPath(5,path)).toBe("/enrollments/183/learn?lessonId=5&assessmentId=5#lesson");
     for (const bad of ["/exams", "//evil.test", "/\\evil.test", "https://evil.test", "/courses/5/../exams", null]) expect(learnerAssessmentReturnPath(bad)).toBe("/student/exams");
     expect(assessmentReturnPath(null)).toBe("/exams");
   });

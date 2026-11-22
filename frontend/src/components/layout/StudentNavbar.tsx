@@ -121,6 +121,12 @@ export function StudentNavbar() {
         };
       });
 
+    if (hasPermission("ENROLLMENT_CREATE") && !groups.some(g => g.items.some(i => i.url === "/student/recommendations"))) {
+      const item = { id: "student-recommendations", title: "For you", url: "/student/recommendations", icon: resolveIcon("menu"), isActive: pathname === "/student/recommendations" };
+      const courseGroup = groups.find(g => !g.hiddenInMenu && (g.items.some(i => normalizePath(i.url) === "/courses") || g.name.toLowerCase().trim() === "course online"));
+      if (courseGroup) courseGroup.items.push(item);
+      else groups.push({ id: "student-courses", name: "Course Online", hiddenInMenu: false, items: [item] });
+    }
     // Safety net: when the sprint module is not configured in the database the
     // student still needs the Backlogs entry point.
     const hasBacklogs = groups.some((group) =>

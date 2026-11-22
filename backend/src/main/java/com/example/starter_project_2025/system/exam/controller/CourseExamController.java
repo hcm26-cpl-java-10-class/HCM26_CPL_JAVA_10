@@ -38,6 +38,17 @@ public class CourseExamController {
         return linkService.listByCourse(courseId, sectionId, lessonId, principal);
     }
 
+    public record WeightUpdate(Long examId, java.math.BigDecimal weight) {}
+
+    @PutMapping("/courses/{courseId}/exam-weights")
+    @PreAuthorize("hasAuthority('EXAM_UPDATE') and hasAnyRole('ADMIN', 'TEACHER')")
+    public ResponseEntity<Void> updateWeights(@PathVariable Long courseId,
+            @org.springframework.web.bind.annotation.RequestBody List<WeightUpdate> updates,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        linkService.updateWeights(courseId, updates, principal);
+        return ResponseEntity.noContent().build();
+    }
+
     /** Danh sach bai thi thuoc mot section. Giang vien course, admin, hoac sinh vien da ghi danh. */
     @GetMapping("/sections/{sectionId}/exams")
     @PreAuthorize("isAuthenticated()")

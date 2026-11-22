@@ -24,6 +24,7 @@ class GradebookCourseWeightsTest {
     @Mock ExamRepository exams;
     @Mock ExamAttemptRepository attempts;
     @Mock ExamAccessGuard access;
+    @Mock com.example.starter_project_2025.system.exam.service.ExamResultAccessService resultAccess;
     @Mock GradebookStateRepository state;
     @Mock GradebookPublishedItemRepository published;
     @Mock CourseAssessmentCompletionService completion;
