@@ -1,6 +1,9 @@
-import { EXAM_CATEGORY_LABEL, type ExamCategory, type ExamDTO, type ExamType, type LatePolicy, type ResultVisibility } from "@/types";
+import { EXAM_CATEGORY_LABEL, type ExamCategory, type ExamDTO, type ExamStatus, type ExamType, type LatePolicy, type ResultVisibility } from "@/types";
 
 export interface ExamConfigForm {
+  status: ExamStatus;
+  startTime: string;
+  endTime: string;
   maxAttempts: string;
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
@@ -45,6 +48,9 @@ export interface ExamConfigForm {
 }
 
 export const DEFAULT_CONFIG: ExamConfigForm = {
+  status: "PUBLISHED",
+  startTime: "",
+  endTime: "",
   maxAttempts: "",
   shuffleQuestions: false,
   shuffleOptions: false,
@@ -120,6 +126,9 @@ const pickEnum = <T extends string, F extends string = T>(
 ): T | F => (value && value in allowed ? (value as T) : fallback);
 
 export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
+  status: exam.status ?? "PUBLISHED",
+  startTime: exam.startTime ? exam.startTime.slice(0, 16) : "",
+  endTime: exam.endTime ? exam.endTime.slice(0, 16) : "",
   maxAttempts: String(exam.maxAttempts ?? 1),
   shuffleQuestions: exam.shuffleQuestions ?? false,
   shuffleOptions: exam.shuffleOptions ?? false,
@@ -131,9 +140,8 @@ export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   latePolicy: pickEnum(exam.latePolicy, LATE_POLICY_LABEL, "NOT_ALLOWED"),
   latePenaltyPercent: exam.latePenaltyPercent != null ? String(exam.latePenaltyPercent) : "",
   lateGraceMinutes: String(exam.lateGraceMinutes ?? 0),
-  // AFTER_EXAM_CLOSED is a legacy value (exams no longer have a close time): treated as manual release.
   resultVisibility: pickEnum(
-    exam.resultVisibility === "AFTER_EXAM_CLOSED" ? "MANUAL_RELEASE" : exam.resultVisibility,
+    exam.resultVisibility,
     RESULT_VISIBILITY_LABEL,
     "IMMEDIATE",
   ),
@@ -172,11 +180,23 @@ export function getRequiredFieldErrors(cfg: ExamConfigForm): { examType?: string
   return errors;
 }
 
-export function validateConfig(_duration: number, cfg: ExamConfigForm): string | null {
+export function validateConfig(duration: number, cfg: ExamConfigForm): string | null {
   const required = getRequiredFieldErrors(cfg);
   if (required.examType) return required.examType;
   if (required.category) return required.category;
   if (required.maxAttempts) return required.maxAttempts;
+
+  if (cfg.startTime && cfg.endTime) {
+    const startMs = Date.parse(cfg.startTime);
+    const endMs = Date.parse(cfg.endTime);
+    if (!Number.isNaN(startMs) && !Number.isNaN(endMs)) {
+      if (endMs <= startMs) return "End time must be after start time.";
+      const windowMinutes = Math.floor((endMs - startMs) / 60000);
+      if (Number.isFinite(duration) && duration > 0 && duration > windowMinutes) {
+        return `Duration (${duration} mins) cannot exceed the open window (${windowMinutes} mins).`;
+      }
+    }
+  }
 
   if (cfg.maxAttempts.trim() !== "" && !(Number(cfg.maxAttempts) >= 1)) return "Maximum attempts must be at least 1.";
   if (cfg.courseWeight !== "" && (!Number.isFinite(Number(cfg.courseWeight)) || Number(cfg.courseWeight)<0 || Number(cfg.courseWeight)>100 || !/^\d+(\.\d{1,2})?$/.test(cfg.courseWeight))) return "Course weight must be 0–100 with at most two decimal places.";
@@ -208,6 +228,9 @@ export function buildExamRequest(title: string, duration: string, cfg: ExamConfi
   return {
     title: title.trim(),
     durationMinutes: Number(duration),
+    status: cfg.status || "PUBLISHED",
+    startTime: cfg.startTime ? (cfg.startTime.length === 16 ? `${cfg.startTime}:00` : cfg.startTime) : null,
+    endTime: cfg.endTime ? (cfg.endTime.length === 16 ? `${cfg.endTime}:00` : cfg.endTime) : null,
     isActive,
     maxAttempts: cfg.maxAttempts.trim() === "" ? 1 : Number(cfg.maxAttempts),
     shuffleQuestions: cfg.shuffleQuestions,

@@ -1,11 +1,11 @@
 package com.example.starter_project_2025.system.demo.course;
 
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
-import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
-import com.example.starter_project_2025.system.exam.domain.ExamRepository;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptRepository;
+import com.example.starter_project_2025.system.exam.core.domain.ExamRepository;
 import com.example.starter_project_2025.system.exam.gradebook.GradebookPublishedItem;
 import com.example.starter_project_2025.system.exam.gradebook.GradebookPublishedItemRepository;
-import com.example.starter_project_2025.system.exam.service.ExamResultAccessService;
+import com.example.starter_project_2025.system.exam.result.service.ExamResultAccessService;
 import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.util.List;

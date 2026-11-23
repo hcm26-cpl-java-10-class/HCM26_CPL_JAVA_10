@@ -1,3 +1,4 @@
+import NotificationCenterPage from "@/pages/notifications/NotificationCenterPage";
 import RecommendedCoursesPage from "@/pages/student/RecommendedCoursesPage";
 import CourseLearnerGradesPage from "@/pages/management/demo/course/pages/CourseLearnerGradesPage";
 import ScoreManagementPage from "@/pages/management/exam/score-management";
@@ -17,6 +18,7 @@ import SessionDetailPage from "@/pages/management/demo/session/SessionDetailPage
 import SessionManagementPage from "@/pages/management/demo/session/SessionManagementPage";
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
+import AccountSecurityPage from "@/pages/auth/AccountSecurityPage";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
 import { Login } from "@/pages/auth/Login";
 import RegisterPage from "@/pages/auth/RegisterPage";
@@ -219,13 +221,14 @@ export const routes: RouteConfig[] = [
   {
     path: "/exams",
     component: ExamManagementPage,
-    requiredPermission: "EXAM_READ",
     isModuleDriven: true,
+    requiredPermission: "EXAM_UPDATE",
   },
 
   {
     path: "/exams/supervisor",
     component: ExamSupervisorPage,
+    requiredPermission: "EXAM_UPDATE",
   },
 
   {
@@ -491,6 +494,7 @@ export const routes: RouteConfig[] = [
     isModuleDriven: false,
   },
 
+  { path: "/notifications", component: NotificationCenterPage, isModuleDriven: false },
   { path: "/student/recommendations", component: RecommendedCoursesPage, requiredPermission: "ENROLLMENT_CREATE", isModuleDriven: false },
   // STUDENT
   {
@@ -584,6 +588,10 @@ export const routes: RouteConfig[] = [
   ...buildEntityRoutes(),
 
   // AUTHENTICATION
+  {
+    path: "/account/security",
+    component: AccountSecurityPage,
+  },
   {
     path: "/not-found-page",
     component: NotFoundPage,

@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.demo.course;
-import com.example.starter_project_2025.system.exam.domain.*;
-import com.example.starter_project_2025.system.exam.service.ExamResultAccessService;
+import com.example.starter_project_2025.system.exam.attempt.domain.*;
+import com.example.starter_project_2025.system.exam.core.domain.*;
+import com.example.starter_project_2025.system.exam.result.service.ExamResultAccessService;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import com.example.starter_project_2025.system.exam.gradebook.GradebookPublishedItemRepository;
 import org.junit.jupiter.api.Test;

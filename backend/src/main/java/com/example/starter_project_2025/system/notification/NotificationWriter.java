@@ -21,6 +21,7 @@ public class NotificationWriter {
                 .title(title)
                 .message(message)
                 .targetUrl(targetUrl)
+                .category(NotificationCategory.fromEventKey(eventKey))
                 .build());
     }
 

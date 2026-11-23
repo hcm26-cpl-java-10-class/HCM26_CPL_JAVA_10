@@ -1,7 +1,6 @@
 package com.example.starter_project_2025.system.demo.course;
 
 import com.example.starter_project_2025.exception.BusinessValidationException;
-import com.example.starter_project_2025.system.demo.course.CourseFromSyllabusModels.*;
 import com.example.starter_project_2025.system.demo.lesson.LessonDTO;
 import com.example.starter_project_2025.system.demo.lesson.LessonService;
 import com.example.starter_project_2025.system.demo.section.SectionDTO;
@@ -19,6 +18,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import com.example.starter_project_2025.system.demo.course.CourseFromSyllabusModels.*;
 import com.example.starter_project_2025.system.demo.syllabus.entity.Syllabus;
 import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusRepository;
 import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusSection;

@@ -130,12 +130,25 @@ export function NotificationBell() {
             </button>)
               : <p className="p-8 text-center text-sm text-muted-foreground">No notifications on this page.</p>}
         </div>
-
         {(data?.totalPages ?? 0) > 1 && <nav aria-label="Notification history pages" className="flex items-center justify-between border-t px-3 py-2">
           <Button type="button" size="sm" variant="ghost" disabled={page === 0} onClick={() => setPage(current => Math.max(0, current - 1))}><ChevronLeft className="mr-1 size-4" /> Newer</Button>
           <span className="text-xs text-muted-foreground">Page {page + 1} of {data?.totalPages}</span>
           <Button type="button" size="sm" variant="ghost" disabled={page + 1 >= (data?.totalPages ?? 0)} onClick={() => setPage(current => current + 1)}>Older <ChevronRight className="ml-1 size-4" /></Button>
         </nav>}
+        <div className="border-t p-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full"
+            onClick={() => {
+              setOpen(false);
+              navigate("/notifications");
+            }}
+          >
+            View all notifications
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   );

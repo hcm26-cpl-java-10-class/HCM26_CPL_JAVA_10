@@ -3,8 +3,7 @@ package com.example.starter_project_2025.system.exam.gradebook;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.demo.course.*;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
-import com.example.starter_project_2025.system.exam.domain.*;
-import com.example.starter_project_2025.system.exam.service.ExamAccessGuard;
+import com.example.starter_project_2025.system.exam.core.service.ExamAccessGuard;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,6 +13,10 @@ import java.math.BigDecimal;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptRepository;
+import com.example.starter_project_2025.system.exam.core.domain.Exam;
+import com.example.starter_project_2025.system.exam.core.domain.ExamCategory;
+import com.example.starter_project_2025.system.exam.core.domain.ExamRepository;
 
 @ExtendWith(MockitoExtension.class)
 class GradebookCourseWeightsTest {
@@ -24,7 +27,7 @@ class GradebookCourseWeightsTest {
     @Mock ExamRepository exams;
     @Mock ExamAttemptRepository attempts;
     @Mock ExamAccessGuard access;
-    @Mock com.example.starter_project_2025.system.exam.service.ExamResultAccessService resultAccess;
+    @Mock com.example.starter_project_2025.system.exam.result.service.ExamResultAccessService resultAccess;
     @Mock GradebookStateRepository state;
     @Mock GradebookPublishedItemRepository published;
     @Mock CourseAssessmentCompletionService completion;

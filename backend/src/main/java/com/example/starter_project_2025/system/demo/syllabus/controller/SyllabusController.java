@@ -1,6 +1,5 @@
 package com.example.starter_project_2025.system.demo.syllabus.controller;
 
-
 import com.example.starter_project_2025.system.demo.syllabus.dto.SyllabusModels.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

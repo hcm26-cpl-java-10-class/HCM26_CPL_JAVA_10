@@ -4,6 +4,8 @@ import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.system.rbac.user.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
@@ -56,5 +58,10 @@ public class Notification extends BaseEntity {
 
     @Column(name = "read_at")
     LocalDateTime readAt;
+
+    /** Null for rows created before categories existed; the category is then derived from the event key. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    NotificationCategory category;
 }
 

@@ -49,8 +49,12 @@ const courseLabel = (exam: ExamDTO): string => {
   return parts.join(" › ");
 };
 
-const ACTIVE_STYLE = { label: "Active", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" };
-const INACTIVE_STYLE = { label: "Inactive", className: "bg-muted text-muted-foreground" };
+const STATUS_BADGE: Record<string, { label: string; className: string }> = {
+  PUBLISHED: { label: "Published", className: "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" },
+  DRAFT: { label: "Draft", className: "border border-slate-300 bg-slate-100 text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200" },
+  CLOSED: { label: "Closed", className: "bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200" },
+  ARCHIVED: { label: "Archived", className: "bg-muted text-muted-foreground" },
+};
 
 const SORT_OPTIONS: { value: string; label: string }[] = [
   { value: "createdAt,desc", label: "Newest first" },
@@ -313,7 +317,8 @@ export default function ExamManagementPage() {
         ) : (
           <div className="grid min-w-0 max-w-full gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {examRows.map((exam) => {
-              const status = exam.isActive === false ? INACTIVE_STYLE : ACTIVE_STYLE;
+              const statusKey = exam.status ?? (exam.isActive === false ? "ARCHIVED" : "PUBLISHED");
+              const status = STATUS_BADGE[statusKey] ?? STATUS_BADGE.PUBLISHED;
               return (
                 // A real link that opens the exam in a new browser tab (middle click and Ctrl+click also work).
                 <a
