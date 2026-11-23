@@ -46,7 +46,7 @@ import {
   Video,
   type LucideIcon,
 } from "lucide-react";
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useCourseEnrollment } from "../hooks/useCourseEnrollment.ts";
@@ -169,7 +169,6 @@ export function CourseDetailContent({
         {enrollmentManagement && (
           <p className="text-sm text-muted-foreground">
             Course type: {course.courseType === "FROM_SYLLABUS" ? "From Syllabus" : "Standard course"}
-            {course.syllabus && ` · Linked syllabus: ${course.syllabus.code} - ${course.syllabus.name}`}
           </p>
         )}
         <p className="text-sm text-muted-foreground">
@@ -214,6 +213,21 @@ export function CourseDetailContent({
           );
         })()}
       </section>
+      {course.syllabus && (
+        <section className="rounded-xl border bg-card px-4 py-3" aria-label="Linked Syllabus">
+          <h2 className="flex items-center gap-2 text-base font-semibold">
+            <Link2 className="size-4" /> Linked Syllabus
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            This Course is based on the published syllabus <span className="font-medium text-foreground">{course.syllabus.code} · {course.syllabus.name}</span>.
+          </p>
+          <Button asChild size="sm" variant="outline" className="mt-2">
+            <Link to={`/student/syllabuses/${course.syllabus.id}?fromCourse=${course.id}`}>
+              <BookOpen className="size-4" /> View Syllabus
+            </Link>
+          </Button>
+        </section>
+      )}
       <Syllabus course={course} />
     </>
   );
@@ -895,7 +909,19 @@ function SectionItem({
   index: number;
   defaultOpen: boolean;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const { hash } = useLocation();
+  const target = /^#lesson-(\d+)$/.exec(hash);
+  const targetId = target ? Number(target[1]) : null;
+  const hasTarget = targetId !== null && section.lessons.some((lesson) => lesson.id === targetId);
+  const [open, setOpen] = useState(defaultOpen || hasTarget);
+  useEffect(() => {
+    if (!hasTarget || targetId === null) return;
+    setOpen(true);
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`lesson-${targetId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [hasTarget, targetId]);
   const lessons = [...section.lessons].sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
   const totalSeconds = lessons.reduce((sum, lesson) => sum + (lesson.duration ?? 0), 0);
 
@@ -949,7 +975,7 @@ function AssessmentOutlineRow({ assessment, enrolled, canManage }: {
           {assessment.durationMinutes != null ? ` · ${assessment.durationMinutes} min` : ""}</p></div>
     </div>
     {canManage ? <Button asChild variant="outline" size="sm"><Link to={`/exams/${assessment.id}${returnQuery}`}>Manage assessment</Link></Button> :
-      enrolled ? <Button asChild variant="outline" size="sm"><Link to={`/student/exams/${assessment.id}/take`}>Open assessment</Link></Button> :
+      enrolled ? <Button asChild variant="outline" size="sm"><Link to={`/student/exams/${assessment.id}/prepare?returnTo=${encodeURIComponent(location.pathname + location.search + "#course-assessments")}`}>Open assessment</Link></Button> :
       <span className="text-xs text-muted-foreground">Enroll to take this assessment</span>}
   </li>;
 }
@@ -959,7 +985,7 @@ function LessonRow({ lesson }: { lesson: CourseDetailLesson }) {
   const duration = formatLessonDuration(lesson.duration);
 
   return (
-    <li className="flex items-center gap-3 px-3 py-1 text-sm">
+    <li id={`lesson-${lesson.id}`} className="flex scroll-mt-24 items-center gap-3 px-3 py-1 text-sm target:bg-muted/50">
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <span className={`min-w-0 flex-1 truncate ${lesson.locked ? "text-muted-foreground" : ""}`}>
         {lesson.title}

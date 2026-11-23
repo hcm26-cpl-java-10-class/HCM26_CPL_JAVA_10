@@ -19,6 +19,9 @@ import java.util.zip.ZipInputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import com.example.starter_project_2025.system.demo.syllabus.service.StudentSyllabusCatalogService;
+import com.example.starter_project_2025.system.demo.syllabus.storage.SyllabusMaterialFileService;
+import com.example.starter_project_2025.system.demo.syllabus.storage.SyllabusMaterialsArchiveService;
 
 @ExtendWith(MockitoExtension.class)
 class SyllabusMaterialsArchiveServiceTest {

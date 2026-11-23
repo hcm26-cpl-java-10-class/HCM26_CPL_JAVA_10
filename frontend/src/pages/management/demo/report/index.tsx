@@ -4,11 +4,10 @@ import { Button } from "@/components/ui/button";
 import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
 import type { CourseReportItem } from "@/types";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Award, BarChart3, BookOpen, CheckCircle2, Clock3, Download, Users } from "lucide-react";
+import { Activity, Award, BarChart3, BookOpen, CheckCircle2, Download, Users } from "lucide-react";
 import { useMemo } from "react";
 import { Navigate } from "react-router-dom";
 import { CourseCatalogPage } from "@/pages/management/demo/course/components/CourseCatalogPage";
-import { LearningHoursAnalytics } from "./LearningHoursAnalytics";
 
 const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
 
@@ -83,23 +82,6 @@ export default function CourseReportPage() {
             </div>
             <CourseCatalogPage embedded />
           </div>
-
-          <section className="rounded-xl border bg-card px-4 py-3" aria-labelledby="learning-hours-heading">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Clock3 className="size-5 text-blue-600" />
-                  <h2 id="learning-hours-heading" className="text-lg font-semibold">Learning hours analytics</h2>
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Learning time by student, department and course, with enrollment dates for reconciliation.
-                </p>
-              </div>
-            </div>
-            <div className="mt-3">
-              <LearningHoursAnalytics />
-            </div>
-          </section>
 
         </section>
       </MainLayout>

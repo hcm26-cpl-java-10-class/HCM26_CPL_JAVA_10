@@ -10,6 +10,8 @@ import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.exam.attempt.dto.ExamAttemptDTO;
 import com.example.starter_project_2025.system.exam.attempt.dto.ExamAttemptReviewDTO;
 import com.example.starter_project_2025.system.exam.attempt.dto.ExamAttemptSummaryDTO;
+import com.example.starter_project_2025.system.exam.attempt.dto.ExamPreparationDTO;
+import com.example.starter_project_2025.system.exam.attempt.dto.LearnerExamDTO;
 import com.example.starter_project_2025.system.exam.attempt.dto.SaveExamAnswerRequest;
 
 import com.example.starter_project_2025.system.question.core.mapper.QuestionTakerMapper;
@@ -75,6 +77,76 @@ public class ExamAttemptService {
     final ExamAttemptGradingFlow examAttemptGradingFlow = new ExamAttemptGradingFlow(this);
     final ExamAttemptMappingFlow examAttemptMappingFlow = new ExamAttemptMappingFlow(this);
     final ExamAttemptReviewFlow examAttemptReviewFlow = new ExamAttemptReviewFlow(this);
+
+    /** No attempts are created, expired, graded or saved while reading this overview. */
+    @Transactional(readOnly = true)
+    public ExamPreparationDTO preparation(Long examId, Long studentId) {
+        Exam exam = examRepository.findById(examId)
+                .filter(e -> Boolean.TRUE.equals(e.getIsActive()))
+                .orElseThrow(() -> new ResourceNotFoundException("Assessment is unavailable"));
+        List<ExamAttempt> attempts = attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(examId, studentId);
+        // Prior takers retain access to their own metadata, matching existing resume/review behavior.
+        if (attempts.isEmpty()) progressLockService.assertCanViewAssessment(exam, studentId);
+        ExamAttempt active = attempts.stream().filter(a -> a.getStatus() == ExamAttemptStatus.IN_PROGRESS)
+                .max(Comparator.comparingInt(ExamAttempt::getAttemptNumber)).orElse(null);
+        int remaining = Math.max(0, maxAttempts(exam) - attempts.size());
+        String reason = null;
+        int count = 0;
+        if (active == null) {
+            try {
+                ExamQuestionPoolVersion pool = poolVersionRepository.findTopByExam_IdOrderByVersionNumberDesc(examId).orElse(null);
+                if (pool == null) {
+                    var questions = activeQuestions(exam);
+                    count = questions.size();
+                    if (count == 0 || questions.stream().mapToInt(Question::getPoints).sum() <= 0)
+                        reason = "This assessment has no valid questions yet.";
+                } else {
+                    // Uses the same snapshot validation as start, without selecting or exposing questions.
+                    int available = (int) pool.getQuestions().stream().filter(this::isPoolSnapshotStructurallyValid).count();
+                    count = Boolean.TRUE.equals(pool.getRandomSelectionEnabled())
+                            ? Optional.ofNullable(pool.getRandomQuestionCount()).orElse(0) : available;
+                    if (count < 1 || count > available) reason = "This assessment's question pool is unavailable.";
+                }
+                progressLockService.assertUnlocked(exam, studentId);
+                ensureInvitationAccepted(examId, studentId);
+                if (remaining == 0) reason = "You have used all available attempts.";
+            } catch (AccessDeniedException | BadRequestException blocked) {
+                reason = blocked.getMessage();
+            }
+        } else {
+            count = active.getQuestions().size();
+            if (isExpired(active, Instant.now())) reason = "The active attempt's deadline has passed. Open it to finalize the expired attempt.";
+        }
+        final int attemptsRemaining = remaining;
+        List<ExamPreparationDTO.Attempt> summaries = attempts.stream()
+                .sorted(Comparator.comparingInt(ExamAttempt::getAttemptNumber).reversed())
+                .map(a -> new ExamPreparationDTO.Attempt(toSummary(a),
+                        resultAccessService.canStudentViewOwnSubmission(exam, a.getStatus())
+                        || (resultAccessService.canStudentViewScore(exam)
+                            && resultAccessService.canStudentViewAnswers(exam, a.getStatus(), attemptsRemaining))))
+                .toList();
+        return new ExamPreparationDTO(LearnerExamDTO.from(exam), count, exam.getPassScore(), attempts.size(), remaining,
+                active == null && reason == null, active != null, reason,
+                Boolean.TRUE.equals(exam.getAntiCheatEnabled()), Boolean.TRUE.equals(exam.getRequireFullscreen()),
+                Boolean.TRUE.equals(exam.getCameraProctoring()), summaries);
+    }
+
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<LearnerExamDTO> learnerExams(org.springframework.data.domain.Pageable pageable) {
+        return examRepository.findAll((org.springframework.data.jpa.domain.Specification<Exam>)
+                (exam, query, cb) -> cb.isTrue(exam.get("isActive")), pageable).map(LearnerExamDTO::from);
+    }
+
+    /** Loading /take may resume an existing attempt, but can never allocate a new one. */
+    public ExamAttemptDTO currentAttempt(Long examId, Long studentId) {
+        ExamAttempt attempt = attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(examId, studentId)
+                .stream().max(Comparator.comparingInt(ExamAttempt::getAttemptNumber))
+                .orElseThrow(() -> new ResourceNotFoundException("Open the assessment overview to start an attempt"));
+        if (!Boolean.TRUE.equals(attempt.getExam().getIsActive()))
+            throw new ResourceNotFoundException("Assessment is unavailable");
+        if (attempt.getStatus() == ExamAttemptStatus.IN_PROGRESS) expireIfOverdue(attempt.getId(), Instant.now());
+        return toResponse(attempt);
+    }
 
     public ExamAttemptDTO startOrResume(Long examId, Long studentId) {
         return startOrResume(examId, studentId, null);

@@ -24,6 +24,24 @@ public class ExamAttemptController {
 
     private final ExamAttemptService service;
 
+    @GetMapping("/learner")
+    public org.springframework.data.domain.Page<com.example.starter_project_2025.system.exam.attempt.dto.LearnerExamDTO> learnerExams(
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size) {
+        return service.learnerExams(org.springframework.data.domain.PageRequest.of(Math.max(0, page), Math.min(100, Math.max(1, size)),
+                org.springframework.data.domain.Sort.by("id").descending()));
+    }
+
+    @GetMapping("/{examId}/preparation")
+    public com.example.starter_project_2025.system.exam.attempt.dto.ExamPreparationDTO preparation(
+            @PathVariable Long examId, @AuthenticationPrincipal UserPrincipal principal) {
+        return service.preparation(examId, principal.getUser().getId());
+    }
+
+    @GetMapping("/{examId}/attempt/current")
+    public ExamAttemptDTO current(@PathVariable Long examId, @AuthenticationPrincipal UserPrincipal principal) {
+        return service.currentAttempt(examId, principal.getUser().getId());
+    }
+
     @PostMapping("/{examId}/attempt")
     public ResponseEntity<ExamAttemptDTO> startOrResume(
             @PathVariable Long examId,

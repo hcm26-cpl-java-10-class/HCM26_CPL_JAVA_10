@@ -5,7 +5,6 @@ import com.example.starter_project_2025.system.demo.lesson.LessonDTO;
 import com.example.starter_project_2025.system.demo.lesson.LessonService;
 import com.example.starter_project_2025.system.demo.section.SectionDTO;
 import com.example.starter_project_2025.system.demo.section.SectionService;
-import com.example.starter_project_2025.system.demo.syllabus.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -20,6 +19,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import com.example.starter_project_2025.system.demo.course.CourseFromSyllabusModels.*;
+import com.example.starter_project_2025.system.demo.syllabus.entity.Syllabus;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusRepository;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusSection;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusSectionRepository;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusStatus;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusTopic;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusTopicRepository;
 
 @ExtendWith(MockitoExtension.class)
 class CourseFromSyllabusServiceTest {
@@ -133,12 +139,12 @@ class CourseFromSyllabusServiceTest {
         syllabus.setStatus(SyllabusStatus.PUBLISHED);
         syllabus.setIsActive(true);
         when(syllabuses.findById(7L)).thenReturn(Optional.of(syllabus));
-        when(courses.existsByName("Java Fundamentals - Class 01")).thenReturn(true);
-        when(courses.existsByName("Java Fundamentals - Class 02")).thenReturn(true);
-        when(courses.existsByName("Java Fundamentals - Class 03")).thenReturn(false);
+        when(courses.existsByName("Java Fundamentals - Course 01")).thenReturn(true);
+        when(courses.existsByName("Java Fundamentals - Course 02")).thenReturn(true);
+        when(courses.existsByName("Java Fundamentals - Course 03")).thenReturn(false);
 
         NameSuggestion suggested = service.suggestName(7L, 1);
-        assertEquals("Java Fundamentals - Class 03", suggested.name());
+        assertEquals("Java Fundamentals - Course 03", suggested.name());
         assertEquals(3, suggested.sequence());
         assertEquals("Java Fundamentals", syllabus.getName());
         verifyNoInteractions(courseService, sectionService, lessonService);
