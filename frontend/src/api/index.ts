@@ -42,3 +42,4 @@ export * from "./features/demo/course_review.api";
 export * from "./features/ai-question-generator.api";
 
 export * from "./features/exam-supervisor.api";
+export * from "./features/demo/certificate-insights.api"
