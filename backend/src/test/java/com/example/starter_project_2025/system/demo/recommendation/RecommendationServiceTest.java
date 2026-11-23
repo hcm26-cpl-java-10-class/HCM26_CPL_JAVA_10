@@ -95,8 +95,17 @@ class RecommendationServiceTest {
         for(long id=1;id<=8;id++)assertTrue(service.acquire(id,10_000_000));
         assertFalse(service.acquire(9L,10_000_000));service.release(1L);assertTrue(service.acquire(9L,10_000_000));
     }
-    @Test void automaticReturnsAtMostSix() {
+    @Test void automaticReturnsBoundedShortlistForPagination() {
         when(data.automatic(1L)).thenReturn(result(java.util.stream.LongStream.range(1,20).mapToObj(RecommendationServiceTest::item).toList()));
-        assertEquals(6,service.automatic(1L).recommendations().size());
+        assertEquals(19,service.automatic(1L).recommendations().size());
+    }
+    @Test void providerSupportsMultiplePagesAndHidesIdsInReply() throws Exception {
+        var items=java.util.stream.LongStream.rangeClosed(1,30).mapToObj(RecommendationServiceTest::item).toList();
+        when(data.automatic(1L)).thenReturn(result(items));when(ai.isConfigured()).thenReturn(true);
+        when(ai.generateRecommendationJson(anyString(),anyList())).thenReturn(mapper.readTree("{\"reply\":\"Course 1 (ID 1), Course 7 (ID 7)\",\"courseIds\":[1,2,3,4,5,6,7,8]}"));
+        var response=service.ask(1L,request());
+        assertEquals(8,response.recommendations().size());assertFalse(response.reply().contains("ID"));
+        assertEquals(30,service.automatic(1L).recommendations().size());
+        assertEquals(30,RecommendationService.fallback(items,false,"UNAVAILABLE").recommendations().size());
     }
 }

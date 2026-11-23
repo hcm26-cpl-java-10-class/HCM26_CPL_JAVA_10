@@ -670,4 +670,46 @@ class ExamCourseLinkServiceTest {
             assertEquals(2, available.size());
         }
     }
+
+    private com.example.starter_project_2025.system.exam.controller.CourseExamController.WeightUpdate weight(long id, String value) {
+        return new com.example.starter_project_2025.system.exam.controller.CourseExamController.WeightUpdate(id, value==null?null:new BigDecimal(value));
+    }
+    private List<Exam> weightFixture() {
+        Exam a=new Exam(); a.setId(1L); a.setCourse(course1); a.setCourseWeight(new BigDecimal("70"));
+        Exam b=new Exam(); b.setId(2L); b.setCourse(course1); b.setCourseWeight(new BigDecimal("30"));
+        when(courseRepository.findLockedForAssessment(course1.getId())).thenReturn(Optional.of(course1));
+        when(examRepository.findByCourseLink(course1.getId(),null,null,false)).thenReturn(List.of(a,b));
+        return List.of(a,b);
+    }
+    @Test void batchWeightsApplyFinalTotalAtomicallyAndPreserveOtherMetadata() {
+        var exams=weightFixture();
+        when(examAccessGuard.canManage(any(),eq(adminPrincipal))).thenReturn(true);
+        service.updateWeights(course1.getId(),List.of(weight(1,"20.25"),weight(2,"79.75")),adminPrincipal);
+        assertEquals(new BigDecimal("20.25"),exams.get(0).getCourseWeight());
+        assertEquals(new BigDecimal("79.75"),exams.get(1).getCourseWeight());
+        assertSame(course1,exams.get(0).getCourse());
+        verify(examRepository).saveAll(exams);
+    }
+    @Test void batchWeightsRejectOverAllocationBeforeChangingAnyEntity() {
+        var exams=weightFixture(); when(examAccessGuard.canManage(any(),eq(adminPrincipal))).thenReturn(true);
+        assertThrows(RuntimeException.class,()->service.updateWeights(course1.getId(),List.of(weight(1,"80")),adminPrincipal));
+        assertEquals(new BigDecimal("70"),exams.get(0).getCourseWeight()); verify(examRepository,never()).saveAll(any());
+    }
+    @Test void batchWeightsDenyStudentAndNonOwnerWithoutWriting() {
+        weightFixture();
+        assertThrows(AccessDeniedException.class,()->service.updateWeights(course1.getId(),List.of(weight(1,"20")),studentPrincipal));
+        verify(examRepository,never()).saveAll(any());
+    }
+    @Test void batchWeightsRejectAnotherCoursesExam() {
+        weightFixture();
+        assertThrows(IllegalArgumentException.class,()->service.updateWeights(course1.getId(),List.of(weight(999,"20")),adminPrincipal));
+        verify(examRepository,never()).saveAll(any());
+    }
+    @Test void batchWeightsRejectInvalidValuesAndKeepIncompletePlansEditable() {
+        var exams=weightFixture(); when(examAccessGuard.canManage(any(),eq(adminPrincipal))).thenReturn(true);
+        for(String bad:List.of("-1","100.01","2.001"))
+            assertThrows(RuntimeException.class,()->service.updateWeights(course1.getId(),List.of(weight(1,bad)),adminPrincipal));
+        service.updateWeights(course1.getId(),List.of(weight(1,"0")),adminPrincipal);
+        assertEquals(BigDecimal.ZERO,exams.get(0).getCourseWeight());
+    }
 }

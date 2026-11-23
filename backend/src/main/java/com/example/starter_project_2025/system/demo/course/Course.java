@@ -1,6 +1,6 @@
 package com.example.starter_project_2025.system.demo.course;
 import com.example.starter_project_2025.system.demo.category.Category;
-import com.example.starter_project_2025.system.demo.syllabus.Syllabus;
+import com.example.starter_project_2025.system.demo.syllabus.entity.Syllabus;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;

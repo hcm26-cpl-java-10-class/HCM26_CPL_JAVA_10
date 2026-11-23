@@ -203,6 +203,40 @@ public class ExamCourseLinkService {
     }
 
     @Transactional
+    public void updateWeights(Long courseId,
+            List<com.example.starter_project_2025.system.exam.controller.CourseExamController.WeightUpdate> updates,
+            UserPrincipal principal) {
+        Course course = courseRepository.findLockedForAssessment(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
+        checkCanLink(course, principal);
+        if (updates == null || updates.isEmpty()) throw new IllegalArgumentException("Provide assessment weights");
+        var linked = examRepository.findByCourseLink(courseId, null, null, false);
+        var selected = new java.util.HashMap<Long, java.math.BigDecimal>();
+        ValidationContext ctx = new ValidationContext();
+        for (var update : updates) {
+            if (update == null || update.examId() == null || selected.containsKey(update.examId()))
+                throw new IllegalArgumentException("Invalid or duplicate assessment");
+            Exam exam = linked.stream().filter(e -> update.examId().equals(e.getId())).findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("Assessment is not linked to this course"));
+            if (!examAccessGuard.canManage(exam, principal)) throw new AccessDeniedException("You cannot edit this assessment");
+            var weight = update.weight();
+            if (weight == null) ctx.add("courseWeight", "Provide a weight (0 for practice)");
+            else validateWeightValue(weight, ctx);
+            selected.put(update.examId(), weight);
+        }
+        ctx.throwIfErrors();
+        var total = linked.stream().map(e -> selected.containsKey(e.getId()) ? selected.get(e.getId()) : e.getCourseWeight())
+                .filter(Objects::nonNull).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+        if (total.compareTo(java.math.BigDecimal.valueOf(100)) > 0) {
+            ctx.add("courseWeight", "Course assessment weights would exceed 100%");
+            ctx.throwIfErrors();
+        }
+        // Published gradebook snapshots and certificates are deliberately not written here.
+        linked.forEach(e -> { if (selected.containsKey(e.getId())) e.setCourseWeight(selected.get(e.getId())); });
+        examRepository.saveAll(linked.stream().filter(e -> selected.containsKey(e.getId())).toList());
+    }
+
+    @Transactional
     public CourseExamDTO linkExam(Long courseId, Long examId, Long sectionId, Long lessonId, UserPrincipal principal) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
@@ -367,11 +401,7 @@ public class ExamCourseLinkService {
     /** A course plan may be incomplete while being built, but cannot allocate over 100%. */
     public void validateWeight(Exam exam, java.math.BigDecimal weight, ValidationContext ctx) {
         if (weight == null) return;
-        if (weight.signum()<0 || weight.compareTo(java.math.BigDecimal.valueOf(100))>0
-                || weight.stripTrailingZeros().scale()>2) {
-            ctx.add("courseWeight", "Course weight must be 0–100 with at most two decimal places");
-            return;
-        }
+        if (!validateWeightValue(weight, ctx)) return;
         if (exam.getCourse()==null) return;
         Long courseId=exam.getCourse().getId();
         courseRepository.findLockedForAssessment(courseId);
@@ -381,6 +411,15 @@ public class ExamCourseLinkService {
                 .reduce(java.math.BigDecimal.ZERO,java.math.BigDecimal::add);
         if (others.add(weight).compareTo(java.math.BigDecimal.valueOf(100))>0)
             ctx.add("courseWeight", "Course assessment weights would exceed 100%. Other assessments use " + others + "%");
+    }
+
+    private boolean validateWeightValue(java.math.BigDecimal weight, ValidationContext ctx) {
+        if (weight.signum()<0 || weight.compareTo(java.math.BigDecimal.valueOf(100))>0
+                || weight.stripTrailingZeros().scale()>2) {
+            ctx.add("courseWeight", "Course weight must be 0-100 with at most two decimal places");
+            return false;
+        }
+        return true;
     }
 
     private void validateLessonCategory(Lesson lesson,com.example.starter_project_2025.system.exam.core.domain.ExamCategory category,ValidationContext ctx) {

@@ -28,6 +28,8 @@ export interface EnrollmentProgress {
   courseCompleted: boolean;
   assessmentStatus: string;
   overallScore: number | null;
+  /** Published outcomes for the owner of this enrollment; never private grading data. */
+  assessmentOutcomes?: Record<string, "PASSED" | "FAILED" | "COMPLETED" | "AWAITING_RESULTS" | "IN_PROGRESS" | "NOT_STARTED">;
   lastLessonId?: number | null;
   lastAccessedAt?: string | null;
   lessons: LessonProgressItem[];

@@ -19,6 +19,9 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     boolean existsByEventKey(String eventKey);
 
+    /** Thông báo có eventKey bắt đầu bằng prefix (mới nhất trước) - dùng cho cooldown nhắc học. */
+    List<Notification> findByEventKeyStartingWithOrderByCreatedAtDesc(String prefix);
+
     @Modifying
     @Query("update Notification notification set notification.targetUrl = :targetUrl "
             + "where notification.eventKey = :eventKey")

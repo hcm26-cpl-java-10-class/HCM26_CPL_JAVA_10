@@ -20,7 +20,6 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
-import { ExamPasswordDialog } from '@/pages/student/components/ExamPasswordDialog';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
@@ -153,15 +152,8 @@ function ExamCard({
 
     const canReview = canViewOwnSubmission;
 
-    const isDisabled = externallyDisabled || locked || outOfAttempts;
-
-    const buttonLabel = locked
-        ? 'Locked'
-        : isInProgress
-            ? 'Continue Exam'
-            : outOfAttempts
-                ? 'No Attempts Left'
-                : 'Start Exam';
+    const isDisabled = externallyDisabled;
+    const buttonLabel = 'View assessment';
 
     const displayedScore =
         attempt?.bestScore ?? attempt?.finalScore ?? null;
@@ -394,7 +386,6 @@ function ExamCard({
 
 export default function StudentExamList() {
     const navigate = useNavigate();
-    const [passwordExam, setPasswordExam] = useState<Exam | null>(null);
     const [page, setPage] = useState(1);
 
     const examsQuery = useQuery({
@@ -453,20 +444,7 @@ export default function StudentExamList() {
     );
 
     const openExam = (examId: number) => {
-        const exam = exams.find((item) => item.id === examId);
-        const isInProgress = attempts.some(
-            (item) => item.examId === examId && item.status === 'IN_PROGRESS',
-        );
-
-        if (lockById.get(examId)?.locked && !isInProgress) return;
-
-        if (exam?.hasPassword && !isInProgress) {
-            setPasswordExam(exam);
-            return;
-        }
-        navigate(`/student/exams/${examId}/take`, {
-            state: { returnTo: "/student/exams" },
-        });
+        navigate(`/student/exams/${examId}/prepare`, { state: { returnTo: "/student/exams" } });
     };
 
     return (
@@ -632,21 +610,7 @@ export default function StudentExamList() {
                 )}
             </div>
 
-            <ExamPasswordDialog
-                open={passwordExam !== null}
-                onOpenChange={(open) => {
-                    if (!open) setPasswordExam(null);
-                }}
-                examId={passwordExam?.id ?? null}
-                examTitle={passwordExam?.title ?? ''}
-                onSuccess={(examId, password) => {
-                    sessionStorage.setItem(`exam_pass_${examId}`, password);
-                    setPasswordExam(null);
-                    navigate(`/student/exams/${examId}/take`, {
-                        state: { returnTo: "/student/exams" },
-                    });
-                }}
-            />
+
         </MainLayout>
     );
 }

@@ -38,6 +38,17 @@ public class CourseExamController {
         return linkService.listByCourse(courseId, sectionId, lessonId, principal);
     }
 
+    public record WeightUpdate(Long examId, java.math.BigDecimal weight) {}
+
+    @PutMapping("/courses/{courseId}/exam-weights")
+    @PreAuthorize("hasAuthority('EXAM_UPDATE') and hasAnyRole('ADMIN', 'TEACHER')")
+    public ResponseEntity<Void> updateWeights(@PathVariable Long courseId,
+            @org.springframework.web.bind.annotation.RequestBody List<WeightUpdate> updates,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        linkService.updateWeights(courseId, updates, principal);
+        return ResponseEntity.noContent().build();
+    }
+
     /** Danh sach bai thi thuoc mot section. Giang vien course, admin, hoac sinh vien da ghi danh. */
     @GetMapping("/sections/{sectionId}/exams")
     @PreAuthorize("isAuthenticated()")
@@ -86,7 +97,7 @@ public class CourseExamController {
 
     /** Danh sach bai thi co the gan vao course nay */
     @GetMapping("/courses/{courseId}/exams/available")
-    @PreAuthorize("hasAuthority('EXAM_READ')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_READ')")
     public List<CourseExamDTO> availableExams(
             @PathVariable Long courseId,
             @AuthenticationPrincipal UserPrincipal principal
@@ -95,19 +106,19 @@ public class CourseExamController {
     }
 
     @GetMapping("/exams/link-options/courses")
-    @PreAuthorize("hasAuthority('EXAM_READ')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_READ')")
     public List<ExamLinkOptionDTO> courses() {
         return linkService.courseOptions();
     }
 
     @GetMapping("/exams/link-options/courses/{courseId}/sections")
-    @PreAuthorize("hasAuthority('EXAM_READ')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_READ')")
     public List<ExamLinkOptionDTO> sections(@PathVariable Long courseId) {
         return linkService.sectionOptions(courseId);
     }
 
     @GetMapping("/exams/link-options/sections/{sectionId}/lessons")
-    @PreAuthorize("hasAuthority('EXAM_READ')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_READ')")
     public List<ExamLinkOptionDTO> lessons(@PathVariable Long sectionId) {
         return linkService.lessonOptions(sectionId);
     }

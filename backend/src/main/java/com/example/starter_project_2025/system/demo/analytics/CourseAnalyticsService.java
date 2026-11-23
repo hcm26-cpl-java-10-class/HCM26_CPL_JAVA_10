@@ -292,7 +292,7 @@ public class CourseAnalyticsService {
      * @param courseId null = toàn hệ thống, ngược lại chỉ một khóa học
      * @param threshold ngưỡng không hoạt động (ngày)
      */
-    private List<LearnerRisk> computeLearnerRisks(Long courseId, int threshold) {
+    public List<LearnerRisk> computeLearnerRisks(Long courseId, int threshold) {
         List<CourseEnrollment> enrollments = courseId == null
                 ? analyticsRepository.findActiveEnrollmentsWithUserScope(null)
                 : analyticsRepository.findActiveEnrollmentsWithUser(courseId);
@@ -382,7 +382,7 @@ public class CourseAnalyticsService {
     }
 
     /** Hồ sơ rủi ro của một học viên (dùng nội bộ). */
-    private record LearnerRisk(
+    public record LearnerRisk(
             Long enrollmentId,
             Long userId,
             String studentName,
@@ -1156,7 +1156,7 @@ public class CourseAnalyticsService {
     // (cùng quy tắc với CourseReportService)
     // =====================================================================
 
-    private Course requireAccessibleCourse(Long courseId) {
+    public Course requireAccessibleCourse(Long courseId) {
         Course course = analyticsRepository.findCourseById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -1189,16 +1189,16 @@ public class CourseAnalyticsService {
         return List.of();
     }
 
-    private static boolean isAdmin(Authentication auth) {
+    static boolean isAdmin(Authentication auth) {
         return auth != null && auth.getAuthorities().stream()
                 .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()) || "ADMIN".equals(a.getAuthority()));
     }
 
-    private static double round1(double v) {
+    static double round1(double v) {
         return BigDecimal.valueOf(v).setScale(1, RoundingMode.HALF_UP).doubleValue();
     }
 
-    private static double round2(double v) {
+    static double round2(double v) {
         return BigDecimal.valueOf(v).setScale(2, RoundingMode.HALF_UP).doubleValue();
     }
 }

@@ -98,6 +98,13 @@ public class ExamProgressLockService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public void assertCanViewAssessment(Exam exam, Long userId) {
+        if (requiresCourseEnrollment(exam)
+                && (userId == null || (!enrollmentRepository.existsByUser_IdAndCourse_Id(userId, exam.getCourse().getId()) && !isStaff(userId))))
+            throw new AccessDeniedException("You must be enrolled in this course to view this assessment");
+    }
+
     private LockState evaluate(
             Exam exam,
             Set<Long> completed,
