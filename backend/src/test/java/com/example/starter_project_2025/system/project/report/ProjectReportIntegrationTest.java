@@ -27,6 +27,7 @@ import com.fasterxml.jackson.databind.*;
 import jakarta.persistence.EntityManager;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -35,11 +36,15 @@ import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.*;
 import org.springframework.transaction.support.TransactionTemplate;
 import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.*;
 import java.util.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,6 +57,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "milestone.mock.seed-enabled=false","milestone.submission.mock.seed-enabled=false"})
 @AutoConfigureMockMvc @ActiveProfiles({"test","artifact-real-scope"})
 class ProjectReportIntegrationTest {
+    @TempDir static Path exportDirectory;
+
+    @DynamicPropertySource
+    static void configureExportDirectory(DynamicPropertyRegistry registry) {
+        registry.add("app.project-reports.export.storage-path", () -> exportDirectory.toString());
+    }
+
     @Autowired MockMvc mvc; @Autowired ObjectMapper json; @Autowired EntityManager em; @Autowired TransactionTemplate tx;
     @Autowired RoleRepository roles; @Autowired PermissionRepository permissions; @Autowired UserRepository users;
     @Autowired UserDetailsService details; @Autowired RefreshTokenService tokens;
@@ -218,12 +230,12 @@ class ProjectReportIntegrationTest {
         byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin)).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
             assertThat(workbook.getNumberOfSheets()).isEqualTo(6);
-            var sheet=workbook.getSheet("Tiến độ dự án");
+            var sheet=workbook.getSheet("Project Progress");
             assertThat(sheet.getLastRowNum()-ProjectReportExcelWriter.HEADER_ROW).isEqualTo(3);
             var header=sheet.getRow(ProjectReportExcelWriter.HEADER_ROW);
             assertThat(header.getLastCellNum()).isEqualTo((short)7);
             assertThat(java.util.stream.StreamSupport.stream(header.spliterator(),false).map(org.apache.poi.ss.usermodel.Cell::getStringCellValue).toList())
-                    .containsExactly("Lớp","Nhóm phụ trách","Master Project","Sub-project","Trạng thái","Mentor","Tiến độ milestone");
+                    .containsExactly("Class","Assigned team","Master Project","Sub-project","Status","Mentor","Milestone progress");
             assertThat(sheet.getPaneInformation().isFreezePane()).isTrue();
             assertThat(sheet.getColumnWidth(2)).isGreaterThan(30*256);
         }
@@ -232,7 +244,7 @@ class ProjectReportIntegrationTest {
         Long downloads=tx.execute(status->em.createQuery("select count(a) from ProjectReportExportAudit a where a.jobId=:id and a.action='DOWNLOADED'",Long.class).setParameter("id",id).getSingleResult());
         assertThat(downloads).isEqualTo(1);
     }
-    @Test void excelKeepsFormulaLikeNamesAsTextAndDownloadExpiresAndClearsStoredFile() throws Exception {
+    @Test void excelKeepsFormulaLikeNamesAsTextAndRemainsDownloadableWithoutDatabaseBlob() throws Exception {
         tx.executeWithoutResult(status->em.find(Project.class,projectA).setName("=1+1, \"Tên Việt\"\nDòng hai"));
         var id=export("EXCEL",UUID.randomUUID());exports.process(id);
         byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin))
@@ -247,8 +259,13 @@ class ProjectReportIntegrationTest {
             assertThat(found).isTrue();
         }
         when(clock.instant()).thenReturn(now.plus(Duration.ofHours(25)));
-        mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin)).andExpect(status().isGone());
-        var job=jobs.findById(id).orElseThrow();assertThat(job.getFileContent()).isNull();assertThat(job.getStatus()).isEqualTo(ProjectReportExportJob.State.EXPIRED);
+        exports.recoverStaleJobs();
+        mvc.perform(get("/api/project-reports/exports/{id}",id).header("Authorization","Bearer "+admin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("READY")).andExpect(jsonPath("$.expiresAt").doesNotExist());
+        mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin))
+                .andExpect(status().isOk()).andExpect(content().bytes(bytes));
+        assertThat(Files.readAllBytes(exportDirectory.resolve(id + ".xlsx"))).isEqualTo(bytes);
+        assertThat(jobs.findById(id).orElseThrow().getFileContent()).isNull();
     }
     @Test void csvIsRejectedAndLegacyCsvDoesNotAppearOrBlockExcelExports() throws Exception {
         mvc.perform(post("/api/project-reports/exports").header("Authorization","Bearer "+admin)
@@ -268,6 +285,26 @@ class ProjectReportIntegrationTest {
         assertThat(jobs.findById(legacy).orElseThrow().getStatus()).isEqualTo(ProjectReportExportJob.State.QUEUED);
         mvc.perform(get("/api/project-reports/exports/{id}",legacy).header("Authorization","Bearer "+admin)).andExpect(status().isNotFound());
         mvc.perform(get("/api/project-reports/exports/{id}/download",legacy).header("Authorization","Bearer "+admin)).andExpect(status().isNotFound());
+    }
+    @Test void readyLegacyExcelCanStillBeDownloadedAndExpiredLegacyExcelIsHidden() throws Exception {
+        var legacyReady=export("EXCEL",UUID.randomUUID());
+        var legacyExpired=export("EXCEL",UUID.randomUUID());
+        byte[] original="legacy file content".getBytes(StandardCharsets.UTF_8);
+        tx.executeWithoutResult(status->{
+            var ready=em.find(ProjectReportExportJob.class,legacyReady);
+            ready.setStatus(ProjectReportExportJob.State.READY);
+            ready.setFileName("legacy.xlsx");
+            ready.setProjectIds("[" + projectA + "]");
+            ready.setFileContent(original);
+            em.find(ProjectReportExportJob.class,legacyExpired).setStatus(ProjectReportExportJob.State.EXPIRED);
+        });
+        mvc.perform(get("/api/project-reports/exports").header("Authorization","Bearer "+admin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(legacyReady.toString()));
+        mvc.perform(get("/api/project-reports/exports/{id}/download",legacyReady).header("Authorization","Bearer "+admin))
+                .andExpect(status().isOk()).andExpect(content().bytes(original));
+        mvc.perform(get("/api/project-reports/exports/{id}/download",legacyExpired).header("Authorization","Bearer "+admin))
+                .andExpect(status().isNotFound());
     }
     @Test void exportDownloadRechecksProjectScopeAndPermissionRevocation() throws Exception {
         tx.executeWithoutResult(status->em.find(Milestone.class,milestoneA).editActive(null,now.minusSeconds(1),UUID.randomUUID(),now));
@@ -435,7 +472,7 @@ class ProjectReportIntegrationTest {
             var sheet=workbook.getSheetAt(0);
             assertThat(sheet.getLastRowNum()-ProjectReportExcelWriter.HEADER_ROW).isEqualTo(8);
             for(int index=ProjectReportExcelWriter.HEADER_ROW+1;index<=sheet.getLastRowNum();index++)
-                assertThat(sheet.getRow(index).getCell(4).getStringCellValue()).isEqualTo("Lên kế hoạch");
+                assertThat(sheet.getRow(index).getCell(4).getStringCellValue()).isEqualTo("Planning");
         }
         tx.executeWithoutResult(status->{
             assertThat(em.find(Project.class,root).getStatus()).isEqualTo(ProjectStatus.ACTIVE);
@@ -541,10 +578,10 @@ class ProjectReportIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
             assertThat(workbook.getNumberOfSheets()).isEqualTo(6);
-            var sheet=workbook.getSheet("Tiến độ dự án");assertThat(sheet.getLastRowNum()-ProjectReportExcelWriter.HEADER_ROW).isEqualTo(3);
+            var sheet=workbook.getSheet("Project Progress");assertThat(sheet.getLastRowNum()-ProjectReportExcelWriter.HEADER_ROW).isEqualTo(3);
             StringBuilder text=new StringBuilder();sheet.forEach(row->row.forEach(cell->text.append(cell.toString()).append("|")));
-            assertThat(text.toString()).contains("Split commerce","Auth","Payment","Phần việc trực tiếp Master","Đang triển khai","0/1 được chấp nhận","1/1 được chấp nhận","Chưa có milestone")
-                    .doesNotContain("Progress (%)","Master progress","Tổng backlog");
+            assertThat(text.toString()).contains("Split commerce","Auth","Payment","Master project work","In progress","0/1 accepted","1/1 accepted","No milestones")
+                    .doesNotContain("Progress (%)","Master progress","Total backlog");
         }
     }
     @Test void filteredExcelContainsOnlyPermittedModuleAndKeepsErdMilestoneWithNoBacklog() throws Exception {
@@ -558,10 +595,10 @@ class ProjectReportIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
             assertThat(workbook.getNumberOfSheets()).isEqualTo(6);
-            var assignments=workbook.getSheet("Tiến độ dự án");
+            var assignments=workbook.getSheet("Project Progress");
             assertThat(assignments.getLastRowNum()-ProjectReportExcelWriter.HEADER_ROW).isEqualTo(1);
             assertThat(assignments.getRow(ProjectReportExcelWriter.HEADER_ROW+1).getCell(3).getStringCellValue()).contains("Auth");
-            assertThat(assignments.getRow(ProjectReportExcelWriter.HEADER_ROW+1).getCell(6).getStringCellValue()).isEqualTo("1/2 được chấp nhận");
+            assertThat(assignments.getRow(ProjectReportExcelWriter.HEADER_ROW+1).getCell(6).getStringCellValue()).isEqualTo("1/2 accepted");
             StringBuilder text=new StringBuilder();assignments.forEach(row->row.forEach(cell->text.append(cell.toString()).append("|")));
             assertThat(text.toString()).doesNotContain("Payment");
         }
@@ -607,7 +644,7 @@ class ProjectReportIntegrationTest {
         try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
             StringBuilder text=new StringBuilder();
             workbook.forEach(sheet->sheet.forEach(row->row.forEach(cell->text.append(cell.toString()).append("|"))));
-            assertThat(text.toString()).doesNotContain("Thành viên không hoạt động","Không có hoạt động trong cửa sổ theo dõi");
+            assertThat(text.toString()).doesNotContain("Inactive member","No activity in the tracking period");
         }
         tx.executeWithoutResult(status->{
             assertThat(em.find(ProjectTeam.class,teamA).getProjectId()).isEqualTo(projectA);
@@ -629,6 +666,56 @@ class ProjectReportIntegrationTest {
         em.flush();return row;
     }
 
+    @Test void milestoneDeliveriesIdentifyClassesForTeamsWithTheSameNameInApiAndExcel() throws Exception {
+        String firstClass = "Frontend React 2026 - Lớp 01", secondClass = "Frontend React 2026 - Lớp 02";
+        Long secondClassId = tx.execute(status -> {
+            var first = em.find(ProjectTeam.class, teamA);
+            first.getTrainingClass().setName(firstClass);
+            first.setTeamName("Nhóm 1");
+            workspace(first);
+            var school = school(em.find(Tenant.class, tenantId), 804L);
+            school.setName(secondClass);
+            var second = team(school, mentorId, ProjectStatus.ACTIVE, sourceId);
+            second.setTeamName("Nhóm 1");
+            workspace(second);
+            milestone(second, now.plusSeconds(86400), false);
+            return school.getId();
+        });
+        var result = body(mvc.perform(get("/api/project-reports").header("Authorization", "Bearer " + admin))
+                .andExpect(status().isOk()));
+        assertThat(result.get("deliveries")).hasSize(2);
+        Map<Long, String> classes = new HashMap<>();
+        for (var row : result.get("deliveries")) {
+            classes.put(row.get("classId").asLong(), row.get("className").asText());
+            assertThat(row.get("teamName").asText()).isEqualTo("Nhóm 1");
+        }
+        assertThat(classes).containsExactlyInAnyOrderEntriesOf(Map.of(classId, firstClass, secondClassId, secondClass));
+        report(mentor).andExpect(status().isOk())
+                .andExpect(jsonPath("$.deliveries.length()").value(1))
+                .andExpect(jsonPath("$.deliveries[0].classId").value(classId))
+                .andExpect(jsonPath("$.deliveries[0].className").value(firstClass));
+        mvc.perform(get("/api/project-reports").header("Authorization", "Bearer " + admin).param("classId", secondClassId.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.deliveries.length()").value(1))
+                .andExpect(jsonPath("$.deliveries[0].className").value(secondClass));
+        UUID id = UUID.fromString(body(mvc.perform(post("/api/project-reports/exports")
+                .header("Authorization", "Bearer " + admin).header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"format\":\"EXCEL\"}"))
+                .andExpect(status().isAccepted())).get("id").asText());
+        exports.process(id);
+        byte[] bytes = mvc.perform(get("/api/project-reports/exports/{id}/download", id).header("Authorization", "Bearer " + admin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try (var book = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            assertThat(book.getNumberOfSheets()).isEqualTo(6);
+            var sheet = book.getSheet("Milestones and Submissions");
+            assertThat(sheet.getRow(ProjectReportExcelWriter.HEADER_ROW).getCell(2).getStringCellValue()).isEqualTo("Class");
+            List<String> exportedClasses = new ArrayList<>();
+            for (int index = ProjectReportExcelWriter.HEADER_ROW + 1; index <= sheet.getLastRowNum(); index++) {
+                exportedClasses.add(sheet.getRow(index).getCell(2).getStringCellValue());
+                assertThat(sheet.getRow(index).getCell(3).getStringCellValue()).isEqualTo("Nhóm 1");
+            }
+            assertThat(exportedClasses).containsExactlyInAnyOrder(firstClass, secondClass);
+        }
+    }
     @Test void kpiStatesUseLatestVersionBeforePaginationAndNeverIncludeAnotherMentorsTeam() throws Exception {
         tx.executeWithoutResult(status->{
             workspace(em.find(ProjectTeam.class,teamA));workspace(em.find(ProjectTeam.class,teamB));
@@ -677,16 +764,16 @@ class ProjectReportIntegrationTest {
         byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         try(var book=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
-            var riskSheet=book.getSheet("Cảnh báo");
+            var riskSheet=book.getSheet("Risks");
             List<String> reasons=new ArrayList<>();
             for(int index=ProjectReportExcelWriter.HEADER_ROW+1;index<=riskSheet.getLastRowNum();index++)
                 reasons.add(riskSheet.getRow(index).getCell(5).getStringCellValue());
-            assertThat(reasons).containsExactlyInAnyOrder("Bài nộp cần chỉnh sửa","Bài nộp bị từ chối");
-            var deliveries=book.getSheet("Milestone và bài nộp");
+            assertThat(reasons).containsExactlyInAnyOrder("Submission needs changes","Submission rejected");
+            var deliveries=book.getSheet("Milestones and Submissions");
             List<String> attention=new ArrayList<>();
             for(int index=ProjectReportExcelWriter.HEADER_ROW+1;index<=deliveries.getLastRowNum();index++)
-                attention.add(deliveries.getRow(index).getCell(13).getStringCellValue());
-            assertThat(attention).contains("Bài nộp cần chỉnh sửa","Bài nộp bị từ chối").doesNotContain("Bài nộp cần xử lý");
+                attention.add(deliveries.getRow(index).getCell(14).getStringCellValue());
+            assertThat(attention).contains("Submission needs changes","Submission rejected").doesNotContain("Submission needs attention");
         }
     }
 
@@ -752,18 +839,18 @@ class ProjectReportIntegrationTest {
         byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         try(var book=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
-            var sheet=book.getSheet("Cảnh báo");
+            var sheet=book.getSheet("Risks");
             List<String> kinds=new ArrayList<>();
             for(int index=ProjectReportExcelWriter.HEADER_ROW+1;index<=sheet.getLastRowNum();index++)
                 kinds.add(sheet.getRow(index).getCell(0).getStringCellValue());
             assertThat(kinds).containsExactly("Milestone");
-            var overview=book.getSheet("Tổng quan");
+            var overview=book.getSheet("Overview");
             Map<String,Double> metrics=new HashMap<>();
             for(int index=ProjectReportExcelWriter.HEADER_ROW+1;index<=overview.getLastRowNum();index++) {
                 var row=overview.getRow(index);
                 metrics.put(row.getCell(0).getStringCellValue(),row.getCell(1).getNumericCellValue());
             }
-            assertThat(metrics).containsEntry("Task quá hạn",4d).containsEntry("Rủi ro cần xử lý",1d);
+            assertThat(metrics).containsEntry("Overdue tasks",4d).containsEntry("Risks needing attention",1d);
         }
     }
 
@@ -984,23 +1071,23 @@ class ProjectReportIntegrationTest {
             try (var all = WorkbookFactory.create(new ByteArrayInputStream(files[0]));
                  var selected = WorkbookFactory.create(new ByteArrayInputStream(files[1]))) {
                 Map<String,Double> metrics = new HashMap<>();
-                var overview = selected.getSheet("Tổng quan");
+                var overview = selected.getSheet("Overview");
                 for (int index = ProjectReportExcelWriter.HEADER_ROW + 1; index <= overview.getLastRowNum(); index++) {
                     var row = overview.getRow(index);
                     metrics.put(row.getCell(0).getStringCellValue(), row.getCell(1).getNumericCellValue());
                 }
-                assertThat(metrics).containsEntry("Công việc · Todo", 2d)
-                        .containsEntry("Công việc · In progress", moduleOnly ? 1d : 2d)
-                        .containsEntry("Công việc · Review", moduleOnly ? 1d : 2d)
-                        .containsEntry("Công việc · Done", moduleOnly ? 1d : 2d);
-                for (String sheet : List.of("Tiến độ dự án", "Tổng quan", "Milestone và bài nộp", "Cảnh báo", "Hoạt động")) {
+                assertThat(metrics).containsEntry("Work items · To do", 2d)
+                        .containsEntry("Work items · In progress", moduleOnly ? 1d : 2d)
+                        .containsEntry("Work items · In review", moduleOnly ? 1d : 2d)
+                        .containsEntry("Work items · Done", moduleOnly ? 1d : 2d);
+                for (String sheet : List.of("Project Progress", "Overview", "Milestones and Submissions", "Risks", "Activity")) {
                     assertThat(excelDataRows(selected.getSheet(sheet))).as("%s, moduleOnly=%s", sheet, moduleOnly)
                             .isEqualTo(excelDataRows(all.getSheet(sheet)));
                     assertThat(selected.getSheet(sheet).getRow(3).getCell(0).getStringCellValue())
                             .isEqualTo(all.getSheet(sheet).getRow(3).getCell(0).getStringCellValue());
                 }
-                var work = selected.getSheet("Trạng thái công việc");
-                assertThat(work.getRow(3).getCell(0).getStringCellValue()).contains("Công việc trong Sprint:");
+                var work = selected.getSheet("Sprint Work");
+                assertThat(work.getRow(3).getCell(0).getStringCellValue()).contains("Sprint:");
                 assertThat(work.getLastRowNum() - ProjectReportExcelWriter.HEADER_ROW).isEqualTo(1);
                 var sprint = work.getRow(ProjectReportExcelWriter.HEADER_ROW + 1);
                 assertThat(sprint.getCell(6).getNumericCellValue()).isEqualTo(1d);
@@ -1008,10 +1095,10 @@ class ProjectReportIntegrationTest {
                 assertThat(sprint.getCell(8).getNumericCellValue()).isEqualTo(1d);
                 assertThat(sprint.getCell(9).getNumericCellValue()).isZero();
                 assertThat(sprint.getCell(10).getNumericCellValue()).isEqualTo(2d);
-                assertThat(all.getSheet("Trạng thái công việc").getLastRowNum() - ProjectReportExcelWriter.HEADER_ROW)
+                assertThat(all.getSheet("Sprint Work").getLastRowNum() - ProjectReportExcelWriter.HEADER_ROW)
                         .isEqualTo(3); // Two Sprints and work that has no Sprint.
                 String masterCode = tx.execute(status -> em.find(Project.class, master).getCode());
-                assertThat(selected.getSheet("Tiến độ dự án").getRow(ProjectReportExcelWriter.HEADER_ROW + 1)
+                assertThat(selected.getSheet("Project Progress").getRow(ProjectReportExcelWriter.HEADER_ROW + 1)
                         .getCell(2).getStringCellValue()).contains(masterCode);
             }
         }
@@ -1184,7 +1271,7 @@ class ProjectReportIntegrationTest {
         String expectedCode=tx.execute(status->em.find(Project.class,projectA).getCode());
         try(var book=WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
             assertThat(book.getNumberOfSheets()).isEqualTo(6);
-            var events=book.getSheet("Hoạt động");
+            var events=book.getSheet("Activity");
             assertThat(events.getLastRowNum()-ProjectReportExcelWriter.HEADER_ROW).isEqualTo(206);
             for(int row=ProjectReportExcelWriter.HEADER_ROW+1;row<=events.getLastRowNum();row++)
                 assertThat(events.getRow(row).getCell(2).getStringCellValue()).isEqualTo(expectedCode);
@@ -1207,11 +1294,11 @@ class ProjectReportIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         try (var book = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
             assertThat(book.getNumberOfSheets()).isEqualTo(6);
-            assertThat(book.getSheetAt(0).getRow(3).getCell(0).getStringCellValue()).contains("Chương trình: #801");
-            assertThat(book.getSheet("Tổng quan").getRow(ProjectReportExcelWriter.HEADER_ROW+1).getCell(1).getCellType())
+            assertThat(book.getSheetAt(0).getRow(3).getCell(0).getStringCellValue()).contains("Program: #801");
+            assertThat(book.getSheet("Overview").getRow(ProjectReportExcelWriter.HEADER_ROW+1).getCell(1).getCellType())
                     .isEqualTo(org.apache.poi.ss.usermodel.CellType.NUMERIC);
-            assertThat(book.getSheet("Milestone và bài nộp").getRow(ProjectReportExcelWriter.HEADER_ROW+1).getCell(7).getStringCellValue()).isEqualTo("Chờ duyệt");
-            var events = book.getSheet("Hoạt động");
+            assertThat(book.getSheet("Milestones and Submissions").getRow(ProjectReportExcelWriter.HEADER_ROW+1).getCell(8).getStringCellValue()).isEqualTo("Pending review");
+            var events = book.getSheet("Activity");
             assertThat(events.getLastRowNum()-ProjectReportExcelWriter.HEADER_ROW).isEqualTo(1);
             assertThat(events.getRow(ProjectReportExcelWriter.HEADER_ROW+1).getCell(2).getStringCellValue())
                     .isEqualTo(tx.execute(status -> em.find(Project.class,projectA).getCode()));

@@ -163,8 +163,8 @@ public class ProjectReportService {
                     project.getParentProject()==null?null:project.getParentProject().getId(),entry.depth(),
                     root.getId(),root.getCode(),root.getName(),"project:"+root.getId(),
                     school.getId(),school.getName(),school.getCohortId(),school.getCohortName(),school.getProgramId(),school.getProgramName(),
-                    owner==null?null:owner.getId(),owner==null?null:owner.getTeamName(),mentorId,source.mentors().getOrDefault(mentorId,"Chưa gán Mentor"),
-                    templateId,templateName,versionId,version==null?"Chưa xác định phiên bản":version.getVersion(),
+                    owner==null?null:owner.getId(),owner==null?null:owner.getTeamName(),mentorId,source.mentors().getOrDefault(mentorId,"No mentor assigned"),
+                    templateId,templateName,versionId,version==null?"Version unavailable":version.getVersion(),
                     entry.workspaceId(),statuses.evaluate(project.getStatus(),source.unpublishedMasters().contains(project.getId())),
                     statuses.evaluate(root.getStatus(),source.unpublishedMasters().contains(root.getId())),
                     ProjectReportQueryRepository.counts(items),(int)stages.stream().filter(stage->stage.lifecycleStatus()==MilestoneLifecycleStatus.ACCEPTED).count(),
@@ -192,8 +192,8 @@ public class ProjectReportService {
     private boolean eq(Long wanted,Long actual){return wanted==null||Objects.equals(wanted,actual);}
     private void validate(Filter filter) {
         if(filter.page()<0||filter.size()<1||filter.size()>50||filter.q().length()>120)throw invalid("Invalid page, page size or search text");
-        if(filter.createdFrom()!=null&&filter.createdTo()!=null&&filter.createdFrom().isAfter(filter.createdTo()))throw invalid("Ngày bắt đầu phải trước hoặc bằng ngày kết thúc");
-        if((filter.status()==Status.CANCELLED||filter.masterStatus()==Status.CANCELLED)&&!filter.includeCancelled())throw invalid("Bật hiển thị Project đã hủy trước khi lọc CANCELLED");
+        if(filter.createdFrom()!=null&&filter.createdTo()!=null&&filter.createdFrom().isAfter(filter.createdTo()))throw invalid("The start date must be on or before the end date");
+        if((filter.status()==Status.CANCELLED||filter.masterStatus()==Status.CANCELLED)&&!filter.includeCancelled())throw invalid("Include cancelled projects before filtering by Cancelled");
         for(Long id:new Long[]{filter.programId(),filter.cohortId(),filter.classId(),filter.mentorId(),filter.templateId(),filter.sourceVersionId(),filter.teamId(),filter.projectId(),filter.masterId(),filter.workSprintId()})
             if(id!=null&&id<=0)throw invalid("Filter IDs must be positive");
     }
@@ -204,7 +204,7 @@ public class ProjectReportService {
         check(filter.masterId(),rows,SubProject::masterId);
     }
     private void check(Long id,List<SubProject> rows,Function<SubProject,Long> field) {
-        if(id!=null&&rows.stream().noneMatch(row->id.equals(field.apply(row))))throw new AccessDeniedException("Bộ lọc nằm ngoài dữ liệu báo cáo được phép xem");
+        if(id!=null&&rows.stream().noneMatch(row->id.equals(field.apply(row))))throw new AccessDeniedException("The filter is outside your report access scope");
     }
     private ResponseStatusException invalid(String message){return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,message);}
 }

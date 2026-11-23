@@ -100,7 +100,7 @@ public class ProjectReportKpiService {
             int checklistDone = version == null ? (int) stage.getChecklistItems().stream().filter(item -> item.isCompleted()).count()
                     : (int) version.getChecklist().stream().filter(item -> item.isCompleted()).count();
             deliveries.add(new DeliveryRow(stage.getId(), stage.getTitle(), row.id(), row.code(), row.name(), row.masterId(),
-                    row.masterName(), row.teamId(), row.teamName(), stage.isMandatory(), state, artifact,
+                    row.masterName(), row.classId(), row.className(), row.teamId(), row.teamName(), stage.isMandatory(), state, artifact,
                     currentSubmission ? submission.getId() : null, versionNumber,
                     stage.getDeadline(), "DRAFT".equals(artifact) ? null : submission == null ? source.submissions().containsKey(stage.getId())
                     ? source.submissions().get(stage.getId()).latestAt() : null : submission.getSubmittedAt(),

@@ -17,12 +17,12 @@ import java.util.Map;
 public class ProjectReportErrors {
     @ExceptionHandler(ResponseStatusException.class) public ResponseEntity<?> status(ResponseStatusException error){return response(error.getStatusCode().value(),error.getReason());}
     @ExceptionHandler(AccessDeniedException.class) public ResponseEntity<?> denied(AccessDeniedException error){return response(403,error.getMessage());}
-    @ExceptionHandler(AuthenticationCredentialsNotFoundException.class) public ResponseEntity<?> login(Exception error){return response(401,"Phiên đăng nhập không hợp lệ");}
+    @ExceptionHandler(AuthenticationCredentialsNotFoundException.class) public ResponseEntity<?> login(Exception error){return response(401,"Your session is invalid");}
     @ExceptionHandler({org.springframework.validation.BindException.class,org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
             org.springframework.http.converter.HttpMessageNotReadableException.class})
-    public ResponseEntity<?> invalid(Exception error){return response(422,"Bộ lọc hoặc yêu cầu xuất báo cáo không hợp lệ");}
-    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class) public ResponseEntity<?> conflict(Exception error){return response(409,"Yêu cầu đã thay đổi; thử lại với cùng mã yêu cầu");}
-    @ExceptionHandler(Exception.class) public ResponseEntity<?> failed(Exception error){log.error("Project report failed",error);return response(500,"Không thể tải báo cáo; vui lòng thử lại");}
+    public ResponseEntity<?> invalid(Exception error){return response(422,"The report filters or export request are invalid");}
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class) public ResponseEntity<?> conflict(Exception error){return response(409,"The request has changed. Retry with the same request key.");}
+    @ExceptionHandler(Exception.class) public ResponseEntity<?> failed(Exception error){log.error("Project report failed",error);return response(500,"Could not load the report. Try again.");}
     private ResponseEntity<?> response(int status,String message){String id=TaskRequestContext.currentCorrelationId();return ResponseEntity.status(status).header("X-Correlation-ID",id)
-            .body(Map.of("status",status,"message",message==null?"Không thể xử lý yêu cầu báo cáo":message,"correlationId",id));}
+            .body(Map.of("status",status,"message",message==null?"Could not process the report request":message,"correlationId",id));}
 }

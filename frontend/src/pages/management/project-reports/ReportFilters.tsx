@@ -30,7 +30,7 @@ function FilterSelect({ label, value, options, onChange }: {
     <Label className="text-xs text-muted-foreground">{label}</Label>
     <Select value={value === undefined ? "all" : String(value)} onValueChange={next => onChange(next === "all" ? undefined : Number(next))}>
       <SelectTrigger className="w-full min-w-0" aria-label={label}><SelectValue /></SelectTrigger>
-      <SelectContent><SelectItem value="all">Tất cả</SelectItem>
+      <SelectContent><SelectItem value="all">All</SelectItem>
         {options.map(item => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}
       </SelectContent>
     </Select>
@@ -51,16 +51,16 @@ export function ReportFilterToolbar({ options, value, applied, onChange, onApply
     + Number(!!applied.risk && applied.risk !== "ALL");
 
   const name = (label: string, id: number | undefined, values: ReportOption[]) => id === undefined ? "" : `${label}: ${values.find(item => item.id === id)?.name ?? `#${id}`}`;
-  const riskLabels: Record<ReportRisk, string> = { ALL: "", OVERDUE: "Đang quá hạn", NEEDS_ATTENTION: "Đang cần xử lý", LATE_SUBMISSION: "Lịch sử nộp trễ" };
-  const appliedLabels = [name("Chương trình", applied.programId, options.programs), name("Cohort", applied.cohortId, options.cohorts),
-    name("Lớp", applied.classId, options.classes), name("Team", applied.teamId, options.teams), name("Mentor", applied.mentorId, options.mentors),
-    name("Đề bài", applied.templateId, options.templates), name("Phiên bản", applied.sourceVersionId, options.versions),
+  const riskLabels: Record<ReportRisk, string> = { ALL: "", OVERDUE: "Overdue", NEEDS_ATTENTION: "Needs attention", LATE_SUBMISSION: "Late submissions" };
+  const appliedLabels = [name("Program", applied.programId, options.programs), name("Cohort", applied.cohortId, options.cohorts),
+    name("Class", applied.classId, options.classes), name("Team", applied.teamId, options.teams), name("Mentor", applied.mentorId, options.mentors),
+    name("Project template", applied.templateId, options.templates), name("Version", applied.sourceVersionId, options.versions),
     name("Master", applied.masterId, options.projects ?? []), name("Project", applied.projectId, options.projects ?? []),
     applied.masterStatus ? "Master: " + statusLabels[applied.masterStatus] : "", applied.status ? "Sub-project: " + statusLabels[applied.status] : "", applied.risk ? riskLabels[applied.risk] : "",
-    applied.createdFrom ? `Từ ${applied.createdFrom}` : "", applied.createdTo ? `Đến ${applied.createdTo}` : "",
-    applied.q ? `Tìm: ${applied.q}` : ""].filter(Boolean);
+    applied.createdFrom ? `From ${applied.createdFrom}` : "", applied.createdTo ? `To ${applied.createdTo}` : "",
+    applied.q ? `Search: ${applied.q}` : ""].filter(Boolean);
 
-  return <div className="space-y-2.5" aria-label="Bộ lọc báo cáo"><div className="flex min-w-0 flex-wrap items-center gap-2.5">
+  return <div className="space-y-2.5" aria-label="Report filters"><div className="flex min-w-0 flex-wrap items-center gap-2.5">
     <Popover open={open} onOpenChange={setOpen}>
       <TooltipWrapper content="Filter data">
         <PopoverTrigger asChild>
@@ -73,56 +73,56 @@ export function ReportFilterToolbar({ options, value, applied, onChange, onApply
       <PopoverContent align="start" aria-label="Filters" className="flex max-h-[min(36rem,var(--radix-popover-content-available-height))] w-96 max-w-[calc(100vw-2rem)] flex-col p-0">
         <div className="flex shrink-0 items-center justify-between border-b px-3 py-2.5">
           <span className="flex items-center gap-2 text-sm font-medium"><Filter size={14} />Filters</span>
-          <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" aria-label="Đóng bộ lọc" onClick={() => setOpen(false)}><X size={14} /></Button>
+          <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" aria-label="Close filters" onClick={() => setOpen(false)}><X size={14} /></Button>
         </div>
         <form className="flex min-h-0 flex-col overflow-hidden" onSubmit={event => { event.preventDefault(); onApply(); setOpen(false); }}>
           <div className="grid min-h-0 gap-3 overflow-y-auto p-3">
-            <FilterSelect label="Chương trình đào tạo" value={value.programId} options={options.programs} onChange={programId => update({ programId, cohortId: undefined, classId: undefined, teamId: undefined, masterId: undefined, projectId: undefined, workSprintId: undefined })} />
-            <FilterSelect label="Khóa / Cohort" value={value.cohortId} options={options.cohorts.filter(c => !value.programId || options.classes.some(item => item.programId === value.programId && item.cohortId === c.id))} onChange={cohortId => update({ cohortId, classId: undefined, teamId: undefined, masterId: undefined, projectId: undefined, workSprintId: undefined })} />
-            <FilterSelect label="Lớp" value={value.classId} options={classes} onChange={classId => update({ classId, teamId: undefined, masterId: undefined, projectId: undefined, workSprintId: undefined })} />
+            <FilterSelect label="Training program" value={value.programId} options={options.programs} onChange={programId => update({ programId, cohortId: undefined, classId: undefined, teamId: undefined, masterId: undefined, projectId: undefined, workSprintId: undefined })} />
+            <FilterSelect label="Cohort" value={value.cohortId} options={options.cohorts.filter(c => !value.programId || options.classes.some(item => item.programId === value.programId && item.cohortId === c.id))} onChange={cohortId => update({ cohortId, classId: undefined, teamId: undefined, masterId: undefined, projectId: undefined, workSprintId: undefined })} />
+            <FilterSelect label="Class" value={value.classId} options={classes} onChange={classId => update({ classId, teamId: undefined, masterId: undefined, projectId: undefined, workSprintId: undefined })} />
             <FilterSelect label="Master Project" value={value.masterId} options={masters} onChange={masterId => update({ masterId, teamId: undefined, projectId: undefined, workSprintId: undefined })} />
             <FilterSelect label="Team" value={value.teamId} options={teams} onChange={teamId => update({ teamId, projectId: undefined, workSprintId: undefined })} />
-            <FilterSelect label="Project / phần việc cụ thể" value={value.projectId} options={projects.filter(p => (!value.masterId || p.masterId === value.masterId) && (!value.teamId || p.teamId === value.teamId))} onChange={projectId => update({ projectId, workSprintId: undefined })} />
+            <FilterSelect label="Project / workstream" value={value.projectId} options={projects.filter(p => (!value.masterId || p.masterId === value.masterId) && (!value.teamId || p.teamId === value.teamId))} onChange={projectId => update({ projectId, workSprintId: undefined })} />
             <FilterSelect label="Mentor" value={value.mentorId} options={options.mentors} onChange={mentorId => update({ mentorId })} />
             <FilterSelect label="Master Project template" value={value.templateId} options={options.templates} onChange={templateId => update({ templateId, sourceVersionId: undefined })} />
-            <FilterSelect label="Phiên bản đề bài" value={value.sourceVersionId} options={options.versions.filter(v => !value.templateId || v.templateId === value.templateId)} onChange={sourceVersionId => update({ sourceVersionId })} />
+            <FilterSelect label="Template version" value={value.sourceVersionId} options={options.versions.filter(v => !value.templateId || v.templateId === value.templateId)} onChange={sourceVersionId => update({ sourceVersionId })} />
             <div className="grid gap-1.5">
-              <Label className="text-xs text-muted-foreground">Trạng thái Master</Label>
+              <Label className="text-xs text-muted-foreground">Master status</Label>
               <Select value={value.masterStatus ?? "all"} onValueChange={status => update({ masterStatus: status === "all" ? undefined : status as ReportStatus })}>
-                <SelectTrigger className="w-full" aria-label="Trạng thái Master"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="all">Tất cả</SelectItem>{reportStatuses(value.masterStatus ? [value.masterStatus] : []).map(status => <SelectItem key={status} value={status}>{statusLabels[status]}</SelectItem>)}</SelectContent>
+                <SelectTrigger className="w-full" aria-label="Master status"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">All</SelectItem>{reportStatuses(value.masterStatus ? [value.masterStatus] : []).map(status => <SelectItem key={status} value={status}>{statusLabels[status]}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="grid gap-1.5">
-              <Label className="text-xs text-muted-foreground">Trạng thái Sub-project</Label>
+              <Label className="text-xs text-muted-foreground">Sub-project status</Label>
               <Select value={value.status ?? "all"} onValueChange={status => update({ status: status === "all" ? undefined : status as ReportStatus })}>
-                <SelectTrigger className="w-full" aria-label="Trạng thái Sub-project"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="all">Tất cả</SelectItem>{reportStatuses(value.status ? [value.status] : []).map(status => <SelectItem key={status} value={status}>{statusLabels[status]}</SelectItem>)}</SelectContent>
+                <SelectTrigger className="w-full" aria-label="Sub-project status"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">All</SelectItem>{reportStatuses(value.status ? [value.status] : []).map(status => <SelectItem key={status} value={status}>{statusLabels[status]}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="grid gap-1.5">
-              <Label className="text-xs text-muted-foreground">Cảnh báo Project</Label>
+              <Label className="text-xs text-muted-foreground">Project risk</Label>
               <Select value={value.risk ?? "ALL"} onValueChange={risk => update({ risk: risk as ReportRisk })}>
-                <SelectTrigger className="w-full" aria-label="Cảnh báo Project"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="ALL">Tất cả</SelectItem><SelectItem value="OVERDUE">Đang quá hạn</SelectItem>
-                  <SelectItem value="NEEDS_ATTENTION">Đang cần xử lý</SelectItem><SelectItem value="LATE_SUBMISSION">Lịch sử nộp trễ</SelectItem>
+                <SelectTrigger className="w-full" aria-label="Project risk"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="ALL">All</SelectItem><SelectItem value="OVERDUE">Overdue</SelectItem>
+                  <SelectItem value="NEEDS_ATTENTION">Needs attention</SelectItem><SelectItem value="LATE_SUBMISSION">Late submissions</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-1.5"><Label className="text-xs text-muted-foreground" htmlFor="report-from">Ngày tạo Project từ</Label><Input id="report-from" type="date" value={value.createdFrom ?? ""} max={value.createdTo} onChange={event => update({ createdFrom: event.target.value || undefined })} /></div>
-            <div className="grid gap-1.5"><Label className="text-xs text-muted-foreground" htmlFor="report-to">Ngày tạo Project đến</Label><Input id="report-to" type="date" value={value.createdTo ?? ""} min={value.createdFrom} onChange={event => update({ createdTo: event.target.value || undefined })} /></div>
+            <div className="grid gap-1.5"><Label className="text-xs text-muted-foreground" htmlFor="report-from">Project created from</Label><Input id="report-from" type="date" value={value.createdFrom ?? ""} max={value.createdTo} onChange={event => update({ createdFrom: event.target.value || undefined })} /></div>
+            <div className="grid gap-1.5"><Label className="text-xs text-muted-foreground" htmlFor="report-to">Project created to</Label><Input id="report-to" type="date" value={value.createdTo ?? ""} min={value.createdFrom} onChange={event => update({ createdTo: event.target.value || undefined })} /></div>
           </div>
           <div className="flex shrink-0 justify-end gap-2 border-t p-3">
-            <Button type="button" variant="outline" size="sm" onClick={onReset}>Đặt lại</Button>
-            <Button type="submit" size="sm">Áp dụng</Button>
+            <Button type="button" variant="outline" size="sm" onClick={onReset}>Reset</Button>
+            <Button type="submit" size="sm">Apply</Button>
           </div>
         </form>
       </PopoverContent>
     </Popover>
     <div className="min-w-0 flex-1 sm:max-w-sm [&_input]:h-8 [&_input]:bg-card [&_input]:text-xs [&_input]:shadow-xs"><SearchInput compact search={value.q ?? ""} onSearchChange={q => update({ q: q.slice(0, 120) })} /></div>
-    {(activeCount > 0 || !!applied.q) && <Button type="button" variant="ghost" size="sm" onClick={onReset}>Đặt lại</Button>}
-    <span className="ml-auto hidden pr-1 text-[11px] text-muted-foreground md:inline">{activeCount ? `${activeCount} điều kiện đã áp dụng` : "Tất cả dữ liệu trong phạm vi của bạn"}</span>
+    {(activeCount > 0 || !!applied.q) && <Button type="button" variant="ghost" size="sm" onClick={onReset}>Reset</Button>}
+    <span className="ml-auto hidden pr-1 text-[11px] text-muted-foreground md:inline">{activeCount ? `${activeCount} filters applied` : "All data in your scope"}</span>
     </div>
-    {appliedLabels.length > 0 && <div className="flex flex-wrap gap-1.5 border-t pt-3" aria-label="Điều kiện đã áp dụng">{appliedLabels.map(label => <Badge key={label} variant="secondary" className="max-w-full rounded-md px-2 py-1 text-[11px] font-normal whitespace-normal">{label}</Badge>)}</div>}
+    {appliedLabels.length > 0 && <div className="flex flex-wrap gap-1.5 border-t pt-3" aria-label="Applied filters">{appliedLabels.map(label => <Badge key={label} variant="secondary" className="max-w-full rounded-md px-2 py-1 text-[11px] font-normal whitespace-normal">{label}</Badge>)}</div>}
   </div>;
 }

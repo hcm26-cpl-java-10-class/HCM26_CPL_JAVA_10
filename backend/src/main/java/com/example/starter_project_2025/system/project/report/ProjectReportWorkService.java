@@ -28,7 +28,7 @@ public class ProjectReportWorkService {
     public Result evaluate(ProjectReportService.Snapshot snapshot) {
         Map<Long,SubProject> rows = snapshot.matching().stream().collect(Collectors.toMap(SubProject::id, row -> row));
         if (rows.isEmpty()) {
-            if (snapshot.filter().workSprintId() != null) throw new AccessDeniedException("Sprint nằm ngoài kết quả báo cáo");
+            if (snapshot.filter().workSprintId() != null) throw new AccessDeniedException("This sprint is outside the report results");
             return new Result(BacklogCounts.empty(), new WorkReport(BacklogCounts.empty(), List.of(), null));
         }
         Set<Long> teams = rows.values().stream().map(SubProject::teamId).filter(Objects::nonNull).collect(Collectors.toSet());
@@ -83,7 +83,7 @@ public class ProjectReportWorkService {
         BacklogCounts selectedCounts = all;
         if (selected != null) {
             var chosen = result.stream().filter(row -> selected.equals(row.id())).findFirst()
-                    .orElseThrow(() -> new AccessDeniedException("Sprint nằm ngoài kết quả báo cáo"));
+                    .orElseThrow(() -> new AccessDeniedException("This sprint is outside the report results"));
             selectedCounts = chosen.backlog();
         }
         return new Result(all, new WorkReport(selectedCounts, result, selected));

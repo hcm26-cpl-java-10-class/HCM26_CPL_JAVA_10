@@ -75,7 +75,7 @@ public final class ProjectReportDtos {
                             BacklogCounts backlog) { }
     public record WorkReport(BacklogCounts backlog, List<SprintRow> sprints, Long selectedSprintId) { }
     public record DeliveryRow(UUID milestoneId, String title, Long projectId, String projectCode,
-                              String projectName, Long masterId, String masterName, Long teamId, String teamName,
+                              String projectName, Long masterId, String masterName, Long classId, String className, Long teamId, String teamName,
                               boolean mandatory, String milestoneStatus, String artifactStatus,
                               UUID submissionId, Integer version, Instant deadline, Instant submittedAt,
                               String reviewerName, int checklistCompleted, int checklistTotal, String attention) { }
@@ -94,5 +94,5 @@ public final class ProjectReportDtos {
                             List<RiskRow> risks, ActivityPage activities) { }
     public record ExportRequest(Filter filters, String format) { }
     public record ExportView(UUID id, String status, String format, String fileName, Instant createdAt,
-                             Instant generatedAt, Instant expiresAt, Long rowCount, String message) { }
+                             Instant generatedAt, Long rowCount, String message) { }
 }

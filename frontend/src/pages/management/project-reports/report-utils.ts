@@ -2,7 +2,7 @@ import { isAxiosError } from "axios";
 import type { ReportStatus } from "@/types/features/project-report";
 
 export const statusLabels: Record<ReportStatus, string> = {
-  DRAFT: "Bản nháp", PLANNING: "Lên kế hoạch", ACTIVE: "Đang triển khai", COMPLETED: "Hoàn thành", CANCELLED: "Đã hủy",
+  DRAFT: "Draft", PLANNING: "Planning", ACTIVE: "In progress", COMPLETED: "Completed", CANCELLED: "Cancelled",
 };
 export const statusColors: Record<ReportStatus, string> = {
   DRAFT: "bg-slate-400", PLANNING: "bg-violet-400", ACTIVE: "bg-blue-500", COMPLETED: "bg-emerald-500", CANCELLED: "bg-rose-400",
@@ -14,7 +14,7 @@ export function reportStatuses(additional: ReportStatus[] = []): ReportStatus[] 
     || status !== "CANCELLED" && additional.includes(status));
 }
 export function reportDate(value: string | null, timeZone: string) {
-  return value ? new Date(value).toLocaleString("vi-VN", { timeZone }) : "—";
+  return value ? new Date(value).toLocaleString("en-GB", { timeZone }) : "—";
 }
 export async function reportError(error: unknown): Promise<string> {
   if (isAxiosError(error) && error.response?.data instanceof Blob) {
@@ -23,9 +23,9 @@ export async function reportError(error: unknown): Promise<string> {
   return reportErrorMessage(error);
 }
 export function reportErrorMessage(error: unknown): string {
-  if (!isAxiosError(error)) return "Không thể tải báo cáo. Hãy thử lại.";
-  if (error.response?.status === 401) return "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.";
+  if (!isAxiosError(error)) return "Could not load the report. Try again.";
+  if (error.response?.status === 401) return "Your session has ended. Sign in again.";
   if (typeof error.response?.data?.message === "string") return error.response.data.message;
-  if (error.response?.status === 403) return "Bạn không có quyền xem dữ liệu trong phạm vi này.";
-  return "Không thể tải báo cáo. Hãy kiểm tra kết nối và thử lại.";
+  if (error.response?.status === 403) return "You do not have access to the data in this scope.";
+  return "Could not load the report. Check your connection and try again.";
 }

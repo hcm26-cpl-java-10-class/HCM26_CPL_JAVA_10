@@ -22,7 +22,7 @@ import { readReportFilters, reportDefaults as defaults, writeReportFilters } fro
 import "./report-dashboard.css";
 
 function LoadingReport() {
-  return <div className="space-y-3.5" role="status" aria-label="Đang tổng hợp báo cáo">
+  return <div className="space-y-3.5" role="status" aria-label="Loading report">
     <div className="grid grid-cols-2 gap-3 @[600px]/reports:grid-cols-3 @[960px]/reports:grid-cols-6">{[0, 1, 2, 3, 4, 5].map(key =>
       <Card key={key}><CardContent className="space-y-4"><Skeleton className="h-4 w-28" /><Skeleton className="h-10 w-16" /><Skeleton className="h-3 w-40" /></CardContent></Card>)}</div>
     <div className="grid gap-3.5 @[960px]/reports:grid-cols-2 @[1020px]/reports:grid-cols-3">
@@ -78,46 +78,46 @@ function ReportContent({ owner }: { owner: string }) {
         <div aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-blue-600 shadow-xs dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300"><BarChart3 className="size-5" /></div>
         <div className="min-w-0"><p data-report-eyebrow className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Project Management</p>
           <h1 className="text-lg font-semibold leading-tight tracking-tight">Project Dashboard</h1>
-          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">Theo dõi phân công Master và Sub-project, trạng thái dự án, backlog và các cảnh báo.</p>
+          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">Track master projects, sub-project assignments, backlog, and risks.</p>
         </div>
       </div>
-      <Button variant="outline" size="sm" className="bg-card text-xs shadow-xs" disabled={fetching} onClick={() => void refresh()}><RefreshCw className={fetching ? "size-3.5 animate-spin" : "size-3.5"} />Làm mới dữ liệu</Button>
+      <Button variant="outline" size="sm" className="bg-card text-xs shadow-xs" disabled={fetching} onClick={() => void refresh()}><RefreshCw className={fetching ? "size-3.5 animate-spin" : "size-3.5"} />Refresh data</Button>
     </header>
     {options.isPending ? <LoadingReport /> : options.isError ?
-      <Card><CardContent className="flex flex-wrap items-center gap-3"><AlertCircle className="size-5 text-destructive" /><p role="alert" className="flex-1 text-sm">{reportErrorMessage(options.error)}</p><Button variant="outline" onClick={() => void options.refetch()}>Thử lại</Button></CardContent></Card> : <>
+      <Card><CardContent className="flex flex-wrap items-center gap-3"><AlertCircle className="size-5 text-destructive" /><p role="alert" className="flex-1 text-sm">{reportErrorMessage(options.error)}</p><Button variant="outline" onClick={() => void options.refetch()}>Retry</Button></CardContent></Card> : <>
       <Tabs value={view} onValueChange={setView} className="gap-3.5">
       <div className="flex min-w-0 flex-col gap-3 @[1020px]/reports:flex-row @[1020px]/reports:items-start">
       <div className="min-w-0 flex-1"><ReportFilterToolbar options={options.data} value={draft} applied={applied} onChange={setDraft} onApply={() => setApplied({ ...draft, workSprintId: undefined, page: 0 })} onReset={reset} /></div>
-      <TabsList aria-label="Các phần báo cáo" className="group-data-[orientation=horizontal]/tabs:h-auto max-w-full shrink-0 flex-wrap justify-start gap-1 bg-slate-100/80 p-1 dark:bg-muted">
-        <TabsTrigger value="overview" className="text-xs">Tổng quan</TabsTrigger><TabsTrigger value="work" className="text-xs">Sprint & Task</TabsTrigger><TabsTrigger value="deliveries" className="text-xs">Milestone & Bài nộp</TabsTrigger>
+      <TabsList aria-label="Report sections" className="group-data-[orientation=horizontal]/tabs:h-auto max-w-full shrink-0 flex-wrap justify-start gap-1 bg-slate-100/80 p-1 dark:bg-muted">
+        <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger><TabsTrigger value="work" className="text-xs">Sprint & Task</TabsTrigger><TabsTrigger value="deliveries" className="text-xs">Milestones & Submissions</TabsTrigger>
       </TabsList>
       </div>
       {query.isPending ? <LoadingReport /> : query.isError ?
-        <Card><CardContent className="flex flex-wrap items-center gap-3"><AlertCircle className="size-5 text-destructive" /><p role="alert" className="flex-1 text-sm">{reportErrorMessage(query.error)}</p><Button variant="outline" onClick={() => void query.refetch()}>Thử lại</Button></CardContent></Card> : <>
+        <Card><CardContent className="flex flex-wrap items-center gap-3"><AlertCircle className="size-5 text-destructive" /><p role="alert" className="flex-1 text-sm">{reportErrorMessage(query.error)}</p><Button variant="outline" onClick={() => void query.refetch()}>Retry</Button></CardContent></Card> : <>
         <TabsContent value="overview" className="space-y-3.5">
         <ReportOverview data={query.data} onFilter={quickFilter} onViewProjects={viewProjects} />
         <div data-report-projects-activity className="grid min-w-0 items-start gap-3.5">
-        <section ref={projectsSection} id="project-report-masters" tabIndex={-1} aria-label="Danh sách dự án" className="scroll-mt-4 space-y-3 pt-1 outline-none">
+        <section ref={projectsSection} id="project-report-masters" tabIndex={-1} aria-label="Project list" className="scroll-mt-4 space-y-3 pt-1 outline-none">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2.5"><div aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-card"><Layers3 className="size-4 text-muted-foreground" /></div>
-              <div><h2 className="text-sm font-semibold tracking-tight">Master Project và các Project con</h2><p className="mt-0.5 text-[11px] leading-5 text-muted-foreground">Mở Master để xem phân công, trạng thái và backlog từng Sub-project.</p></div></div>
-            <span className="rounded-full border bg-card px-2.5 py-1 text-[11px] text-muted-foreground"><strong className="font-semibold text-foreground">{query.data.total}</strong> Master Project trong kết quả</span>
+              <div><h2 className="text-sm font-semibold tracking-tight">Master Projects and Sub-projects</h2><p className="mt-0.5 text-[11px] leading-5 text-muted-foreground">Expand a master project to see assignments, status, and backlog for each sub-project.</p></div></div>
+            <span className="rounded-full border bg-card px-2.5 py-1 text-[11px] text-muted-foreground"><strong className="font-semibold text-foreground">{query.data.total}</strong> matching master projects</span>
           </div>
           {!query.data.content.length ? <Card className="shadow-none"><CardContent className="flex flex-col items-center py-10 text-center">
             <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-muted"><FolderSearch className="size-6 text-muted-foreground" /></div>
-            <h3 className="font-semibold">Chưa có dự án phù hợp</h3><p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">Thử điều chỉnh bộ lọc hoặc kiểm tra các team đã được tạo Project trong phạm vi bạn phụ trách.</p>
-            <Button className="mt-4" variant="outline" onClick={reset}>Đặt lại bộ lọc</Button>
+            <h3 className="font-semibold">No matching projects</h3><p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">Adjust the filters or check which teams have projects in your scope.</p>
+            <Button className="mt-4" variant="outline" onClick={reset}>Reset filters</Button>
           </CardContent></Card> : <ReportMasters masters={query.data.content} timeZone={query.data.timeZone} />}
-          <div className="flex flex-wrap items-center justify-between gap-3 text-sm"><p className="text-xs text-muted-foreground">Trang <strong className="font-medium text-foreground">{query.data.page + 1}</strong> / {pages} · {query.data.total} Master Project</p><div className="flex gap-2">
-            <Button variant="outline" size="sm" className="bg-card" disabled={query.isFetching || !applied.page} onClick={() => setApplied({ ...applied, page: (applied.page ?? 0) - 1 })}><ArrowLeft className="size-3.5" />Trước</Button>
-            <Button variant="outline" size="sm" className="bg-card" disabled={query.isFetching || ((applied.page ?? 0) + 1) * query.data.size >= query.data.total} onClick={() => setApplied({ ...applied, page: (applied.page ?? 0) + 1 })}>Sau<ArrowRight className="size-3.5" /></Button></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm"><p className="text-xs text-muted-foreground">Page <strong className="font-medium text-foreground">{query.data.page + 1}</strong> / {pages} · {query.data.total} Master Project</p><div className="flex gap-2">
+            <Button variant="outline" size="sm" className="bg-card" disabled={query.isFetching || !applied.page} onClick={() => setApplied({ ...applied, page: (applied.page ?? 0) - 1 })}><ArrowLeft className="size-3.5" />Previous</Button>
+            <Button variant="outline" size="sm" className="bg-card" disabled={query.isFetching || ((applied.page ?? 0) + 1) * query.data.size >= query.data.total} onClick={() => setApplied({ ...applied, page: (applied.page ?? 0) + 1 })}>Next<ArrowRight className="size-3.5" /></Button></div></div>
         </section>
         <ReportActivity key={owner + JSON.stringify({ ...applied, page: undefined, size: undefined, workSprintId: undefined })} owner={owner} filters={applied} initial={query.data.activities} timeZone={query.data.timeZone} />
         </div>
         </TabsContent>
         <TabsContent value="work"><ReportWork work={query.data.work} timeZone={query.data.timeZone} onSelect={workSprintId => quickFilter({ workSprintId })} /></TabsContent>
         <TabsContent value="deliveries"><ReportDeliveries rows={query.data.deliveries} bucket={params.get("delivery") ?? "ALL"} onBucket={setDelivery} timeZone={query.data.timeZone} /></TabsContent>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] leading-5 text-muted-foreground"><span className="inline-flex items-center gap-1.5"><Clock3 className="size-3.5" />Dữ liệu lúc {reportDate(query.data.asOf, query.data.timeZone)}</span><span>{query.data.timeZone}</span><span>Trong phạm vi bạn được cấp quyền.</span></div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] leading-5 text-muted-foreground"><span className="inline-flex items-center gap-1.5"><Clock3 className="size-3.5" />Data as of {reportDate(query.data.asOf, query.data.timeZone)}</span><span>{query.data.timeZone}</span><span>Within your access scope.</span></div>
       </>}
       </Tabs>
       {options.data.canExport && <ReportExports owner={owner} filters={applied} timeZone={options.data.timeZone} disabled={query.isPending || query.isError || query.isFetching} />}

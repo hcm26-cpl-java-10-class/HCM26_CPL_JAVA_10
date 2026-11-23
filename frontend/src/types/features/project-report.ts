@@ -58,6 +58,7 @@ export interface ReportSprint {
 }
 export interface ReportDelivery {
   milestoneId: string; title: string; projectId: number; projectCode: string; projectName: string; masterId: number; masterName: string;
+  classId: number; className: string;
   teamId: number | null; teamName: string | null; mandatory: boolean; milestoneStatus: string; artifactStatus: string | null;
   submissionId: string | null; version: number | null; deadline: string | null; submittedAt: string | null;
   reviewerName: string | null; checklistCompleted: number; checklistTotal: number; attention: string;
@@ -73,7 +74,7 @@ export interface ReportActivityHistory {
 }
 export interface ReportActivityHistoryFilters { activityFrom: string; activityTo: string; historyPage: number; historySize: number; before?: string }
 export interface ReportExport {
-  id: string; status: "QUEUED" | "RUNNING" | "READY" | "FAILED" | "EXPIRED"; format: "EXCEL";
-  fileName: string | null; createdAt: string; generatedAt: string | null; expiresAt: string | null;
+  id: string; status: "QUEUED" | "RUNNING" | "READY" | "FAILED"; format: "EXCEL";
+  fileName: string | null; createdAt: string; generatedAt: string | null;
   rowCount: number | null; message: string | null;
 }
