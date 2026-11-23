@@ -1,10 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.submission.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import jakarta.persistence.Version;
+import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
+import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -17,10 +14,16 @@ import java.util.UUID;
 @Table(name = "milestone_artifact_drafts")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class MilestoneArtifactDraft {
+public class MilestoneArtifactDraft implements org.springframework.data.domain.Persistable<UUID> {
     @Id
     @Column(name = "milestone_id", nullable = false, updatable = false)
     private UUID milestoneId;
+
+    /** One draft per milestone: the draft shares the milestone's primary key. */
+    @MapsId
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "milestone_id", foreignKey = @ForeignKey(name = "fk_artifact_draft_milestone"))
+    private Milestone milestone;
 
     @Column(name = "project_id", updatable = false)
     private Long projectId;
@@ -59,10 +62,28 @@ public class MilestoneArtifactDraft {
     @Column(nullable = false)
     private long version;
 
-    public static MilestoneArtifactDraft create(UUID milestoneId, Long projectId, Long teamId, Long tenantId,
+    /**
+     * The id is assigned from the milestone (shared primary key) and the version is primitive, so Spring Data
+     * cannot infer "new" from either; track it explicitly so a new draft is persisted instead of merged.
+     */
+    @Transient
+    private boolean persisted;
+
+    @PostLoad
+    @PostPersist
+    void markPersisted() { persisted = true; }
+
+    @Override
+    public UUID getId() { return milestoneId; }
+
+    @Override
+    public boolean isNew() { return !persisted; }
+
+    public static MilestoneArtifactDraft create(Milestone milestone, Long projectId, Long teamId, Long tenantId,
             UUID actorId, Instant now, String checklistJson) {
         MilestoneArtifactDraft draft = new MilestoneArtifactDraft();
-        draft.milestoneId = milestoneId;
+        draft.milestone = milestone;
+        draft.milestoneId = milestone.getId();
         draft.projectId = projectId;
         draft.teamId = teamId;
         draft.tenantId = tenantId;
@@ -72,9 +93,9 @@ public class MilestoneArtifactDraft {
         return draft;
     }
 
-    public static MilestoneArtifactDraft create(UUID milestoneId, Long projectId, Long tenantId,
+    public static MilestoneArtifactDraft create(Milestone milestone, Long projectId, Long tenantId,
             UUID actorId, Instant now, String checklistJson) {
-        return create(milestoneId, projectId, null, tenantId, actorId, now, checklistJson);
+        return create(milestone, projectId, null, tenantId, actorId, now, checklistJson);
     }
 
     public void update(UUID actorId, Instant now, String repositoryUrl, String deploymentUrl,

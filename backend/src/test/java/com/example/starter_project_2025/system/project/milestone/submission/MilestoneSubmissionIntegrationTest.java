@@ -44,6 +44,7 @@ class MilestoneSubmissionIntegrationTest {
     @Autowired SubmissionAuditRepository audits;
     @Autowired SubmissionOutboxRepository outbox;
     @Autowired MilestoneRepository milestones;
+    @Autowired com.example.starter_project_2025.system.project.rubric.repository.RubricVersionRepository rubricVersions;
     @Autowired MilestoneSubmissionRepository submissions;
     @Autowired SubmissionVersionRepository versions;
     @Autowired com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneArtifactSubmissionRepository artifactSubmissions;
@@ -56,7 +57,7 @@ class MilestoneSubmissionIntegrationTest {
         UUID submitterId = UUID.fromString(detail.get("studentId").asText());
         Instant submittedAt = Instant.now();
         artifactSubmissions.saveAndFlush(MilestoneArtifactSubmission.submit(
-                MockMilestoneData.TENANT_ID, projectId, milestoneId, submitterId, 2,
+                MockMilestoneData.TENANT_ID, projectId, milestones.findById(milestoneId).orElseThrow(), submitterId, 2,
                 "https://github.com/example/actual-product",
                 "https://actual-product.example.com",
                 "Actual release notes from the artifact form",
@@ -286,7 +287,7 @@ class MilestoneSubmissionIntegrationTest {
         UUID actor = UUID.randomUUID();
         Milestone milestone = milestones.saveAndFlush(Milestone.create(MockMilestoneData.TENANT_ID,
                 MockMilestoneData.PROJECT_ID, MockMilestoneData.TEAM_ID, "Not open " + UUID.randomUUID(),
-                null, now.plusSeconds(3600), true, MockMilestoneData.RUBRIC_ID,
+                null, now.plusSeconds(3600), true, seededRubric(),
                 UUID.nameUUIDFromBytes("teacher@example.com".getBytes(java.nio.charset.StandardCharsets.UTF_8)), LatePolicyType.NO_LATE, null, null, actor, now));
         MilestoneSubmission submission = submissions.saveAndFlush(MilestoneSubmission.create(milestone, MockMilestoneData.TEAM_ID,
                 "Team", UUID.randomUUID(), "Student", UUID.nameUUIDFromBytes("teacher@example.com".getBytes(java.nio.charset.StandardCharsets.UTF_8)), "Reviewer", now));
@@ -322,7 +323,7 @@ class MilestoneSubmissionIntegrationTest {
         Milestone milestone = Milestone.create(MockMilestoneData.TENANT_ID, MockMilestoneData.PROJECT_ID,
                 MockMilestoneData.TEAM_ID,
                 "Closed request-changes test " + UUID.randomUUID(), null, now.minusSeconds(3600), true,
-                MockMilestoneData.RUBRIC_ID, UUID.nameUUIDFromBytes("teacher@example.com".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                seededRubric(), UUID.nameUUIDFromBytes("teacher@example.com".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
                 LatePolicyType.NO_LATE, null, null, actor, now.minusSeconds(7200));
         milestone.openForWork(actor, now.minusSeconds(7200));
         milestone.start(actor, now.minusSeconds(7100));
@@ -369,25 +370,35 @@ class MilestoneSubmissionIntegrationTest {
     }
 
     @Test
-    void lockedGradeAndApprovedWaiverCompleteTheMandatoryMilestoneRequirement() throws Exception {
+    void projectIsFinalizedOnlyAfterItsMandatoryMilestoneIsWaived() throws Exception {
         Instant now = Instant.now();
         UUID actor = UUID.randomUUID();
         Long projectId = 902L;
         Long teamId = 903L;
         Milestone milestone = Milestone.create(MockMilestoneData.TENANT_ID, projectId, teamId,
                 "Mandatory completion gate", null, now.plusSeconds(3600), true,
-                MockMilestoneData.RUBRIC_ID, MockMilestoneData.TECHNICAL_REVIEWER_ID,
+                seededRubric(), MockMilestoneData.TECHNICAL_REVIEWER_ID,
                 LatePolicyType.NO_LATE, null, null, actor, now);
         milestone.openForWork(actor, now);
         milestone = milestones.saveAndFlush(milestone);
 
+        // The grade can no longer be locked ahead of time: finalizing requires every mandatory milestone to be done.
+        mockMvc.perform(post("/api/projects/{projectId}/teams/{teamId}/finalize", projectId, teamId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"finalScore\":8.25}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PROJECT_NOT_READY"));
         mockMvc.perform(post("/api/projects/{projectId}/teams/{teamId}/final-grade/lock", projectId, teamId)
                         .header("Authorization", bearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"finalScore\":8.25}"))
+                .andExpect(status().isConflict());
+        mockMvc.perform(get("/api/projects/{projectId}/teams/{teamId}/completion", projectId, teamId)
+                        .header("Authorization", bearer()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.completed").value(false))
-                .andExpect(jsonPath("$.gradeLocked").value(true));
+                .andExpect(jsonPath("$.readiness").value("MILESTONES_PENDING"))
+                .andExpect(jsonPath("$.canFinalize").value(false));
 
         mockMvc.perform(post("/api/projects/{projectId}/teams/{teamId}/milestones/{milestoneId}/waive",
                                 projectId, teamId, milestone.getId())
@@ -395,8 +406,26 @@ class MilestoneSubmissionIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"Approved curriculum exception\"}"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.completed").value(false))
+                .andExpect(jsonPath("$.gradeLocked").value(false));
+        mockMvc.perform(get("/api/projects/{projectId}/teams/{teamId}/completion", projectId, teamId)
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.readiness").value("READY"))
+                .andExpect(jsonPath("$.canFinalize").value(true));
+
+        mockMvc.perform(post("/api/projects/{projectId}/teams/{teamId}/finalize", projectId, teamId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"finalScore\":8.25,\"note\":\"Done\"}"))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.completed").value(true))
                 .andExpect(jsonPath("$.gradeLocked").value(true));
+        mockMvc.perform(get("/api/projects/{projectId}/teams/{teamId}/completion", projectId, teamId)
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.readiness").value("COMPLETED"))
+                .andExpect(jsonPath("$.canFinalize").value(false));
     }
 
     @Test
@@ -541,5 +570,9 @@ class MilestoneSubmissionIntegrationTest {
         var student = userDetailsService.loadUserByUsername("student@example.com");
         return "Bearer " + tokenService.generateAccessToken(
                 new UsernamePasswordAuthenticationToken(student, null, student.getAuthorities()));
+    }
+
+    private com.example.starter_project_2025.system.project.rubric.domain.RubricVersion seededRubric() {
+        return rubricVersions.findById(MockMilestoneData.RUBRIC_ID).orElseThrow();
     }
 }

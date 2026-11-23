@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.submission.domain;
 
+import com.example.starter_project_2025.system.project.rubric.domain.RubricCriterion;
+import com.example.starter_project_2025.system.project.rubric.domain.RubricCriterionRating;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -24,8 +26,10 @@ public class ReviewCriterionEvaluation {
     @JoinColumn(name = "review_id", nullable = false, updatable = false)
     private MilestoneReview review;
 
-    @Column(name = "criterion_id", nullable = false, updatable = false)
-    private UUID criterionId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "criterion_id", nullable = false, updatable = false,
+            foreignKey = @ForeignKey(name = "fk_review_evaluation_criterion"))
+    private RubricCriterion criterion;
 
     @Column(name = "criterion_code", nullable = false, length = 30)
     private String criterionCode;
@@ -33,8 +37,10 @@ public class ReviewCriterionEvaluation {
     @Column(name = "criterion_name", nullable = false, length = 100)
     private String criterionName;
 
-    @Column(name = "rating_id", nullable = false, updatable = false)
-    private UUID ratingId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "rating_id", nullable = false, updatable = false,
+            foreignKey = @ForeignKey(name = "fk_review_evaluation_rating"))
+    private RubricCriterionRating rating;
 
     @Column(name = "rating_level", nullable = false, length = 20)
     private String ratingLevel;
@@ -51,21 +57,31 @@ public class ReviewCriterionEvaluation {
     @Column(name = "order_index", nullable = false)
     private int orderIndex;
 
-    static ReviewCriterionEvaluation create(MilestoneReview review, UUID criterionId, String code,
-                                            String name, UUID ratingId, String level,
+    static ReviewCriterionEvaluation create(MilestoneReview review, RubricCriterion criterion, String code,
+                                            String name, RubricCriterionRating rating, String level,
                                             BigDecimal percentage, BigDecimal score,
                                             String feedback, int orderIndex) {
         ReviewCriterionEvaluation value = new ReviewCriterionEvaluation();
         value.review = review;
-        value.criterionId = criterionId;
+        value.criterion = criterion;
         value.criterionCode = code;
         value.criterionName = name;
-        value.ratingId = ratingId;
+        value.rating = rating;
         value.ratingLevel = level;
         value.ratingPercentage = percentage.setScale(2);
         value.score = score.setScale(2);
         value.feedback = feedback == null || feedback.isBlank() ? null : feedback.trim();
         value.orderIndex = orderIndex;
         return value;
+    }
+
+    /** Id of the evaluated rubric criterion; read from the lazy proxy without loading it. */
+    public UUID getCriterionId() {
+        return criterion.getId();
+    }
+
+    /** Id of the selected rating level; read from the lazy proxy without loading it. */
+    public UUID getRatingId() {
+        return rating.getId();
     }
 }

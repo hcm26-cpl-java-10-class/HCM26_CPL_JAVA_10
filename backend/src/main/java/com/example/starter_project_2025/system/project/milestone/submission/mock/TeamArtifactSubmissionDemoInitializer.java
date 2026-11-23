@@ -62,7 +62,7 @@ public class TeamArtifactSubmissionDemoInitializer implements CommandLineRunner 
             return;
         }
 
-        if (!submissionRepository.findByTenantIdAndTeamIdAndMilestoneIdOrderBySubmittedAtDesc(
+        if (!submissionRepository.findByTenantIdAndTeamIdAndMilestone_IdOrderBySubmittedAtDesc(
                 MockMilestoneData.TENANT_ID, teamId, milestone.getId()).isEmpty()) {
             log.info("Team artifact demo submissions already exist for milestone {}.", milestone.getId());
             return;
@@ -77,7 +77,7 @@ public class TeamArtifactSubmissionDemoInitializer implements CommandLineRunner 
                         MockMilestoneData.TENANT_ID,
                         milestone.getProjectId(),
                         teamId,
-                        milestone.getId(),
+                        milestone,
                         DEMO_STUDENT_ID,
                         version,
                         "https://github.com/example/team-pixel-demo",

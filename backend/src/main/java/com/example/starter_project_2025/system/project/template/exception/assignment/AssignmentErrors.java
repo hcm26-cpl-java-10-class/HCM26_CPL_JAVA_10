@@ -36,6 +36,12 @@ public class AssignmentErrors {
         return error(422, exception.getErrorCode(), details.isEmpty()
                 ? "The selected roles do not follow the assigned template's role policy" : "Check member role quotas: " + details);
     }
+    @ExceptionHandler(com.example.starter_project_2025.system.project.milestone.submission.service.ProjectNotReadyException.class)
+    public ResponseEntity<?> projectNotReady(RuntimeException exception) {
+        return error(409, com.example.starter_project_2025.system.project.milestone.submission.service.ProjectNotReadyException.CODE,
+                exception.getMessage());
+    }
+
     @ExceptionHandler(com.example.starter_project_2025.system.project.milestone.exception.MilestoneConflictException.class)
     public ResponseEntity<?> milestoneConflict(RuntimeException exception) {
         return error(409, "MASTER_MILESTONE_CONFLICT", exception.getMessage());

@@ -13,7 +13,7 @@ class ProjectAlertMilestonePolicyTest {
     private final Instant now=Instant.parse("2026-10-28T03:00:00Z");
     private Milestone milestone(Instant due) {
         UUID actor = UUID.randomUUID();
-        Milestone value = Milestone.create(1L,null,9L,"Release",null,due,true,UUID.randomUUID(),null,
+        Milestone value = Milestone.create(1L,null,9L,"Release",null,due,true,null,null,
                 LatePolicyType.NO_LATE,null,null,actor,now);
         value.openForWork(actor, now);
         value.start(actor, now);

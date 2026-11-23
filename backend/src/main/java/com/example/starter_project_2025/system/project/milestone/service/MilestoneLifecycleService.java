@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class MilestoneLifecycleService {
     private final MilestoneRepository milestones;
+    private final com.example.starter_project_2025.system.project.rubric.repository.RubricVersionRepository rubricVersions;
     private final MilestoneDraftRevisionRepository revisions;
     private final ObjectMapper objectMapper;
     private final MilestoneSubmissionRepository submissions;
@@ -67,11 +68,11 @@ public class MilestoneLifecycleService {
         Instant scheduled = request.startDate().equals(value.getStartDate())
                 && value.getDeadlineOffsetDays() != null && value.scheduledStartAt() != null
                 ? value.scheduledStartAt() : request.startDate().atStartOfDay(zone).toInstant();
-        var history = revisions.findByMilestoneIdAndTenantIdOrderByRevisionNumberDesc(id, value.getTenantId());
+        var history = revisions.findByMilestone_IdAndTenantIdOrderByRevisionNumberDesc(id, value.getTenantId());
         if (history.isEmpty()) captureRevision(value, 1, value.getUpdatedBy() == null ? actor : value.getUpdatedBy(), value.getUpdatedAt());
         value.editDraft(request.title().trim(), request.description(), request.deadline(), Boolean.TRUE.equals(request.mandatory()),
-                request.rubricSnapshotId(), request.latePolicyType(), request.lateUntil(), request.latePenaltyPercent(),
-                request.weight(), actor, now);
+                rubricVersions.referenceOrNull(request.rubricSnapshotId()), request.latePolicyType(), request.lateUntil(),
+                request.latePenaltyPercent(), request.weight(), actor, now);
         // Flush orphan removal before reusing the same (milestone_id, order_index) keys.
         value.replaceChecklist(null);
         milestones.saveAndFlush(value);
@@ -106,7 +107,7 @@ public class MilestoneLifecycleService {
         if (request.description() != null && request.description().length() > 1000)
             throw new MilestoneValidationException(Map.of("description", List.of("Maximum 1000 characters")));
         UUID actor = actors.requireCurrentActorId(); Instant now = milestoneClock.instant();
-        var history = revisions.findByMilestoneIdAndTenantIdOrderByRevisionNumberDesc(id, value.getTenantId());
+        var history = revisions.findByMilestone_IdAndTenantIdOrderByRevisionNumberDesc(id, value.getTenantId());
         if (history.isEmpty()) captureRevision(value, 1, actor, now);
         if (state == MilestoneLifecycleStatus.IN_PROGRESS)
             value.editActive(request.description(), request.deadline(), actor, now);
@@ -156,7 +157,7 @@ public class MilestoneLifecycleService {
     @Transactional(readOnly = true)
     public List<MilestoneDraftRevision> listDraftRevisions(Long projectId, Long teamId, UUID id) {
         Milestone value = require(projectId, teamId, id);
-        return revisions.findByMilestoneIdAndTenantIdOrderByRevisionNumberDesc(value.getId(), value.getTenantId());
+        return revisions.findByMilestone_IdAndTenantIdOrderByRevisionNumberDesc(value.getId(), value.getTenantId());
     }
     private void captureRevision(Milestone value, int number, UUID actor, Instant now) {
         var snapshot = Map.ofEntries(

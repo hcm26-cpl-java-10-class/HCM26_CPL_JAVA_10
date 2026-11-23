@@ -113,8 +113,8 @@ public class SubmissionReviewService {
                 submission.getAssignedReviewerName(), rawScore, penalty, finalScore,
                 request.overallFeedback(), now);
         for (Resolved item : resolved) {
-            review.addEvaluation(item.criterion().getId(), item.criterion().getCode(),
-                    item.criterion().getName(), item.rating().getId(), item.rating().getLevel().name(),
+            review.addEvaluation(item.criterion(), item.criterion().getCode(),
+                    item.criterion().getName(), item.rating(), item.rating().getLevel().name(),
                     item.rating().getPercentage(), item.score(), item.input().feedback(),
                     item.criterion().getOrderIndex());
         }
