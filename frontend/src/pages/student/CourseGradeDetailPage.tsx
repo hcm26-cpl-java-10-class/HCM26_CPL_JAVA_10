@@ -276,7 +276,7 @@ export default function CourseGradeDetailPage() {
                                                                                 title="Review Exam"
                                                                                 onClick={() =>
                                                                                     window.open(
-                                                                                        `/student/exams/attempts/${attempt.attemptId}/review`,
+                                                                                        `/student/exams/attempts/${attempt.attemptId}/review?returnTo=${encodeURIComponent(`/courses/${id}#course-assessments`)}`,
                                                                                         "_blank",
                                                                                         "noopener,noreferrer"
                                                                                     )

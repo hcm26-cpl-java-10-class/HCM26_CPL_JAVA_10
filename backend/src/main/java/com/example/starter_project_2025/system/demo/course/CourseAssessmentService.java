@@ -2,8 +2,7 @@ package com.example.starter_project_2025.system.demo.course;
 
 import com.example.starter_project_2025.system.demo.lesson.Lesson;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
-import com.example.starter_project_2025.system.exam.domain.*;
-import com.example.starter_project_2025.system.exam.service.ExamResultAccessService;
+import com.example.starter_project_2025.system.exam.result.service.ExamResultAccessService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +12,12 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
 import java.util.function.Predicate;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttempt;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptRepository;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus;
+import com.example.starter_project_2025.system.exam.core.domain.Exam;
+import com.example.starter_project_2025.system.exam.core.domain.ExamCategory;
+import com.example.starter_project_2025.system.exam.core.domain.ExamRepository;
 
 /** One calculation used by learner grades, staff results and certificate eligibility. */
 @Service @RequiredArgsConstructor @Transactional(readOnly=true)
@@ -63,6 +68,27 @@ public class CourseAssessmentService {
         return calculate(exams.findByCourseLink(courseId,null,null,false),
                 best(attempts.findAllByStudent_IdOrderByStartedAtDesc(studentId)),access::canStudentSeeScoreOnMyScores);
     }
+    /** Learner-only presentation states; no scores or unpublished pass/fail decisions. */
+    public Map<Long,String> assessmentOutcomes(Long courseId,Long studentId) {
+        var ownAttempts=attempts.findAllByStudent_IdOrderByStartedAtDesc(studentId);
+        var graded=best(ownAttempts);
+        Map<Long,String> states=new HashMap<>();
+        for (Exam exam:exams.findByCourseLink(courseId,null,null,true)) {
+            var attempt=graded.get(exam.getId());
+            String state="NOT_STARTED";
+            if (attempt!=null && access.canStudentViewScore(exam)) {
+                Boolean passed=com.example.starter_project_2025.system.exam.service.ExamScoring.passed(attempt);
+                state=passed==null?"COMPLETED":passed?"PASSED":"FAILED";
+            } else if (ownAttempts.stream().anyMatch(a->a.getExam()!=null && exam.getId().equals(a.getExam().getId()))) {
+                state=ownAttempts.stream().anyMatch(a->a.getExam()!=null && exam.getId().equals(a.getExam().getId())
+                        && a.getStatus()!=ExamAttemptStatus.IN_PROGRESS && a.getStatus()!=ExamAttemptStatus.NOT_STARTED)
+                        ?"AWAITING_RESULTS":"IN_PROGRESS";
+            }
+            states.put(exam.getId(),state);
+        }
+        return Map.copyOf(states);
+    }
+
     public boolean canComplete(Long courseId,Long studentId) {
         Grade grade=grade(courseId,studentId);
         return ("NO_ASSESSMENTS".equals(grade.status()) || "PASSED".equals(grade.status())) && plan(courseId).ready();
@@ -138,6 +164,7 @@ public class CourseAssessmentService {
                 case "QUIZ" -> "Quiz"; case "ASSIGNMENT" -> "Assignment"; case "MIDTERM" -> "Midterm"; case "FINAL_TEST" -> "Final"; default -> item.getColumnType();
             };
             String title=item.getExamTitle()==null?item.getColumnName():item.getColumnName()+" ("+item.getExamTitle()+")";
+            if (item.getBonus()!=null && item.getBonus().signum()>0) title+=" +"+item.getBonus().stripTrailingZeros().toPlainString()+" bonus";
             items.add(new CourseGradeItemDTO(category,item.getExamId(),title,item.getWeightPercent(),item.getScore()));
             BigDecimal weight=item.getWeightPercent();
             if (weight==null || weight.signum()<0 || weight.compareTo(BigDecimal.valueOf(100))>0) {invalid=true;continue;}

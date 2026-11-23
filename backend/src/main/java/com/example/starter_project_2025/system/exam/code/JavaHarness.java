@@ -1,6 +1,6 @@
 package com.example.starter_project_2025.system.exam.code;
 
-import com.example.starter_project_2025.system.question.dto.CodeSpecDTO;
+import com.example.starter_project_2025.system.question.core.dto.CodeSpecDTO;
 
 import java.util.List;
 import java.util.Locale;

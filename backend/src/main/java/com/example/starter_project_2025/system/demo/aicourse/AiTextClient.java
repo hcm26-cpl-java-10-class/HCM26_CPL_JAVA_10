@@ -1,7 +1,7 @@
 package com.example.starter_project_2025.system.demo.aicourse;
 
 import com.example.starter_project_2025.exception.BadRequestException;
-import com.example.starter_project_2025.system.exam.service.ai.AiGradingProperties;
+import com.example.starter_project_2025.system.exam.ai.AiGradingProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;

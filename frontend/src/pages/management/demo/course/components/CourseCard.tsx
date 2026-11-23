@@ -161,7 +161,7 @@ export function CourseCard({
           ))}
           {showEnrollmentAction && (course.enrolled && enrollmentId !== undefined ? (
             certificateToken ? (
-              <Button asChild className="flex-1">
+              <Button asChild className="flex-1 bg-green-600 text-white hover:bg-green-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700">
                 <Link to={`/my-certificates/${encodeURIComponent(certificateToken)}`}>
                   <Award className="size-4" /> View certificate
                 </Link>

@@ -3,12 +3,13 @@ package com.example.starter_project_2025.init;
 
 import com.example.starter_project_2025.config.startup.StartupMutation;
 
-import com.example.starter_project_2025.system.demo.syllabus.SyllabusCloService;
-import com.example.starter_project_2025.system.demo.syllabus.SyllabusMaterialService;
-import com.example.starter_project_2025.system.demo.syllabus.SyllabusModels;
-import com.example.starter_project_2025.system.demo.syllabus.SyllabusRepository;
-import com.example.starter_project_2025.system.demo.syllabus.SyllabusService;
-import com.example.starter_project_2025.system.demo.syllabus.SyllabusWorkflowService;
+import com.example.starter_project_2025.system.demo.syllabus.dto.SyllabusModels;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusRepository;
+import com.example.starter_project_2025.system.demo.syllabus.service.SyllabusCloService;
+import com.example.starter_project_2025.system.demo.syllabus.service.SyllabusMaterialService;
+import com.example.starter_project_2025.system.demo.syllabus.service.SyllabusService;
+import com.example.starter_project_2025.system.demo.syllabus.service.SyllabusWorkflowService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;

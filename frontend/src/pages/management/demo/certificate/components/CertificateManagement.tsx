@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye } from "lucide-react";
+import { Eye, Award, BarChart3 } from "lucide-react";
 import { useProTable } from "@/components/datatable/hook/useProTable";
 import { certificateApi, courseApi, userApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -8,7 +8,7 @@ import type { EntitySchema, FieldSchema } from "@/types";
 import { auditableFieldsSchema } from "@/types";
 import ActionButton from "@/components/datatable/common/ActionButton";
 import { DetailModal } from "@/components/datatable/modal/DetailModal";
-
+import CertificateInsights from "./insights/CertificateInsights";
 
 const certificateSchema: EntitySchema = {
   entityName: "certificate",
@@ -74,10 +74,65 @@ const certificateSchema: EntitySchema = {
 };
 
 export default function CertificateManagement() {
-  return <AdminCertificatePage />;
+  const [activeTab, setActiveTab] = useState<
+    "certificates" | "insights"
+  >("certificates");
+
+  return (
+    <MainLayout pathName={{ certificates: "Certificates" }}>
+      <div className="mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-7xl flex-col space-y-5">
+
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Certificate Management
+          </h1>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage certificates and analyze organizational
+            certification coverage.
+          </p>
+        </div>
+
+        <div className="flex gap-2 border-b">
+          <button
+            type="button"
+            onClick={() => setActiveTab("certificates")}
+            className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+              activeTab === "certificates"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Award size={16} />
+            Certificates
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("insights")}
+            className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+              activeTab === "insights"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <BarChart3 size={16} />
+            Certificate Insights
+          </button>
+        </div>
+
+        {activeTab === "certificates" ? (
+          <AdminCertificateTable />
+        ) : (
+          <CertificateInsights />
+        )}
+
+      </div>
+    </MainLayout>
+  );
 }
 
-function AdminCertificatePage() {
+function AdminCertificateTable() {
   const table = useProTable(certificateApi, certificateSchema, {
     permissionOverrides: {
       canCreate: false,
@@ -92,39 +147,28 @@ function AdminCertificatePage() {
     useState<any | null>(null);
 
   return (
-    <MainLayout pathName={{ certificates: "Certificates" }}>
-      <div className="mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-7xl flex-col space-y-1.5">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Certificate Management
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            View certificates automatically issued to students.
-          </p>
-        </div>
+    <>
+      <ProTable
+        table={table}
+        mode="default"
+        renderRowActions={(row) => (
+          <ActionButton
+            onClick={() => setSelectedCertificate(row)}
+            tooltip="View detail"
+            icon={<Eye size={10} className="text-gray-500" />}
+          />
+        )}
+      />
 
-        <ProTable
-          table={table}
-          mode="default"
-          renderRowActions={(row) => (
-            <ActionButton
-              onClick={() => setSelectedCertificate(row)}
-              tooltip="View detail"
-              icon={<Eye size={10} className="text-gray-500" />}
-            />
-          )}
-        />
-
-        <DetailModal
-          open={!!selectedCertificate}
-          onClose={(open) => {
-            if (!open) setSelectedCertificate(null);
-          }}
-          schema={certificateSchema}
-          row={selectedCertificate}
-          relationOptions={table.relationOptions}
-        />
-      </div>
-    </MainLayout>
+      <DetailModal
+        open={!!selectedCertificate}
+        onClose={(open) => {
+          if (!open) setSelectedCertificate(null);
+        }}
+        schema={certificateSchema}
+        row={selectedCertificate}
+        relationOptions={table.relationOptions}
+      />
+    </>
   );
 }

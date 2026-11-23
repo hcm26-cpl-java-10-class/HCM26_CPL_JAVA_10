@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Download, History, Pencil, Plus, Save, ScanSearch, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, Gift, History, Pencil, Plus, Save, ScanSearch, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import {
   type SmImportReport,
   type SmPerson,
   type SmSaveLog,
+  type SmBonusLog,
 } from "@/api/features/score-management.api";
 import type { SmReleasePolicy } from "@/api/features/score-management.api";
 import { getErrorMessage } from "../examConfig";
@@ -38,6 +39,111 @@ function exportCsv(g: SmGradebook) {
   a.download = `${g.courseName.replace(/[^\w-]+/g, "_")}_scores.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function BonusDialog({ data, open, onClose, onChanged }: { data: SmGradebook; open: boolean; onClose: () => void; onChanged: () => void }) {
+  const queryClient = useQueryClient();
+  const courseId = data.courseId;
+  const { data: log = [] } = useQuery<SmBonusLog[]>({
+    queryKey: ["sm-bonus", courseId],
+    queryFn: () => scoreManagementApi.bonusLog(courseId),
+    enabled: open,
+  });
+  const [columnId, setColumnId] = useState("");
+  const [studentId, setStudentId] = useState("");
+  const [points, setPoints] = useState("0.5");
+  const [reason, setReason] = useState("");
+  const [q, setQ] = useState("");
+  const done = (rows: SmBonusLog[]) => {
+    queryClient.setQueryData(["sm-bonus", courseId], rows);
+    onChanged();
+  };
+  const add = useMutation({
+    mutationFn: () => scoreManagementApi.addBonus(courseId, { columnId: Number(columnId), studentId: Number(studentId), points: Number(points), reason }),
+    onSuccess: (rows) => {
+      done(rows);
+      setReason("");
+      toast.success("Bonus added");
+    },
+    onError: (e) => toast.error(getErrorMessage(e, "Unable to add bonus")),
+  });
+  const revoke = useMutation({
+    mutationFn: (id: number) => scoreManagementApi.revokeBonus(id),
+    onSuccess: (rows) => {
+      done(rows);
+      toast.success("Bonus revoked");
+    },
+    onError: (e) => toast.error(getErrorMessage(e, "Unable to revoke bonus")),
+  });
+  const needle = q.trim().toLowerCase();
+  // Only students who already have a score in the chosen column can receive a bonus there.
+  const students = data.students
+    .filter((s) => !columnId || s.scores[columnId] != null)
+    .filter((s) => !needle || `${s.name} ${s.email}`.toLowerCase().includes(needle))
+    .slice(0, 100);
+  const valid = columnId && studentId && Number(points) >= 0.05 && Number(points) <= 1 && reason.trim().length >= 5;
+  const selectCls = "h-9 w-full rounded-md border bg-background px-2 text-sm";
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Bonus points</DialogTitle>
+          <DialogDescription>
+            Added to the student's score in the chosen column (max 10). Up to +1.0 per student in this course. A reason is required and every change is logged.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Column</label>
+            <select className={selectCls} value={columnId} onChange={(e) => { setColumnId(e.target.value); setStudentId(""); }}>
+              <option value="">Select a column...</option>
+              {data.columns.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Points (0.05 - 1)</label>
+            <Input type="number" min={0.05} max={1} step={0.05} value={points} onChange={(e) => setPoints(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Student</label>
+            <Input placeholder="Search name or email..." value={q} onChange={(e) => setQ(e.target.value)} />
+            <select className={selectCls} value={studentId} onChange={(e) => setStudentId(e.target.value)}>
+              <option value="">{columnId && students.length === 0 ? "No student has a score in this column" : "Select a student..."}</option>
+              {students.map((s) => (
+                <option key={s.id} value={s.id}>{s.name} ({s.email})</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Reason (required)</label>
+            <textarea className="min-h-20 w-full rounded-md border bg-background p-2 text-sm" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <Button size="sm" disabled={!valid || add.isPending} onClick={() => add.mutate()}>Add bonus</Button>
+        </div>
+        <div className="max-h-64 space-y-2 overflow-auto text-sm">
+          {log.length === 0 ? <p className="text-muted-foreground">No bonus given yet.</p> : log.map((b) => (
+            <div key={b.id} className={`flex items-start justify-between gap-2 rounded-md border p-2 ${b.revokedAt ? "opacity-60" : ""}`}>
+              <div>
+                <div className="font-medium">+{fmt(b.points)} · {b.studentName} · {b.columnName}{b.revokedAt ? " (revoked)" : ""}</div>
+                <div className="text-xs text-muted-foreground">{b.reason}</div>
+                <div className="text-xs text-muted-foreground">
+                  {b.grantedByName ?? "—"} · {new Date(b.createdAt).toLocaleString()}
+                  {b.revokedAt ? ` · revoked by ${b.revokedByName ?? "—"} ${new Date(b.revokedAt).toLocaleString()}` : ""}
+                </div>
+              </div>
+              {!b.revokedAt && (
+                <Button variant="ghost" size="sm" disabled={revoke.isPending} onClick={() => revoke.mutate(b.id)}>Revoke</Button>
+              )}
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function HistoryDialog({ courseId, open, onClose }: { courseId: number; open: boolean; onClose: () => void }) {
@@ -261,6 +367,7 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
 
   const [confirmWarnings, setConfirmWarnings] = useState<string[] | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [bonusOpen, setBonusOpen] = useState(false);
   const [search, setSearch] = useState("");
   const apply = (g: SmGradebook) => {
     queryClient.setQueryData(key, g);
@@ -401,6 +508,13 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
     if (!weightOk) warnings.push(`The weights add up to ${fmt(data.totalWeight)}%, not 100%.`);
     const missing = SM_COLUMN_TYPES.filter((t) => !data.columns.some((c) => c.type === t.value)).map((t) => t.label);
     if (missing.length > 0) warnings.push(`Missing score column(s): ${missing.join(", ")}. A full score table has Assignment, Quiz, Midterm and Final.`);
+    for (const c of data.columns) {
+      if (c.weightPercent <= 0) continue;
+      const without = data.students.filter((st) => st.scores[String(c.id)] == null).length;
+      if (without > 0) {
+        warnings.push(`${c.name}: ${without} of ${data.students.length} student(s) have no score yet. They will see an empty cell and no overall result.`);
+      }
+    }
     if (warnings.length > 0) setConfirmWarnings(warnings);
     else saveMutation.mutate();
   };
@@ -426,6 +540,9 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
           <Input className="h-8 w-48" placeholder="Search student..." value={search} onChange={(e) => setSearch(e.target.value)} />
           <Button size="sm" variant="outline" onClick={() => exportCsv(data)} title="Download the score table as CSV">
             <Download className="size-4" /> Export CSV
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setBonusOpen(true)} disabled={data.columns.length === 0}>
+            <Gift className="size-4" /> Bonus
           </Button>
           <Button size="sm" variant="outline" onClick={() => setHistoryOpen(true)}>
             <History className="size-4" /> History
@@ -500,7 +617,17 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
                   </TableCell>
                   {data.columns.map((c) => (
                     <TableCell key={c.id} className="px-2 py-1">
-                      <div className="flex h-8 w-16 items-center justify-center rounded-md border bg-muted/30 text-sm tabular-nums">{fmt(s.scores[String(c.id)])}</div>
+                      <div
+                        className="relative flex h-8 w-16 items-center justify-center rounded-md border bg-muted/30 text-sm tabular-nums"
+                        title={s.bonuses?.[String(c.id)] ? `Includes +${fmt(s.bonuses[String(c.id)])} bonus` : undefined}
+                      >
+                        {fmt(s.scores[String(c.id)])}
+                        {s.bonuses?.[String(c.id)] ? (
+                          <span className="absolute -right-1 -top-2 rounded bg-amber-500 px-1 text-[10px] font-medium leading-4 text-white">
+                            +{fmt(s.bonuses[String(c.id)])}
+                          </span>
+                        ) : null}
+                      </div>
                     </TableCell>
                   ))}
                   <TableCell className="sticky right-0 z-10 bg-background px-2 py-1 text-right font-semibold">{fmt(s.finalScore)}</TableCell>
@@ -599,6 +726,12 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
       </Dialog>
 
       <HistoryDialog courseId={courseId} open={historyOpen} onClose={() => setHistoryOpen(false)} />
+      <BonusDialog
+        data={data}
+        open={bonusOpen}
+        onClose={() => setBonusOpen(false)}
+        onChanged={() => void queryClient.invalidateQueries({ queryKey: key })}
+      />
       <Dialog
           open={publishDialogOpen}
           onOpenChange={(open) => {

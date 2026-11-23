@@ -38,6 +38,7 @@ import {
 } from "@/pages/management/demo/analytics/lib/chart-helpers";
 import type { AtRiskLearner } from "@/types";
 import { useMemo, useState } from "react";
+import { ProblemLearnersPanel } from "@/pages/management/demo/analytics/components/ProblemLearnersPanel";
 import { AnalyticsLoading } from "@/pages/management/demo/analytics/components/AnalyticsLoading";
 
 type Props = {
@@ -293,6 +294,8 @@ export function ActivityTab({ courseId }: Props) {
           </>
         )}
       </AnalyticsPanel>
+
+      <ProblemLearnersPanel courseId={courseId} inactiveDays={inactiveDays} />
     </div>
   );
 }

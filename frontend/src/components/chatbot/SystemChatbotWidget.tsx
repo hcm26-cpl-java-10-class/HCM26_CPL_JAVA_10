@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Bot, Send, X, Sparkles, Trash2, Loader2 } from 'lucide-react';
+import { Bot, Send, X, Sparkles, Trash2, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { chatbotApi, type ChatMessage } from '@/api/features/chatbot.api';
 
 const STORAGE_KEY = 'system_ai_chat_history';
+const MINIMIZED_KEY = 'system_ai_chat_minimized';
 
 const QUICK_SUGGESTIONS = [
     'Cách nộp sản phẩm (Artifact) cho Milestone?',
@@ -17,6 +18,9 @@ export const SystemChatbotWidget: React.FC = () => {
     const location = useLocation();
     const [isOpen, setIsOpen] = useState(false);
     const [showBubble, setShowBubble] = useState(true);
+    const [isMinimized, setIsMinimized] = useState<boolean>(() => {
+        return sessionStorage.getItem(MINIMIZED_KEY) === 'true';
+    });
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -38,7 +42,6 @@ export const SystemChatbotWidget: React.FC = () => {
         ];
     });
 
-
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -47,6 +50,14 @@ export const SystemChatbotWidget: React.FC = () => {
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }
     }, [messages, isOpen]);
+
+    const toggleMinimize = (minimized: boolean) => {
+        setIsMinimized(minimized);
+        sessionStorage.setItem(MINIMIZED_KEY, String(minimized));
+        if (minimized) {
+            setShowBubble(false);
+        }
+    };
 
     const handleSend = async (textToSend?: string) => {
         const content = (textToSend ?? input).trim();
@@ -116,7 +127,11 @@ export const SystemChatbotWidget: React.FC = () => {
     }
 
     return (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+        <div
+            className={`fixed bottom-6 z-50 flex flex-col items-end transition-all duration-300 ${
+                isMinimized && !isOpen ? 'right-0' : 'right-6'
+            }`}
+        >
             {/* KHUNG CỬA SỔ CHAT KHI MỞ */}
             {isOpen && (
                 <div className="mb-3 flex h-[520px] w-[380px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200">
@@ -146,7 +161,7 @@ export const SystemChatbotWidget: React.FC = () => {
                                 size="icon"
                                 className="h-7 w-7 text-white hover:bg-primary-foreground/15"
                                 onClick={() => setIsOpen(false)}
-                                title="Thu gọn"
+                                title="Đóng cửa sổ chat"
                             >
                                 <X className="h-4 w-4" />
                             </Button>
@@ -228,8 +243,21 @@ export const SystemChatbotWidget: React.FC = () => {
                 </div>
             )}
 
-            {/* NÚT FLOATING ICON + BONG BÓNG NHẮC NHỞ (GIỐNG HÌNH 2) */}
-            {!isOpen && (
+            {/* TRẠNG THÁI 1: KHI THU GỌN -> SIÊU NHỎ SÁT MÉP PHẢI */}
+            {!isOpen && isMinimized && (
+                <button
+                    type="button"
+                    onClick={() => toggleMinimize(false)}
+                    title="Mở rộng trợ lý AI"
+                    aria-label="Mở rộng trợ lý AI"
+                    className="group flex h-6 w-4 items-center justify-center rounded-l-md bg-blue-600/90 text-white shadow transition-all hover:w-6 hover:bg-blue-600"
+                >
+                    <ChevronLeft className="h-3 w-3" />
+                </button>
+            )}
+
+            {/* TRẠNG THÁI 2: LÚC ĐẦU / BÌNH THƯỜNG -> GIỮ NGUYÊN KÍCH THƯỚC ĐẦY ĐỦ */}
+            {!isOpen && !isMinimized && (
                 <div className="flex items-center gap-3">
                     {showBubble && (
                         <div className="relative flex items-center rounded-full bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg">
@@ -248,17 +276,34 @@ export const SystemChatbotWidget: React.FC = () => {
                         </div>
                     )}
 
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setIsOpen(true);
-                            setShowBubble(false);
-                        }}
-                        className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-xl transition-transform hover:scale-105 active:scale-95"
-                        aria-label="Mở trợ lý AI"
-                    >
-                        <Bot className="h-7 w-7" />
-                    </button>
+                    {/* Cụm nút Robot kích thước chuẩn + Nút thu gọn */}
+                    <div className="group relative">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsOpen(true);
+                                setShowBubble(false);
+                            }}
+                            className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-xl transition-transform hover:scale-105 active:scale-95"
+                            aria-label="Mở trợ lý AI"
+                        >
+                            <Bot className="h-7 w-7" />
+                        </button>
+
+                        {/* Nút thu gọn icon sang mép phải */}
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                toggleMinimize(true);
+                            }}
+                            title="Thu gọn biểu tượng"
+                            aria-label="Thu gọn biểu tượng"
+                            className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-white/20 bg-neutral-800 text-white shadow-md transition-opacity hover:bg-neutral-950"
+                        >
+                            <ChevronRight className="h-3.5 w-3.5" />
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

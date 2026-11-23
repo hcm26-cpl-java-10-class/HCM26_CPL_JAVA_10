@@ -124,7 +124,7 @@ export default function StudentInvitationList() {
                     taking: true,
                 });
             } else {
-                navigate(`/student/exams/${updated.examId}/take`, {
+                navigate(`/student/exams/${updated.examId}/prepare`, {
                     state: { returnTo: "/invitations" },
                 });
             }
@@ -157,7 +157,7 @@ export default function StudentInvitationList() {
                 taking: true,
             });
         } else {
-            navigate(`/student/exams/${examId}/take`, {
+            navigate(`/student/exams/${examId}/prepare`, {
                 state: { returnTo: "/invitations" },
             });
         }
@@ -350,7 +350,7 @@ export default function StudentInvitationList() {
                 onSuccess={(examId, password) => {
                     sessionStorage.setItem(`exam_pass_${examId}`, password);
                     setPasswordPrompt(null);
-                    navigate(`/student/exams/${examId}/take`, {
+                    navigate(`/student/exams/${examId}/prepare`, {
                         state: { returnTo: "/invitations" },
                     });
                 }}
