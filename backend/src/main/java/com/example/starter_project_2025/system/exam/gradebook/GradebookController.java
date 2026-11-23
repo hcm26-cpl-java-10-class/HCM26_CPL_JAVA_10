@@ -19,6 +19,7 @@ public class GradebookController {
 
     private final GradebookService service;
     private final ClassGradebookService classService;
+    private final GradebookBonusService bonusService;
 
     @GetMapping("/courses")
     public ResponseEntity<List<CourseItem>> courses(@AuthenticationPrincipal UserPrincipal p) {
@@ -71,6 +72,24 @@ public class GradebookController {
     public ResponseEntity<Gradebook> deleteColumn(@PathVariable Long columnId,
             @AuthenticationPrincipal UserPrincipal p) {
         return ResponseEntity.ok(service.deleteColumn(columnId, p));
+    }
+
+    @GetMapping("/courses/{courseId}/bonuses")
+    public ResponseEntity<java.util.List<BonusLog>> bonusLog(@PathVariable Long courseId,
+            @AuthenticationPrincipal UserPrincipal p) {
+        return ResponseEntity.ok(bonusService.log(courseId, p));
+    }
+
+    @PostMapping("/courses/{courseId}/bonuses")
+    public ResponseEntity<java.util.List<BonusLog>> addBonus(@PathVariable Long courseId,
+            @RequestBody BonusRequest req, @AuthenticationPrincipal UserPrincipal p) {
+        return ResponseEntity.ok(bonusService.add(courseId, req, p));
+    }
+
+    @PostMapping("/bonuses/{bonusId}/revoke")
+    public ResponseEntity<java.util.List<BonusLog>> revokeBonus(@PathVariable Long bonusId,
+            @AuthenticationPrincipal UserPrincipal p) {
+        return ResponseEntity.ok(bonusService.revoke(bonusId, p));
     }
 
     @GetMapping("/courses/{courseId}/history")

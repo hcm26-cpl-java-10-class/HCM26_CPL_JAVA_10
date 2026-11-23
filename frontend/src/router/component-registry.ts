@@ -221,11 +221,13 @@ export const routes: RouteConfig[] = [
     component: ExamManagementPage,
     requiredPermission: "EXAM_READ",
     isModuleDriven: true,
+    requiredPermission: "EXAM_UPDATE",
   },
 
   {
     path: "/exams/supervisor",
     component: ExamSupervisorPage,
+    requiredPermission: "EXAM_UPDATE",
   },
 
   {

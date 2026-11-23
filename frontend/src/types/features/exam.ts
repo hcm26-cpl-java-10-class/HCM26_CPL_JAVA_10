@@ -108,6 +108,7 @@ export interface ExamDTO {
   createdByName?: string | null;
   /** Submitted attempts waiting for the teacher to grade. */
   pendingGradingCount?: number;
+  invitationCount?: number;
   hasAttempts?: boolean;
   title: string;
   durationMinutes: number;

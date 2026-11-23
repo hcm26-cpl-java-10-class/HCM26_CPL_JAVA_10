@@ -386,8 +386,15 @@ export default function StudentExamTakingPage() {
         if (requireConfirmation && !skipConfirmRef.current) {
             // In-page dialog: a native confirm() would take the browser out of fullscreen.
             const unsaved = attempt.questions.filter((q) => q.type === 'ESSAY' && !answersRef.current[q.id]?.saved).length;
+            const unanswered = attempt.questions.filter((q) => {
+                const a = answersRef.current[q.id];
+                return q.type === 'ESSAY' || q.type === 'CODING'
+                    ? (a?.textAnswer ?? '').trim().length === 0
+                    : (a?.selectedOptionIds.length ?? 0) === 0;
+            }).length;
             setConfirmText(
                 'Are you sure you want to submit your exam? Please double-check your answers before proceeding.' +
+                (unanswered > 0 ? `\n\nYou have ${unanswered} unanswered question(s) out of ${attempt.questions.length}.` : '') +
                 (unsaved > 0 ? `\n\nThere are ${unsaved} essay question(s) that have not been saved (unsaved content will still be submitted).` : ''),
             );
             return;

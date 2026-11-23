@@ -145,6 +145,7 @@ export function EditExamQuestionDialog({ exam, question, onClose, onSaved }: Edi
       isActive: question.isActive ?? true,
       imageUrl: question.imageUrl ?? "",
       gradingCriteria: question.gradingCriteria ?? [],
+      code: question.code ?? null,
       options: (question.options ?? []).map((option) => ({
         id: option.id,
         content: option.content,

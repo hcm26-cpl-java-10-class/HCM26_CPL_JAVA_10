@@ -213,7 +213,7 @@ class AiQuestionGeneratorServiceTest {
         Exam exam = new Exam();
         exam.setId(70L);
         exam.setTitle("Midterm Assessment");
-        when(examRepository.findById(70L)).thenReturn(Optional.of(exam));
+        when(examService.getExamForPoolConfiguration(70L)).thenReturn(exam);
 
         GeneratedQuestion gq1 = GeneratedQuestion.builder()
                 .tempId("q_1")
@@ -268,7 +268,7 @@ class AiQuestionGeneratorServiceTest {
     void getExamAiQuestions_success() {
         Exam exam = new Exam();
         exam.setId(70L);
-        when(examRepository.findById(70L)).thenReturn(Optional.of(exam));
+        when(examService.getExamForPoolConfiguration(70L)).thenReturn(exam);
         when(examAttemptRepository.existsByExam_Id(70L)).thenReturn(false);
 
         Question q = new Question();
@@ -298,7 +298,7 @@ class AiQuestionGeneratorServiceTest {
         q.setSource("AI_GENERATED");
         exam.getQuestions().add(q);
 
-        when(examRepository.findById(70L)).thenReturn(Optional.of(exam));
+        when(examService.getExamForPoolConfiguration(70L)).thenReturn(exam);
         when(examAttemptRepository.existsByExam_Id(70L)).thenReturn(false);
         when(questionRepository.findById(101L)).thenReturn(Optional.of(q));
 
@@ -336,7 +336,7 @@ class AiQuestionGeneratorServiceTest {
         Exam exam = new Exam();
         exam.setId(70L);
         exam.setExamType(ExamType.CODING);
-        when(examRepository.findById(70L)).thenReturn(Optional.of(exam));
+        when(examService.getExamForPoolConfiguration(70L)).thenReturn(exam);
 
         GeneratedQuestion mcQuestion = GeneratedQuestion.builder()
                 .tempId("q_1")

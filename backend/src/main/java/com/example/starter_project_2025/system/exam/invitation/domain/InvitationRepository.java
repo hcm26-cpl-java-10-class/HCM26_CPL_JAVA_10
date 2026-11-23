@@ -12,6 +12,9 @@ import java.util.Optional;
 
 public interface InvitationRepository extends BaseCrudRepository<Invitation, Long> {
 
+    /** Dem nhanh so loi moi cua mot de thi (khong tai ban ghi). */
+    long countByExam_Id(Long examId);
+
     List<Invitation> findByExamId(Long examId);
 
     List<Invitation> findByExamIdAndStatus(Long examId, InvitationStatus status);

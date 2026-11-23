@@ -5,6 +5,7 @@ import com.example.starter_project_2025.system.exam.core.domain.Exam;
 import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptRepository;
 import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus;
 import com.example.starter_project_2025.system.exam.core.domain.ExamType;
+import com.example.starter_project_2025.system.exam.invitation.domain.InvitationRepository;
 import com.example.starter_project_2025.system.exam.core.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.grading.service.ExamScoring;
 import com.example.starter_project_2025.system.exam.core.service.ExamTypePolicy;
@@ -27,6 +28,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
     private final QuestionMapper questionMapper;
     private final UserRepository userRepository;
     private final ExamAttemptRepository attemptRepository;
+    private final InvitationRepository invitationRepository;
 
     @Override
     public Exam toEntity(ExamDTO dto) {
@@ -46,6 +48,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setCreatedBy(e.getCreatedBy());
         d.setCreatedByName(creatorName(e.getCreatedBy()));
         d.setPendingGradingCount(pendingGrading(e.getId()));
+        d.setInvitationCount(invitationCount(e.getId()));
         d.setHasAttempts(e.getId() != null && attemptRepository.existsByExam_Id(e.getId()));
         d.setUpdatedBy(e.getUpdatedBy());
         d.setTitle(e.getTitle());
@@ -111,6 +114,15 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
     public void update(Exam e, ExamDTO dto) {
         if (dto.getIsActive() != null) e.setIsActive(dto.getIsActive());
         apply(e, dto);
+    }
+
+    private long invitationCount(Long examId) {
+        if (examId == null) return 0L;
+        try {
+            return invitationRepository.countByExam_Id(examId);
+        } catch (RuntimeException ex) {
+            return 0L;
+        }
     }
 
     /** So bai dang cho cham (PENDING_REVIEW hoac EXPIRED); 0 neu khong dem duoc. */

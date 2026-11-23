@@ -164,6 +164,7 @@ public class CourseAssessmentService {
                 case "QUIZ" -> "Quiz"; case "ASSIGNMENT" -> "Assignment"; case "MIDTERM" -> "Midterm"; case "FINAL_TEST" -> "Final"; default -> item.getColumnType();
             };
             String title=item.getExamTitle()==null?item.getColumnName():item.getColumnName()+" ("+item.getExamTitle()+")";
+            if (item.getBonus()!=null && item.getBonus().signum()>0) title+=" +"+item.getBonus().stripTrailingZeros().toPlainString()+" bonus";
             items.add(new CourseGradeItemDTO(category,item.getExamId(),title,item.getWeightPercent(),item.getScore()));
             BigDecimal weight=item.getWeightPercent();
             if (weight==null || weight.signum()<0 || weight.compareTo(BigDecimal.valueOf(100))>0) {invalid=true;continue;}

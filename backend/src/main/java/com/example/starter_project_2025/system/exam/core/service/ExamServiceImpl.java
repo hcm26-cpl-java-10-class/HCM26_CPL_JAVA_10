@@ -218,6 +218,59 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		return examMapper.toResponse(examRepository.save(exam));
 	}
 
+	/**
+	 * Nhan ban de thi: giu cau hinh va cac cau hoi (tao ban sao moi), bo lien ket khoa hoc, ma truy cap
+	 * va pool; de moi co tieu de "Copy of ..." va do nguoi dang nhap so huu.
+	 */
+	public ExamDTO duplicate(Long examId) {
+		checkPermission(CrudAction.CREATE);
+		Exam source = findExam(examId);
+		Exam copy = new Exam();
+		copy.setIsActive(Boolean.TRUE);
+		String title = "Copy of " + source.getTitle();
+		copy.setTitle(title.length() > 200 ? title.substring(0, 200) : title);
+		copy.setDurationMinutes(source.getDurationMinutes());
+		copy.setMaxAttempts(source.getMaxAttempts());
+		copy.setShuffleQuestions(source.getShuffleQuestions());
+		copy.setShuffleOptions(source.getShuffleOptions());
+		copy.setShowAnswersAfterExam(source.getShowAnswersAfterExam());
+		copy.setPassScore(source.getPassScore());
+		copy.setMaxScore(source.getMaxScore());
+		copy.setLatePolicy(source.getLatePolicy());
+		copy.setLatePenaltyPercent(source.getLatePenaltyPercent());
+		copy.setLateGraceMinutes(source.getLateGraceMinutes());
+		copy.setResultVisibility(source.getResultVisibility());
+		copy.setExamType(source.getExamType());
+		copy.setCategory(source.getCategory());
+		copy.setAntiCheatEnabled(source.getAntiCheatEnabled());
+		copy.setDetectTabSwitch(source.getDetectTabSwitch());
+		copy.setBlockCopyPaste(source.getBlockCopyPaste());
+		copy.setRequireFullscreen(source.getRequireFullscreen());
+		copy.setSingleSession(source.getSingleSession());
+		copy.setCameraProctoring(source.getCameraProctoring());
+		copy.setHeadTurnAngleDeg(source.getHeadTurnAngleDeg());
+		copy.setHeadTurnSeconds(source.getHeadTurnSeconds());
+		copy.setFastSubmitPercent(source.getFastSubmitPercent());
+		copy.setNotifyOnViolation(source.getNotifyOnViolation());
+		copy.setSelfReviewEnabled(source.getSelfReviewEnabled());
+		copy.setPeerReviewEnabled(source.getPeerReviewEnabled());
+		copy.setPeerReviewCount(source.getPeerReviewCount());
+		copy.setPeerReviewAnonymous(source.getPeerReviewAnonymous());
+		copy.setPeerReviewShowReference(source.getPeerReviewShowReference());
+		Exam saved = examRepository.save(copy);
+		for (Question original : source.getQuestions()) {
+			Question q = copyOf(original);
+			q.setSourceQuestionId(original.getSourceQuestionId());
+			q.setSource(original.getSource());
+			q.setIsAiGenerated(original.getIsAiGenerated());
+			if (original.getExamId() != null) {
+				q.setExamId(saved.getId());
+			}
+			saved.getQuestions().add(questionRepository.save(q));
+		}
+		return examMapper.toResponse(examRepository.save(saved));
+	}
+
 	public ExamDTO removeQuestion(Long examId, Long questionId) {
 		checkPermission(CrudAction.UPDATE);
 		Exam exam = findExam(examId);
