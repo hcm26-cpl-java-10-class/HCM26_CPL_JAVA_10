@@ -39,10 +39,17 @@ export interface CharterMember {
   confirmed: boolean; confirmedAt: string | null;
 }
 export interface CharterHistory {
-  revision: number; actorId: number; savedAt: string; charter: TeamCharter; members: CharterMember[];
-  confirmations: { userId: number; name: string; roles: string[]; responsibility: string; confirmedAt: string }[];
+  revision: number;
+  actorId?: number | null;
+  savedAt?: string | null;
+  charter?: { [K in keyof TeamCharter]?: TeamCharter[K] | null } | null;
+  members?: CharterMember[] | null;
+  confirmations?: {
+    userId: number; name?: string | null; roles?: string[] | null;
+    responsibility?: string | null; confirmedAt?: string | null;
+  }[] | null;
 }
-export interface CharterHistoryPage { content: CharterHistory[]; totalElements: number; totalPages: number; number: number }
+export interface CharterHistoryPage { content: CharterHistory[] | null; totalElements: number; totalPages: number; number: number }
 
 export interface ProjectTeam {
   id: number;

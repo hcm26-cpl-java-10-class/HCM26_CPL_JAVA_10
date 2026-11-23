@@ -19,5 +19,6 @@ export function TeamCharterForm({teamId, canManage, onAccessChanged}: {
   const denied = isAxiosError(query.error) && [401, 403, 404].includes(query.error.response?.status ?? 0);
   if (!query.data || denied) return <Alert variant="destructive"><AlertDescription>{getWorkspaceError(query.error)}<Button variant="outline" onClick={() => { onAccessChanged?.(); void query.refetch(); }}>Try again</Button></AlertDescription></Alert>;
   return <CharterContent key={`${teamId}:${user.email}:${activeRole}`} view={{...query.data, canEdit: canManage !== false && query.data.canEdit}}
-    onRefresh={async () => { await query.refetch(); }} />;
+    onRefresh={async () => { await query.refetch(); }}
+    onReload={async () => (await query.refetch({throwOnError: true})).data} />;
 }
