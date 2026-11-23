@@ -78,6 +78,12 @@ class SessionLifecycleIntegrationTest {
     private UserDetailsService userDetailsService;
 
     @Autowired
+    private com.example.starter_project_2025.system.rbac.user.UserRepository userRepository;
+
+    @Autowired
+    private com.example.starter_project_2025.system.rbac.role.RoleRepository roleRepository;
+
+    @Autowired
     private TransactionTemplate transactionTemplate;
 
     @MockBean
@@ -447,8 +453,8 @@ class SessionLifecycleIntegrationTest {
     @Test
     @DisplayName("POST /api/sessions/{id}/duplicate - a cancelled source does not pass its reason on")
     void duplicate_FromCancelled_DoesNotCopyCancellation() throws Exception {
-        Session source = saveSession(CLASS_ID, TRAINER_ID, "Intro", NINE, ELEVEN, "A101", Session.SessionStatus.CANCELLED);
-        source.setCancelReason("Trainer sick");
+        Session source = saveSession(CLASS_ID, TRAINER_ID, "Intro", NINE, ELEVEN, "A101", Session.SessionStatus.SCHEDULED);
+        source.cancel("Trainer sick");
         sessionRepository.save(source);
 
         performPost("/api/sessions/" + source.getId() + "/duplicate", adminToken,
@@ -718,13 +724,40 @@ class SessionLifecycleIntegrationTest {
     }
 
     @Test
-    @DisplayName("POST /api/sessions/import and GET /export - require SESSION_CREATE / SESSION_READ (403)")
-    void importExport_AsStudent_Return403() throws Exception {
+    @DisplayName("POST /api/sessions/import requires SESSION_CREATE (403 for STUDENT); GET /export requires SESSION_READ (200 for STUDENT, 403 without SESSION_READ)")
+    void importExport_PermissionsEnforced() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "sessions.csv", "text/csv", "Class ID\n1\n".getBytes(StandardCharsets.UTF_8));
 
         mockMvc.perform(multipart("/api/sessions/import").file(file).header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/sessions/export").header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+
+        String noSessionReadEmail = "no-session-read@example.com";
+        String noPermToken = transactionTemplate.execute(status -> {
+            com.example.starter_project_2025.system.rbac.role.Role noSessionRole = roleRepository.findByName("NO_SESSION_READ")
+                    .orElseGet(() -> {
+                        com.example.starter_project_2025.system.rbac.role.Role r = new com.example.starter_project_2025.system.rbac.role.Role();
+                        r.setName("NO_SESSION_READ");
+                        r.setDescription("Role without SESSION_READ");
+                        r.setPermissions(java.util.Set.of());
+                        return roleRepository.saveAndFlush(r);
+                    });
+            com.example.starter_project_2025.system.rbac.user.User u = userRepository.findByEmail(noSessionReadEmail)
+                    .orElseGet(() -> {
+                        com.example.starter_project_2025.system.rbac.user.User created = new com.example.starter_project_2025.system.rbac.user.User();
+                        created.setEmail(noSessionReadEmail);
+                        created.setFirstName("NoPerm");
+                        created.setLastName("User");
+                        created.setPasswordHash("{noop}password");
+                        created.setIsActive(true);
+                        created.setRoles(java.util.Set.of(noSessionRole));
+                        return userRepository.saveAndFlush(created);
+                    });
+            return tokenFor(u.getEmail());
+        });
+
+        mockMvc.perform(get("/api/sessions/export").header("Authorization", "Bearer " + noPermToken))
                 .andExpect(status().isForbidden());
         assertEquals(0, sessionRepository.count());
     }
@@ -766,6 +799,7 @@ class SessionLifecycleIntegrationTest {
                 .endTime(end)
                 .location(location)
                 .status(status)
+                .cancelReason(status == Session.SessionStatus.CANCELLED ? "Seeded cancellation" : null)
                 .build());
     }
 

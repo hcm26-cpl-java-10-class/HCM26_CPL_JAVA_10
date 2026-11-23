@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class LocalExternalApiService implements ExternalApiService {
     private final ConcurrentHashMap<Long, ExternalClassDTO> classes = new ConcurrentHashMap<>();
     private static final String TRAINER_NOTE_PREFIX = "Trainer: ";
+    public static final long UNVERIFIED_TRAINER_ID = 0L;
     private final AtomicLong classIds = new AtomicLong(3);
 
     @Autowired(required = false)
@@ -119,8 +120,13 @@ public class LocalExternalApiService implements ExternalApiService {
         return trainerDirectory().stream().filter(t -> name.trim().equalsIgnoreCase(t.getName())).map(ExternalTrainerDTO::getId).findFirst().orElse(null);
     }
 
+    private boolean isKnownTrainerId(Long id) {
+        if (id == null || id <= 0) return false;
+        return trainerDirectory().stream().anyMatch(t -> id.equals(t.getId()));
+    }
+
     private String trainerNameById(Long id) {
-        if (id == null) return "";
+        if (id == null || id <= 0) return "";
         return trainerDirectory().stream().filter(t -> id.equals(t.getId())).map(ExternalTrainerDTO::getName).findFirst().orElse(String.valueOf(id));
     }
 
@@ -183,24 +189,34 @@ public class LocalExternalApiService implements ExternalApiService {
         session.setTitle(topic.length() > 150 ? topic.substring(0, 150) : topic);
 
         session.setTopicId(1L);
-        session.setTrainerId(1L);
         if (map.get("trainerId") instanceof Number n) {
-            session.setTrainerId(n.longValue());
-        } else if (map.get("trainer") != null) {
-            Long byName = trainerIdByName(map.get("trainer").toString());
+            long requestedId = n.longValue();
+            if (isKnownTrainerId(requestedId)) {
+                session.setTrainerId(requestedId);
+                if (session.getNote() != null && session.getNote().startsWith(TRAINER_NOTE_PREFIX)) session.setNote(null);
+            } else {
+                session.setTrainerId(UNVERIFIED_TRAINER_ID);
+            }
+        } else if (map.containsKey("trainer")) {
+            String rawTrainer = map.get("trainer") != null ? map.get("trainer").toString().trim() : "";
+            Long byName = trainerIdByName(rawTrainer);
             if (byName != null) {
                 session.setTrainerId(byName);
                 if (session.getNote() != null && session.getNote().startsWith(TRAINER_NOTE_PREFIX)) session.setNote(null);
-            } else if (!map.get("trainer").toString().isBlank() && map.get("notes") == null) {
-                // Trainer is not in the local directory (e.g. the class master trainer): keep the name so it round-trips.
-                session.setNote(TRAINER_NOTE_PREFIX + map.get("trainer").toString().trim());
+            } else {
+                // Unverified trainer (not in local external directory): never default to trainer #1.
+                session.setTrainerId(UNVERIFIED_TRAINER_ID);
+                if (!rawTrainer.isBlank() && map.get("notes") == null) {
+                    session.setNote(TRAINER_NOTE_PREFIX + rawTrainer);
+                }
             }
+        } else if (session.getTrainerId() == null) {
+            session.setTrainerId(UNVERIFIED_TRAINER_ID);
         }
 
         String location = map.get("room") != null ? map.get("room").toString() : (map.get("venue") != null ? map.get("venue").toString() : "Room A101");
         session.setLocation(location.length() > 150 ? location.substring(0, 150) : location);
 
-        session.setStatus(Session.SessionStatus.SCHEDULED);
         if (map.get("notes") != null) {
             session.setNote(map.get("notes").toString());
         }
@@ -237,8 +253,7 @@ public class LocalExternalApiService implements ExternalApiService {
             endTime = startTime.plusHours(2);
         }
 
-        session.setStartTime(LocalDateTime.of(date, startTime));
-        session.setEndTime(LocalDateTime.of(date, endTime));
+        session.scheduleSlot(LocalDateTime.of(date, startTime), LocalDateTime.of(date, endTime));
     }
 
     private Map<String, Object> toSessionMap(Session s) {

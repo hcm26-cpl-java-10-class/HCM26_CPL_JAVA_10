@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 class TrainingCalendarIntegrationTest {
     @Autowired TrainingCalendarService service;
+    @Autowired TrainingClassService classService;
     @Autowired TrainingClassRepository classes;
     @Autowired SessionRepository sessions;
     @Autowired ObjectMapper mapper;
@@ -74,12 +75,12 @@ class TrainingCalendarIntegrationTest {
         c.setProgram("FR_NFP_JAVA"); c.setMasterTrainer("Actual trainer"); c.setLocation("HCM"); classes.saveAndFlush(c);
         var plan = service.list(c.getId()).getFirst();
         assertEquals("EMPTY_Calendar", plan.path("name").asText());
-        var topic = plan.path("overviewItems").get(0);
-        assertEquals("FR_NFP_JAVA", topic.path("label").asText());
-        assertEquals("2027-02-09", topic.path("endDate").asText());
-        assertEquals("Actual trainer", topic.path("lessons").get(0).path("trainer").asText());
+        assertTrue(plan.path("overviewItems").isArray());
+        assertEquals(0, plan.path("overviewItems").size());
+        assertEquals("2027-02-09", plan.path("classEndDate").asText());
+        assertEquals("", plan.path("actualLearningStartDate").asText());
         c.setEndDate(LocalDate.of(2027,3,1)); classes.saveAndFlush(c);
-        assertEquals("2027-03-01", service.list(c.getId()).getFirst().path("overviewItems").get(0).path("endDate").asText());
+        assertEquals("2027-03-01", service.list(c.getId()).getFirst().path("classEndDate").asText());
         assertThrows(ResourceNotFoundException.class, () -> service.list(Long.MAX_VALUE));
     }
     @Test void savesReloadsVersionsAndIsolatesClasses() throws Exception {
@@ -103,16 +104,72 @@ class TrainingCalendarIntegrationTest {
     @Test void liveCalendarTracksRealSessionChangesAndIgnoresCancelledAndDeletedRows() {
         var c = add("LIVE");
         var s = new Session(); s.setClassId(c.getId()); s.setTopicId(1L); s.setTrainerId(1L);
-        s.setTitle("Actual lesson"); s.setStartTime(LocalDateTime.of(2026,11,10,9,0));
-        s.setEndTime(s.getStartTime().plusHours(2)); s.setLocation("A101"); sessions.saveAndFlush(s);
+        s.setTitle("Actual lesson"); s.scheduleSlot(LocalDateTime.of(2026,11,10,9,0), LocalDateTime.of(2026,11,10,11,0));
+        s.setLocation("A101"); sessions.saveAndFlush(s);
         var live = service.list(c.getId()).getFirst();
         assertEquals(0, live.path("id").asLong());
         assertEquals("Actual lesson", live.path("overviewItems").get(0).path("label").asText());
-        s.setStartTime(s.getStartTime().plusDays(2)); s.setEndTime(s.getEndTime().plusDays(2)); sessions.saveAndFlush(s);
+        s.scheduleSlot(s.getStartTime().plusDays(2), s.getEndTime().plusDays(2)); sessions.saveAndFlush(s);
         assertEquals("2026-11-12", service.list(c.getId()).getFirst().path("actualLearningStartDate").asText());
-        s.setStatus(Session.SessionStatus.CANCELLED); sessions.saveAndFlush(s);
-        assertEquals("class-" + c.getId(), service.list(c.getId()).getFirst().path("overviewItems").get(0).path("id").asText());
-        s.setStatus(Session.SessionStatus.SCHEDULED); s.setIsActive(false); sessions.saveAndFlush(s);
-        assertEquals("class-" + c.getId(), service.list(c.getId()).getFirst().path("overviewItems").get(0).path("id").asText());
+        s.cancel("Cancelled for live calendar test"); sessions.saveAndFlush(s);
+        var afterCancel = service.list(c.getId()).getFirst();
+        assertEquals(0, afterCancel.path("overviewItems").size());
+        assertEquals("", afterCancel.path("actualLearningStartDate").asText());
+        var deleted = Session.builder()
+                .classId(c.getId()).topicId(1L).trainerId(1L).title("Deleted lesson")
+                .startTime(LocalDateTime.of(2026,11,12,9,0)).endTime(LocalDateTime.of(2026,11,12,11,0))
+                .location("A101").status(Session.SessionStatus.SCHEDULED).isActive(false).build();
+        sessions.saveAndFlush(deleted);
+        assertEquals(0, service.list(c.getId()).getFirst().path("overviewItems").size());
+    }
+
+    @Test void updatingClassDatesShiftsOnlyScheduledSessionsAndPreservesCompletedAndCancelled() {
+        var c = add("SHIFT_MIXED");
+        LocalDateTime scheduledStart = LocalDateTime.of(2026, 11, 10, 9, 0);
+        LocalDateTime scheduledEnd = LocalDateTime.of(2026, 11, 10, 11, 0);
+        var scheduled = Session.builder()
+                .classId(c.getId()).topicId(1L).trainerId(1L).title("Scheduled lesson")
+                .startTime(scheduledStart).endTime(scheduledEnd).location("A101")
+                .status(Session.SessionStatus.SCHEDULED).build();
+
+        LocalDateTime completedStart = LocalDateTime.of(2026, 11, 11, 9, 0);
+        LocalDateTime completedEnd = LocalDateTime.of(2026, 11, 11, 11, 0);
+        var completed = Session.builder()
+                .classId(c.getId()).topicId(1L).trainerId(1L).title("Completed lesson")
+                .startTime(completedStart).endTime(completedEnd).location("A101")
+                .status(Session.SessionStatus.COMPLETED).build();
+
+        LocalDateTime cancelledStart = LocalDateTime.of(2026, 11, 12, 9, 0);
+        LocalDateTime cancelledEnd = LocalDateTime.of(2026, 11, 12, 11, 0);
+        var cancelled = Session.builder()
+                .classId(c.getId()).topicId(1L).trainerId(1L).title("Cancelled lesson")
+                .startTime(cancelledStart).endTime(cancelledEnd).location("A101")
+                .status(Session.SessionStatus.CANCELLED).cancelReason("Holiday").build();
+
+        scheduled = sessions.saveAndFlush(scheduled);
+        completed = sessions.saveAndFlush(completed);
+        cancelled = sessions.saveAndFlush(cancelled);
+
+        var updateDto = classService.get(c.getId());
+        updateDto.setStartDate(LocalDate.of(2026, 12, 1));
+        updateDto.setEndDate(LocalDate.of(2027, 3, 1));
+
+        assertDoesNotThrow(() -> classService.update(c.getId(), updateDto));
+
+        var reloadedScheduled = sessions.findById(scheduled.getId()).orElseThrow();
+        var reloadedCompleted = sessions.findById(completed.getId()).orElseThrow();
+        var reloadedCancelled = sessions.findById(cancelled.getId()).orElseThrow();
+
+        assertEquals(LocalDate.of(2026, 12, 1), reloadedScheduled.getStartTime().toLocalDate());
+        assertEquals(Session.SessionStatus.SCHEDULED, reloadedScheduled.getStatus());
+
+        assertEquals(completedStart, reloadedCompleted.getStartTime());
+        assertEquals(completedEnd, reloadedCompleted.getEndTime());
+        assertEquals(Session.SessionStatus.COMPLETED, reloadedCompleted.getStatus());
+
+        assertEquals(cancelledStart, reloadedCancelled.getStartTime());
+        assertEquals(cancelledEnd, reloadedCancelled.getEndTime());
+        assertEquals(Session.SessionStatus.CANCELLED, reloadedCancelled.getStatus());
+        assertEquals("Holiday", reloadedCancelled.getCancelReason());
     }
 }

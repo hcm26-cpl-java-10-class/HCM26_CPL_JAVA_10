@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.training;
 
 import com.example.starter_project_2025.system.training.entity.TrainingClass;
+import com.example.starter_project_2025.system.demo.session.Session;
 import com.example.starter_project_2025.system.demo.session.SessionRepository;
 import com.example.starter_project_2025.exception.*;
 import lombok.RequiredArgsConstructor;
@@ -131,20 +132,20 @@ public class TrainingClassService {
             throw new ConflictException("Invalid class status transition");
         if (Set.of("active", "completed", "closed").contains(entity.getStatus()) && !entity.getCode().equals(input.getCode()))
             throw new ConflictException("Cannot change the code of a class that has started");
-        var activeSessions = sessions.findByClassId(id).stream()
-                .filter(s -> Boolean.TRUE.equals(s.getIsActive()))
-                .sorted(Comparator.comparing(s -> s.getStartTime()))
+        var scheduledSessions = sessions.findByClassId(id).stream()
+                .filter(s -> Boolean.TRUE.equals(s.getIsActive()) && s.getStatus() == Session.SessionStatus.SCHEDULED)
+                .sorted(Comparator.comparing(Session::getStartTime))
                 .toList();
         boolean datesChanged = !Objects.equals(entity.getStartDate(), input.getStartDate())
                 || !Objects.equals(entity.getEndDate(), input.getEndDate());
-        boolean hasOutOfBounds = activeSessions.stream().anyMatch(
+        boolean hasOutOfBounds = scheduledSessions.stream().anyMatch(
                 s -> s.getStartTime().toLocalDate().isBefore(input.getStartDate())
                         || s.getEndTime().toLocalDate().isAfter(input.getEndDate()));
         if (datesChanged || hasOutOfBounds) {
             long totalSpanDays = Math.max(0L, java.time.temporal.ChronoUnit.DAYS.between(input.getStartDate(), input.getEndDate()));
-            int totalCount = activeSessions.size();
+            int totalCount = scheduledSessions.size();
             for (int i = 0; i < totalCount; i++) {
-                var session = activeSessions.get(i);
+                var session = scheduledSessions.get(i);
                 long offsetDays = totalCount <= 1 ? 0L : Math.round((i * (double) totalSpanDays) / (totalCount - 1));
                 LocalDate newDate = input.getStartDate().plusDays(offsetDays);
                 if (newDate.isAfter(input.getEndDate())) {
@@ -156,9 +157,11 @@ public class TrainingClassService {
                 var newEnd = newStart.plusMinutes(durationMinutes);
                 if (newEnd.toLocalDate().isAfter(input.getEndDate())) {
                     newEnd = input.getEndDate().atTime(23, 59);
+                    if (!newEnd.isAfter(newStart)) {
+                        newStart = newEnd.minusMinutes(Math.min(durationMinutes, 30L));
+                    }
                 }
-                session.setStartTime(newStart);
-                session.setEndTime(newEnd);
+                session.scheduleSlot(newStart, newEnd);
                 sessions.save(session);
             }
         }
