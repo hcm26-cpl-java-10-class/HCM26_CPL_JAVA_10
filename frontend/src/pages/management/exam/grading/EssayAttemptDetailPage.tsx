@@ -165,20 +165,20 @@ export default function EssayAttemptDetailPage() {
         if (!detail?.essays?.length) return null;
 
         const gradesList = [];
-        for (const essay of detail.essays) {
+        for (const [essayIndex, essay] of detail.essays.entries()) {
             const draft = draftGrades[essay.questionId];
             if (!draft || draft.score.trim() === "") {
-                toast.error(`Please assign a score for Essay Question ${essay.displayOrder}.`);
+                toast.error(`Please assign a score for Essay Question ${essayIndex + 1}.`);
                 return null;
             }
             const scoreNum = Number(draft.score);
             if (isNaN(scoreNum) || scoreNum < 0) {
-                toast.error(`Score for Essay Question ${essay.displayOrder} must be a non-negative number.`);
+                toast.error(`Score for Essay Question ${essayIndex + 1} must be a non-negative number.`);
                 return null;
             }
             if (scoreNum > (essay.maxScore ?? essay.points)) {
                 toast.error(
-                    `Score for Essay Question ${essay.displayOrder} cannot exceed maximum points (${formatScore(
+                    `Score for Essay Question ${essayIndex + 1} cannot exceed maximum points (${formatScore(
                         essay.maxScore ?? essay.points
                     )}).`
                 );

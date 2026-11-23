@@ -211,7 +211,11 @@ public class ExamQuestionPoolVersionService {
     public ExamQuestionPoolConfigResponse getCurrentConfig(Long examId) {
         examService.getExamForPoolConfiguration(examId);
 
-        ExamQuestionPoolVersion version = getCurrentVersion(examId);
+        // 404 (not 400) when the exam has no pool yet: the UI treats it as "use defaults".
+        ExamQuestionPoolVersion version = versionRepository
+                .findTopByExam_IdOrderByVersionNumberDesc(examId)
+                .orElseThrow(() -> new com.example.starter_project_2025.exception.ResourceNotFoundException(
+                        "Question Pool Version not found for exam: " + examId));
 
         ExamQuestionPoolConfigResponse response =
                 new ExamQuestionPoolConfigResponse();

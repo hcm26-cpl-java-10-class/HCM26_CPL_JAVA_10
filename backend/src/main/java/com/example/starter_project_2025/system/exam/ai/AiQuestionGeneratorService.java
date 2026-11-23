@@ -118,8 +118,8 @@ public class AiQuestionGeneratorService {
             throw new BadRequestException("Cần cung cấp mã đề thi (examId) hợp lệ để lưu câu hỏi AI.");
         }
 
-        Exam exam = examRepository.findById(req.getExamId())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài thi với ID: " + req.getExamId()));
+        // Permission + ownership check (404 for exams the caller does not own).
+        Exam exam = examService.getExamForPoolConfiguration(req.getExamId());
 
         if (examAttemptRepository.existsByExam_Id(exam.getId())) {
             throw new BadRequestException("Bài thi đã có học sinh làm bài, không thể thêm câu hỏi mới.");
@@ -202,8 +202,8 @@ public class AiQuestionGeneratorService {
         if (examId == null || examId <= 0) {
             throw new BadRequestException("examId không hợp lệ.");
         }
-        Exam exam = examRepository.findById(examId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài thi với ID: " + examId));
+        // Permission + ownership check (404 for exams the caller does not own).
+        Exam exam = examService.getExamForPoolConfiguration(examId);
 
         // If exam has attempts or is locked, clean up unused/temporary AI questions automatically
         if (examAttemptRepository.existsByExam_Id(examId)) {
@@ -221,8 +221,8 @@ public class AiQuestionGeneratorService {
         if (examId == null || examId <= 0 || questionId == null || questionId <= 0) {
             throw new BadRequestException("examId hoặc questionId không hợp lệ.");
         }
-        Exam exam = examRepository.findById(examId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài thi với ID: " + examId));
+        // Permission + ownership check (404 for exams the caller does not own).
+        Exam exam = examService.getExamForPoolConfiguration(examId);
 
         if (examAttemptRepository.existsByExam_Id(examId)) {
             throw new BadRequestException("Bài thi đã có học sinh làm bài, không thể xóa vĩnh viễn câu hỏi AI.");
@@ -251,10 +251,7 @@ public class AiQuestionGeneratorService {
         if (examId == null || examId <= 0) {
             return 0;
         }
-        Exam exam = examRepository.findById(examId).orElse(null);
-        if (exam == null) {
-            return 0;
-        }
+        Exam exam = examService.getExamForPoolConfiguration(examId);
 
         Set<Long> inExamIds = exam.getQuestions().stream()
                 .map(Question::getId)

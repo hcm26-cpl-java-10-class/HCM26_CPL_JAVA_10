@@ -17,7 +17,15 @@ public final class GradebookDTOs {
         }
 
         public record StudentRow(Long id, String name, String email, String code,
-                        Map<Long, BigDecimal> scores, BigDecimal finalScore) {
+                        Map<Long, BigDecimal> scores, Map<Long, BigDecimal> bonuses, BigDecimal finalScore) {
+        }
+
+        public record BonusRequest(Long columnId, Long studentId, BigDecimal points, String reason) {
+        }
+
+        public record BonusLog(Long id, Long columnId, String columnName, Long studentId, String studentName,
+                        BigDecimal points, String reason, String grantedByName, java.time.LocalDateTime createdAt,
+                        java.time.LocalDateTime revokedAt, String revokedByName) {
         }
 
         public record Gradebook(Long courseId, String courseName, List<ColumnDto> columns,

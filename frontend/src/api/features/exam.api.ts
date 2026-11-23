@@ -293,6 +293,10 @@ export const examApi = {
     const response = await axiosInstance.post<SimilarityReport>(`/exams/${examId}/grading/similarity/scan`);
     return response.data;
   },
+  duplicate: async (examId: number): Promise<ExamDTO> => {
+    const response = await axiosInstance.post<ExamDTO>(`/exams/${examId}/duplicate`);
+    return response.data;
+  },
   removeQuestion: async (examId: number, questionId: number): Promise<ExamDTO> => {
     const response = await axiosInstance.delete<ExamDTO>(`/exams/${examId}/questions/${questionId}`);
     return response.data;

@@ -49,6 +49,11 @@ public class ExamController extends BaseCrudController<Long, ExamDTO, ExamFilter
         return ResponseEntity.ok(service.addQuestions(id, req.questionIds()));
     }
 
+    @PostMapping("/{id}/duplicate")
+    public ResponseEntity<ExamDTO> duplicate(@PathVariable Long id) {
+        return ResponseEntity.ok(service.duplicate(id));
+    }
+
     @GetMapping("/invitations/overview")
     @PreAuthorize("hasAuthority('INVITATION_READ')")
     public ResponseEntity<List<ExamInvitationOverviewDTO>> listInvitationOverviews(

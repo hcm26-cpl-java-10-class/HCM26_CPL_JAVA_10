@@ -34,6 +34,10 @@ public class ExamDTO extends BaseDTO {
     @JsonProperty(access = READ_ONLY)
     private String createdByName;
 
+    /** So loi moi da tao cho de thi (chi de hien thi). */
+    @JsonProperty(access = READ_ONLY)
+    private Long invitationCount;
+
     /** So bai da nop dang cho giao vien cham (chi de hien thi). */
     @JsonProperty(access = READ_ONLY)
     private Long pendingGradingCount;

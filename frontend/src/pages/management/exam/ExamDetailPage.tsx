@@ -1,10 +1,12 @@
+import { ApiErrorState } from "@/components/exam/ApiErrorState";
 import { assessmentReturnPath } from "@/utils/assessment-navigation";
 import { examApi } from "@/api";
 import HeaderRight from "@/components/layout/HeaderRight";
 import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 import { Button } from "@/components/ui/button";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, BookOpen, ClipboardCheck, Mail, Pencil, BarChart3 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { ArrowLeft, BookOpen, ClipboardCheck, Copy, Mail, Pencil, BarChart3 } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ExamEditPanel } from "./ExamEditPanel";
@@ -59,9 +61,22 @@ export default function ExamDetailPage() {
     queryFn: () => examApi.getById(examId),
     enabled: Number.isFinite(id) && id > 0,
   });
+  const queryClient = useQueryClient();
+  const duplicateMutation = useMutation({
+    mutationFn: () => examApi.duplicate(id),
+    onSuccess: (copy) => {
+      queryClient.invalidateQueries({ queryKey: ["exams"] });
+      toast.success("Exam duplicated", { duration: 3000 });
+      navigate(`/exams/${copy.id}/questions${returnQuery}`);
+    },
+    onError: () => toast.error("Could not duplicate this exam"),
+  });
   const title = examQuery.data?.title;
   const counts: Partial<Record<TabKey, { value: number; warn?: boolean }>> = {
     questions: { value: examQuery.data?.questionIds?.length ?? examQuery.data?.questions?.length ?? 0 },
+    ...((examQuery.data?.invitationCount ?? 0) > 0
+      ? { invitations: { value: examQuery.data?.invitationCount ?? 0 } }
+      : {}),
     ...((examQuery.data?.pendingGradingCount ?? 0) > 0
       ? { grading: { value: examQuery.data?.pendingGradingCount ?? 0, warn: true } }
       : {}),
@@ -72,12 +87,14 @@ export default function ExamDetailPage() {
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate(returnTo)}>
+          <Button variant="ghost" size="sm" className="shrink-0" onClick={() => navigate(returnTo)}>
             <ArrowLeft className="mr-1 size-4" />
-            {returnTo.startsWith("/courses/") || returnTo.startsWith("/course-enrollments/") ? "Back to course" : returnTo.startsWith("/exams/curriculum") ? "Back to curriculum mapping" : "Assessment Management"}
+            <span className="hidden lg:inline">
+              {returnTo.startsWith("/courses/") || returnTo.startsWith("/course-enrollments/") ? "Back to course" : returnTo.startsWith("/exams/curriculum") ? "Back to curriculum mapping" : "Assessment Management"}
+            </span>
           </Button>
           <span className="text-muted-foreground">/</span>
-          <h1 className="truncate text-base font-semibold">{title ?? "Loading..."}</h1>
+          <h1 className="min-w-0 truncate text-base font-semibold" title={title ?? undefined}>{title ?? "Loading..."}</h1>
           {examQuery.data && (examQuery.data.courseName ? (
             <span
               className="hidden max-w-[40ch] truncate rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground md:inline"
@@ -96,10 +113,24 @@ export default function ExamDetailPage() {
             </button>
           ))}
         </div>
-        <HeaderRight />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={duplicateMutation.isPending || !examQuery.data}
+            onClick={() => duplicateMutation.mutate()}
+          >
+            <Copy className="mr-1 size-4" />
+            {duplicateMutation.isPending ? "Duplicating..." : "Duplicate"}
+          </Button>
+          <HeaderRight />
+        </div>
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
+        {examQuery.isError ? (
+          <ApiErrorState error={examQuery.error} onRetry={() => void examQuery.refetch()} onBack={() => navigate(returnTo)} />
+        ) : (<>
         <div className="grid grid-cols-2 gap-1 rounded-lg border bg-muted/40 p-1 sm:grid-cols-5" role="tablist" aria-label="Assessment sections">
           {TABS.map(({ key, label, segment, icon: Icon }) => (
             <button
@@ -139,6 +170,7 @@ export default function ExamDetailPage() {
           </EmbeddedLayoutContext.Provider>
           {active === "edit" && <ExamEditPanel examId={id} />}
         </div>
+        </>)}
       </main>
     </div>
   );
