@@ -27,6 +27,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import com.example.starter_project_2025.system.exam.analytics.service.ExamAttemptStatisticsService;
+import com.example.starter_project_2025.system.exam.grading.service.ExamGradeScaleService;
 
 @ExtendWith(MockitoExtension.class)
 class ExamResultStatisticsServiceTest {

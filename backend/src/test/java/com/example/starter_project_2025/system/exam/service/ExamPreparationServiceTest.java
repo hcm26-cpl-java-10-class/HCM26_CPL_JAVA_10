@@ -1,8 +1,17 @@
 package com.example.starter_project_2025.system.exam.service;
 
-import com.example.starter_project_2025.system.exam.domain.*;
-import com.example.starter_project_2025.system.question.domain.*;
-import com.example.starter_project_2025.system.question.mapper.QuestionTakerMapper;
+import com.example.starter_project_2025.system.exam.attempt.domain.*;
+import com.example.starter_project_2025.system.exam.attempt.service.ExamAttemptService;
+import com.example.starter_project_2025.system.exam.core.domain.*;
+import com.example.starter_project_2025.system.exam.courselink.service.ExamProgressLockService;
+import com.example.starter_project_2025.system.exam.integrity.domain.ExamProctorImageRepository;
+import com.example.starter_project_2025.system.exam.invitation.domain.*;
+import com.example.starter_project_2025.system.exam.pool.domain.ExamQuestionPoolVersionRepository;
+import com.example.starter_project_2025.system.exam.pool.service.ExamPoolAttemptSnapshotService;
+import com.example.starter_project_2025.system.exam.pool.service.ExamPoolRandomSelectionService;
+import com.example.starter_project_2025.system.exam.result.service.ExamResultAccessService;
+import com.example.starter_project_2025.system.question.core.domain.*;
+import com.example.starter_project_2025.system.question.core.mapper.QuestionTakerMapper;
 import com.example.starter_project_2025.system.rbac.user.*;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.fasterxml.jackson.databind.ObjectMapper;

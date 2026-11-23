@@ -15,6 +15,8 @@ import {
     List,
     Monitor,
     MonitorOff,
+    Pin,
+    PinOff,
     RefreshCw,
     Search,
     ShieldCheck,
@@ -224,6 +226,59 @@ function AttemptMediaConnection({
     return null;
 }
 
+const PINNED_STORAGE_KEY = "exam-supervisor:pinned-students";
+
+function loadPinnedStudents(): number[] {
+    try {
+        const raw = window.localStorage.getItem(PINNED_STORAGE_KEY);
+        const parsed: unknown = raw ? JSON.parse(raw) : [];
+
+        return Array.isArray(parsed)
+            ? parsed.filter((id): id is number => typeof id === "number")
+            : [];
+    } catch {
+        return [];
+    }
+}
+
+/** Nút ghim thí sinh lên đầu lưới. Không làm kích hoạt thẻ cha khi bấm. */
+function PinButton({
+                       pinned,
+                       onToggle,
+                       className,
+                   }: {
+    pinned: boolean;
+    onToggle: () => void;
+    className?: string;
+}) {
+    return (
+        <button
+            type="button"
+            title={pinned ? "Bỏ ghim" : "Ghim lên đầu"}
+            aria-label={pinned ? "Bỏ ghim thí sinh" : "Ghim thí sinh lên đầu"}
+            aria-pressed={pinned}
+            onClick={(event) => {
+                event.stopPropagation();
+                onToggle();
+            }}
+            onKeyDown={(event) => event.stopPropagation()}
+            className={cn(
+                "flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                pinned
+                    ? "bg-amber-400 text-slate-900 hover:bg-amber-300"
+                    : "bg-black/50 text-white hover:bg-black/70",
+                className,
+            )}
+        >
+            {pinned ? (
+                <Pin className="h-3.5 w-3.5 fill-current" />
+            ) : (
+                <PinOff className="h-3.5 w-3.5" />
+            )}
+        </button>
+    );
+}
+
 /**
  * Thẻ camera trong chế độ Grid.
  * Không tạo viewer connection riêng.
@@ -235,12 +290,16 @@ function StudentCameraCard({
                                mediaState,
                                violation,
                                source,
+                               pinned,
+                               onTogglePin,
                            }: {
     attempt: SupervisorAttemptDTO;
     onSelect: (attempt: SupervisorAttemptDTO) => void;
     mediaState?: AttemptMediaState;
     violation?: AttemptViolationInfo;
     source: StreamSource;
+    pinned: boolean;
+    onTogglePin: () => void;
 }) {
     const streamStatus = mediaState?.status ?? "waiting";
     const cameraStream = mediaState?.media.camera ?? null;
@@ -250,14 +309,26 @@ function StudentCameraCard({
     const isViolating = Boolean(violation?.recent);
 
     return (
-        <button
-            type="button"
+        // div thay vì button để chứa được nút ghim (button không lồng button).
+        <div
+            role="button"
+            tabIndex={0}
             onClick={() => onSelect(attempt)}
+            onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelect(attempt);
+                }
+            }}
             className={cn(
-                "group relative overflow-hidden rounded-xl bg-slate-950 text-left shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "group relative cursor-pointer overflow-hidden rounded-xl bg-slate-950 text-left shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 isViolating
                     ? "ring-4 ring-red-500 shadow-lg shadow-red-500/40"
-                    : "ring-1 ring-border hover:ring-2 hover:ring-primary/60",
+                    : pinned
+                        ? "ring-2 ring-amber-400 hover:ring-amber-300"
+                        : "ring-1 ring-border hover:ring-2 hover:ring-primary/60",
             )}
         >
             <div className="relative flex aspect-video items-center justify-center text-slate-300">
@@ -316,11 +387,18 @@ function StudentCameraCard({
                     </span>
                 </div>
 
-                {/* Cảnh báo vi phạm (trên phải) */}
+                {/* Nút ghim (góc trên phải) */}
+                <PinButton
+                    pinned={pinned}
+                    onToggle={onTogglePin}
+                    className="absolute right-2 top-2"
+                />
+
+                {/* Cảnh báo vi phạm (cạnh nút ghim) */}
                 {violation && (
                     <span
                         className={cn(
-                            "absolute right-2 top-2 flex max-w-[60%] items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-white",
+                            "absolute right-10 top-2 flex max-w-[55%] items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-white",
                             isViolating
                                 ? "animate-pulse bg-red-600"
                                 : "bg-amber-500",
@@ -356,7 +434,7 @@ function StudentCameraCard({
                     </span>
                 </div>
             </div>
-        </button>
+        </div>
     );
 }
 
@@ -435,6 +513,47 @@ export default function ExamSupervisorPage() {
 
         return () => window.clearInterval(timer);
     }, []);
+
+    // Ghim thí sinh (theo studentId) - nhớ lại sau khi tải lại trang.
+    const [pinnedStudentIds, setPinnedStudentIds] =
+        useState<number[]>(loadPinnedStudents);
+
+    useEffect(() => {
+        try {
+            window.localStorage.setItem(
+                PINNED_STORAGE_KEY,
+                JSON.stringify(pinnedStudentIds),
+            );
+        } catch {
+            // localStorage không khả dụng: bỏ qua, ghim chỉ có hiệu lực trong phiên.
+        }
+    }, [pinnedStudentIds]);
+
+    const pinnedSet = useMemo(
+        () => new Set(pinnedStudentIds),
+        [pinnedStudentIds],
+    );
+
+    const togglePin = useCallback((studentId: number) => {
+        setPinnedStudentIds((current) =>
+            current.includes(studentId)
+                ? current.filter((id) => id !== studentId)
+                : [...current, studentId],
+        );
+    }, []);
+
+    // Nhấn Esc để đóng cửa sổ chi tiết toàn trang.
+    useEffect(() => {
+        if (!selectedAttempt) return;
+
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setSelectedAttempt(null);
+        };
+
+        window.addEventListener("keydown", onKeyDown);
+
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [selectedAttempt]);
 
     const attemptsQuery = useQuery({
         queryKey: ["exam-supervisor", "active-attempts"],
@@ -528,6 +647,20 @@ export default function ExamSupervisorPage() {
                 ),
         );
     }, [attempts, searchText]);
+
+    /** Thí sinh đã ghim lên đầu, giữ nguyên thứ tự trong mỗi nhóm. */
+    const displayedAttempts = useMemo(() => {
+        if (pinnedSet.size === 0) return filteredAttempts;
+
+        const pinned: SupervisorAttemptDTO[] = [];
+        const rest: SupervisorAttemptDTO[] = [];
+
+        for (const attempt of filteredAttempts) {
+            (pinnedSet.has(attempt.studentId) ? pinned : rest).push(attempt);
+        }
+
+        return [...pinned, ...rest];
+    }, [filteredAttempts, pinnedSet]);
 
     /**
      * Cập nhật stream của từng attempt.
@@ -801,16 +934,12 @@ export default function ExamSupervisorPage() {
                                 <div
                                     className={
                                         viewMode === "grid"
-                                            ? cn(
-                                                "grid gap-3",
-                                                source === "screen"
-                                                    ? "grid-cols-[repeat(auto-fill,minmax(340px,1fr))]"
-                                                    : "grid-cols-[repeat(auto-fill,minmax(260px,1fr))]",
-                                            )
+                                            ? // 4 khung / hàng, giống nhau cho cả webcam và màn hình
+                                            "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
                                             : "space-y-3"
                                     }
                                 >
-                                    {filteredAttempts.map((attempt) => {
+                                    {displayedAttempts.map((attempt) => {
                                         const violation =
                                             violationByAttempt.get(
                                                 attempt.attemptId,
@@ -831,6 +960,14 @@ export default function ExamSupervisorPage() {
                                                     }
                                                     violation={violation}
                                                     source={source}
+                                                    pinned={pinnedSet.has(
+                                                        attempt.studentId,
+                                                    )}
+                                                    onTogglePin={() =>
+                                                        togglePin(
+                                                            attempt.studentId,
+                                                        )
+                                                    }
                                                 />
                                             );
                                         }
@@ -840,14 +977,30 @@ export default function ExamSupervisorPage() {
                                                 ?.media[source] ?? null;
 
                                         return (
-                                            <button
+                                            <div
                                                 key={attempt.attemptId}
-                                                type="button"
+                                                role="button"
+                                                tabIndex={0}
                                                 onClick={() =>
                                                     setSelectedAttempt(attempt)
                                                 }
+                                                onKeyDown={(event) => {
+                                                    if (
+                                                        event.target !==
+                                                        event.currentTarget
+                                                    )
+                                                        return;
+
+                                                    if (
+                                                        event.key === "Enter" ||
+                                                        event.key === " "
+                                                    ) {
+                                                        event.preventDefault();
+                                                        setSelectedAttempt(attempt);
+                                                    }
+                                                }}
                                                 className={cn(
-                                                    "flex w-full items-center gap-4 rounded-lg bg-card p-3 text-left",
+                                                    "flex w-full cursor-pointer items-center gap-4 rounded-lg bg-card p-3 text-left",
                                                     violation?.recent
                                                         ? "ring-4 ring-red-500"
                                                         : "ring-1 ring-border hover:ring-primary/50",
@@ -913,7 +1066,18 @@ export default function ExamSupervisorPage() {
                                                         attempt.deadlineAt,
                                                     )}
                                                 </span>
-                                            </button>
+
+                                                <PinButton
+                                                    pinned={pinnedSet.has(
+                                                        attempt.studentId,
+                                                    )}
+                                                    onToggle={() =>
+                                                        togglePin(
+                                                            attempt.studentId,
+                                                        )
+                                                    }
+                                                />
+                                            </div>
                                         );
                                     })}
                                 </div>
@@ -991,165 +1155,151 @@ export default function ExamSupervisorPage() {
                     </aside>
                 </div>
 
-                {/* Attempt detail dialog */}
-                {selectedAttempt && (
-                    <div
-                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-                        role="presentation"
-                        onMouseDown={(event) => {
-                            if (event.target === event.currentTarget) {
-                                setSelectedAttempt(null);
-                            }
-                        }}
-                    >
-                        <section
-                            role="dialog"
-                            aria-modal="true"
-                            aria-labelledby="supervisor-detail-title"
-                            className="w-full max-w-2xl rounded-xl bg-background p-5 shadow-xl"
-                        >
-                            <div className="mb-4 flex items-start justify-between gap-3">
-                                <div>
-                                    <h2
-                                        id="supervisor-detail-title"
-                                        className="text-lg font-semibold"
-                                    >
-                                        Thông tin lượt thi
-                                    </h2>
+                {/* Attempt detail: toàn trang */}
+                {selectedAttempt &&
+                    (() => {
+                        const media =
+                            mediaByAttempt[selectedAttempt.attemptId]?.media;
+                        const detailViolation = violationByAttempt.get(
+                            selectedAttempt.attemptId,
+                        );
 
-                                    <p className="text-sm text-muted-foreground">
-                                        {selectedAttempt.studentName}
-                                    </p>
-                                </div>
+                        const panels = [
+                            {
+                                key: "camera" as const,
+                                title: "Webcam",
+                                icon: <Camera className="h-4 w-4" />,
+                                stream: media?.camera ?? null,
+                                emptyIcon: <VideoOff className="h-8 w-8" />,
+                                emptyText: "Chưa có luồng webcam",
+                            },
+                            {
+                                key: "screen" as const,
+                                title: "Màn hình chia sẻ",
+                                icon: <Monitor className="h-4 w-4" />,
+                                stream: media?.screen ?? null,
+                                emptyIcon: <MonitorOff className="h-8 w-8" />,
+                                emptyText: "Học sinh chưa chia sẻ màn hình",
+                            },
+                        ];
 
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() =>
-                                        setSelectedAttempt(null)
-                                    }
-                                    aria-label="Đóng"
-                                >
-                                    <X className="h-4 w-4" />
-                                </Button>
-                            </div>
+                        return (
+                            <div
+                                role="dialog"
+                                aria-modal="true"
+                                aria-labelledby="supervisor-detail-title"
+                                className="fixed inset-0 z-50 flex flex-col bg-background"
+                            >
+                                <header className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3">
+                                    <div className="min-w-0">
+                                        <h2
+                                            id="supervisor-detail-title"
+                                            className="truncate text-lg font-semibold"
+                                        >
+                                            {selectedAttempt.studentName}
+                                        </h2>
 
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <div className="rounded-lg bg-muted/50 p-3">
-                                    <p className="text-xs text-muted-foreground">
-                                        Bài thi
-                                    </p>
-
-                                    <p className="mt-1 font-medium">
-                                        {selectedAttempt.examTitle}
-                                    </p>
-                                </div>
-
-                                <div className="rounded-lg bg-muted/50 p-3">
-                                    <p className="text-xs text-muted-foreground">
-                                        Trạng thái
-                                    </p>
-
-                                    <p className="mt-1 font-medium text-emerald-600">
-                                        Đang thi
-                                    </p>
-                                </div>
-
-                                <div className="rounded-lg bg-muted/50 p-3">
-                                    <p className="text-xs text-muted-foreground">
-                                        Email
-                                    </p>
-
-                                    <p className="mt-1 break-all font-medium">
-                                        {selectedAttempt.studentEmail}
-                                    </p>
-                                </div>
-
-                                <div className="rounded-lg bg-muted/50 p-3">
-                                    <p className="text-xs text-muted-foreground">
-                                        Bắt đầu lúc
-                                    </p>
-
-                                    <p className="mt-1 font-medium">
-                                        {formatClock(
-                                            selectedAttempt.startedAt,
-                                        )}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                                {/* Webcam */}
-                                <div className="rounded-lg border p-4">
-                                    <div className="mb-2 flex items-center gap-2 font-medium">
-                                        <Camera className="h-4 w-4" />
-                                        Webcam
+                                        <p className="truncate text-sm text-muted-foreground">
+                                            {selectedAttempt.examTitle} ·{" "}
+                                            {selectedAttempt.studentEmail}
+                                        </p>
                                     </div>
 
-                                    <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-md bg-slate-950 text-slate-300">
-                                        {mediaByAttempt[
-                                            selectedAttempt.attemptId
-                                            ]?.media.camera ? (
-                                            <StreamVideo
-                                                stream={
-                                                    mediaByAttempt[
-                                                        selectedAttempt.attemptId
-                                                        ].media.camera
-                                                }
-                                                className="h-full w-full object-contain"
-                                            />
-                                        ) : (
-                                            <div className="flex flex-col items-center gap-2">
-                                                <VideoOff className="h-7 w-7" />
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Badge variant="outline">
+                                            Bắt đầu{" "}
+                                            {formatClock(
+                                                selectedAttempt.startedAt,
+                                            )}
+                                        </Badge>
 
-                                                <span className="text-sm">
-                                                    Chưa có luồng webcam
-                                                </span>
+                                        <Badge
+                                            variant="outline"
+                                            className="gap-1.5"
+                                        >
+                                            <Clock3 className="h-3.5 w-3.5" />
+                                            Còn{" "}
+                                            {getRemainingTime(
+                                                selectedAttempt.deadlineAt,
+                                            )}
+                                        </Badge>
+
+                                        <Badge className="bg-emerald-600 hover:bg-emerald-600">
+                                            Đang thi
+                                        </Badge>
+
+                                        {detailViolation && (
+                                            <Badge
+                                                className={cn(
+                                                    "gap-1.5 text-white",
+                                                    detailViolation.recent
+                                                        ? "animate-pulse bg-red-600 hover:bg-red-600"
+                                                        : "bg-amber-500 hover:bg-amber-500",
+                                                )}
+                                            >
+                                                <AlertTriangle className="h-3.5 w-3.5" />
+                                                {detailViolation.count} vi phạm
+                                            </Badge>
+                                        )}
+
+                                        <PinButton
+                                            pinned={pinnedSet.has(
+                                                selectedAttempt.studentId,
+                                            )}
+                                            onToggle={() =>
+                                                togglePin(
+                                                    selectedAttempt.studentId,
+                                                )
+                                            }
+                                        />
+
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() =>
+                                                setSelectedAttempt(null)
+                                            }
+                                            aria-label="Đóng (Esc)"
+                                            title="Đóng (Esc)"
+                                        >
+                                            <X className="h-5 w-5" />
+                                        </Button>
+                                    </div>
+                                </header>
+
+                                <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto p-4 lg:grid-cols-2 lg:grid-rows-1 lg:overflow-hidden">
+                                    {panels.map((panel) => (
+                                        <section
+                                            key={panel.key}
+                                            className="flex min-h-[40vh] min-w-0 flex-col rounded-lg border p-3 lg:min-h-0"
+                                        >
+                                            <div className="mb-2 flex items-center gap-2 font-medium">
+                                                {panel.icon}
+                                                {panel.title}
                                             </div>
-                                        )}
-                                    </div>
-                                </div>
 
-                                {/* Screen sharing */}
-                                <div className="rounded-lg border p-4">
-                                    <div className="mb-2 flex items-center gap-2 font-medium">
-                                        <Monitor className="h-4 w-4" />
-                                        Màn hình chia sẻ
-                                    </div>
+                                            <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-md bg-slate-950 text-slate-300">
+                                                {panel.stream ? (
+                                                    <StreamVideo
+                                                        stream={panel.stream}
+                                                        className="h-full w-full object-contain"
+                                                    />
+                                                ) : (
+                                                    <div className="flex flex-col items-center gap-2">
+                                                        {panel.emptyIcon}
 
-                                    <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-md bg-slate-950 text-slate-300">
-                                        {mediaByAttempt[
-                                            selectedAttempt.attemptId
-                                            ]?.media.screen ? (
-                                            <StreamVideo
-                                                stream={
-                                                    mediaByAttempt[
-                                                        selectedAttempt.attemptId
-                                                        ].media.screen
-                                                }
-                                                className="h-full w-full object-contain"
-                                            />
-                                        ) : (
-                                            <div className="flex flex-col items-center gap-2">
-                                                <Monitor className="h-7 w-7" />
-
-                                                <span className="text-sm">
-                                                    Học sinh chưa chia sẻ màn hình
-                                                </span>
+                                                        <span className="text-sm">
+                                                            {panel.emptyText}
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
+                                        </section>
+                                    ))}
                                 </div>
                             </div>
-
-                            <p className="mt-4 text-xs text-muted-foreground">
-                                Thông tin lượt thi lấy từ API hiện tại.
-                                Luồng webcam và màn hình được nhận qua
-                                kết nối WebRTC của lượt thi.
-                            </p>
-                        </section>
-                    </div>
-                )}
+                        );
+                    })()}
             </div>
         </MainLayout>
     );

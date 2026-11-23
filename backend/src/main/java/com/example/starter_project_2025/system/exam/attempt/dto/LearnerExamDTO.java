@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.exam.attempt.dto;
 
 import com.example.starter_project_2025.system.exam.core.domain.*;
 import com.example.starter_project_2025.system.exam.grading.service.ExamScoring;
+import com.example.starter_project_2025.system.exam.result.domain.ResultVisibility;
 import java.math.BigDecimal;
 
 /** Allowlist for learner catalog metadata: no questions, access code, or management information. */
