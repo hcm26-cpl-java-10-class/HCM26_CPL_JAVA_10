@@ -671,8 +671,8 @@ class ExamCourseLinkServiceTest {
         }
     }
 
-    private com.example.starter_project_2025.system.exam.controller.CourseExamController.WeightUpdate weight(long id, String value) {
-        return new com.example.starter_project_2025.system.exam.controller.CourseExamController.WeightUpdate(id, value==null?null:new BigDecimal(value));
+    private com.example.starter_project_2025.system.exam.courselink.controller.CourseExamController.WeightUpdate weight(long id, String value) {
+        return new com.example.starter_project_2025.system.exam.courselink.controller.CourseExamController.WeightUpdate(id, value==null?null:new BigDecimal(value));
     }
     private List<Exam> weightFixture() {
         Exam a=new Exam(); a.setId(1L); a.setCourse(course1); a.setCourseWeight(new BigDecimal("70"));

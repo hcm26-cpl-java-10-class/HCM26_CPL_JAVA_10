@@ -51,6 +51,7 @@ import com.example.starter_project_2025.system.exam.courselink.service.ExamProgr
 import com.example.starter_project_2025.system.exam.invitation.domain.Invitation;
 import com.example.starter_project_2025.system.exam.invitation.domain.InvitationRepository;
 import com.example.starter_project_2025.system.exam.invitation.domain.InvitationStatus;
+import com.example.starter_project_2025.system.exam.pool.domain.ExamQuestionPoolVersionRepository;
 import com.example.starter_project_2025.system.exam.result.service.ExamResultAccessService;
 
 @ExtendWith(MockitoExtension.class)

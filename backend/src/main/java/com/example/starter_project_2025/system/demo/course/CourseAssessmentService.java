@@ -77,7 +77,7 @@ public class CourseAssessmentService {
             var attempt=graded.get(exam.getId());
             String state="NOT_STARTED";
             if (attempt!=null && access.canStudentViewScore(exam)) {
-                Boolean passed=com.example.starter_project_2025.system.exam.service.ExamScoring.passed(attempt);
+                Boolean passed=com.example.starter_project_2025.system.exam.grading.service.ExamScoring.passed(attempt);
                 state=passed==null?"COMPLETED":passed?"PASSED":"FAILED";
             } else if (ownAttempts.stream().anyMatch(a->a.getExam()!=null && exam.getId().equals(a.getExam().getId()))) {
                 state=ownAttempts.stream().anyMatch(a->a.getExam()!=null && exam.getId().equals(a.getExam().getId())

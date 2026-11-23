@@ -204,7 +204,7 @@ public class ExamCourseLinkService {
 
     @Transactional
     public void updateWeights(Long courseId,
-            List<com.example.starter_project_2025.system.exam.controller.CourseExamController.WeightUpdate> updates,
+            List<com.example.starter_project_2025.system.exam.courselink.controller.CourseExamController.WeightUpdate> updates,
             UserPrincipal principal) {
         Course course = courseRepository.findLockedForAssessment(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
