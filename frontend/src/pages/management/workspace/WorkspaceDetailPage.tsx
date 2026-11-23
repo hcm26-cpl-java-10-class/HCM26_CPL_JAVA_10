@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, BarChart3, Hash, RefreshCw, Users } from "lucide-react";
+import { ArrowLeft, BarChart3, GitBranch, Hash, RefreshCw, Users } from "lucide-react";
 import { workspaceApi } from "@/api/features/workspace.api";
 import { projectAssignmentApi } from "@/api/features/project-assignment.api";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -27,6 +27,7 @@ import { WorkspaceProjectHierarchy, flattenWorkspaceProjects } from "./Workspace
 import { WorkspaceResourcesPanel } from "./WorkspaceResourcesPanel";
 import { WorkspaceAlertsPanel } from "@/pages/management/alerts/WorkspaceAlertsPanel";
 import ProjectAnalyticsPage from "@/pages/management/analytics/project/ProjectAnalyticsPage";
+import { GitActivityWorkspacePanel } from "./GitActivityWorkspacePanel";
 
 export default function WorkspaceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -40,8 +41,9 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   // Tolerate a trailing slash (`?tab=analytic/`) and both spellings of the tab.
   const selected = (params.get("tab") ?? "overview").replace(/\/+$/, "");
   const isAnalyticsTab = selected === "analytics" || selected === "analytic";
+  const isGitActivityTab = selected === "git-activity";
   const tab: WorkspaceSectionKey = WORKSPACE_SECTIONS.find(section => section.id === selected)?.id ?? "overview";
-  const activeTab = isAnalyticsTab ? "analytics" : tab;
+  const activeTab = isAnalyticsTab ? "analytics" : isGitActivityTab ? "git-activity" : tab;
   const [blocked, setBlocked] = useState<WorkspaceSectionKey>();
   const [showAccess, setShowAccess] = useState(false);
   const validId = Number.isSafeInteger(workspaceId) && workspaceId > 0;
@@ -84,7 +86,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   const isMaster = hierarchy.data?.assignmentId != null && project?.parentProjectId == null;
   const sharedMasterSelected = isMaster && hierarchy.data?.mode === "SPLIT";
   const milestoneProjects = isMaster ? projects : projects.filter(item => item.parentProjectId != null);
-  const showAllMilestoneProjects = projectScoped && milestoneProjects.length > 1;
+  const showAllMilestoneProjects = projectScoped && isMaster && milestoneProjects.length > 1;
   function selectProject(projectId: number) {
     setParams(previous => { const next = new URLSearchParams(previous); next.set("project", String(projectId)); return next; }, { replace: true });
   }
@@ -101,6 +103,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   const current = sections.find(item => item.key === tab);
   const members = sections.find(item => item.key === "members");
   const canViewAnalytics = hasPermission("PROJECT_ANALYTICS_READ");
+  const canViewGitActivity = hasPermission("WORKSPACE_READ") || hasPermission("VIEW_PROJECT_WORKSPACE");
   const hasProject = Number.isSafeInteger(projectId) && Number(projectId) > 0;
   const denied = blocked === tab || !current?.canRead;
   const validContext = context && Number.isSafeInteger(context.teamId);
@@ -140,7 +143,10 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                 className="h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none"><Icon className="size-4" />{label}</TabsTrigger>)}
               {hasProject && <TabsTrigger value="analytics" disabled={!canViewAnalytics}
                 title={canViewAnalytics ? "Open read-only project analytics" : "Analytics access is not granted for your role"}
-                className="h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none"><BarChart3 className="size-4" />Analytics</TabsTrigger>}</TabsList></div>
+                className="h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none"><BarChart3 className="size-4" />Analytics</TabsTrigger>}
+              {hasProject && <TabsTrigger value="git-activity" disabled={!canViewGitActivity}
+                title={canViewGitActivity ? "Open read-only Git Activity" : "Workspace access is not granted for your role"}
+                className="h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none"><GitBranch className="size-4" />Git Activity</TabsTrigger>}</TabsList></div>
             <TabsContent key={activeTab} value={activeTab} className="space-y-5">
               {isAnalyticsTab ? (
                 hasProject && canViewAnalytics ? (
@@ -148,7 +154,10 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                     <ProjectAnalyticsPage projectId={projectId!} />
                   </EmbeddedLayoutContext.Provider>
                 ) : <WorkspaceSectionState denied retry={reloadAccess} />
-              ) : denied || !current ? <WorkspaceSectionState denied retry={reloadAccess} />
+              ) : isGitActivityTab ? (hasProject && canViewGitActivity
+                  ? <GitActivityWorkspacePanel key={projectId} workspaceId={workspaceId} projectId={projectId!} />
+                  : <WorkspaceSectionState denied retry={reloadAccess} />)
+                : denied || !current ? <WorkspaceSectionState denied retry={reloadAccess} />
                 : tab === "overview" ? <WorkspaceOverviewSection workspaceId={workspaceId} projectId={context.projectId} selectedProject={projectScoped ? project : undefined}
                     teamId={context.teamId} canViewMembers={!!members?.canRead} onViewMembers={() => changeTab("members")}
                     onViewAccess={() => setShowAccess(true)}
@@ -177,7 +186,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                     onCreateWorkItem={sections.find(item => item.key === "backlog")?.canRead ? () => changeTab("backlog") : undefined} />
                 : tab === "backlog" ? <WorkspaceBacklogPanel key={projectId} workspaceId={workspaceId} projectId={projectId}
                     teamId={context.teamId} projectName={project?.name ?? context.projectName}
-                    taskKeyPrefix={context.taskKeyPrefix} readOnly={projectReadOnly} />
+                    taskKeyPrefix={context.taskKeyPrefix} readOnly={projectReadOnly} aggregateProjects={isMaster} />
                 : tab === "activity" ? <WorkspaceProjectLogsPanel workspaceId={workspaceId} readOnly={projectReadOnly} />
                 : tab === "feedback" ? <WorkspaceAlertsPanel workspaceId={workspaceId} teamId={context.teamId} />
                 : <WorkspaceBusinessSectionPanel key={workspaceId + ":" + tab} workspaceId={workspaceId}
@@ -190,7 +199,9 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
       <Dialog open={showAccess} onOpenChange={setShowAccess}>
         <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
           <DialogHeader><DialogTitle>Quyền truy cập Workspace</DialogTitle><DialogDescription>Các mục có thể truy cập theo vai trò đang sử dụng.</DialogDescription></DialogHeader>
-          <ul className="divide-y rounded-lg border">{WORKSPACE_SECTIONS.map(({ id, label, icon: Icon }) => <li key={id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"><span className="flex items-center gap-2 text-xs"><Icon className="size-4 text-muted-foreground" />{label}</span><Badge variant={sections.find(item => item.key === id)?.canRead ? "secondary" : "outline"} className="text-[10px]">{sections.find(item => item.key === id)?.canRead ? "Có thể xem" : "Không có quyền"}</Badge></li>)}</ul>
+          <ul className="divide-y rounded-lg border">{WORKSPACE_SECTIONS.map(({ id, label, icon: Icon }) => <li key={id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"><span className="flex items-center gap-2 text-xs"><Icon className="size-4 text-muted-foreground" />{label}</span><Badge variant={sections.find(item => item.key === id)?.canRead ? "secondary" : "outline"} className="text-[10px]">{sections.find(item => item.key === id)?.canRead ? "Có thể xem" : "Không có quyền"}</Badge></li>)}
+            {hasProject && <li className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"><span className="flex items-center gap-2 text-xs"><GitBranch className="size-4 text-muted-foreground" />Git Activity</span><Badge variant={canViewGitActivity ? "secondary" : "outline"} className="text-[10px]">{canViewGitActivity ? "Có thể xem" : "Không có quyền"}</Badge></li>}
+          </ul>
         </DialogContent>
       </Dialog>
     </div>

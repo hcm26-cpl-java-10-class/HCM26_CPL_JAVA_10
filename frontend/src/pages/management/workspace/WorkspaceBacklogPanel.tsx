@@ -5,6 +5,8 @@ interface WorkspaceBacklogPanelProps {
   workspaceId?: number;
   /** Project of the workspace, so the board only lists its own sprints. */
   projectId?: number | null;
+  /** The selected Master reads every project already authorized for this Workspace. */
+  aggregateProjects?: boolean;
   /**
    * Team of the workspace. It scopes the board to the sprints and work items of
    * that team instead of every record of the tenant.
@@ -41,6 +43,7 @@ export function WorkspaceBacklogPanel({
   taskKeyPrefix = null,
   readOnly = false,
   workspaceId,
+  aggregateProjects = false,
 }: WorkspaceBacklogPanelProps) {
   return (
     <BacklogBoard
@@ -51,6 +54,7 @@ export function WorkspaceBacklogPanel({
       taskKeyPrefix={taskKeyPrefix}
       readOnly={readOnly}
       workspaceId={workspaceId}
+      aggregateProjects={aggregateProjects}
     />
   );
 }

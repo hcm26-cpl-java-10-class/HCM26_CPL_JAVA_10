@@ -34,6 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -448,6 +449,148 @@ class AssignmentCatalogIntegrationTest {
         team.setProjectTemplate(template);
         team.setLeaderMemberId(leaderId);
         team.setAssignedMentorId(team.getTrainingClass().getMentorId());
+    }
+
+    @Test
+    void publishingAPrecreatedEmptyProjectStillCopiesTheTemplateMilestonesAndBacklog() throws Exception {
+        tx.executeWithoutResult(status -> {
+            var template = em.find(ProjectTemplate.class, analyticsId);
+            template.setEstimatedDurationWeeks(6);
+            prepareTeamForPublishing(template);
+            var plan = new TemplateMilestone();
+            plan.setTemplate(template);
+            plan.setTitle("Prepare dataset");
+            plan.setDueAfter(2);
+            plan.setDueUnit(TemplateMilestoneTimeUnit.WEEKS);
+            plan.setWeight(new BigDecimal("100"));
+            plan.setMandatory(true);
+            plan.setOrderIndex(0);
+            plan.setAllowLateSubmission(false);
+            plan.setRubricVersion(em.getReference(RubricVersion.class, rubricVersionId));
+            var check = new TemplateMilestoneChecklistItem();
+            check.setMilestone(plan);
+            check.setContent("Dataset prepared");
+            check.setMandatory(true);
+            check.setOrderIndex(0);
+            plan.getChecklistItems().add(check);
+            em.persist(plan);
+            var task = new com.example.starter_project_2025.system.project.template.domain.backlog.TemplateBacklogItem();
+            task.setTemplate(template);
+            task.setTitle("Prepare sample dataset");
+            task.setDescription("Sample work item from the template");
+            task.setOrderIndex(0);
+            em.persist(task);
+            var team = em.find(ProjectTeam.class, teamId);
+            var project = new com.example.starter_project_2025.system.project.domain.Project();
+            project.setTenant(em.find(Tenant.class, tenantId));
+            project.setClassId(classId);
+            project.setTeamId(teamId);
+            project.setName("Prepared project");
+            project.setCode("PREPARED-" + UUID.randomUUID());
+            project.setStatus(com.example.starter_project_2025.system.project.domain.ProjectStatus.PLANNING);
+            em.persist(project);
+            team.setProject(project);
+        });
+
+        String key = UUID.randomUUID().toString();
+        publish(key);
+
+        assertThat(workspaceMilestones()).singleElement().satisfies(milestone ->
+                assertPublishedMilestone(milestone, milestone.scheduledStartAt(), 14));
+        List<String> backlogTitles = tx.execute(status -> em.createQuery("select b.title from SprintBacklog b where b.projectId = :project", String.class)
+                .setParameter("project", em.find(ProjectTeam.class, teamId).getProjectId()).getResultList());
+        assertThat(backlogTitles).containsExactly("Prepare sample dataset");
+        publish(key);
+        assertThat(workspaceMilestones()).hasSize(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 4})
+    void publishingFourModulesCopiesMilestonesAndBacklogForEveryAssignedTeam(int teamCount) throws Exception {
+        var mappings = tx.execute(status -> {
+            var school = em.find(TrainingClass.class, classId);
+            var session = em.find(TeamAllocationSession.class, sessionId);
+            var tenant = em.find(Tenant.class, tenantId);
+            var selectedTeams = new java.util.ArrayList<ProjectTeam>();
+            prepareTeamForPublishing(em.find(ProjectTemplate.class, shopId));
+            var first = em.find(ProjectTeam.class, teamId);
+            first.setProjectTemplate(null);
+            selectedTeams.add(first);
+            for (int i = 1; i < teamCount; i++) {
+                var team = new ProjectTeam();
+                team.setTrainingClass(school);
+                team.setAllocationSession(session);
+                team.setTeamName("Team " + (i + 1));
+                team.setStatus(ProjectTeamStatus.DRAFT);
+                team.setMaxMembers(5);
+                team.setAssignedMentorId(school.getMentorId());
+                em.persist(team);
+                var member = new ClassMember();
+                member.setTrainingClass(school);
+                member.setUser(user(tenant, "STUDENT", "Member " + (i + 1)));
+                member.setStatus(ClassMemberStatus.ACTIVE);
+                em.persist(member);
+                em.flush();
+                var roster = new ProjectMember();
+                roster.setTeam(team);
+                roster.setClassMember(member);
+                roster.setRole("PM");
+                em.persist(roster);
+                team.setLeaderMemberId(member.getId());
+                selectedTeams.add(team);
+            }
+            ObjectNode content;
+            try { content = (ObjectNode) json.readTree(em.find(ProjectTemplateSnapshot.class, shopVersionId).getContentJson()); }
+            catch (Exception error) { throw new IllegalStateException(error); }
+            var masterPlan = content.withArray("milestones");
+            masterPlan.remove(1);
+            ((ObjectNode) masterPlan.get(0)).put("weight", 100);
+            var children = content.putArray("modules");
+            var result = new java.util.ArrayList<AssignmentDtos.ModuleTeam>();
+            for (int i = 0; i < 4; i++) {
+                var module = template(tenantId, em.find(ProjectTemplate.class, shopId), "MODULE-" + i,
+                        "Module " + (i + 1), ProjectTemplateStatus.ACTIVE);
+                var child = json.createObjectNode();
+                child.put("templateId", module.getId());
+                child.put("code", module.getCode());
+                child.put("name", module.getName());
+                child.putObject("constraints").put("min_members", 1).put("max_members", 5);
+                child.putArray("milestones").addObject().put("title", "Milestone module " + (i + 1))
+                        .put("dueAfter", 3).put("dueUnit", "DAYS").put("mandatory", true)
+                        .put("rubricVersionId", rubricVersionId.toString());
+                child.putArray("backlogItems").addObject().put("title", "Backlog module " + (i + 1));
+                child.putArray("modules");
+                var version = snapshot(module.getId(), "v1", ProjectTemplateVersionStatus.PUBLISHED, child.toString());
+                child.put("versionId", version.getId());
+                children.add(child);
+                result.add(new AssignmentDtos.ModuleTeam(module.getId(), selectedTeams.get(i % teamCount).getId()));
+            }
+            em.find(ProjectTemplateSnapshot.class, shopVersionId).setContentJson(content.toString());
+            return result;
+        });
+        var request = new AssignmentDtos.Request(shopId, shopVersionId, AssignmentDtos.Mode.SPLIT, null, mappings);
+        mvc.perform(authorized(post(sessionPath() + "/project-assignments"), admin)
+                        .header("X-Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(request)))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.workspaces").isEmpty());
+
+        publish(UUID.randomUUID().toString());
+
+        tx.executeWithoutResult(status -> {
+            var workspaces = em.createQuery("select w from Workspace w where w.tenant.id = :tenant", com.example.starter_project_2025.system.project.workspace.domain.Workspace.class)
+                    .setParameter("tenant", tenantId).getResultList();
+            assertThat(workspaces).hasSize(teamCount);
+            for (var workspace : workspaces) {
+                var assigned = em.createQuery("select a.project.id from TeamSubprojectAssignment a where a.workspaceId = :workspace and a.isActive = true", Long.class)
+                        .setParameter("workspace", workspace.getId()).getResultList();
+                assertThat(assigned).hasSize(4 / teamCount);
+                assertThat(em.createQuery("select m from Milestone m where m.projectId in :projects", Milestone.class)
+                        .setParameter("projects", assigned).getResultList()).hasSize(4 / teamCount)
+                        .allSatisfy(milestone -> assertThat(milestone.getTeamId()).isEqualTo(workspace.getTeam().getId()));
+                assertThat(em.createQuery("select b.title from SprintBacklog b where b.projectId in :projects", String.class)
+                        .setParameter("projects", assigned).getResultList()).hasSize(4 / teamCount);
+            }
+        });
     }
 
     private void publish(String key) throws Exception {

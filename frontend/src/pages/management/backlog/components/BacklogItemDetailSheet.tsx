@@ -55,6 +55,7 @@ import {
   backlogWorkTypeMeta,
 } from "../backlog.constants";
 import { BacklogSubtasksPanel } from "./BacklogSubtasksPanel";
+import { BacklogItemGitActivities } from "./BacklogItemGitActivities";
 
 const NO_SPRINT = "none";
 const NO_MILESTONE = "none";
@@ -86,6 +87,8 @@ interface BacklogItemDetailSheetProps {
    * so the picker still offers the members of the team that owns the project.
    */
   teamId?: number | null;
+  /** Workspace scope used by the Git Activity task reader when embedded. */
+  workspaceId?: number;
   /** SPRINT_BACKLOG_UPDATE (title, description, status, priority, dates, estimate). */
   canEdit: boolean;
   /** SPRINT_UPDATE (moving the item to another sprint / back to the backlog). */
@@ -205,6 +208,7 @@ export function BacklogItemDetailSheet({
   workflowStatuses = [],
   allowedStatusTransitions,
   teamId = null,
+  workspaceId,
   canEdit,
   canMove,
   canDelete,
@@ -825,6 +829,10 @@ export function BacklogItemDetailSheet({
             <div className="px-5 pb-5">
               <BacklogSubtasksPanel key={item.id} backlogId={item.id} readOnly={readOnly} />
             </div>
+
+            {workspaceId != null && projectId != null && item.id != null && <div className="px-5 pb-5">
+              <BacklogItemGitActivities workspaceId={workspaceId} taskId={item.id} enabled={open} />
+            </div>}
 
             <div className="px-5 pb-8">
               <h3 className="text-sm font-semibold text-foreground">Details</h3>

@@ -110,9 +110,18 @@ public class TemplateAssignmentProvisioningService {
     public void provision(ProjectTeam team, ProjectTemplate template, Long actorId, String correlationId) {
         Long tenantId = Objects.requireNonNull(team.getTrainingClass().getTenantId(),
                 "The training class must belong to a tenant");
-        if (team.getProject() != null) {
-            ensureWorkspace(team, team.getProject(), tenantId, actorId, correlationId);
-            return;
+        Project project = team.getProject();
+        if (project != null) {
+            // A prepared project row is not proof that its template components were copied.
+            // Hierarchy assignments and existing assignment snapshots have already been provisioned.
+            boolean alreadyProvisioned = project.getAssignmentId() != null || project.getTemplateSnapshotId() != null;
+            boolean hasTemplateComponents = !alreadyProvisioned
+                    && (!templateMilestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId()).isEmpty()
+                        || !templateBacklogItems.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId()).isEmpty());
+            if (alreadyProvisioned || !hasTemplateComponents) {
+                ensureWorkspace(team, project, tenantId, actorId, correlationId);
+                return;
+            }
         }
 
         entityManager.refresh(template, jakarta.persistence.LockModeType.PESSIMISTIC_READ);
@@ -134,7 +143,12 @@ public class TemplateAssignmentProvisioningService {
                 template, team.getId(), team.getProjectTemplateVersionId());
 
         // ---- Step 2: project creation
-        Project project = createProject(team, template, snapshot, tenantId, actorId);
+        if (project == null) {
+            project = createProject(team, template, snapshot, tenantId, actorId);
+        } else {
+            project.setTemplateSnapshotId(snapshot.getId());
+            projects.saveAndFlush(project);
+        }
         briefSnapshots.linkProject(snapshot, project.getId());
 
         team.setProject(project);

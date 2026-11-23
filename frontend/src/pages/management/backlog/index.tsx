@@ -213,6 +213,8 @@ export interface BacklogBoardProps {
    * `/backlogs` route page).
    */
   projectId?: number | null;
+  /** Read all assigned projects while keeping the selected project for new items. */
+  aggregateProjects?: boolean;
   /**
    * Team of the open workspace. When it is set the board reads the team-scoped
    * endpoint (`/teams/{teamId}/backlog-board`), so a team workspace lists only
@@ -248,6 +250,7 @@ export interface BacklogBoardProps {
 export function BacklogBoard({
   embedded = false,
   projectId = null,
+  aggregateProjects = false,
   teamId = null,
   projectName = null,
   taskKeyPrefix = null,
@@ -256,7 +259,7 @@ export function BacklogBoard({
 }: BacklogBoardProps) {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { hasAllPermissions, user } = usePermissions();
+  const { hasAllPermissions, user, activeRole } = usePermissions();
 
   const canCreate = !readOnly && hasAllPermissions(["SPRINT_CREATE"]);
   const canUpdate = !readOnly && hasAllPermissions(["SPRINT_UPDATE"]);
@@ -296,8 +299,8 @@ export function BacklogBoard({
    * queries below whenever the board is mounted for a team workspace.
    */
   const teamQuery = useQuery({
-    queryKey: [...TEAM_BOARD_QUERY_KEY, teamId ?? "none", projectId, workspaceId],
-    queryFn: () => teamBacklogApi.getBoard(teamId as number, projectId, workspaceId),
+    queryKey: [...TEAM_BOARD_QUERY_KEY, teamId ?? "none", projectId, workspaceId, aggregateProjects, user.email, activeRole],
+    queryFn: () => teamBacklogApi.getBoard(teamId as number, aggregateProjects ? null : projectId, workspaceId),
     enabled: teamId != null,
   });
 
@@ -1369,6 +1372,7 @@ export function BacklogBoard({
           if (!open) setDetailItem(null);
         }}
         item={detailItem}
+        workspaceId={workspaceId}
         itemKey={
           detailItem && detailSection
             ? backlogItemKey(detailSection.prefix, detailItem)

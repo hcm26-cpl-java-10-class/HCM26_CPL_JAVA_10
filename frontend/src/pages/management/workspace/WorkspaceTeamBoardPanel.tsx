@@ -14,7 +14,8 @@ import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Check, ChevronLeft, ChevronRight, Circle, CircleDot, Clock3, History, LayoutGrid, List, Plus, RefreshCw, Search, UserRound } from "lucide-react";
 import { BacklogItemDetailSheet } from "@/pages/management/backlog/components/BacklogItemDetailSheet";
 import type { BacklogPriority, SprintBacklogWorkType, SprintPlanningItem } from "@/types";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import axios from "axios";
 
@@ -331,7 +332,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
     }
   };
 
-  const openItemDetails = (item: SprintBacklogDTO) => {
+  const openItemDetails = useCallback((item: SprintBacklogDTO) => {
     if (item.id == null) return;
     setDetailItem({
       id: item.id,
@@ -350,7 +351,22 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
       endDate: item.endDate ?? null,
       estimatedHours: item.estimatedHours ?? null,
     });
-  };
+  }, [query.data?.members]);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const rawItemId = searchParams.get("itemId");
+    if (!rawItemId || !query.isSuccess) return;
+    const itemId = Number(rawItemId);
+    const item = Number.isSafeInteger(itemId) ? query.data.items.find(row => row.id === itemId) : undefined;
+    if (item) {
+      if (item.sprintId != null) setSprintId(item.sprintId);
+      openItemDetails(item);
+    } else {
+      toast.error("Could not find the work item in this Workspace.");
+    }
+    setSearchParams(previous => { const next = new URLSearchParams(previous); next.delete("itemId"); return next; }, { replace: true });
+  }, [searchParams, query.isSuccess, query.data, openItemDetails, setSearchParams]);
 
   const filterKey = JSON.stringify([teamId, sprintId, memberFilter, searchTerm, sortBy, statusFilter, priorityFilter]);
   const [previousFilterKey, setPreviousFilterKey] = useState(filterKey);
@@ -543,6 +559,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
       open={detailItem !== null}
       onClose={(open) => { if (!open) setDetailItem(null); }}
       item={detailItem}
+      workspaceId={workspaceId}
       itemKey={detailItem ? ("TASK-" + detailItem.id) : undefined}
       sprintName={sprints.find((sprint) => sprint.id === detailItem?.sprintId)?.name ?? null}
       sprints={sprints}
