@@ -6,9 +6,10 @@ type CoreHoursSchedule = { days: CoreHourDay[]; start: string; end: string };
 const time = "(?:[01][0-9]|2[0-3]):[0-5][0-9]";
 
 /** Convert a typed clock time to the HH:mm format used in the saved schedule. */
-export function parseClockTime(value: string): string | null {
+export function parseClockTime(value: string, allowEndOfDay = false): string | null {
   const text = value.trim();
   if (!text) return "";
+  if (allowEndOfDay && (text === "24:00" || text === "2400" || text === "24")) return "24:00";
   const parts = /^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i.exec(text)
     ?? /^(\d{1,2})(\d{2})\s*(AM|PM)?$/i.exec(text);
   if (!parts) return null;
@@ -19,7 +20,7 @@ export function parseClockTime(value: string): string | null {
   const hour24 = period ? hour % 12 + (period === "PM" ? 12 : 0) : hour;
   return `${String(hour24).padStart(2, "0")}:${minute}`;
 }
-const schedulePattern = new RegExp(`^([A-Za-z, ]*) · (${time})?–(${time})?$`);
+const schedulePattern = new RegExp(`^([A-Za-z, ]*) · (${time})?–(${time}|24:00)?$`);
 
 export function parseCoreHours(value: string): CoreHoursSchedule | null {
   if (!value) return {days: [], start: "", end: ""};

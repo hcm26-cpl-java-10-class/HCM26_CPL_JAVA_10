@@ -80,6 +80,18 @@ public class ProjectHubController {
         return service.saveCharter(id, request);
     }
 
+    @PutMapping("/teams/{id}/charter/draft")
+    @PreAuthorize("hasAnyAuthority('TEAM_UPDATE', 'TEAM_READ', 'WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
+    public ProjectHubDtos.CharterView saveCharterDraft(@PathVariable Long id, @Valid @RequestBody ProjectHubDtos.Charter request) {
+        return charterService.saveDraft(id, request);
+    }
+
+    @PostMapping("/teams/{id}/charter/open-signing")
+    @PreAuthorize("hasAnyAuthority('TEAM_READ', 'WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
+    public ProjectHubDtos.CharterView openCharterSigning(@PathVariable Long id, @Valid @RequestBody ProjectHubDtos.Charter request) {
+        return charterService.openSigning(id, request);
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ErrorResponse> statusError(ResponseStatusException exception) {
         return ResponseEntity.status(exception.getStatusCode()).body(new ErrorResponse(

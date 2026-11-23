@@ -33,7 +33,12 @@ const fields = [
 const channels = ["Microsoft Teams", "Slack", "Discord", "Google Chat", "Email"];
 const formOf = (view: TeamCharterView): TeamCharter => ({
   ...view.charter,
-  responsibilities: (view.members ?? []).map(m => ({membershipId: m.membershipId, responsibility: m.responsibility})),
+  ...view.draft,
+  version: view.charter.version,
+  responsibilities: (view.members ?? []).map(m => ({
+    membershipId: m.membershipId,
+    responsibility: view.draft?.responsibilities?.find(duty => duty.membershipId === m.membershipId)?.responsibility ?? m.responsibility,
+  })),
 });
 
 function ErrorBox({error, retry}: {error: unknown; retry?: () => void}) {
@@ -115,7 +120,7 @@ function CharterHeader({view, navigation, dirty = false, busy = false}: {
                 <Badge variant="secondary">{charterProgressLabel(view)}</Badge>
                 {!navigation && !view.canEdit && <ReadOnlyBadge />}
               </div>
-              <p className="text-xs text-muted-foreground">{dirty ? "Unsaved changes" : view.revision > 0 ? "Saved revision" : "No saved charter yet"}</p>
+              <p className="text-xs text-muted-foreground">{dirty ? "Unsaved changes" : view.draft ? "Saved draft" : view.revision > 0 ? "Saved revision" : "No saved charter yet"}</p>
             </div>
             <div className="w-full min-w-0 space-y-1.5 sm:w-56">
               <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -192,11 +197,12 @@ export default function TeamCharterPage() {
   </MainLayout>;
 }
 
-export function CharterContent({view, onRefresh, onReload, navigation}: {
+export function CharterContent({view, onRefresh, onReload, navigation, onEditingStateChange}: {
   view: TeamCharterView;
   onRefresh: () => Promise<void>;
   onReload: () => Promise<TeamCharterView | undefined>;
   navigation?: CharterNavigation;
+  onEditingStateChange?: (state: {dirty: boolean; busy: boolean}) => void;
 }) {
   const confirmationId = useId();
   const confirmationHintId = `${confirmationId}-hint`;
@@ -217,7 +223,8 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
   const [tab, setTab] = useState<"current" | "history">("current");
   const [page, setPage] = useState(0);
   const [selectedRevision, setSelectedRevision] = useState<number | null>(null);
-  const invalidTimeDraft = Object.values(timeDrafts).some(value => value !== undefined && parseClockTime(value) === null);
+  const invalidTimeDraft = Object.entries(timeDrafts).some(([field, value]) =>
+    value !== undefined && parseClockTime(value, field === "end") === null);
   const dirty = invalidTimeDraft || JSON.stringify(form) !== JSON.stringify(baseline);
   useEffect(() => {
     if (!dirty) return;
@@ -228,7 +235,7 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
-  const coreHoursError = invalidTimeDraft ? "Enter a time like 204, 14:04, or 2:04 PM."
+  const coreHoursError = invalidTimeDraft ? "Enter a valid time, such as 02:04 or 14:04. Use 24:00 only as an end time."
     : form.coreHours !== baseline.coreHours ? validateCoreHours(form.coreHours ?? "") : null;
   const stale = form.version !== view.charter.version;
   // Adopt newer server content only when clean; never overwrite unsaved edits or a just-saved newer token.
@@ -245,23 +252,24 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
     await queryClient.invalidateQueries({queryKey: ["workspace-detail"], refetchType: "none"});
     await queryClient.invalidateQueries({queryKey: ["team-charter", view.teamId], refetchType: "none"});
   };
-  const save = useMutation({mutationFn: () => projectHubApi.saveCharter(view.teamId, form), onError: refreshAfterRejectedMutation, onSuccess: async response => {
-    const next = {...form, ...response.charter, responsibilities: form.responsibilities}; setForm(next); setBaseline(next); setPreview(false); setAcknowledgedFor(null);
+  const save = useMutation({mutationFn: (openSigning: boolean) => openSigning
+    ? projectHubApi.openCharterSigning(view.teamId, form)
+    : projectHubApi.saveCharterDraft(view.teamId, form), onError: refreshAfterRejectedMutation, onSuccess: async (response, openSigning) => {
+    const next = formOf(response); setForm(next); setBaseline(next); setPreview(false); setAcknowledgedFor(null);
     setTimeDrafts({});
-    toast.success(view.workflow ? "Draft saved." : "Team charter saved."); await refreshCharter();
+    toast.success(openSigning ? `Revision ${response.revision} is open for signing.` : "Draft saved. The signing revision is unchanged.");
+    await refreshCharter();
   }});
   const confirm = useMutation({mutationFn: () => projectHubApi.confirmCharter(view.teamId, revisionRequest()), onError: async error => {
     setAcknowledgedFor(null); await refreshAfterRejectedMutation(error);
   }, onSuccess: async () => {
-    setAcknowledgedFor(null); toast.success(view.confirmationKind === "ADMIN" ? "Your Admin acknowledgement was recorded." : "Your role and charter confirmation was recorded."); await refreshCharter();
+    setAcknowledgedFor(null); toast.success("Your role and charter confirmation was recorded."); await refreshCharter();
   }});
   const publication = useMutation({
-    mutationFn: (action: "approve" | "publish") => action === "approve"
-      ? projectHubApi.approveCharter(view.teamId, revisionRequest())
-      : projectHubApi.publishCharter(view.teamId, revisionRequest()),
+    mutationFn: () => projectHubApi.publishCharter(view.teamId, revisionRequest()),
     onError: refreshAfterRejectedMutation,
-    onSuccess: async (response, action) => {
-      toast.success(action === "approve" ? `Revision ${response.revision} is open for signing.` : `Revision ${response.revision} is now in effect.`);
+    onSuccess: async response => {
+      toast.success(`Revision ${response.revision} is now in effect.`);
       await refreshCharter();
     },
   });
@@ -285,14 +293,27 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
   });
   const history = useQuery({queryKey: ["charter-history", view.teamId, view.revision, page, user.email, activeRole], queryFn: () => projectHubApi.getCharterHistory(view.teamId, page), enabled: tab === "history", refetchOnWindowFocus: false});
   const busy = save.isPending || confirm.isPending || publication.isPending || reload.isPending;
+  useEffect(() => {
+    onEditingStateChange?.({dirty, busy});
+  }, [onEditingStateChange, dirty, busy]);
   const confirmationDisabled = busy || !view.canConfirm || dirty || stale;
-  const adminAcknowledgement = view.confirmationKind === "ADMIN";
   const editable = view.canEdit && !busy;
-  const canSave = editable && !coreHoursError && (dirty || view.revision === 0) && form.version != null;
-  const submitCharter = () => {
-    if (!canSave || saveInFlight.current) return;
+  const canSave = editable && !stale && !coreHoursError && dirty && form.version != null;
+  const members = view.members ?? [];
+  const workflow = view.workflow;
+  const signingBlock = fields.some(field => !form[field.key]?.trim())
+    ? "Complete all five working agreement fields before opening signing."
+    : !members.length || members.some(member => !member.eligible || !member.roles?.length)
+      ? "Resolve the team's membership and role assignments before opening signing."
+      : members.some(member => !form.responsibilities?.find(item => item.membershipId === member.membershipId)?.responsibility?.trim())
+        ? "Enter a responsibility for every team member before opening signing."
+        : null;
+  const canOpenSigning = editable && view.workflow?.canManagePublication && !stale && !coreHoursError
+    && !signingBlock && form.version != null && (dirty || !!view.draft || view.workflow.phase === "DRAFT");
+  const submitCharter = (openSigning = false) => {
+    if (!(openSigning ? canOpenSigning : canSave) || saveInFlight.current) return;
     saveInFlight.current = true;
-    save.mutate(undefined, {onSettled: () => { saveInFlight.current = false; }});
+    save.mutate(openSigning, {onSettled: () => { saveInFlight.current = false; }});
   };
   const closePreview = () => { if (!saveInFlight.current && !save.isPending) setPreview(false); };
   const focusPreviewTrigger = () => {
@@ -322,18 +343,24 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
       <RefreshCw className={reload.isPending ? "animate-spin" : undefined} />{reloadLabel}
     </Button>
   );
-  const members = view.members ?? [];
-  const workflow = view.workflow;
   const published = view.publishedCharter;
-  const workflowHint = dirty ? "Save or discard local edits before continuing."
-    : stale ? "Reload the saved charter before continuing." : workflow?.blockReason;
-  const saveLabel = save.isPending ? "Saving…" : workflow ? "Save draft" : "Save charter";
+  const workflowHint = workflow?.blockReason ?? (stale ? "Reload the saved charter before continuing."
+    : dirty ? "Save or discard local edits before continuing." : null);
+  const saveLabel = save.isPending && !save.variables ? "Saving…" : "Save draft";
+  const headerNavigation = navigation && {
+    ...navigation,
+    fetching: navigation.fetching || (tab === "history" && history.isFetching),
+    refresh: () => {
+      navigation.refresh();
+      if (tab === "history") void history.refetch();
+    },
+  };
   const confirmationHint = dirty ? "Save or discard local edits before confirming."
     : stale ? "Reload the saved charter before confirming."
     : view.confirmationBlockReason
       ?? (view.canConfirm ? "Your confirmation applies to the saved revision shown above." : "Confirmation is unavailable for this account.");
   return <>
-    <CharterHeader view={view} navigation={navigation} dirty={dirty} busy={busy} />
+    <CharterHeader view={view} navigation={headerNavigation} dirty={dirty} busy={busy} />
     <Tabs value={tab} onValueChange={value => setTab(value === "history" ? "history" : "current")} className="@container gap-4">
       <div className="border-b">
         <TabsList variant="line" aria-label="Charter sections" className="max-w-full gap-2">
@@ -350,20 +377,15 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
               <div className="min-w-0 space-y-1">
                 <h2 className="text-sm font-semibold">{published ? `Revision ${published.revision} is in effect` : "No published charter"}</h2>
                 <p className="text-sm text-muted-foreground">
-                  {workflow.phase === "DRAFT" ? "An Admin or Team Leader can approve the saved draft to open signing."
+                  {workflow.phase === "DRAFT" ? "An Admin or Team Leader can open a revision for signing."
                     : workflow.phase === "AWAITING_SIGNATURES" ? "Team members can now sign this revision. Publication requires every member’s signature."
                     : workflow.phase === "READY_TO_PUBLISH" ? "Every team member has signed. An Admin or Team Leader can now publish this revision."
                     : workflow.phase === "PUBLISHED" ? `Published ${formatCharterDate(published?.publishedAt, view.timeZone)}.`
                     : "Save a draft to begin."}
                 </p>
               </div>
-              {workflow.canManagePublication && workflow.phase === "DRAFT" && (
-                <Button type="button" size="sm" disabled={busy || dirty || stale || !workflow.canApprove} onClick={() => publication.mutate("approve")}>
-                  {publication.isPending ? "Approving…" : "Approve for signing"}
-                </Button>
-              )}
               {workflow.canManagePublication && (workflow.phase === "AWAITING_SIGNATURES" || workflow.phase === "READY_TO_PUBLISH") && (
-                <Button type="button" size="sm" disabled={busy || dirty || stale || !workflow.canPublish} onClick={() => publication.mutate("publish")}>
+                <Button type="button" size="sm" disabled={busy || dirty || stale || !workflow.canPublish} onClick={() => publication.mutate()}>
                   {publication.isPending ? "Publishing…" : "Publish charter"}
                 </Button>
               )}
@@ -406,7 +428,7 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
           <CardContent className="px-4 sm:px-5">
           {view.canEdit ? (
           <form className="space-y-4" onSubmit={event => { event.preventDefault(); submitCharter(); }}>
-            {(view.confirmedCount > 0 || workflow?.phase === "AWAITING_SIGNATURES") && <Alert><AlertDescription>Saving a change starts a new draft. Previous signatures stay in revision history. The new draft must be approved and signed separately.</AlertDescription></Alert>}
+            {(view.draft || dirty) && <Alert><AlertDescription>Save draft keeps the current revision in place. Opening a changed charter for signing creates a new revision and requires new signatures.</AlertDescription></Alert>}
             <fieldset disabled={!editable} className="space-y-4">
               {fields.map(field => {
                 if (field.key === "coreHours") return <CoreHoursField
@@ -444,13 +466,20 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
             </fieldset>
             {save.isError && <ErrorBox error={save.error} />}
             {reload.isError && !discardOpen && <ErrorBox error={reload.error} />}
+            {workflow?.canManagePublication && signingBlock && <p className="text-sm text-muted-foreground">{signingBlock}</p>}
             <div className="flex flex-wrap items-center gap-2 border-t pt-3">
               {previewButton}
               {reloadButton}
               <Button type="submit" size="sm" className="ml-auto bg-blue-600 text-white hover:bg-blue-700" disabled={!canSave}>
-                {save.isPending ? <Loader2 className="animate-spin" /> : <Save />}
+                {save.isPending && !save.variables ? <Loader2 className="animate-spin" /> : <Save />}
                 {saveLabel}
               </Button>
+              {workflow?.canManagePublication && (
+                <Button type="button" size="sm" disabled={!canOpenSigning} onClick={() => submitCharter(true)}>
+                  {save.isPending && save.variables && <Loader2 className="animate-spin" />}
+                  {save.isPending && save.variables ? "Opening signing…" : "Save & open for signing"}
+                </Button>
+              )}
             </div>
           </form>
           ) : (
@@ -525,14 +554,21 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
               })}
             </CardContent>
           </Card>
-          <Card className="min-w-0 gap-3 py-4 @min-[840px]:col-start-1 @min-[840px]:row-start-2">
+          {view.confirmationKind === "MEMBER" && <Card className="min-w-0 gap-3 py-4 @min-[840px]:col-start-1 @min-[840px]:row-start-2">
             <CardHeader className="px-4 sm:px-5">
-              <CardTitle><h2 className="flex items-center gap-2 text-base"><ShieldCheck className="size-4 text-blue-600" />{adminAcknowledgement ? "Admin acknowledgement" : "Charter confirmation"}</h2></CardTitle>
+              <CardTitle><h2 className="flex items-center gap-2 text-base"><ShieldCheck className="size-4 text-blue-600" />Charter confirmation</h2></CardTitle>
               {user.email && <p className="break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">Signed in as {user.email}</p>}
             </CardHeader>
             <CardContent className="space-y-3 px-4 sm:px-5">
-            {adminAcknowledgement && <Alert><AlertDescription>You are confirming as Admin using your own account. This acknowledgement does not replace any member's consent or increase the team's confirmation progress.</AlertDescription></Alert>}
-            {view.selfConfirmedAt && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-400">Your {adminAcknowledgement ? "Admin acknowledgement" : "confirmation"} was recorded: {formatCharterDate(view.selfConfirmedAt, view.timeZone)}.</p>}
+            {view.draft && <details className="space-y-2 rounded-md border p-3">
+              <summary className="cursor-pointer text-sm font-medium">Review revision {view.revision} before signing</summary>
+              <CharterSummary charter={view.charter} layout="agreement" />
+              {members.map(member => <div key={member.membershipId} className="min-w-0">
+                <p className="text-sm font-semibold [overflow-wrap:anywhere]">{member.name} · {member.roles.join(", ")}</p>
+                <SavedCharterText value={member.responsibility} />
+              </div>)}
+            </details>}
+            {view.selfConfirmedAt && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-400">Your confirmation was recorded: {formatCharterDate(view.selfConfirmedAt, view.timeZone)}.</p>}
             <div className={`flex items-start gap-3 rounded-lg bg-muted/30 p-3 select-none ${confirmationDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
               <Checkbox
                 id={confirmationId}
@@ -543,17 +579,17 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
                 onCheckedChange={checked => { if (!confirmationDisabled) setAcknowledgedFor(checked === true ? agreementId : null); }}
               />
               <Label htmlFor={confirmationId} className={`min-w-0 text-sm leading-6 font-normal ${confirmationDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
-                {adminAcknowledgement ? "I have read this saved charter and acknowledge it as Admin using my own account." : "I have read this saved charter and agree to my assigned roles and responsibilities."}
+                I have read revision {view.revision} and agree to my assigned roles and responsibilities.
               </Label>
             </div>
             <p id={confirmationHintId} className={`rounded-md px-3 py-2 text-xs ${confirmationDisabled && !view.selfConfirmedAt ? "bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-200" : "text-muted-foreground"}`}>{confirmationHint}</p>
             <Button aria-describedby={confirmationHintId} className="h-auto min-h-9 w-full whitespace-normal py-2" disabled={confirmationDisabled || !acknowledged} onClick={() => { if (!confirmationDisabled && acknowledged) confirm.mutate(); }}>
               {confirm.isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
-              {confirm.isPending ? "Confirming…" : adminAcknowledgement ? "Confirm charter as Admin" : "Confirm my role & charter"}
+              {confirm.isPending ? "Confirming…" : "Confirm my role & charter"}
             </Button>
             {confirm.isError && <ErrorBox error={confirm.error} />}
             </CardContent>
-          </Card>
+          </Card>}
       </div>
     </TabsContent>
     <Dialog open={discardOpen} onOpenChange={open => { if (!reload.isPending) setDiscardOpen(open); }}>
@@ -616,7 +652,7 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
                   <h2 ref={previewTitle} tabIndex={-1} className="text-lg font-semibold leading-tight">Preview team charter</h2>
                 </DialogTitle>
                 {dirty ? <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">Unsaved changes</Badge>
-                  : <Badge variant="secondary">{view.revision > 0 ? `Saved revision ${view.revision}` : "Not saved yet"}</Badge>}
+                  : <Badge variant="secondary">{view.draft ? "Saved draft" : view.revision > 0 ? `Saved revision ${view.revision}` : "Not saved yet"}</Badge>}
               </div>
               {view.teamName && <p className="text-sm font-medium [overflow-wrap:anywhere]">{view.teamName}</p>}
               <DialogDescription>Previewing does not record anyone’s confirmation.</DialogDescription>
@@ -629,7 +665,7 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
         <div className="min-h-0 min-w-0 space-y-4 overflow-y-auto overscroll-contain bg-muted/25 px-4 py-4 sm:px-6">
           <section className="min-w-0 space-y-3 rounded-xl border bg-card p-3 sm:p-4">
             <h3 className="flex items-center gap-2 text-sm font-semibold"><BookOpen className="size-4 text-blue-600" aria-hidden="true" />Working agreement</h3>
-            <CharterSummary charter={invalidTimeDraft ? {...form, coreHours: ""} : form} layout="agreement" />
+            <CharterSummary charter={!view.canEdit ? view.charter : invalidTimeDraft ? {...form, coreHours: ""} : form} layout="agreement" />
           </section>
           <section className="min-w-0 space-y-3 rounded-xl border bg-card p-3 sm:p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -640,7 +676,9 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
               <ul className="grid min-w-0 gap-2.5 sm:grid-cols-2">
                 {members.map(member => {
                   const roles = member.roles ?? [];
-                  const responsibility = form.responsibilities?.find(item => item.membershipId === member.membershipId)?.responsibility;
+                  const responsibility = view.canEdit
+                    ? form.responsibilities?.find(item => item.membershipId === member.membershipId)?.responsibility
+                    : member.responsibility;
                   return (
                     <li key={member.membershipId} className="min-w-0 space-y-2 rounded-lg border bg-muted/20 p-3">
                       <div className="flex flex-wrap items-center gap-2">
@@ -660,7 +698,7 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
           {save.isError && <ErrorBox error={save.error} />}
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button type="button" variant="outline" size="sm" disabled={save.isPending} onClick={closePreview}>Back to charter</Button>
-            {view.canEdit && <Button type="button" size="sm" className="bg-blue-600 text-white hover:bg-blue-700" disabled={!canSave} onClick={submitCharter}>
+            {view.canEdit && <Button type="button" size="sm" className="bg-blue-600 text-white hover:bg-blue-700" disabled={!canSave} onClick={() => submitCharter()}>
               {save.isPending ? <Loader2 className="animate-spin" /> : <Save />}
               {saveLabel}
             </Button>}
@@ -761,7 +799,7 @@ function RevisionSnapshot({revision, isCurrent, timeZone}: {revision: CharterHis
           <span>Saved {formatCharterDate(revision.savedAt, timeZone)}</span>
           <span>{revision.actorId == null ? "Saved by an unrecorded user" : `Saved by User #${revision.actorId}`}</span>
           {revision.approvedAt && <span>Approved for signing {formatCharterDate(revision.approvedAt, timeZone)} · User #{revision.approvedBy}</span>}
-          {revision.publishedAt && <span>Published {formatCharterDate(revision.publishedAt, timeZone)} · User #{revision.publishedBy}</span>}
+          {revision.publishedAt && <span>Published {formatCharterDate(revision.publishedAt, timeZone)} · {revision.publishedBy == null ? "Publisher not recorded" : `User #${revision.publishedBy}`}</span>}
         </div>
       </CardHeader>
       <CardContent className="space-y-5 px-4 sm:px-5">
@@ -834,7 +872,7 @@ function CoreHoursField({value, error, editable, timeZone, onChange, timeDrafts,
   const weekdaysSelected = weekdays.every(day => schedule.days.includes(day));
   const complete = !legacy && !error && schedule.days.length > 0 && !!schedule.start && !!schedule.end;
   const updateTime = (field: "start" | "end", text: string, finished = false) => {
-    const time = parseClockTime(text);
+    const time = parseClockTime(text, field === "end");
     onTimeDraftsChange({...timeDrafts, [field]: finished && time !== null ? undefined : text});
     if (time !== null) onChange(formatCoreHours({...schedule, [field]: time}));
   };
@@ -846,7 +884,7 @@ function CoreHoursField({value, error, editable, timeZone, onChange, timeDrafts,
         <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
           <p id={`${id}-hint`} className="text-xs text-muted-foreground">
             {legacy && "Picking a day or time replaces the saved text when you save. "}
-            Choose the days that share the same hours ({charterTimeZone(timeZone)}). Type 204 for 2:04 AM or pick a time.
+            Choose the days that share the same hours ({charterTimeZone(timeZone)}). Type 204 for 02:04 or pick a time.
           </p>
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -880,9 +918,9 @@ function CoreHoursField({value, error, editable, timeZone, onChange, timeDrafts,
             </div>
           </div>
           <div className="grid gap-3 border-t pt-3 sm:grid-cols-2">
-            <CoreTimePicker label="Start time" value={formatClockLabel(schedule.start)} draft={timeDrafts.start} errorId={error ? `${id}-error` : undefined}
+            <CoreTimePicker label="Start time" value={schedule.start} draft={timeDrafts.start} errorId={error ? `${id}-error` : undefined}
               onChange={(text, finished) => updateTime("start", text, finished)} />
-            <CoreTimePicker label="End time" value={formatClockLabel(schedule.end)} draft={timeDrafts.end} errorId={error ? `${id}-error` : undefined}
+            <CoreTimePicker label="End time" value={schedule.end} allowEndOfDay draft={timeDrafts.end} errorId={error ? `${id}-error` : undefined}
               onChange={(text, finished) => updateTime("end", text, finished)} />
           </div>
           {(value || error) && (
@@ -890,7 +928,7 @@ function CoreHoursField({value, error, editable, timeZone, onChange, timeDrafts,
               {error ? <p id={`${id}-error`} role="status" className="text-sm text-destructive">{error}</p>
                 : complete && <p className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground">
                     <Clock aria-hidden="true" className="size-3.5 shrink-0" />
-                    <span>{schedule.days.join(", ")} · <span className="font-medium text-foreground">{formatClockLabel(schedule.start)}–{formatClockLabel(schedule.end)}</span></span>
+                    <span>{schedule.days.join(", ")} · <span className="font-medium text-foreground">{schedule.start}–{schedule.end}</span></span>
                   </p>}
               <Button type="button" variant="ghost" size="sm" className="ml-auto h-8 text-xs" onClick={() => {
                 onTimeDraftsChange({});
@@ -905,29 +943,24 @@ function CoreHoursField({value, error, editable, timeZone, onChange, timeDrafts,
   );
 }
 
-function formatClockLabel(value: string) {
-  if (!value) return "";
-  const [hour, minute] = value.split(":");
-  const number = Number(hour);
-  return `${number % 12 || 12}:${minute} ${number < 12 ? "AM" : "PM"}`;
-}
-
 const suggestedTimes = Array.from({length: 96}, (_, slot) => {
-  const hour = Math.floor(slot / 4);
+  const hour = String(Math.floor(slot / 4)).padStart(2, "0");
   const minute = String(slot % 4 * 15).padStart(2, "0");
-  return formatClockLabel(`${hour}:${minute}`);
+  return `${hour}:${minute}`;
 });
+const suggestedEndTimes = [...suggestedTimes, "24:00"];
 
-function CoreTimePicker({label, value, draft, errorId, onChange}: {
+function CoreTimePicker({label, value, draft, errorId, allowEndOfDay = false, onChange}: {
   label: string;
   value: string;
   draft?: string;
   errorId?: string;
+  allowEndOfDay?: boolean;
   onChange: (value: string, finished?: boolean) => void;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
-  const selected = formatClockLabel(parseClockTime(draft ?? value) ?? "");
+  const selected = parseClockTime(draft ?? value, allowEndOfDay);
   const finishTyping = () => {
     if (draft !== undefined) onChange(draft, true);
   };
@@ -955,8 +988,8 @@ function CoreTimePicker({label, value, draft, errorId, onChange}: {
         </PopoverAnchor>
         <PopoverContent align="start" collisionPadding={12} aria-label={`Suggested ${label.toLowerCase()}s`}
           className="w-(--radix-popover-trigger-width) min-w-40 max-w-[calc(100vw-1.5rem)] p-2">
-          <div className="grid max-h-[min(12rem,var(--radix-popover-content-available-height)-1rem)] grid-cols-2 gap-1 overflow-y-auto overscroll-contain">
-            {suggestedTimes.map(time => (
+          <div className="grid max-h-[min(12rem,var(--radix-popover-content-available-height)-1rem)] grid-cols-1 gap-1 overflow-y-auto overscroll-contain">
+            {(allowEndOfDay ? suggestedEndTimes : suggestedTimes).map(time => (
               <Button key={time} type="button" size="sm" variant={selected === time ? "secondary" : "ghost"}
                 aria-pressed={selected === time} className="h-8 justify-start px-2 text-xs tabular-nums" onClick={() => {
                   onChange(time, true);

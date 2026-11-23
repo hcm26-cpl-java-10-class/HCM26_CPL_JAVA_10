@@ -19,4 +19,8 @@ export const projectHubApi = {
     (await axiosInstance.put<ProjectTeam>(`/project-hub/teams/${id}/mentor`, { mentorId })).data,
   saveCharter: async (id: number, charter: TeamCharter) =>
     (await axiosInstance.put<ProjectTeam>(`/project-hub/teams/${id}/charter`, charter)).data,
+  saveCharterDraft: async (id: number, charter: TeamCharter) =>
+    (await axiosInstance.put<TeamCharterView>(`/project-hub/teams/${id}/charter/draft`, charter)).data,
+  openCharterSigning: async (id: number, charter: TeamCharter) =>
+    (await axiosInstance.post<TeamCharterView>(`/project-hub/teams/${id}/charter/open-signing`, charter)).data,
 };

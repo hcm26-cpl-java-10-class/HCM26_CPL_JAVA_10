@@ -96,3 +96,13 @@ test("typed times accept shorthand, 24-hour notation and explicit AM/PM", () => 
     assert.equal(parseClockTime(input), null, input);
   }
 });
+
+test("24:00 is available only as the end of the same day", () => {
+  for (const input of ["24:00", "2400", "24"]) {
+    assert.equal(parseClockTime(input, true), "24:00");
+    assert.equal(parseClockTime(input), null);
+  }
+  assert.equal(parseClockTime("24:15", true), null);
+  assert.equal(validateCoreHours("Mon · 00:00–24:00"), null);
+  assert.equal(parseCoreHours("Mon · 24:00–23:45"), null);
+});

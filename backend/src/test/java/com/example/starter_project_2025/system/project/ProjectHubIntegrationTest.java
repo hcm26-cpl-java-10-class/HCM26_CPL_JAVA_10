@@ -244,6 +244,60 @@ class ProjectHubIntegrationTest {
     }
 
     @Test
+    void draftButtonsKeepSigningAndPublicationSeparate() throws Exception {
+        JsonNode initial = readCharter(adminToken);
+        long membershipId = initial.path("members").get(0).path("membershipId").asLong();
+        var duties = List.of(new ProjectHubDtos.ResponsibilityInput(membershipId, "Implement and test the API"));
+        java.util.function.BiFunction<JsonNode, String, ProjectHubDtos.Charter> edit = (view, mission) ->
+                new ProjectHubDtos.Charter(mission, "Reviewed and tested", "Slack", "19:00-21:00",
+                        "Discuss and escalate", view.path("charter").path("version").asLong(), duties);
+        mvc.perform(put("/api/project-hub/teams/{id}/charter/draft", team.getId())
+                        .header("Authorization", "Bearer " + adminToken).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(edit.apply(initial, "First agreement"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.revision").value(0))
+                .andExpect(jsonPath("$.draft.mission").value("First agreement"));
+        assertThat(readCharter(studentToken).path("draft").isNull()).isTrue();
+        assertThat(charterRevisions.countByTeam_Id(team.getId())).isZero();
+
+        JsonNode storedDraft = readCharter(adminToken);
+        JsonNode first = json.valueToTree(edit.apply(storedDraft, "First agreement"));
+        mvc.perform(put("/api/project-hub/teams/{id}/charter/draft", team.getId())
+                        .header("Authorization", "Bearer " + adminToken).contentType(MediaType.APPLICATION_JSON)
+                        .content(first.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.charter.version").value(storedDraft.path("charter").path("version").asLong()));
+        var draftEvents = charterOutbox.findAll().stream().filter(event -> event.getAggregateId().equals(team.getId())
+                && event.getEventType().equals("TEAM_CHARTER_DRAFT_SAVED")).toList();
+        assertThat(draftEvents).hasSize(1);
+        assertThat(draftEvents.getFirst().getPayload()).doesNotContain("First agreement", "Implement and test the API");
+        charterAction("open-signing", studentToken, first).andExpect(status().isForbidden());
+        charterAction("open-signing", adminToken, first).andExpect(status().isOk())
+                .andExpect(jsonPath("$.revision").value(1)).andExpect(jsonPath("$.workflow.phase").value("AWAITING_SIGNATURES"));
+        JsonNode v1 = readCharter(adminToken);
+        assertThat(v1.path("draft").isNull()).isTrue();
+        charterAction("publish", adminToken, consentRequest(v1)).andExpect(status().isUnprocessableEntity());
+        confirmCharter(studentToken, consentRequest(v1)).andExpect(status().isOk());
+        charterAction("publish", adminToken, consentRequest(v1)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.publishedCharter.revision").value(1));
+
+        mvc.perform(put("/api/project-hub/teams/{id}/charter/draft", team.getId())
+                        .header("Authorization", "Bearer " + adminToken).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(edit.apply(readCharter(adminToken), "Second agreement"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.revision").value(1))
+                .andExpect(jsonPath("$.confirmedCount").value(1));
+        JsonNode saved = readCharter(adminToken);
+        charterAction("open-signing", adminToken, json.valueToTree(edit.apply(saved, "")))
+                .andExpect(status().isUnprocessableEntity());
+        assertThat(charterRevisions.countByTeam_Id(team.getId())).isEqualTo(1);
+        assertThat(readCharter(adminToken).path("draft").path("mission").asText()).isEqualTo("Second agreement");
+        charterAction("open-signing", adminToken, json.valueToTree(edit.apply(saved, "Second agreement")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.revision").value(2))
+                .andExpect(jsonPath("$.confirmedCount").value(0))
+                .andExpect(jsonPath("$.publishedCharter.revision").value(1));
+        assertThat(charterConfirmations.findByTeamIdAndRevisionNumber(team.getId(), 1L)).hasSize(1);
+    }
+
+    @Test
     void preWorkflowSignaturesStayInHistoryAndCannotSatisfyNewPublication() throws Exception {
         saveCompleteCharter();
         approveSavedCharter();

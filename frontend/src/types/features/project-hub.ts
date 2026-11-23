@@ -18,6 +18,7 @@ export interface TeamCharterView {
   revision: number;
   canEdit: boolean;
   charter: TeamCharter;
+  draft?: TeamCharter | null;
   rosterToken: string;
   members: CharterMember[];
   confirmedCount: number;
