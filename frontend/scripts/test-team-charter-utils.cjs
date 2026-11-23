@@ -13,6 +13,7 @@ const compiled = ts.transpileModule(source, {compilerOptions:{module:ts.ModuleKi
 const scope = {exports:{}, Intl, Date};
 vm.runInNewContext(compiled, scope);
 const {charterProgressLabel, charterTimeZone, formatCharterDate, parseCoreHours, formatCoreHours, validateCoreHours} = scope.exports;
+const {parseClockTime} = scope.exports;
 const view = {
   progress:"NEEDS_REVIEW", contentComplete:true,
   charter:{mission:"Mission", definitionOfDone:"Tests", primaryChannel:"Slack", coreHours:"19–21", conflictResolution:"Discuss"},
@@ -83,4 +84,25 @@ test("core hours allow an empty draft but reject incomplete and overnight select
   for (const end of ["19:00", "18:00"]) {
     assert.match(validateCoreHours(formatCoreHours({days: ["Mon"], start: "19:00", end})), /later than start/);
   }
+});
+
+test("typed times accept shorthand, 24-hour notation and explicit AM/PM", () => {
+  for (const [input, expected] of [
+    ["204", "02:04"], ["0204", "02:04"], ["1404", "14:04"], ["14:04", "14:04"],
+    ["204pm", "14:04"], ["2:04 AM", "02:04"], ["12:00 AM", "00:00"],
+    ["12:00 PM", "12:00"], ["2", "02:00"], ["0", "00:00"], ["  ", ""],
+  ]) assert.equal(parseClockTime(input), expected);
+  for (const input of ["2060", "2400", "14 PM", "2:4", "2:04 P", "xyz"]) {
+    assert.equal(parseClockTime(input), null, input);
+  }
+});
+
+test("24:00 is available only as the end of the same day", () => {
+  for (const input of ["24:00", "2400", "24"]) {
+    assert.equal(parseClockTime(input, true), "24:00");
+    assert.equal(parseClockTime(input), null);
+  }
+  assert.equal(parseClockTime("24:15", true), null);
+  assert.equal(validateCoreHours("Mon · 00:00–24:00"), null);
+  assert.equal(parseCoreHours("Mon · 24:00–23:45"), null);
 });

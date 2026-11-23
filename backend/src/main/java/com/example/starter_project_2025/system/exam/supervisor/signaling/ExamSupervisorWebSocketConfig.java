@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.exam.supervisor.signaling;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
@@ -41,6 +42,7 @@ public class ExamSupervisorWebSocketConfig implements WebSocketConfigurer {
      * cho supervisor. Nâng giới hạn lên 64KB.
      */
     @Bean
+    @ConditionalOnProperty(name = "app.exam-supervisor.websocket.custom-buffer-enabled", matchIfMissing = true)
     public ServletServerContainerFactoryBean webSocketContainer() {
         ServletServerContainerFactoryBean container =
                 new ServletServerContainerFactoryBean();

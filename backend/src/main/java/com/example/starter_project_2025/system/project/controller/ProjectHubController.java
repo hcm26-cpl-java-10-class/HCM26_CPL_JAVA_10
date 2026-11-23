@@ -42,6 +42,18 @@ public class ProjectHubController {
         return charterService.confirm(id, request);
     }
 
+    @PostMapping("/teams/{id}/charter/approve")
+    @PreAuthorize("hasAnyAuthority('TEAM_READ', 'WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
+    public ProjectHubDtos.CharterView approveCharter(@PathVariable Long id, @Valid @RequestBody ProjectHubDtos.ConfirmCharter request) {
+        return charterService.approve(id, request);
+    }
+
+    @PostMapping("/teams/{id}/charter/publish")
+    @PreAuthorize("hasAnyAuthority('TEAM_READ', 'WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
+    public ProjectHubDtos.CharterView publishCharter(@PathVariable Long id, @Valid @RequestBody ProjectHubDtos.ConfirmCharter request) {
+        return charterService.publish(id, request);
+    }
+
     @GetMapping("/teams/{id}/charter/history")
     @PreAuthorize("hasAnyAuthority('TEAM_READ', 'WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
     public org.springframework.data.domain.Page<ProjectHubDtos.CharterHistory> charterHistory(@PathVariable Long id,
@@ -66,6 +78,18 @@ public class ProjectHubController {
     @PreAuthorize("hasAnyAuthority('TEAM_UPDATE', 'TEAM_READ', 'WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
     public ProjectHubDtos.TeamView saveCharter(@PathVariable Long id, @Valid @RequestBody ProjectHubDtos.Charter request) {
         return service.saveCharter(id, request);
+    }
+
+    @PutMapping("/teams/{id}/charter/draft")
+    @PreAuthorize("hasAnyAuthority('TEAM_UPDATE', 'TEAM_READ', 'WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
+    public ProjectHubDtos.CharterView saveCharterDraft(@PathVariable Long id, @Valid @RequestBody ProjectHubDtos.Charter request) {
+        return charterService.saveDraft(id, request);
+    }
+
+    @PostMapping("/teams/{id}/charter/open-signing")
+    @PreAuthorize("hasAnyAuthority('TEAM_READ', 'WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
+    public ProjectHubDtos.CharterView openCharterSigning(@PathVariable Long id, @Valid @RequestBody ProjectHubDtos.Charter request) {
+        return charterService.openSigning(id, request);
     }
 
     @ExceptionHandler(ResponseStatusException.class)

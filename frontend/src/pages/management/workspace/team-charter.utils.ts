@@ -4,7 +4,23 @@ export const coreHourDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as
 type CoreHourDay = (typeof coreHourDays)[number];
 type CoreHoursSchedule = { days: CoreHourDay[]; start: string; end: string };
 const time = "(?:[01][0-9]|2[0-3]):[0-5][0-9]";
-const schedulePattern = new RegExp(`^([A-Za-z, ]*) · (${time})?–(${time})?$`);
+
+/** Convert a typed clock time to the HH:mm format used in the saved schedule. */
+export function parseClockTime(value: string, allowEndOfDay = false): string | null {
+  const text = value.trim();
+  if (!text) return "";
+  if (allowEndOfDay && (text === "24:00" || text === "2400" || text === "24")) return "24:00";
+  const parts = /^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i.exec(text)
+    ?? /^(\d{1,2})(\d{2})\s*(AM|PM)?$/i.exec(text);
+  if (!parts) return null;
+  const hour = Number(parts[1]);
+  const minute = parts[2] ?? "00";
+  const period = parts[3]?.toUpperCase();
+  if (Number(minute) > 59 || hour > 23 || (period && (hour < 1 || hour > 12))) return null;
+  const hour24 = period ? hour % 12 + (period === "PM" ? 12 : 0) : hour;
+  return `${String(hour24).padStart(2, "0")}:${minute}`;
+}
+const schedulePattern = new RegExp(`^([A-Za-z, ]*) · (${time})?–(${time}|24:00)?$`);
 
 export function parseCoreHours(value: string): CoreHoursSchedule | null {
   if (!value) return {days: [], start: "", end: ""};
@@ -32,6 +48,12 @@ export function validateCoreHours(value: string): string | null {
 
 /** Keep server workflow enums unchanged; distinguish incomplete content from roster issues. */
 export function charterProgressLabel(view: TeamCharterView): string {
+  switch (view.workflow?.phase) {
+    case "DRAFT": return "Draft";
+    case "AWAITING_SIGNATURES": return "Awaiting signatures";
+    case "READY_TO_PUBLISH": return "Ready to publish";
+    case "PUBLISHED": return "Published";
+  }
   if (view.progress === "NOT_SAVED") return "Not created";
   if (view.progress === "FULLY_CONFIRMED") return "Fully confirmed";
   if (view.progress === "PENDING") return "Awaiting confirmation";
