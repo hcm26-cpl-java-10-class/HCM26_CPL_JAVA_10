@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,7 +21,7 @@ import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import type { CharterHistory, CharterHistoryPage, TeamCharter, TeamCharterView } from "@/types/features/project-hub";
 import { getWorkspaceError } from "./workspace.shared";
 import { isAxiosError } from "axios";
-import { charterProgressLabel, charterTimeZone, coreHourDays, formatCharterDate, formatCoreHours, parseCoreHours, validateCoreHours } from "./team-charter.utils";
+import { charterProgressLabel, charterTimeZone, coreHourDays, formatCharterDate, formatCoreHours, parseClockTime, parseCoreHours, validateCoreHours } from "./team-charter.utils";
 
 const fields = [
   {key: "mission", label: "Team mission", max: 2000},
@@ -114,7 +115,7 @@ function CharterHeader({view, navigation, dirty = false, busy = false}: {
                 <Badge variant="secondary">{charterProgressLabel(view)}</Badge>
                 {!navigation && !view.canEdit && <ReadOnlyBadge />}
               </div>
-              <p className="text-xs text-muted-foreground">{dirty ? "Unsaved changes" : view.revision > 0 ? "Saved charter" : "No saved charter yet"}</p>
+              <p className="text-xs text-muted-foreground">{dirty ? "Unsaved changes" : view.revision > 0 ? "Saved revision" : "No saved charter yet"}</p>
             </div>
             <div className="w-full min-w-0 space-y-1.5 sm:w-56">
               <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -216,7 +217,7 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
   const [tab, setTab] = useState<"current" | "history">("current");
   const [page, setPage] = useState(0);
   const [selectedRevision, setSelectedRevision] = useState<number | null>(null);
-  const invalidTimeDraft = timeDrafts.start !== undefined || timeDrafts.end !== undefined;
+  const invalidTimeDraft = Object.values(timeDrafts).some(value => value !== undefined && parseClockTime(value) === null);
   const dirty = invalidTimeDraft || JSON.stringify(form) !== JSON.stringify(baseline);
   useEffect(() => {
     if (!dirty) return;
@@ -227,7 +228,7 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
-  const coreHoursError = invalidTimeDraft ? "Enter a time like 2:04 AM."
+  const coreHoursError = invalidTimeDraft ? "Enter a time like 204, 14:04, or 2:04 PM."
     : form.coreHours !== baseline.coreHours ? validateCoreHours(form.coreHours ?? "") : null;
   const stale = form.version !== view.charter.version;
   // Adopt newer server content only when clean; never overwrite unsaved edits or a just-saved newer token.
@@ -237,17 +238,33 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
   const refreshAfterRejectedMutation = async (error: unknown) => {
     if (isAxiosError(error) && [401, 403, 404, 409, 422].includes(error.response?.status ?? 0)) await onRefresh();
   };
+  const revisionRequest = () => ({version: view.charter.version!, revision: view.revision, rosterToken: view.rosterToken});
+  const refreshCharter = async () => {
+    await onRefresh();
+    await queryClient.invalidateQueries({queryKey: ["charter-history", view.teamId]});
+    await queryClient.invalidateQueries({queryKey: ["workspace-detail"], refetchType: "none"});
+    await queryClient.invalidateQueries({queryKey: ["team-charter", view.teamId], refetchType: "none"});
+  };
   const save = useMutation({mutationFn: () => projectHubApi.saveCharter(view.teamId, form), onError: refreshAfterRejectedMutation, onSuccess: async response => {
     const next = {...form, ...response.charter, responsibilities: form.responsibilities}; setForm(next); setBaseline(next); setPreview(false); setAcknowledgedFor(null);
-    toast.success("Team charter saved. Members must confirm the current revision."); await onRefresh();
-    await queryClient.invalidateQueries({queryKey: ["charter-history", view.teamId]});
+    setTimeDrafts({});
+    toast.success(view.workflow ? "Draft saved." : "Team charter saved."); await refreshCharter();
   }});
-  const confirm = useMutation({mutationFn: () => projectHubApi.confirmCharter(view.teamId, {version: view.charter.version!, revision: view.revision, rosterToken: view.rosterToken}), onError: async error => {
+  const confirm = useMutation({mutationFn: () => projectHubApi.confirmCharter(view.teamId, revisionRequest()), onError: async error => {
     setAcknowledgedFor(null); await refreshAfterRejectedMutation(error);
   }, onSuccess: async () => {
-    setAcknowledgedFor(null); toast.success(view.confirmationKind === "ADMIN" ? "Your Admin acknowledgement was recorded." : "Your role and charter confirmation was recorded."); await onRefresh();
-    await queryClient.invalidateQueries({queryKey: ["charter-history", view.teamId]});
+    setAcknowledgedFor(null); toast.success(view.confirmationKind === "ADMIN" ? "Your Admin acknowledgement was recorded." : "Your role and charter confirmation was recorded."); await refreshCharter();
   }});
+  const publication = useMutation({
+    mutationFn: (action: "approve" | "publish") => action === "approve"
+      ? projectHubApi.approveCharter(view.teamId, revisionRequest())
+      : projectHubApi.publishCharter(view.teamId, revisionRequest()),
+    onError: refreshAfterRejectedMutation,
+    onSuccess: async (response, action) => {
+      toast.success(action === "approve" ? `Revision ${response.revision} is open for signing.` : `Revision ${response.revision} is now in effect.`);
+      await refreshCharter();
+    },
+  });
   const reload = useMutation({
     mutationFn: async () => {
       const latest = await onReload();
@@ -263,10 +280,11 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
       setDiscardOpen(false);
       save.reset();
       confirm.reset();
+      publication.reset();
     },
   });
   const history = useQuery({queryKey: ["charter-history", view.teamId, view.revision, page, user.email, activeRole], queryFn: () => projectHubApi.getCharterHistory(view.teamId, page), enabled: tab === "history", refetchOnWindowFocus: false});
-  const busy = save.isPending || confirm.isPending || reload.isPending;
+  const busy = save.isPending || confirm.isPending || publication.isPending || reload.isPending;
   const confirmationDisabled = busy || !view.canConfirm || dirty || stale;
   const adminAcknowledgement = view.confirmationKind === "ADMIN";
   const editable = view.canEdit && !busy;
@@ -299,12 +317,17 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
     }
   };
   const reloadLabel = reload.isPending ? "Reloading…" : dirty ? "Discard changes & reload" : "Reload saved charter";
-  const reloadButton = (dirty || stale || save.isError || confirm.isError || reload.isError || reload.isPending) && (
+  const reloadButton = (dirty || stale || save.isError || confirm.isError || publication.isError || reload.isError || reload.isPending) && (
     <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={requestReload}>
       <RefreshCw className={reload.isPending ? "animate-spin" : undefined} />{reloadLabel}
     </Button>
   );
   const members = view.members ?? [];
+  const workflow = view.workflow;
+  const published = view.publishedCharter;
+  const workflowHint = dirty ? "Save or discard local edits before continuing."
+    : stale ? "Reload the saved charter before continuing." : workflow?.blockReason;
+  const saveLabel = save.isPending ? "Saving…" : workflow ? "Save draft" : "Save charter";
   const confirmationHint = dirty ? "Save or discard local edits before confirming."
     : stale ? "Reload the saved charter before confirming."
     : view.confirmationBlockReason
@@ -314,12 +337,61 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
     <Tabs value={tab} onValueChange={value => setTab(value === "history" ? "history" : "current")} className="@container gap-4">
       <div className="border-b">
         <TabsList variant="line" aria-label="Charter sections" className="max-w-full gap-2">
-          <TabsTrigger value="current" className="data-[state=active]:text-blue-700 after:bg-blue-600 dark:data-[state=active]:text-blue-300"><BookOpen />Current charter</TabsTrigger>
+          <TabsTrigger value="current" className="data-[state=active]:text-blue-700 after:bg-blue-600 dark:data-[state=active]:text-blue-300"><BookOpen />{workflow ? "Working revision" : "Current charter"}</TabsTrigger>
           <TabsTrigger value="history" className="data-[state=active]:text-blue-700 after:bg-blue-600 dark:data-[state=active]:text-blue-300"><History />Revision history</TabsTrigger>
         </TabsList>
       </div>
     <TabsContent value="current" forceMount className="min-w-0 space-y-4 data-[state=inactive]:hidden">
       {stale && dirty && <Alert><AlertDescription>The saved charter changed while you were editing. Your unsaved changes are still here. Discard them to load the latest saved charter.</AlertDescription></Alert>}
+      {workflow && (
+        <Card className="min-w-0 gap-3 py-4">
+          <CardContent className="space-y-3 px-4 sm:px-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <h2 className="text-sm font-semibold">{published ? `Revision ${published.revision} is in effect` : "No published charter"}</h2>
+                <p className="text-sm text-muted-foreground">
+                  {workflow.phase === "DRAFT" ? "An Admin or Team Leader can approve the saved draft to open signing."
+                    : workflow.phase === "AWAITING_SIGNATURES" ? "Team members can now sign this revision. Publication requires every member’s signature."
+                    : workflow.phase === "READY_TO_PUBLISH" ? "Every team member has signed. An Admin or Team Leader can now publish this revision."
+                    : workflow.phase === "PUBLISHED" ? `Published ${formatCharterDate(published?.publishedAt, view.timeZone)}.`
+                    : "Save a draft to begin."}
+                </p>
+              </div>
+              {workflow.canManagePublication && workflow.phase === "DRAFT" && (
+                <Button type="button" size="sm" disabled={busy || dirty || stale || !workflow.canApprove} onClick={() => publication.mutate("approve")}>
+                  {publication.isPending ? "Approving…" : "Approve for signing"}
+                </Button>
+              )}
+              {workflow.canManagePublication && (workflow.phase === "AWAITING_SIGNATURES" || workflow.phase === "READY_TO_PUBLISH") && (
+                <Button type="button" size="sm" disabled={busy || dirty || stale || !workflow.canPublish} onClick={() => publication.mutate("publish")}>
+                  {publication.isPending ? "Publishing…" : "Publish charter"}
+                </Button>
+              )}
+            </div>
+            {workflow.canManagePublication && workflowHint && workflow.phase !== "PUBLISHED" && (
+              <p className="text-sm text-muted-foreground">{workflowHint}</p>
+            )}
+            {publication.isError && <ErrorBox error={publication.error} />}
+            {published && (
+              <details className="min-w-0 rounded-md border p-3">
+                <summary className="cursor-pointer text-sm font-medium">View published charter</summary>
+                <div className="mt-3 space-y-4">
+                  <CharterSummary charter={published.charter} layout="agreement" />
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold">Published roles & responsibilities</h3>
+                    {published.members.map(member => (
+                      <div key={member.membershipId} className="min-w-0 rounded-md border p-3">
+                        <p className="text-sm font-medium [overflow-wrap:anywhere]">{member.name} · {member.roles.join(", ")}</p>
+                        <SavedCharterText value={member.responsibility} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </details>
+            )}
+          </CardContent>
+        </Card>
+      )}
       <div className="grid items-start gap-4 @min-[840px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] @min-[840px]:grid-rows-[auto_1fr]">
         <Card className="min-w-0 gap-4 py-4">
           <CardHeader className="px-4 sm:px-5">
@@ -328,13 +400,13 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
               {dirty && <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">Unsaved changes</Badge>}
             </div>
             <p className="text-sm text-muted-foreground">{view.canEdit
-              ? "Save a partial draft at any time. Complete all five fields, roles and responsibilities before confirmation."
+              ? "Save a partial draft at any time. Complete all five fields, roles and responsibilities before opening signing."
               : "The team’s saved working rules, communication channel and shared hours."}</p>
           </CardHeader>
           <CardContent className="px-4 sm:px-5">
           {view.canEdit ? (
           <form className="space-y-4" onSubmit={event => { event.preventDefault(); submitCharter(); }}>
-            {view.confirmedCount > 0 && <Alert><AlertDescription>Saving a meaningful change creates a new revision and requires every member to confirm again. Previous confirmations remain in revision history.</AlertDescription></Alert>}
+            {(view.confirmedCount > 0 || workflow?.phase === "AWAITING_SIGNATURES") && <Alert><AlertDescription>Saving a change starts a new draft. Previous signatures stay in revision history. The new draft must be approved and signed separately.</AlertDescription></Alert>}
             <fieldset disabled={!editable} className="space-y-4">
               {fields.map(field => {
                 if (field.key === "coreHours") return <CoreHoursField
@@ -377,7 +449,7 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
               {reloadButton}
               <Button type="submit" size="sm" className="ml-auto bg-blue-600 text-white hover:bg-blue-700" disabled={!canSave}>
                 {save.isPending ? <Loader2 className="animate-spin" /> : <Save />}
-                {save.isPending ? "Saving…" : "Save charter"}
+                {saveLabel}
               </Button>
             </div>
           </form>
@@ -421,7 +493,7 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
                       <Badge variant="outline" className={member.confirmed
                         ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
                         : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"}>
-                        {member.confirmed ? "Confirmed" : "Pending"}
+                        {member.confirmed ? "Confirmed" : workflow?.phase === "DRAFT" || workflow?.phase === "NOT_SAVED" ? "Signing not open" : "Pending"}
                       </Badge>
                     </div>
                     {roles.length > 0 && <div className="flex flex-wrap gap-1">{roles.map(role => <Badge variant="secondary" key={role}>{role}</Badge>)}</div>}
@@ -590,7 +662,7 @@ export function CharterContent({view, onRefresh, onReload, navigation}: {
             <Button type="button" variant="outline" size="sm" disabled={save.isPending} onClick={closePreview}>Back to charter</Button>
             {view.canEdit && <Button type="button" size="sm" className="bg-blue-600 text-white hover:bg-blue-700" disabled={!canSave} onClick={submitCharter}>
               {save.isPending ? <Loader2 className="animate-spin" /> : <Save />}
-              {save.isPending ? "Saving…" : "Save charter"}
+              {saveLabel}
             </Button>}
           </div>
         </DialogFooter>
@@ -634,7 +706,7 @@ function RevisionHistoryViewer({data, currentRevision, selectedRevision, onSelec
                 <select id={`${id}-revision`} value={selected.revision} onChange={event => onSelect(Number(event.target.value))}
                   className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring">
                   {revisions.map(item => <option key={item.revision} value={item.revision}>
-                    Revision {item.revision}{item.revision === currentRevision ? " · Current revision" : ""}
+                    Revision {item.revision}{item.revision === currentRevision ? " · Latest revision" : ""}{item.publishedAt ? " · Published" : ""}
                   </option>)}
                 </select>
               </div>
@@ -648,7 +720,7 @@ function RevisionHistoryViewer({data, currentRevision, selectedRevision, onSelec
                         checked={viewed} onChange={() => onSelect(item.revision)} />
                       <span className="flex flex-wrap items-center gap-1.5">
                         <span className="font-semibold">Revision {item.revision}</span>
-                        {item.revision === currentRevision && <Badge variant="outline">Current revision</Badge>}
+                        {item.revision === currentRevision && <Badge variant="outline">Latest revision</Badge>}
                       </span>
                       <span className="block text-xs text-muted-foreground">{formatCharterDate(item.savedAt, timeZone)}</span>
                       <span className="flex flex-wrap items-center justify-between gap-1 text-xs text-muted-foreground">
@@ -682,11 +754,14 @@ function RevisionSnapshot({revision, isCurrent, timeZone}: {revision: CharterHis
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle><h2 className="text-lg">Revision {revision.revision}</h2></CardTitle>
           <ReadOnlyBadge />
-          {isCurrent && <Badge variant="outline" className="border-blue-200 text-blue-700 dark:border-blue-800 dark:text-blue-300">Current revision</Badge>}
+          {isCurrent && <Badge variant="outline" className="border-blue-200 text-blue-700 dark:border-blue-800 dark:text-blue-300">Latest revision</Badge>}
+          {revision.publishedAt && <Badge variant="secondary">Published</Badge>}
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span>Saved {formatCharterDate(revision.savedAt, timeZone)}</span>
           <span>{revision.actorId == null ? "Saved by an unrecorded user" : `Saved by User #${revision.actorId}`}</span>
+          {revision.approvedAt && <span>Approved for signing {formatCharterDate(revision.approvedAt, timeZone)} · User #{revision.approvedBy}</span>}
+          {revision.publishedAt && <span>Published {formatCharterDate(revision.publishedAt, timeZone)} · User #{revision.publishedBy}</span>}
         </div>
       </CardHeader>
       <CardContent className="space-y-5 px-4 sm:px-5">
@@ -758,9 +833,9 @@ function CoreHoursField({value, error, editable, timeZone, onChange, timeDrafts,
   const weekdays = coreHourDays.slice(0, 5);
   const weekdaysSelected = weekdays.every(day => schedule.days.includes(day));
   const complete = !legacy && !error && schedule.days.length > 0 && !!schedule.start && !!schedule.end;
-  const updateTime = (field: "start" | "end", text: string) => {
-    const time = parseClockLabel(text);
-    onTimeDraftsChange({...timeDrafts, [field]: time === null ? text : undefined});
+  const updateTime = (field: "start" | "end", text: string, finished = false) => {
+    const time = parseClockTime(text);
+    onTimeDraftsChange({...timeDrafts, [field]: finished && time !== null ? undefined : text});
     if (time !== null) onChange(formatCoreHours({...schedule, [field]: time}));
   };
   return (
@@ -771,7 +846,7 @@ function CoreHoursField({value, error, editable, timeZone, onChange, timeDrafts,
         <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
           <p id={`${id}-hint`} className="text-xs text-muted-foreground">
             {legacy && "Picking a day or time replaces the saved text when you save. "}
-            Choose the days that share the same hours ({charterTimeZone(timeZone)}). Type a time or choose a suggestion.
+            Choose the days that share the same hours ({charterTimeZone(timeZone)}). Type 204 for 2:04 AM or pick a time.
           </p>
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -805,10 +880,10 @@ function CoreHoursField({value, error, editable, timeZone, onChange, timeDrafts,
             </div>
           </div>
           <div className="grid gap-3 border-t pt-3 sm:grid-cols-2">
-            <CoreTimePicker label="Start time" value={timeDrafts.start ?? formatClockLabel(schedule.start)} errorId={error ? `${id}-error` : undefined}
-              onChange={text => updateTime("start", text)} />
-            <CoreTimePicker label="End time" value={timeDrafts.end ?? formatClockLabel(schedule.end)} errorId={error ? `${id}-error` : undefined}
-              onChange={text => updateTime("end", text)} />
+            <CoreTimePicker label="Start time" value={formatClockLabel(schedule.start)} draft={timeDrafts.start} errorId={error ? `${id}-error` : undefined}
+              onChange={(text, finished) => updateTime("start", text, finished)} />
+            <CoreTimePicker label="End time" value={formatClockLabel(schedule.end)} draft={timeDrafts.end} errorId={error ? `${id}-error` : undefined}
+              onChange={(text, finished) => updateTime("end", text, finished)} />
           </div>
           {(value || error) && (
             <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-2">
@@ -837,33 +912,62 @@ function formatClockLabel(value: string) {
   return `${number % 12 || 12}:${minute} ${number < 12 ? "AM" : "PM"}`;
 }
 
-const suggestedTimes = Array.from({length: 96}, (_, slot) =>
-  formatClockLabel(`${Math.floor(slot / 4)}:${String(slot % 4 * 15).padStart(2, "0")}`));
+const suggestedTimes = Array.from({length: 96}, (_, slot) => {
+  const hour = Math.floor(slot / 4);
+  const minute = String(slot % 4 * 15).padStart(2, "0");
+  return formatClockLabel(`${hour}:${minute}`);
+});
 
-function parseClockLabel(value: string): string | null {
-  if (!value) return "";
-  const match = /^(0?[1-9]|1[0-2]):([0-5][0-9])\s*(AM|PM)$/i.exec(value.trim());
-  if (!match) return null;
-  const hour = Number(match[1]) % 12 + (match[3].toUpperCase() === "PM" ? 12 : 0);
-  return `${String(hour).padStart(2, "0")}:${match[2]}`;
-}
-
-function CoreTimePicker({label, value, errorId, onChange}: {
+function CoreTimePicker({label, value, draft, errorId, onChange}: {
   label: string;
   value: string;
+  draft?: string;
   errorId?: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, finished?: boolean) => void;
 }) {
   const id = useId();
+  const [open, setOpen] = useState(false);
+  const selected = formatClockLabel(parseClockTime(draft ?? value) ?? "");
+  const finishTyping = () => {
+    if (draft !== undefined) onChange(draft, true);
+  };
   return (
     <div className="min-w-0 space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} list={`${id}-times`} value={value} onChange={event => onChange(event.target.value)}
-        autoComplete="off" maxLength={16} placeholder="e.g. 2:04 AM" className="bg-background tabular-nums"
-        aria-invalid={!!errorId} aria-describedby={errorId} />
-      <datalist id={`${id}-times`}>
-        {suggestedTimes.map(time => <option key={time} value={time} />)}
-      </datalist>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverAnchor className="relative">
+          <Input id={id} value={draft ?? value} onChange={event => onChange(event.target.value)}
+            onBlur={finishTyping}
+            onKeyDown={event => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                finishTyping();
+              }
+            }}
+            autoComplete="off" maxLength={16} placeholder="e.g. 204" className="bg-background pr-10 tabular-nums"
+            aria-invalid={!!errorId} aria-describedby={errorId} />
+          <PopoverTrigger asChild>
+            <Button type="button" variant="ghost" size="icon" className="absolute inset-y-1 right-1 size-7"
+              aria-label={`Choose ${label.toLowerCase()}`}>
+              <Clock aria-hidden="true" className="size-4" />
+            </Button>
+          </PopoverTrigger>
+        </PopoverAnchor>
+        <PopoverContent align="start" collisionPadding={12} aria-label={`Suggested ${label.toLowerCase()}s`}
+          className="w-(--radix-popover-trigger-width) min-w-40 max-w-[calc(100vw-1.5rem)] p-2">
+          <div className="grid max-h-[min(12rem,var(--radix-popover-content-available-height)-1rem)] grid-cols-2 gap-1 overflow-y-auto overscroll-contain">
+            {suggestedTimes.map(time => (
+              <Button key={time} type="button" size="sm" variant={selected === time ? "secondary" : "ghost"}
+                aria-pressed={selected === time} className="h-8 justify-start px-2 text-xs tabular-nums" onClick={() => {
+                  onChange(time, true);
+                  setOpen(false);
+                }}>
+                {time}
+              </Button>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

@@ -12,7 +12,7 @@ import { charterProgressLabel } from "./team-charter.utils";
 import { getWorkspaceError } from "./workspace.shared";
 
 export function WorkspaceCharterCard({teamId, workspaceId}: {teamId: number; workspaceId: number}) {
-  const {user, activeRole, hasPermission} = usePermissions();
+  const {user, activeRole} = usePermissions();
   const charter = useQuery({queryKey: ["team-charter", teamId, workspaceId, user.email, activeRole], queryFn: () => projectHubApi.getCharter(teamId, workspaceId), retry: false});
   const data = charter.isSuccess ? charter.data : undefined;
   const total = data?.memberCount;
@@ -56,6 +56,7 @@ export function WorkspaceCharterCard({teamId, workspaceId}: {teamId: number; wor
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <div className="flex flex-wrap gap-1.5">
                   {data?.revision != null && <Badge variant="secondary">{data.revision > 0 ? `Revision ${data.revision}` : "No saved revision"}</Badge>}
+                  {data?.workflow && <Badge variant="outline">{data.publishedCharter ? `In effect: revision ${data.publishedCharter.revision}` : "No published charter"}</Badge>}
                   {data?.teamStatus === "ARCHIVED" && <Badge variant="outline">Archived</Badge>}
                   {progressLabel && <Badge variant="outline" className={statusColor}>{progressLabel}</Badge>}
                 </div>
@@ -73,16 +74,9 @@ export function WorkspaceCharterCard({teamId, workspaceId}: {teamId: number; wor
             )}
           </div>
         </div>
-        <div className="flex shrink-0 flex-col gap-0.5 @min-[560px]:items-end">
-          <Button variant="outline" size="sm" asChild>
-            <Link to={`/student/team/charter?teamId=${teamId}&workspaceId=${workspaceId}`}>Open team charter<ChevronRight /></Link>
-          </Button>
-          {hasPermission("TEAM_UPDATE") && (
-            <Button variant="link" size="sm" className="h-auto px-0 py-1 text-xs text-muted-foreground" asChild>
-              <Link to="/mentor/teams">Browse team charters</Link>
-            </Button>
-          )}
-        </div>
+        <Button variant="outline" size="sm" className="shrink-0" asChild>
+          <Link to={`/student/team/charter?teamId=${teamId}&workspaceId=${workspaceId}`}>Open team charter<ChevronRight /></Link>
+        </Button>
       </CardContent>
     </Card>
   );
