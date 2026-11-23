@@ -141,6 +141,20 @@ export function NotificationBell() {
             <p className="p-8 text-center text-sm text-muted-foreground">No notifications yet.</p>
           )}
         </div>
+        <div className="border-t p-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full"
+            onClick={() => {
+              setOpen(false);
+              navigate("/notifications");
+            }}
+          >
+            View all notifications
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   );

@@ -1,3 +1,4 @@
+import NotificationCenterPage from "@/pages/notifications/NotificationCenterPage";
 import RecommendedCoursesPage from "@/pages/student/RecommendedCoursesPage";
 import CourseLearnerGradesPage from "@/pages/management/demo/course/pages/CourseLearnerGradesPage";
 import ScoreManagementPage from "@/pages/management/exam/score-management";
@@ -219,7 +220,6 @@ export const routes: RouteConfig[] = [
   {
     path: "/exams",
     component: ExamManagementPage,
-    requiredPermission: "EXAM_READ",
     isModuleDriven: true,
     requiredPermission: "EXAM_UPDATE",
   },
@@ -493,6 +493,7 @@ export const routes: RouteConfig[] = [
     isModuleDriven: false,
   },
 
+  { path: "/notifications", component: NotificationCenterPage, isModuleDriven: false },
   { path: "/student/recommendations", component: RecommendedCoursesPage, requiredPermission: "ENROLLMENT_CREATE", isModuleDriven: false },
   // STUDENT
   {
