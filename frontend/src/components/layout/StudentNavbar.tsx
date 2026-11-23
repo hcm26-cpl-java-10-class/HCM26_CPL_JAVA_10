@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { usePendingInvitations } from "@/hooks/usePendingInvitations";
-import { InvitationBell } from "@/components/features/invitation/InvitationBell";
 import { cn } from "@/lib/utils";
 import { authApi } from "@/api/features/auth.api";
 import { iconMap } from "@/components/datatable/iconMap";
@@ -467,9 +466,6 @@ export function StudentNavbar() {
                 })}
               </DropdownMenuContent>
             </DropdownMenu>
-
-            {/* INVITATION BELL */}
-            <InvitationBell />
 
             {/* EXISTING ROLE SWITCHER */}
             <div className="min-w-0 max-w-full [&>div]:flex-wrap">

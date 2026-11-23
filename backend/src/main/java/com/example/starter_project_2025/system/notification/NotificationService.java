@@ -1,8 +1,9 @@
 package com.example.starter_project_2025.system.notification;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
-import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,32 +14,38 @@ import java.time.LocalDateTime;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
-    private final UserRepository userRepository;
+    private final NotificationWriter notificationWriter;
 
     @Transactional(readOnly = true)
-    public NotificationListDTO getForUser(Long userId) {
+    public NotificationListDTO getForUser(Long userId, int page, int size) {
+        var notifications = notificationRepository.findByUser_IdOrderByCreatedAtDesc(
+                userId,
+                PageRequest.of(page, size)
+        );
         return new NotificationListDTO(
-                notificationRepository.findTop30ByUser_IdOrderByCreatedAtDesc(userId)
-                        .stream()
+                notifications.stream()
                         .map(NotificationDTO::from)
                         .toList(),
-                notificationRepository.countByUser_IdAndReadAtIsNull(userId)
+                notificationRepository.countByUser_IdAndReadAtIsNull(userId),
+                notifications.getNumber(),
+                notifications.getTotalPages(),
+                notifications.getTotalElements()
         );
     }
 
-    @Transactional
     public void createOnce(Long userId, String eventKey, String title, String message, String targetUrl) {
-        if (notificationRepository.existsByEventKey(eventKey)) {
-            notificationRepository.updateTargetUrlByEventKey(eventKey, targetUrl);
+        if (notificationRepository.existsByUser_IdAndEventKey(userId, eventKey)) {
+            notificationWriter.updateTargetUrl(userId, eventKey, targetUrl);
             return;
         }
-        notificationRepository.save(Notification.builder()
-                .user(userRepository.getReferenceById(userId))
-                .eventKey(eventKey)
-                .title(title)
-                .message(message)
-                .targetUrl(targetUrl)
-                .build());
+        try {
+            notificationWriter.insert(userId, eventKey, title, message, targetUrl);
+        } catch (DataIntegrityViolationException failure) {
+            if (!notificationRepository.existsByUser_IdAndEventKey(userId, eventKey)) {
+                throw failure;
+            }
+            notificationWriter.updateTargetUrl(userId, eventKey, targetUrl);
+        }
     }
 
     @Transactional
