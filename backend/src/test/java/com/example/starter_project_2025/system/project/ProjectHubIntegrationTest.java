@@ -169,8 +169,93 @@ class ProjectHubIntegrationTest {
     }
 
     private org.springframework.test.web.servlet.ResultActions confirmCharter(String token, JsonNode request) throws Exception {
-        return mvc.perform(post("/api/project-hub/teams/{id}/charter/confirm", team.getId()).header("Authorization", "Bearer " + token)
+        return charterAction("confirm", token, request);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions charterAction(String action, String token, JsonNode request) throws Exception {
+        return mvc.perform(post("/api/project-hub/teams/{id}/charter/{action}", team.getId(), action).header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON).content(request.toString()));
+    }
+
+    private void approveSavedCharter() throws Exception {
+        charterAction("approve", adminToken, consentRequest(readCharter(adminToken))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.workflow.phase").value("AWAITING_SIGNATURES"));
+    }
+
+    @Test
+    void onlyPublishedSnapshotTakesEffectAndEveryMemberMustSignTheApprovedRevision() throws Exception {
+        transaction.executeWithoutResult(status -> {
+            ProjectTeam target = teams.findById(team.getId()).orElseThrow();
+            target.setLeaderMemberId(members.findAllByTeam_IdOrderByIdAsc(target.getId()).getFirst().getClassMember().getId());
+            var user = new User();
+            user.setEmail("charter-peer-" + UUID.randomUUID() + "@example.test");
+            user.setUsername("peer-" + UUID.randomUUID());
+            user.setFirstName("Charter");
+            user.setLastName("Peer");
+            user.setPasswordHash("test-fixture-only");
+            user.setTenant(target.getProject().getTenant());
+            user.setRoles(new java.util.HashSet<>(List.of(roles.findByName("STUDENT").orElseThrow())));
+            users.saveAndFlush(user);
+            ClassMember peer = new ClassMember();
+            peer.setTrainingClass(target.getTrainingClass());
+            peer.setUser(user);
+            peer.setStatus(ClassMemberStatus.ACTIVE);
+            entityManager.persist(peer);
+            members.saveAndFlush(ProjectMember.builder().team(target).classMember(peer).role("QA").build());
+        });
+        String peerToken = transaction.execute(status -> token(members.findAllByTeam_IdOrderByIdAsc(team.getId()).getLast().getClassMember().getUser().getEmail()));
+        long workspaceId = createWorkspace(UUID.randomUUID().toString()).get("id").asLong();
+        saveCompleteCharter();
+        JsonNode draft = readCharter(studentToken);
+        assertThat(draft.path("workflow").path("phase").asText()).isEqualTo("DRAFT");
+        assertThat(draft.path("publishedCharter").isNull()).isTrue();
+        var v1 = consentRequest(draft);
+        confirmCharter(studentToken, v1).andExpect(status().isUnprocessableEntity());
+        charterAction("approve", peerToken, v1).andExpect(status().isForbidden());
+        charterAction("publish", peerToken, v1).andExpect(status().isForbidden());
+        charterAction("publish", adminToken, v1).andExpect(status().isUnprocessableEntity());
+        charterAction("approve", studentToken, v1).andExpect(status().isOk()).andExpect(jsonPath("$.confirmedCount").value(0));
+        charterAction("approve", adminToken, v1).andExpect(status().isOk());
+        confirmCharter(adminToken, v1).andExpect(status().isOk()).andExpect(jsonPath("$.confirmedCount").value(0));
+        confirmCharter(studentToken, v1).andExpect(status().isOk()).andExpect(jsonPath("$.confirmedCount").value(1));
+        charterAction("publish", studentToken, v1).andExpect(status().isUnprocessableEntity());
+        confirmCharter(peerToken, v1).andExpect(status().isOk()).andExpect(jsonPath("$.workflow.phase").value("READY_TO_PUBLISH"));
+        charterAction("publish", studentToken, v1).andExpect(status().isOk()).andExpect(jsonPath("$.workflow.phase").value("PUBLISHED"));
+        charterAction("publish", adminToken, v1).andExpect(status().isOk()).andExpect(jsonPath("$.publishedCharter.revision").value(1));
+
+        saveCharter(adminToken, draft.path("charter").path("version").asLong(), "New proposal").andExpect(status().isOk());
+        JsonNode v2 = readCharter(studentToken);
+        assertThat(v2.path("workflow").path("phase").asText()).isEqualTo("DRAFT");
+        assertThat(v2.path("confirmedCount").asInt()).isZero();
+        assertThat(v2.path("publishedCharter").path("charter").path("mission").asText()).isEqualTo("Deliver the team project");
+        mvc.perform(get("/api/workspaces/{id}", workspaceId).header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.charter.mission").value("Deliver the team project"));
+        charterAction("publish", adminToken, v1).andExpect(status().isConflict());
+        approveSavedCharter();
+        confirmCharter(studentToken, consentRequest(v2)).andExpect(status().isOk());
+        confirmCharter(peerToken, consentRequest(v2)).andExpect(status().isOk());
+        charterAction("publish", adminToken, consentRequest(v2)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.publishedCharter.charter.mission").value("New proposal"));
+        mvc.perform(get("/api/project-hub/teams/{id}/charter/history", team.getId()).header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[1].publishedAt").isNotEmpty())
+                .andExpect(jsonPath("$.content[1].confirmations.length()").value(3));
+        assertThat(charterOutbox.findAll().stream().filter(e -> e.getAggregateId().equals(team.getId())
+                && e.getEventType().equals("TEAM_CHARTER_PUBLISHED")).count()).isEqualTo(2);
+    }
+
+    @Test
+    void preWorkflowSignaturesStayInHistoryAndCannotSatisfyNewPublication() throws Exception {
+        saveCompleteCharter();
+        approveSavedCharter();
+        confirmCharter(studentToken, consentRequest(readCharter(studentToken))).andExpect(status().isOk());
+        new JdbcTemplate(dataSource).update("update team_charter_revisions set approved_at=null, approved_by=null where team_id=?", team.getId());
+        JsonNode legacy = readCharter(adminToken);
+        assertThat(legacy.path("confirmedCount").asInt()).isZero();
+        assertThat(legacy.path("publishedCharter").isNull()).isTrue();
+        charterAction("approve", adminToken, consentRequest(legacy)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.revision").value(2)).andExpect(jsonPath("$.confirmedCount").value(0));
+        assertThat(charterConfirmations.findByTeamIdAndRevisionNumber(team.getId(), 1L)).hasSize(1);
+        charterAction("publish", adminToken, consentRequest(readCharter(adminToken))).andExpect(status().isUnprocessableEntity());
     }
 
     private void asAdmin(java.util.function.Consumer<org.springframework.security.core.Authentication> action) {
@@ -203,6 +288,7 @@ class ProjectHubIntegrationTest {
         assertThat(initial.path("contentComplete").asBoolean()).isFalse();
         assertThat(charterRevisions.countByTeam_Id(team.getId())).isZero();
         saveCompleteCharter();
+        approveSavedCharter();
         JsonNode saved = readCharter(studentToken);
         assertThat(saved.path("contentComplete").asBoolean()).isTrue();
         confirmCharter(studentToken, consentRequest(saved)).andExpect(status().isOk())
@@ -241,6 +327,7 @@ class ProjectHubIntegrationTest {
     @Test
     void softDeletedTeamIsHiddenWhileItsCharterEvidenceRemainsIntact() throws Exception {
         saveCompleteCharter();
+        approveSavedCharter();
         JsonNode current = readCharter(studentToken);
         confirmCharter(studentToken, consentRequest(current)).andExpect(status().isOk());
         transaction.executeWithoutResult(status -> {
@@ -262,6 +349,7 @@ class ProjectHubIntegrationTest {
     @Test
     void selfConfirmationIsImmutableIdempotentAndCannotImpersonateAnotherUser() throws Exception {
         saveCompleteCharter();
+        approveSavedCharter();
         JsonNode current = readCharter(studentToken);
         assertThat(current.get("canConfirm").asBoolean()).isTrue();
         var request = (com.fasterxml.jackson.databind.node.ObjectNode) consentRequest(current);
@@ -279,7 +367,7 @@ class ProjectHubIntegrationTest {
 
     @Test
     void charterRevisionChangeRequiresNewConsentAndPreservesHistory() throws Exception {
-        saveCompleteCharter(); JsonNode old = readCharter(studentToken);
+        saveCompleteCharter(); approveSavedCharter(); JsonNode old = readCharter(studentToken);
         confirmCharter(studentToken, consentRequest(old)).andExpect(status().isOk());
         saveCharter(adminToken, old.get("charter").get("version").asLong(), "Changed mission").andExpect(status().isOk());
         JsonNode updated = readCharter(studentToken);
@@ -307,7 +395,7 @@ class ProjectHubIntegrationTest {
 
     @Test
     void adminAcknowledgesAsSelfWhileNonMemberMentorCannotConfirm() throws Exception {
-        saveCompleteCharter(); var request = consentRequest(readCharter(studentToken));
+        saveCompleteCharter(); approveSavedCharter(); var request = consentRequest(readCharter(studentToken));
         JsonNode admin = readCharter(adminToken);
         assertThat(admin.path("confirmationKind").asText()).isEqualTo("ADMIN");
         assertThat(admin.path("canConfirm").asBoolean()).isTrue();
@@ -330,6 +418,7 @@ class ProjectHubIntegrationTest {
     @Test
     void adminAcknowledgementRetryDoesNotReplaceMemberConsentAndHistoryKeepsBothActors() throws Exception {
         saveCompleteCharter();
+        approveSavedCharter();
         JsonNode request = consentRequest(readCharter(adminToken));
         confirmCharter(adminToken, request).andExpect(status().isOk());
         confirmCharter(adminToken, request).andExpect(status().isOk());
@@ -354,12 +443,14 @@ class ProjectHubIntegrationTest {
         assertThat(incomplete.path("canConfirm").asBoolean()).isFalse();
         confirmCharter(adminToken, consentRequest(incomplete)).andExpect(status().isUnprocessableEntity());
         saveCompleteCharter();
+        approveSavedCharter();
         JsonNode current = readCharter(adminToken);
         confirmCharter(adminToken, consentRequest(current)).andExpect(status().isOk());
         saveCharter(adminToken, current.path("charter").path("version").asLong(), "Updated agreement").andExpect(status().isOk());
-        assertThat(readCharter(adminToken).path("canConfirm").asBoolean()).isTrue();
+        assertThat(readCharter(adminToken).path("canConfirm").asBoolean()).isFalse();
         assertThat(readCharter(adminToken).path("selfConfirmedAt").isNull()).isTrue();
         confirmCharter(adminToken, consentRequest(current)).andExpect(status().isConflict());
+        approveSavedCharter();
         confirmCharter(adminToken, consentRequest(readCharter(adminToken))).andExpect(status().isOk());
     }
 
@@ -376,7 +467,7 @@ class ProjectHubIntegrationTest {
 
     @Test
     void officialRoleChangeInvalidatesConsentAtomically() throws Exception {
-        saveCompleteCharter(); confirmCharter(studentToken, consentRequest(readCharter(studentToken))).andExpect(status().isOk());
+        saveCompleteCharter(); approveSavedCharter(); confirmCharter(studentToken, consentRequest(readCharter(studentToken))).andExpect(status().isOk());
         long version = readCharter(adminToken).get("charter").get("version").asLong();
         Long memberId = transaction.execute(status -> members.findAllByTeam_IdOrderByIdAsc(team.getId()).getFirst().getClassMember().getId());
         asAdmin(auth -> roleService.updateRoles(team.getTrainingClass().getId(), team.getAllocationSession().getId(), team.getId(),
@@ -385,13 +476,13 @@ class ProjectHubIntegrationTest {
         assertThat(changed.get("revision").asLong()).isEqualTo(2);
         assertThat(changed.get("confirmedCount").asInt()).isZero();
         assertThat(changed.get("members").get(0).get("roles").get(0).asText()).isEqualTo("QA");
-        assertThat(changed.get("canConfirm").asBoolean()).isTrue();
+        assertThat(changed.get("canConfirm").asBoolean()).isFalse();
         assertThat(charterConfirmations.findByTeamIdAndRevisionNumber(team.getId(), 1L)).hasSize(1);
     }
 
     @Test
     void officialMemberRemovalPreservesConsentEvidenceAndNeverShowsZeroOfZeroAsComplete() throws Exception {
-        saveCompleteCharter(); confirmCharter(studentToken, consentRequest(readCharter(studentToken))).andExpect(status().isOk());
+        saveCompleteCharter(); approveSavedCharter(); confirmCharter(studentToken, consentRequest(readCharter(studentToken))).andExpect(status().isOk());
         Long memberId = transaction.execute(status -> members.findAllByTeam_IdOrderByIdAsc(team.getId()).getFirst().getClassMember().getId());
         asAdmin(auth -> membershipService.removeMember(team.getTrainingClass().getId(), team.getAllocationSession().getId(), team.getId(), memberId,
                 new RemoveActiveTeamMemberRequest("Student moved to another group"), auth));
@@ -404,7 +495,7 @@ class ProjectHubIntegrationTest {
 
     @Test
     void membershipStatusReactivationDoesNotResurrectOldConsent() throws Exception {
-        saveCompleteCharter(); confirmCharter(studentToken, consentRequest(readCharter(studentToken))).andExpect(status().isOk());
+        saveCompleteCharter(); approveSavedCharter(); confirmCharter(studentToken, consentRequest(readCharter(studentToken))).andExpect(status().isOk());
         transaction.executeWithoutResult(status -> members.findAllByTeam_IdOrderByIdAsc(team.getId()).getFirst().getClassMember().setStatus(ClassMemberStatus.INACTIVE));
         assertThat(readCharter(adminToken).get("confirmedCount").asInt()).isZero();
         transaction.executeWithoutResult(status -> members.findAllByTeam_IdOrderByIdAsc(team.getId()).getFirst().getClassMember().setStatus(ClassMemberStatus.ACTIVE));
@@ -415,7 +506,7 @@ class ProjectHubIntegrationTest {
 
     @Test
     void concurrentConfirmRetriesProduceOnlyOneConsent() throws Exception {
-        saveCompleteCharter(); var request = consentRequest(readCharter(studentToken));
+        saveCompleteCharter(); approveSavedCharter(); var request = consentRequest(readCharter(studentToken));
         try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
             var a = executor.submit(() -> confirmCharter(studentToken, request).andReturn().getResponse().getStatus());
             var b = executor.submit(() -> confirmCharter(studentToken, request).andReturn().getResponse().getStatus());
@@ -473,7 +564,7 @@ class ProjectHubIntegrationTest {
 
     @Test
     void confirmationAndItsEvidenceRollBackTogether() throws Exception {
-        saveCompleteCharter(); var current = readCharter(studentToken);
+        saveCompleteCharter(); approveSavedCharter(); var current = readCharter(studentToken);
         var actor = userDetails.loadUserByUsername("student@example.com");
         org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(actor, null, actor.getAuthorities()));
         try {
@@ -749,7 +840,7 @@ class ProjectHubIntegrationTest {
         long id = createWorkspace(UUID.randomUUID().toString()).get("id").asLong();
         mvc.perform(get("/api/workspaces/{id}", id).header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.mentorName").isNotEmpty())
-                .andExpect(jsonPath("$.charter.mission").value("Ship a usable portal"));
+                .andExpect(jsonPath("$.charter").value(org.hamcrest.Matchers.nullValue()));
     }
 
     @Test
