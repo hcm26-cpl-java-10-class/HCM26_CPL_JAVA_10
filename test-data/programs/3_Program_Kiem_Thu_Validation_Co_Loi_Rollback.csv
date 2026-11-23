@@ -1,0 +1,6 @@
+﻿programCode,programName,programVersion,region,subjectCode,subjectVersion,orderIndex
+PROG_ERR_TEST_2026,FAMS Quality Assurance & Error Handling Test Program,1.0,HCM,JAVA_CORE_2026,1.0,1
+PROG_ERR_TEST_2026,FAMS Quality Assurance & Error Handling Test Program,1.0,HCM,NON_EXISTENT_TOPIC_XYZ,1.0,2
+PROG_ERR_TEST_2026,FAMS Quality Assurance & Error Handling Test Program,1.0,HCM,LEGACY_JAVA_7,1.0,3
+PROG_ERR_TEST_2026,FAMS Quality Assurance & Error Handling Test Program,1.0,HCM,JAVA_CORE_2026,1.0,4
+PROG_ERR_TEST_2026,FAMS Quality Assurance & Error Handling Test Program,1.0,HCM,SPRING_BOOT_2026,1.0,7

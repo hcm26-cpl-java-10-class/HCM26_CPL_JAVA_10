@@ -15,6 +15,7 @@ public interface CertificateRepository extends BaseCrudRepository<Certificate, L
     boolean existsByUser_IdAndCourse_Id(Long userId, Long courseId);
     Optional<Certificate> findByVerificationToken(UUID verificationToken);
     Optional<Certificate> findByUser_IdAndCourse_Id(Long userId, Long courseId);
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"course", "course.categories"})
     List<Certificate> findAllByUser_Id(Long userId);
 
     @Query("select c.user.id from Certificate c where c.course.id = :courseId")

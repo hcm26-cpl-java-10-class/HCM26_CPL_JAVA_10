@@ -1,3 +1,4 @@
+import { PassBadge } from "@/components/exam/PassBadge";
 import { getAttemptReview } from '@/api/exam.api';
 import { scoreAppealApi } from '@/api/features/score-appeal.api';
 import StudentSubmissionView from '@/components/features/exam/StudentSubmissionView';
@@ -8,11 +9,14 @@ import { Card, CardContent, CardTitle } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { ArrowLeft, Lock, MessageSquareWarning } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { learnerAssessmentReturnPath, assessmentPreparationPath } from '@/utils/assessment-navigation';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 export default function ExamReviewPage() {
     const { attemptId } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
+    const returnTo = learnerAssessmentReturnPath(new URLSearchParams(location.search).get("returnTo") ?? location.state?.returnTo);
     const id = Number(attemptId);
 
     const { data, isLoading, error } = useQuery({
@@ -36,13 +40,14 @@ export default function ExamReviewPage() {
     const score = data ? (data.finalScore ?? data.objectiveScore) : null;
 
     return (
-        <MainLayout pathName={{ exams: 'Exam Schedule', review: 'Review Answers' }}>
+        <MainLayout pathName={{ exams: 'Assessments', review: 'Review Answers' }} ignorePaths={['attempts']}>
             <div className="mx-auto w-full max-w-3xl space-y-4">
-                <Button variant="outline" onClick={() => navigate('/student/exams')}>
+                <Button variant="outline" onClick={() => navigate(returnTo)}>
                     <ArrowLeft className="size-4" />
-                    Back to exams
+                    {returnTo.startsWith("/enrollments/") || returnTo.startsWith("/courses/") ? "Back to course" : "Back to assessments"}
                 </Button>
 
+                {data && <Button className="ml-2" variant="outline" onClick={() => navigate(assessmentPreparationPath(data.examId, returnTo))}>Assessment overview</Button>}
                 {isLoading && <p className="text-slate-500">Loading...</p>}
 
                 {error && (
@@ -76,6 +81,9 @@ export default function ExamReviewPage() {
                                     ? `${formatScore(score ?? 0)}/${formatScore(data.maxScore ?? 10)}`
                                     : 'Awaiting publication'}
                             </p>
+                            {revealAnswers && data.passed != null && (
+                                <PassBadge passed={data.passed} passScore={data.passScore} />
+                            )}
                             {revealAnswers && data.finalScore != null && (
                                 <Button
                                     variant="outline"

@@ -34,6 +34,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useMemo, useState } from "react";
+import { AllCoursesLearningHours } from "@/pages/management/demo/analytics/components/AllCoursesLearningHours";
 import { AnalyticsLoading } from "@/pages/management/demo/analytics/components/AnalyticsLoading";
 
 type Props = {
@@ -59,7 +60,43 @@ const formatDuration = (seconds?: number | null): string => {
   return `${hours} h ${minutes} min`;
 };
 
+/** Study time: the selected course, or learning hours across all courses. */
 export function StudyTimeTab({ courseId }: Props) {
+  const [scope, setScope] = useState<"course" | "all">("course");
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        {(
+          [
+            { value: "course", label: "This course" },
+            { value: "all", label: "All courses" },
+          ] as const
+        ).map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => setScope(option.value)}
+            className={`rounded-md border px-3 py-2 text-sm transition-colors ${
+              scope === option.value
+                ? "border-primary bg-primary text-primary-foreground"
+                : "bg-background hover:bg-muted"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {scope === "course" ? (
+        <CourseStudyTime courseId={courseId} />
+      ) : (
+        <AllCoursesLearningHours />
+      )}
+    </div>
+  );
+}
+
+function CourseStudyTime({ courseId }: Props) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["course-analytics", "study-time", courseId],
     queryFn: () => courseAnalyticsApi.getStudyTime(courseId),
@@ -204,7 +241,7 @@ export function StudyTimeTab({ courseId }: Props) {
 
       <AnalyticsPanel
         title="Study time per learner"
-        description="Total study time, number of completed lessons and the most recent visit of every learner in the course. Scope: this course only — for learning hours across all courses, see Enrollment → Learning Hours."
+        description="Total study time, number of completed lessons and the most recent visit of every learner in the course. Scope: this course only — use the All courses switch above for learning hours across the whole system."
       >
         <div className="flex flex-wrap items-center gap-2 pb-3">
           <TableSearchBox

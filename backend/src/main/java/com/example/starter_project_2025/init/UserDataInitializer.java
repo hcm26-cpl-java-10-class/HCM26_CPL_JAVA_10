@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
@@ -20,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Order(3)
 @Component
 @RequiredArgsConstructor
+@StartupMutation
 public class UserDataInitializer implements CommandLineRunner {
 
   private static final String STUDENT_EMAIL = "student@example.com";

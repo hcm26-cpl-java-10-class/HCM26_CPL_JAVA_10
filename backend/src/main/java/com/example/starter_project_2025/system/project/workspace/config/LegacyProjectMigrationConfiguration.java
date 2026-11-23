@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.workspace.config;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -9,6 +11,7 @@ import java.util.LinkedHashSet;
 
 /** Data must be converted before Hibernate attempts UUID-to-BIGINT schema updates. */
 @Configuration(proxyBeanMethods = false)
+@StartupMutation
 public class LegacyProjectMigrationConfiguration {
     @Bean
     static BeanFactoryPostProcessor legacyProjectMigrationBeforeHibernate() {

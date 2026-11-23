@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.board;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -23,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @Order(0)
 @RequiredArgsConstructor
+@StartupMutation
 public class LegacyBoardStatusMigration implements CommandLineRunner {
 
     private static final String SUPPORTED_STATUSES = "'TODO','IN_PROGRESS','REVIEW','DONE'";

@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-FAMS LMS — a training & exam management system (team HCM26_CPL_JAVA_10). Monorepo with a Spring Boot backend (`backend/`) and a React + Vite + TypeScript frontend (`frontend/`). Feature specs, implementation plans and verification notes live in `docs/` (e.g. `MILESTONE_BACKEND_GUIDE.md`, `MILESTONE_FRONTEND_GUIDE.md`, `PROJECT_HUB.md`) — check there before designing a feature in the project/milestone area.
+FAMS LMS — a training & exam management system (team HCM26_CPL_JAVA_10). Monorepo with a Spring Boot backend (`backend/`) and a React + Vite + TypeScript frontend (`frontend/`). Feature specs, implementation plans and verification notes live in `docs/` (e.g. `05-project-workspace/MILESTONE_BACKEND_GUIDE.md`, `05-project-workspace/MILESTONE_FRONTEND_GUIDE.md`, `05-project-workspace/PROJECT_HUB.md`) — check there before designing a feature in the project/milestone area. The `docs/` folder is organised by topic; see `docs/README.md` for the index.
 
 ## Commands
 
@@ -51,7 +51,7 @@ npx tsc --noEmit -p tsconfig.app.json  # type-check app sources
 - **Routing is partly data-driven**: `router/build-router.ts` globs `pages/management/**/index.tsx`. A page that exports `entityConfig` gets a route at `entityConfig.path` (its default export, or the generic `AutoCrudPage` if there is none), plus optional create/edit/detail action routes. `App.tsx` only mounts those module-driven routes for URLs that appear in the backend menu (`useActiveModuleGroups`), wrapped in `ProtectedRoute` with the module's permission. Other pages are registered as static routes in `router/component-registry.ts`.
 - Permissions/role: `hooks/usePermissions` + `utils/rbac.utils`. Students get `StudentNavbar`; other roles get the sidebar layout (`components/layout/MainLayout`). Each page renders its own `MainLayout`, so the sidebar remounts on every navigation; any sidebar UI state that must survive navigation has to be persisted (cookie / local/session storage).
 
-## Conventions (from `docs/COMMIT_GUIDE.md`)
+## Conventions (from `docs/01-getting-started/COMMIT_GUIDE.md`)
 
 - Branches: `feature/*`, `fix/*`, `hotfix/*`, `chore/*` off `dev`; PRs target `dev` (`main` is release only).
 - Conventional Commits: `type(scope): subject` (no trailing period); one logical change per commit; stage specific files rather than `git add .`.

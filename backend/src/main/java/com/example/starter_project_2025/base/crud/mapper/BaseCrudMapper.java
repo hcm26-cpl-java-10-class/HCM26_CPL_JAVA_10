@@ -17,5 +17,6 @@ public interface BaseCrudMapper<
     D toResponse(E entity);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @IgnoreAuditFields
     void update(@MappingTarget E entity, D dto);
 }

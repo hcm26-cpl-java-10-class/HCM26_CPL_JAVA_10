@@ -8,7 +8,8 @@ public record NotificationDTO(
         String message,
         String targetUrl,
         boolean read,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        NotificationCategory category
 ) {
     static NotificationDTO from(Notification notification) {
         return new NotificationDTO(
@@ -17,7 +18,10 @@ public record NotificationDTO(
                 notification.getMessage(),
                 notification.getTargetUrl(),
                 notification.getReadAt() != null,
-                notification.getCreatedAt()
+                notification.getCreatedAt(),
+                notification.getCategory() != null
+                        ? notification.getCategory()
+                        : NotificationCategory.fromEventKey(notification.getEventKey())
         );
     }
 }

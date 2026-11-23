@@ -1,7 +1,7 @@
 package com.example.starter_project_2025.system.demo.aicourse;
 
 import com.example.starter_project_2025.exception.BadRequestException;
-import com.example.starter_project_2025.system.exam.service.ai.AiGradingProperties;
+import com.example.starter_project_2025.system.exam.ai.AiGradingProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +31,19 @@ import java.util.Map;
 @Slf4j
 public class AiTextClient {
 
-    private static final int MIN_TIMEOUT_SECONDS = 60;
+    /**
+     * Timeout tối thiểu cho một request AI.
+     *
+     * <p>Phân tích so sánh gửi payload khá lớn (1 target + tối đa 15 peers + toàn bộ
+     * peerStats), nên cần nhiều thời gian hơn so với việc viết nội dung bài học.
+     */
+    private static final int MIN_TIMEOUT_SECONDS = 90;
+
+    /** Nhiệt độ mặc định: dành cho việc viết nội dung sáng tạo. */
+    public static final double DEFAULT_TEMPERATURE = 0.7;
+
+    /** Nhiệt độ cho phân tích số liệu: gần như tất định, tránh bịa số. */
+    public static final double ANALYSIS_TEMPERATURE = 0.2;
 
     private final AiGradingProperties properties;
     private final ObjectMapper objectMapper;
@@ -47,6 +59,22 @@ public class AiTextClient {
     }
 
     public JsonNode generateJson(String systemInstruction, List<Turn> turns) {
+        return generateJson(systemInstruction, turns, DEFAULT_TEMPERATURE);
+    }
+
+    /**
+     * @param temperature 0 = deterministic (phân tích số liệu), 0.7 = sáng tạo (viết nội dung).
+     */
+    public JsonNode generateJson(String systemInstruction, List<Turn> turns, double temperature) {
+        return generateJson(systemInstruction, turns, temperature, 3, 0, 8192);
+    }
+
+    public JsonNode generateRecommendationJson(String instruction, List<Turn> turns) {
+        return generateJson(instruction, turns, ANALYSIS_TEMPERATURE, 1, 20, 2048);
+    }
+
+    private JsonNode generateJson(String systemInstruction, List<Turn> turns, double temperature,
+                                  int maxAttempts, int timeoutSeconds, int outputTokens) {
         if (!isConfigured()) {
             throw new BadRequestException(
                     "Gemini API key is not configured. Set GEMINI_API_KEY in backend/.env to use the AI course builder.");
@@ -65,8 +93,8 @@ public class AiTextClient {
                 "contents", contents,
                 "generationConfig", Map.of(
                         "responseMimeType", "application/json",
-                        "temperature", 0.7,
-                        "maxOutputTokens", 8192
+                        "temperature", temperature,
+                        "maxOutputTokens", outputTokens
                 )
         );
 
@@ -75,10 +103,10 @@ public class AiTextClient {
         headers.set("x-goog-api-key", properties.getApiKey().trim());
 
         // Up to 3 attempts: Gemini sometimes answers 5xx (overloaded) or returns truncated JSON.
-        final int maxAttempts = 3;
+        // Attempt count is selected by the caller-specific policy.
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                ResponseEntity<String> response = buildRestTemplate()
+                ResponseEntity<String> response = buildRestTemplate(timeoutSeconds)
                         .postForEntity(generateContentUrl(), new HttpEntity<>(body, headers), String.class);
                 if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
                     throw new BadRequestException("AI provider returned status " + response.getStatusCode());
@@ -153,10 +181,10 @@ public class AiTextClient {
         return (base.endsWith("/models") ? base : base + "/models") + "/" + model + ":generateContent";
     }
 
-    private RestTemplate buildRestTemplate() {
+    private RestTemplate buildRestTemplate(int timeoutSeconds) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        int timeoutMs = Math.max(MIN_TIMEOUT_SECONDS, properties.getTimeoutSeconds()) * 1000;
-        factory.setConnectTimeout(timeoutMs);
+        int timeoutMs = (timeoutSeconds > 0 ? timeoutSeconds : Math.max(MIN_TIMEOUT_SECONDS, properties.getTimeoutSeconds())) * 1000;
+        factory.setConnectTimeout(timeoutSeconds > 0 ? 5000 : timeoutMs);
         factory.setReadTimeout(timeoutMs);
         return new RestTemplate(factory);
     }
