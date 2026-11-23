@@ -23,21 +23,7 @@ public class ExamResultAccessService {
             return false;
         }
 
-        ExamResultPublication publication = publicationRepository
-                .findByExam_Id(exam.getId())
-                .orElse(null);
-
-        if (publication == null || !publication.isPublished()) {
-            return false;
-        }
-
-        ScoreReleasePolicy policy = publication.getReleasePolicy();
-
-        if (policy == null || policy == ScoreReleasePolicy.HIDDEN) {
-            return false;
-        }
-
-        return isVisibilitySatisfied(exam);
+        return isResultReleased(exam) && isVisibilitySatisfied(exam);
     }
 
     @Transactional(readOnly = true)
@@ -83,16 +69,7 @@ public class ExamResultAccessService {
      */
     @Transactional(readOnly = true)
     public boolean canStudentSeeScoreOnMyScores(Exam exam) {
-        if (exam == null || exam.getId() == null) {
-            return false;
-        }
-
-        return publicationRepository.findByExam_Id(exam.getId())
-                .map(publication ->
-                        publication.isPublished()
-                                && publication.getReleasePolicy()!=null
-                                && publication.getReleasePolicy() != ScoreReleasePolicy.HIDDEN)
-                .orElse(false);
+        return isResultReleased(exam);
     }
 
     /**
@@ -101,6 +78,10 @@ public class ExamResultAccessService {
      */
     @Transactional(readOnly = true)
     public boolean isResultPublished(Exam exam) {
+        return isResultReleased(exam);
+    }
+
+    private boolean isResultReleased(Exam exam) {
         if (exam == null || exam.getId() == null) {
             return false;
         }
@@ -108,9 +89,9 @@ public class ExamResultAccessService {
         return publicationRepository.findByExam_Id(exam.getId())
                 .map(publication ->
                         publication.isPublished()
-                                && publication.getReleasePolicy()!=null
+                                && publication.getReleasePolicy() != null
                                 && publication.getReleasePolicy() != ScoreReleasePolicy.HIDDEN)
-                .orElse(false);
+                .orElse(exam.getResultVisibility() == ResultVisibility.IMMEDIATE);
     }
 
     /**

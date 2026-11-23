@@ -82,8 +82,7 @@ public class PublishedExamScoreService {
     }
 
     private PublishedExamScoreDTO toDTO(ExamAttempt attempt) {
-        // Ket qua chi duoc cong bo khi giao vien bam "Publish Results".
-        // Truoc do hoc sinh thay thong bao "cho cong bo", khong thay diem.
+        // Immediate visibility releases graded results without a separate publish action.
         boolean resultPublished = resultAccessService.isResultPublished(attempt.getExam());
 
         if (!resultPublished) {

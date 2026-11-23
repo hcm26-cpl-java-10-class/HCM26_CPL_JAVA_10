@@ -47,8 +47,6 @@ class ExamProgressLockServiceTest {
     @Mock
     private UserRepository userRepository;
 
-    @Mock private com.example.starter_project_2025.system.demo.course.CourseAssessmentService assessments;
-
     @InjectMocks
     private ExamProgressLockService service;
 
@@ -189,7 +187,7 @@ class ExamProgressLockServiceTest {
     }
 
     @Test
-    void assessmentLessonDoesNotRequireItselfToBeCompleted() {
+    void assessmentLessonCanStartWithIncompleteCoursePlanAfterPrerequisites() {
         firstLesson.setContentType(com.example.starter_project_2025.system.demo.lesson.LessonContentType.TEXT);
         secondLesson.setContentType(com.example.starter_project_2025.system.demo.lesson.LessonContentType.QUIZ);
         when(enrollmentRepository.findByUser_IdAndCourse_Id(STUDENT_ID,COURSE_ID)).thenReturn(Optional.of(enrollment));
@@ -197,7 +195,6 @@ class ExamProgressLockServiceTest {
         when(lessonRepository.findBySection_IdOrderByOrderIndexAsc(30L)).thenReturn(List.of(firstLesson,secondLesson));
         Exam quiz=courseExam(ExamCategory.QUIZ);quiz.setSection(secondLesson.getSection());quiz.setLesson(secondLesson);
         assertDoesNotThrow(()->service.assertUnlocked(quiz,STUDENT_ID));
-        org.mockito.Mockito.verify(assessments).assertReady(COURSE_ID);
     }
 
     @Test

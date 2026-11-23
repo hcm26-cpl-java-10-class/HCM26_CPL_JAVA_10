@@ -6,7 +6,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,6 +21,7 @@ import {
   type SmPerson,
   type SmSaveLog,
 } from "@/api/features/score-management.api";
+import type { SmReleasePolicy } from "@/api/features/score-management.api";
 import { getErrorMessage } from "../examConfig";
 
 const csvCell = (v: string | number | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -247,6 +248,10 @@ function ColumnEditDialog({ courseId, column, onClose, onSaveWeight, onDelete, o
 }
 
 function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void }) {
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+
+  const [releasePolicy, setReleasePolicy] =
+      useState<SmReleasePolicy>("MY_SCORES_ONLY");
   const queryClient = useQueryClient();
   const key = ["sm-gradebook", courseId];
   const { data, isLoading, isError } = useQuery({ queryKey: key, queryFn: () => scoreManagementApi.gradebook(courseId) });
@@ -307,6 +312,79 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
     onError: fail,
   });
 
+  const publishCourseMutation = useMutation({
+    mutationFn: async (policy: SmReleasePolicy) => {
+      const exams = (
+          await scoreManagementApi.availableExams(courseId)
+      ).filter((exam) => exam.inCourse);
+
+      if (exams.length === 0) {
+        return {
+          total: 0,
+          published: 0,
+          skipped: 0,
+          failed: [] as { title: string; message: string }[],
+        };
+      }
+
+      let published = 0;
+      let skipped = 0;
+
+      const failed: { title: string; message: string }[] = [];
+
+      for (const exam of exams) {
+        try {
+          const status = await scoreManagementApi.publicationStatus(exam.id);
+
+          if (status.published) {
+            skipped++;
+            continue;
+          }
+
+          await scoreManagementApi.publishExam(exam.id, policy);
+          published++;
+        } catch (error) {
+          failed.push({
+            title: exam.title,
+            message: getErrorMessage(error, "Unable to publish this exam"),
+          });
+        }
+      }
+
+      return {
+        total: exams.length,
+        published,
+        skipped,
+        failed,
+      };
+    },
+
+    onSuccess: (result) => {
+      setPublishDialogOpen(false);
+
+      if (result.total === 0) {
+        toast.info("No exams are linked to this course.");
+        return;
+      }
+
+      toast.success(
+          `Published: ${result.published} · Already published: ${result.skipped} · Failed: ${result.failed.length}`
+      );
+
+      if (result.failed.length > 0) {
+        console.error("Course publication errors:", result.failed);
+
+        toast.error(
+            `${result.failed.length} exam(s) could not be published. Check the console for details.`
+        );
+      }
+
+      void queryClient.invalidateQueries({ queryKey: key });
+    },
+
+    onError: fail,
+  });
+
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading score table...</p>;
   if (isError || !data) return <p className="text-sm text-destructive">Failed to load the score table.</p>;
 
@@ -354,6 +432,15 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
           </Button>
           <Button size="sm" variant="outline" onClick={requestSave} disabled={saveMutation.isPending || overWeight}>
             <Save className="size-4" /> Save scores
+          </Button>
+          <Button
+              size="sm"
+              onClick={() => setPublishDialogOpen(true)}
+              disabled={publishCourseMutation.isPending}
+          >
+            {publishCourseMutation.isPending
+                ? "Publishing..."
+                : "Publish Results"}
           </Button>
           <Button
             size="sm"
@@ -512,6 +599,74 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
       </Dialog>
 
       <HistoryDialog courseId={courseId} open={historyOpen} onClose={() => setHistoryOpen(false)} />
+      <Dialog
+          open={publishDialogOpen}
+          onOpenChange={(open) => {
+            if (!publishCourseMutation.isPending) {
+              setPublishDialogOpen(open);
+            }
+          }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Publish Course Results</DialogTitle>
+            <DialogDescription>
+              Publish the results of all exams linked to this course.
+              Exams that have already been published will be skipped.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <label
+                htmlFor="course-release-policy"
+                className="text-sm font-medium"
+            >
+              Result visibility
+            </label>
+
+            <select
+                id="course-release-policy"
+                value={releasePolicy}
+                onChange={(event) =>
+                    setReleasePolicy(event.target.value as SmReleasePolicy)
+                }
+                disabled={publishCourseMutation.isPending}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="MY_SCORES_ONLY">
+                Show scores
+              </option>
+              <option value="MY_SCORES_AND_EMAIL">
+                Show scores and send email
+              </option>
+              <option value="HIDDEN">
+                Hide scores
+              </option>
+            </select>
+          </div>
+
+          <DialogFooter>
+            <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPublishDialogOpen(false)}
+                disabled={publishCourseMutation.isPending}
+            >
+              Cancel
+            </Button>
+
+            <Button
+                type="button"
+                onClick={() => publishCourseMutation.mutate(releasePolicy)}
+                disabled={publishCourseMutation.isPending}
+            >
+              {publishCourseMutation.isPending
+                  ? "Publishing..."
+                  : "Confirm Publish"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ColumnEditDialog
         courseId={courseId}
