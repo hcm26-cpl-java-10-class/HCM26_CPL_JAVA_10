@@ -1,10 +1,17 @@
 package com.example.starter_project_2025.system.project.allocation;
 
+import com.example.starter_project_2025.system.project.ProjectMemberRepository;
+import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.ProjectTeamRepository;
+import com.example.starter_project_2025.system.project.ProjectTemplateConstraints;
+import com.example.starter_project_2025.system.project.TeamAllocationSession;
+import com.example.starter_project_2025.system.project.TeamAllocationSessionRepository;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.repository.ProjectTemplateRepository;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
-import com.example.starter_project_2025.system.project.*;
 import com.example.starter_project_2025.system.project.project_template_version.*;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplateStatus;
 import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -1,11 +1,12 @@
 import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Hash, RefreshCw, Users } from "lucide-react";
+import { ArrowLeft, BarChart3, Hash, RefreshCw, Users } from "lucide-react";
 import { workspaceApi } from "@/api/features/workspace.api";
 import { projectAssignmentApi } from "@/api/features/project-assignment.api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -25,6 +26,7 @@ import { WorkspaceProjectLogsPanel } from "./WorkspaceProjectLogsPanel";
 import { WorkspaceProjectHierarchy, flattenWorkspaceProjects } from "./WorkspaceProjectHierarchy";
 import { WorkspaceResourcesPanel } from "./WorkspaceResourcesPanel";
 import { WorkspaceAlertsPanel } from "@/pages/management/alerts/WorkspaceAlertsPanel";
+import ProjectAnalyticsPage from "@/pages/management/analytics/project/ProjectAnalyticsPage";
 
 export default function WorkspaceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -35,8 +37,11 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   const { user, activeRole, hasPermission } = usePermissions();
   const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
-  const selected = params.get("tab") ?? "overview";
+  // Tolerate a trailing slash (`?tab=analytic/`) and both spellings of the tab.
+  const selected = (params.get("tab") ?? "overview").replace(/\/+$/, "");
+  const isAnalyticsTab = selected === "analytics" || selected === "analytic";
   const tab: WorkspaceSectionKey = WORKSPACE_SECTIONS.find(section => section.id === selected)?.id ?? "overview";
+  const activeTab = isAnalyticsTab ? "analytics" : tab;
   const [blocked, setBlocked] = useState<WorkspaceSectionKey>();
   const [showAccess, setShowAccess] = useState(false);
   const validId = Number.isSafeInteger(workspaceId) && workspaceId > 0;
@@ -51,6 +56,13 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
     void refetchNavigation().then(result => { if (result.isSuccess) setBlocked(undefined); });
   }, [tab, refetchNavigation]);
   function changeTab(value: string) {
+    // US-ANL-001: Analytics is a read-only view embedded in the workspace
+    // shell, so the workspace id stays in the URL and its project is resolved
+    // from the workspace context.
+    if (value === "analytics") {
+      setParams(previous => { const next = new URLSearchParams(previous); next.set("tab", "analytic"); return next; }, { replace: true });
+      return;
+    }
     setParams(previous => { const next = new URLSearchParams(previous);
       if (value === "overview") next.delete("tab"); else next.set("tab", value); return next;
     }, { replace: true });
@@ -88,6 +100,8 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   }) ?? [];
   const current = sections.find(item => item.key === tab);
   const members = sections.find(item => item.key === "members");
+  const canViewAnalytics = hasPermission("PROJECT_ANALYTICS_READ");
+  const hasProject = Number.isSafeInteger(projectId) && Number(projectId) > 0;
   const denied = blocked === tab || !current?.canRead;
   const validContext = context && Number.isSafeInteger(context.teamId);
   async function refresh() {
@@ -95,7 +109,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
     await Promise.all(["workspace-detail", "workspace-members", "workspace-section", "workspace-resources"].map(key =>
       queryClient.invalidateQueries({ queryKey: [key, workspaceId] })));
   }
-  return <MainLayout contentClassName="bg-slate-50/70 dark:bg-background" pathName={{ management: "Management", workspaces: "Workspace",
+  return <MainLayout contentClassName="bg-slate-50/70 dark:bg-background" ignorePaths={["management", "workspaces"]} pathName={{
     [String(workspaceId)]: navigation.isError ? "Workspace details" : context?.projectName ?? context?.teamName ?? "Workspace details" }}>
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
@@ -119,13 +133,22 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
             {context.projectStatus && <div className="pt-1 sm:pt-6"><WorkspaceStatusBadge status={context.projectStatus} colored /></div>}
           </section>
           {hierarchy.data && <WorkspaceProjectHierarchy data={hierarchy.data} selectedId={projectId} onSelect={selectProject} />}
-          <Tabs value={tab} onValueChange={changeTab} className="min-w-0 gap-5">
+          <Tabs value={activeTab} onValueChange={changeTab} className="min-w-0 gap-5">
             <div className="min-w-0 overflow-x-auto overflow-y-hidden border-b"><TabsList aria-label="Workspace sections"
               className="h-10 w-max min-w-full justify-start gap-1 rounded-none bg-transparent p-0 align-top group-data-[orientation=horizontal]/tabs:h-10">{WORKSPACE_SECTIONS.map(({ id, label, icon: Icon }) =>
               <TabsTrigger key={id} value={id} disabled={!sections.find(item => item.key === id)?.canRead}
-                className="h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none"><Icon className="size-4" />{label}</TabsTrigger>)}</TabsList></div>
-            <TabsContent key={tab} value={tab} className="space-y-5">
-              {denied || !current ? <WorkspaceSectionState denied retry={reloadAccess} />
+                className="h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none"><Icon className="size-4" />{label}</TabsTrigger>)}
+              {hasProject && <TabsTrigger value="analytics" disabled={!canViewAnalytics}
+                title={canViewAnalytics ? "Open read-only project analytics" : "Analytics access is not granted for your role"}
+                className="h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none"><BarChart3 className="size-4" />Analytics</TabsTrigger>}</TabsList></div>
+            <TabsContent key={activeTab} value={activeTab} className="space-y-5">
+              {isAnalyticsTab ? (
+                hasProject && canViewAnalytics ? (
+                  <EmbeddedLayoutContext.Provider value>
+                    <ProjectAnalyticsPage projectId={projectId!} />
+                  </EmbeddedLayoutContext.Provider>
+                ) : <WorkspaceSectionState denied retry={reloadAccess} />
+              ) : denied || !current ? <WorkspaceSectionState denied retry={reloadAccess} />
                 : tab === "overview" ? <WorkspaceOverviewSection workspaceId={workspaceId} projectId={context.projectId} selectedProject={projectScoped ? project : undefined}
                     teamId={context.teamId} canViewMembers={!!members?.canRead} onViewMembers={() => changeTab("members")}
                     onViewAccess={() => setShowAccess(true)}

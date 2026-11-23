@@ -1,0 +1,169 @@
+.project-report-dashboard [data-report-projects-activity] > section {
+  min-width: 0;
+}
+
+/* Keep the aggregate feed beside Masters and scroll its events independently. */
+.project-report-dashboard [data-report-activity] {
+  max-height: min(32rem, calc(100dvh - 6rem));
+}
+
+@container reports (min-width: 1020px) {
+  .project-report-dashboard [data-report-projects-activity] {
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
+  }
+
+  .project-report-dashboard [data-report-activity] {
+    position: sticky;
+    top: 12px;
+  }
+}
+
+/* Short desktop viewports include laptops and browser zoom. Keep the overview
+   in natural flow: reduce spacing, never clip charts or hide their states. */
+@media (min-width: 64rem) and (max-height: 56rem) {
+  .project-report-dashboard {
+    padding-block: 12px;
+  }
+
+  .project-report-dashboard > :not(:last-child),
+  .project-report-dashboard [data-report-overview] > :not(:last-child) {
+    margin-block-end: 10px;
+  }
+
+  .project-report-dashboard [data-report-eyebrow] {
+    display: none;
+  }
+
+  .project-report-dashboard [data-report-charts] {
+    gap: 10px;
+  }
+
+  .project-report-dashboard [data-slot="tabs"] {
+    gap: 10px;
+  }
+
+  .project-report-dashboard [data-report-metric],
+  .project-report-dashboard [data-report-chart] {
+    padding: 12px;
+  }
+
+  .project-report-dashboard [data-report-metric-heading] {
+    min-height: 24px;
+  }
+
+  .project-report-dashboard [data-report-metric-value],
+  .project-report-dashboard [data-report-metric-note] {
+    margin-top: 4px;
+  }
+
+  .project-report-dashboard [data-report-chart="status"] > header,
+  .project-report-dashboard [data-report-chart="backlog"] > header {
+    margin-bottom: 8px;
+  }
+
+  .project-report-dashboard [data-report-donut] {
+    width: 96px;
+    height: 96px;
+  }
+
+  .project-report-dashboard [data-report-donut-center] {
+    width: 72px;
+    height: 72px;
+  }
+
+  .project-report-dashboard [data-report-legend] {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .project-report-dashboard [data-report-legend] > div {
+    margin-block: 0;
+    padding-block: 0;
+  }
+
+  .project-report-dashboard [data-report-chart="status"] > p {
+    margin-top: 6px;
+    font-size: 11px;
+    line-height: 14px;
+  }
+
+  .project-report-dashboard [data-report-chart-body] {
+    padding-block: 6px;
+  }
+
+  .project-report-dashboard [data-report-master-legend] > li {
+    margin-block: 0;
+  }
+
+  .project-report-dashboard [data-report-master-legend] button {
+    padding-block: 4px;
+  }
+
+  .project-report-dashboard [data-report-chart] > footer {
+    padding-top: 8px;
+  }
+
+  .project-report-dashboard [data-report-chart="backlog"] > footer {
+    margin-top: 8px;
+  }
+
+  .project-report-dashboard [data-report-backlog-summary] > [role="img"] {
+    height: 4px;
+    padding: 0;
+    margin-bottom: 8px;
+  }
+
+  .project-report-dashboard [data-report-backlog-summary] > dl {
+    gap: 8px;
+  }
+
+  .project-report-dashboard [data-report-backlog-summary] > dl > div {
+    padding: 8px;
+  }
+
+  .project-report-dashboard [data-report-backlog-summary] dd {
+    margin-top: 4px;
+  }
+
+  .project-report-dashboard [data-report-backlog-summary] dd:last-child {
+    line-height: 14px;
+  }
+}
+
+/* Three compact distributions share the wide row. Backlog uses a short strip
+   below them, so its counts stay visible alongside the complete Master chart. */
+@container reports (min-width: 1020px) {
+  .project-report-dashboard [data-report-chart="backlog"] [data-report-backlog-summary] > dl {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-template-columns: none;
+  }
+
+  .project-report-dashboard [data-report-chart="backlog"] [data-report-backlog-summary] > dl > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    column-gap: 12px;
+    align-items: center;
+  }
+
+  .project-report-dashboard [data-report-chart="backlog"] [data-report-backlog-summary] dt {
+    grid-column: 1;
+    grid-row: 1;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .project-report-dashboard [data-report-chart="backlog"] [data-report-backlog-summary] dd:first-of-type {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    margin-top: 0;
+  }
+
+  .project-report-dashboard [data-report-chart="backlog"] [data-report-backlog-summary] dd:last-child {
+    grid-column: 1;
+    grid-row: 2;
+    margin-top: 4px;
+  }
+}

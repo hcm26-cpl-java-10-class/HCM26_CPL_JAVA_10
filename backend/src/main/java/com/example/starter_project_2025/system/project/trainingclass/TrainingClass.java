@@ -6,7 +6,7 @@ import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportFi
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
-import com.example.starter_project_2025.system.project.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;

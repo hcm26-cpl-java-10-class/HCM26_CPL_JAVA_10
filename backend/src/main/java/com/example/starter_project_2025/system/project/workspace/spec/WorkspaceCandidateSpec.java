@@ -63,6 +63,7 @@ public final class WorkspaceCandidateSpec {
             var member = membership.from(ProjectMember.class);
             membership.select(member.get("id")).where(cb.equal(member.get("team").get("id"), root.get("id")),
                     cb.isTrue(member.get("isActive")),
+                    cb.isTrue(member.get("classMember").get("isActive")),
                     cb.equal(member.get("classMember").get("trainingClass").get("id"),
                             root.get("trainingClass").get("id")),
                     cb.equal(member.get("classMember").get("user").get("id"), userId),

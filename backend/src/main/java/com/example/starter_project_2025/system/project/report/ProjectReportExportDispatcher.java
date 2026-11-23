@@ -30,7 +30,7 @@ public class ProjectReportExportDispatcher {
             // File rendering runs on this feature's executor, leaving the shared scheduler free.
             executor.execute(() -> {
                 try {
-                    exports.expireAndRecover();
+                    exports.recoverStaleJobs();
                     jobs.pending(ProjectReportExportJob.State.QUEUED,PageRequest.of(0,5)).forEach(exports::process);
                 } catch(Exception failure) {
                     log.warn("Unable to process pending project report exports",failure);

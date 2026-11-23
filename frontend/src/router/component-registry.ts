@@ -50,6 +50,7 @@ import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import ExploreProjectsPage from "@/pages/student/projects/explore";
 import StudentProjectDetailPage from "@/pages/student/projects/detail";
 import StudentDraftTeamPage from "@/pages/student/draft-team";
+import TeamCharterPage from "@/pages/management/workspace/TeamCharterPage";
 import ProjectTemplateVersionPage from "@/pages/management/project-template-version";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/MilestoneCreatePage";
@@ -69,14 +70,20 @@ import { StudentSubmissionPage } from "@/pages/student/milestone-submission/Stud
 import { StudentSubmissionListPage } from "@/pages/student/milestone-submission/StudentSubmissionListPage";
 import WorkspaceCandidatePage from "@/pages/management/workspace/WorkspaceCandidatePage";
 import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPage";
+import ProjectAnalyticsPage from "@/pages/management/analytics/project/ProjectAnalyticsPage";
+import ProjectAnalyticsIndexPage from "@/pages/management/analytics/project/ProjectAnalyticsIndexPage";
 import { createElement } from "react";
 import TaskManagementPage from "@/pages/management/task";
 import ProjectAlertsPage from "@/pages/management/alerts";
 import ProjectReportsPage from "@/pages/management/project-reports";
+import AiAssistantPage from "@/pages/management/ai-assistant";
+import AiSuggestionWorkspacePage from "@/pages/management/ai-assistant/pages/AiSuggestionWorkspacePage";
+import AiSuggestionDetailPage from "@/pages/management/ai-assistant/pages/AiSuggestionDetailPage";
 import ProjectTemplateListPage from "@/pages/management/project-template";
 import ExamSupervisorPage from "@/pages/management/exam/supervisor";
 import { ProjectTemplateFormPage } from "@/pages/management/project-template/pages/ProjectTemplateFormPage";
 import { ProjectTemplateDetailPage } from "@/pages/management/project-template/pages/ProjectTemplateDetailPage";
+import ProjectTemplateReviewPage from "@/pages/management/project-template-review/ProjectTemplateReviewPage";
 import ArtifactDraftPage from "@/pages/student/ArtifactDraftPage";
 import StudentTeamMilestoneSubmissionsPage from "@/pages/student/StudentTeamMilestoneSubmissionsPage";
 import MyScoresPage from "@/pages/student/MyScoresPage";
@@ -118,7 +125,7 @@ import CourseGradeDetailPage from "@/pages/student/CourseGradeDetailPage";
 
 export interface RouteConfig {
   path: string;
-  component: ComponentType<any>;
+  component: ComponentType;
   requiredPermission?: string;
   requiredPermissions?: string[];
   isPublic?: boolean;
@@ -162,10 +169,15 @@ export const routes: RouteConfig[] = [
   { path: "/tasks/:id/edit", component: TaskManagementPage, requiredPermission: "TASK_UPDATE" },
   { path: "/tasks/:id/detail", component: TaskManagementPage, requiredPermission: "TASK_READ" },
   { path: "/project-templates", component: ProjectTemplateListPage, requiredPermission: "PROJECT_TEMPLATE_READ" },
+  { path: "/ai-assistant/suggestions", component: AiSuggestionWorkspacePage, requiredPermission: "PROJECT_TEMPLATE_CREATE" },
+  { path: "/ai-assistant/suggestions/:id", component: AiSuggestionDetailPage, requiredPermission: "PROJECT_TEMPLATE_CREATE" },
+  { path: "/ai-assistant", component: AiAssistantPage, requiredPermission: "PROJECT_TEMPLATE_CREATE" },
   { path: "/project-template-versions", component: ProjectTemplateVersionPage, requiredPermission: "PROJECT_TEMPLATE_READ" },
   { path: "/project-templates/create", component: ProjectTemplateFormPage, requiredPermission: "PROJECT_TEMPLATE_CREATE" },
   { path: "/project-templates/:id/edit", component: ProjectTemplateFormPage, requiredPermission: "PROJECT_TEMPLATE_UPDATE" },
   { path: "/project-templates/:id/detail", component: ProjectTemplateDetailPage, requiredPermission: "PROJECT_TEMPLATE_READ" },
+  { path: "/project-templates/:templateId/reviews", component: ProjectTemplateReviewPage, requiredPermission: "PROJECT_TEMPLATE_REVIEW" },
+  { path: "/project-templates/:templateId/reviews/:reportId", component: ProjectTemplateReviewPage, requiredPermission: "PROJECT_TEMPLATE_REVIEW" },
 
   // FAMS MODULE GROUP MODULE
   {
@@ -417,6 +429,8 @@ export const routes: RouteConfig[] = [
     isModuleDriven: true,
   },
   { path: "/project-board", component: ProjectBoardPage },
+  { path: "/student/team/charter", component: TeamCharterPage, requiredPermissions: ["TEAM_READ", "WORKSPACE_READ", "VIEW_PROJECT_WORKSPACE"] },
+  { path: "/mentor/teams", component: TeamCharterPage, requiredPermissions: ["TEAM_READ", "WORKSPACE_READ", "VIEW_PROJECT_WORKSPACE"] },
   { path: "/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
@@ -425,6 +439,8 @@ export const routes: RouteConfig[] = [
   { path: "/milestones", component: MilestoneListPage, requiredPermission: "MILESTONE_READ" },
   { path: "/milestones/teams", component: MilestoneEntryPage, requiredPermission: "MILESTONE_READ" },
   { path: "/projects/:projectId/milestones", component: MilestoneListPage, requiredPermission: "MILESTONE_READ" },
+  { path: "/projects/:projectId/analytics", component: ProjectAnalyticsPage, requiredPermission: "PROJECT_ANALYTICS_READ" },
+  { path: "/analytics/projects", component: ProjectAnalyticsIndexPage, requiredPermission: "PROJECT_ANALYTICS_READ" },
   { path: "/teams/:teamId/milestones/new", component: MilestoneCreatePage, requiredPermission: "MILESTONE_WRITE" },
   { path: "/teams/:teamId/milestones/:milestoneId/edit", component: MilestoneCreatePage, requiredPermission: "MILESTONE_WRITE" },
   { path: "/teams/:teamId/milestones/:milestoneId", component: TeamMilestoneDetailPage, requiredPermission: "MILESTONE_READ" },

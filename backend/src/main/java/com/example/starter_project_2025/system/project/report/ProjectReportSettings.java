@@ -9,6 +9,5 @@ import java.time.ZoneId;
 @Getter
 public class ProjectReportSettings {
     @Value("${app.project-reports.time-zone:Asia/Ho_Chi_Minh}") private String timeZone;
-    @Value("${app.project-reports.export.ttl-hours:24}") private long exportTtlHours;
     public ZoneId zone() { return ZoneId.of(timeZone); }
 }

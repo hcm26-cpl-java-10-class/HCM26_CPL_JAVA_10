@@ -41,6 +41,7 @@ export * from "./features/content";
 export * from "./features/calendar";
 export * from "./features/demo/schedule_version";
 export * from "./features/workspace";
+export * from "./features/project-analytics";
 export * from "./features/rubric";
 export * from "./features/team-allocation";
 export * from "./features/training-class";

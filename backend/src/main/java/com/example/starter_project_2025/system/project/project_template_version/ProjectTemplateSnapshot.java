@@ -7,7 +7,7 @@ import com.example.starter_project_2025.base.dataio.importer.annotation.ImportFi
 import com.example.starter_project_2025.base.dataio.importer.annotation.PostImport;
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
-import com.example.starter_project_2025.system.project.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -4,7 +4,7 @@ import com.example.starter_project_2025.exception.error.ValidationErrorResponse;
 import com.example.starter_project_2025.system.project.board.TaskCardResponse;
 import com.example.starter_project_2025.system.project.sprint.TaskStatus;
 import jakarta.validation.Valid;
-import jakarta.validation.Valid;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;

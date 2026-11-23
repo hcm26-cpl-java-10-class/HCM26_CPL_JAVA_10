@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project.alert;
 
-import com.example.starter_project_2025.system.project.*;
+import com.example.starter_project_2025.system.project.BoardProjectMember;
+import com.example.starter_project_2025.system.project.ProjectTeam;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogStatus;
 import com.example.starter_project_2025.system.project.task.alert.TaskAlertData;
 import com.fasterxml.jackson.databind.*;
