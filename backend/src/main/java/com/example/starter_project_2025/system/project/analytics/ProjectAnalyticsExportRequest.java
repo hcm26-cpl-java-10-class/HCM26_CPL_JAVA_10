@@ -7,7 +7,7 @@ import java.time.LocalDate;
 /**
  * US-ANL-010: request payload for {@code POST /api/v1/projects/{projectId}/analytics/export}.
  *
- * @param format    {@code CSV} or {@code PDF}
+ * @param format    {@code CSV}, {@code XLSX} or {@code PDF}
  * @param scope     {@code ALL} | {@code BACKLOG} | {@code SPRINT}
  * @param sprintId  selected sprint when {@code scope=SPRINT}
  * @param startDate first date of the filter window (inclusive)

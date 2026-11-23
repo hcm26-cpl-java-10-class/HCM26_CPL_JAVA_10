@@ -77,8 +77,9 @@ export const projectAnalyticsApi = {
     })).data,
 
   /**
-   * US-ANL-010: exports the filtered Sprint & Backlog analytics report as CSV
-   * or PDF via a secure binary stream and records an immutable audit entry.
+   * US-ANL-010: exports the filtered Sprint & Backlog analytics report as CSV,
+   * multi-sheet Excel (XLSX), or PDF via a secure binary stream and records an
+   * immutable audit entry.
    */
   exportReport: async (
     projectId: number,
@@ -98,7 +99,7 @@ export const projectAnalyticsApi = {
       },
       { responseType: "blob" },
     );
-    const ext = format === "CSV" ? "csv" : "pdf";
+    const ext = format === "CSV" ? "csv" : format === "XLSX" ? "xlsx" : "pdf";
     const prefix = (fallbackPrefix?.trim() || `project-${projectId}`).toLowerCase().replace(/[^a-z0-9-]+/g, "-");
     const fallbackName = `${prefix}-analytics.${ext}`;
     const filename = filenameFromDisposition(response.headers?.["content-disposition"], fallbackName);
