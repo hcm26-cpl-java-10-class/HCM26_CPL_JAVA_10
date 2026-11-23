@@ -271,4 +271,4 @@ export interface ProjectAnalyticsDrillDownResponse {
 }
 
 /** US-ANL-010: supported report export formats. */
-export type ProjectAnalyticsExportFormat = "CSV" | "PDF";
+export type ProjectAnalyticsExportFormat = "CSV" | "XLSX" | "PDF";

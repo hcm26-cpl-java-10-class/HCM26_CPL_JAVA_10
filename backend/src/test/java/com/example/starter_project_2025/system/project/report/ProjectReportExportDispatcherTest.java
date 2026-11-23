@@ -20,14 +20,14 @@ class ProjectReportExportDispatcherTest {
         var task=ArgumentCaptor.forClass(Runnable.class);
         verify(executor,times(1)).execute(task.capture());verifyNoInteractions(jobs,service);
         task.getValue().run();
-        verify(service).expireAndRecover();verify(service).process(id);
+        verify(service).recoverStaleJobs();verify(service).process(id);
         dispatcher.dispatch();verify(executor,times(2)).execute(any(Runnable.class));
     }
     @Test void failedBatchReleasesWorkerSoNextPollCanRetry() {
         var jobs=mock(ProjectReportExportRepository.class);
         var service=mock(ProjectReportExportService.class);
         var executor=mock(ExecutorService.class);
-        doThrow(new IllegalStateException("Database temporarily unavailable")).when(service).expireAndRecover();
+        doThrow(new IllegalStateException("Database temporarily unavailable")).when(service).recoverStaleJobs();
         var dispatcher=new ProjectReportExportDispatcher(jobs,service,executor);
         dispatcher.dispatch();
         var task=ArgumentCaptor.forClass(Runnable.class);verify(executor).execute(task.capture());task.getValue().run();

@@ -13,7 +13,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * US-ANL-010: immutable export audit log recording every CSV/PDF analytics
+ * US-ANL-010: immutable export audit log recording every CSV/XLSX/PDF analytics
  * report download with actor_id, timestamp, project_id, filter_scope,
  * export_format and correlation_id.
  */

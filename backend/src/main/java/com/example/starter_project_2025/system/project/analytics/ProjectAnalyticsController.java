@@ -81,7 +81,7 @@ public class ProjectAnalyticsController {
 
     @PostMapping("/{projectId}/analytics/export")
     @PreAuthorize("hasAuthority('PROJECT_ANALYTICS_EXPORT')")
-    @Operation(summary = "US-ANL-010: Export filtered Sprint & Backlog analytics report as CSV or PDF")
+    @Operation(summary = "US-ANL-010: Export filtered Sprint & Backlog analytics report as CSV, XLSX (multi-sheet) or PDF")
     public ResponseEntity<byte[]> export(
             @PathVariable String projectId,
             @RequestBody(required = false) ProjectAnalyticsExportRequest body,
