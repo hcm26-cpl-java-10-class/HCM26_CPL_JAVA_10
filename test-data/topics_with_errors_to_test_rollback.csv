@@ -1,0 +1,8 @@
+﻿Code,Name,Version,Technical Group,Duration (Hours),Description,Status
+ERR_TOPIC_001,Valid Introduction to Clean Architecture,1.0,Java,32,Valid starting row,ACTIVE
+ERR_TOPIC_NUM_TG,Numeric Technical Group Topic (Must Be Text),1.0,100.0,20,Technical Group has number 100.0; test inline edit to change to Java,ACTIVE
+,Missing Code Topic (Needs Fix in Preview),1.0,Frontend,24,Row has empty code; test inline edit to fill Code,ACTIVE
+ERR_TOPIC_003,,1.0,Database,40,Row has empty name; test inline edit to fill Name,ACTIVE
+ERR_TOPIC_004,Invalid Duration Topic,1.0,DevOps,-20,Duration must be positive; test inline edit to change to 20,ACTIVE
+ERR_TOPIC_001,Duplicate of Row 1 (Needs Delete or Code Change),1.0,Java,32,Duplicate row; test delete button or edit code,ACTIVE
+ERR_TOPIC_OVERLONG,Valid Kubernetes Clustering for Developers,1.0,Cloud_Infrastructure_And_Distributed_Systems_Architecture_Engineering_Very_Long_Text_That_Exceeds_One_Hundred_Characters_Limit_To_Test_Validation,48,Technical group length exceeds 100 chars; test inline edit to shorten it,ACTIVE

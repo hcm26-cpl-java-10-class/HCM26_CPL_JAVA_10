@@ -470,3 +470,159 @@ export interface CourseComparisonResponse {
   /** Nhận định cho từng module. */
   modules: ModuleInsight[];
 }
+
+// =====================================================================
+// Learner engagement: bottlenecks, problem learners, nudges, top learners
+// =====================================================================
+
+export type BottleneckSeverity = "HIGH" | "MEDIUM" | "NONE";
+
+export type BottleneckReason =
+  | "HIGH_DROP_OFF"
+  | "HIGH_DROPOUT"
+  | "MANY_STUCK"
+  | "SLOW_COMPLETION"
+  | "REPORTED";
+
+export interface LessonBottleneckItem {
+  lessonId: number;
+  lessonTitle: string;
+  contentType?: string | null;
+  sectionId: number;
+  sectionTitle: string;
+  position: number;
+  startedCount: number;
+  completedCount: number;
+  completionRate: number;
+  dropOffFromPrevious: number;
+  /** Opened but not completed. */
+  stuckCount: number;
+  stuckRate: number;
+  /** Inactive learners whose last lesson was this one. */
+  dropoutCount: number;
+  dropoutRate: number;
+  avgStudySeconds: number;
+  expectedSeconds: number;
+  timeRatio?: number | null;
+  reportCount: number;
+  bottleneckScore: number;
+  severity: BottleneckSeverity;
+  reasons: BottleneckReason[];
+}
+
+export interface SectionBottleneckItem {
+  sectionId: number;
+  sectionTitle: string;
+  lessonCount: number;
+  averageCompletionRate: number;
+  dropoutCount: number;
+  dropoutRate: number;
+}
+
+export interface BottleneckResponse {
+  courseId: number;
+  courseName: string;
+  inactiveThresholdDays: number;
+  totalLearners: number;
+  droppedLearners: number;
+  neverStartedDropouts: number;
+  topDropoutLesson?: LessonBottleneckItem | null;
+  bottlenecks: LessonBottleneckItem[];
+  sections: SectionBottleneckItem[];
+  lessons: LessonBottleneckItem[];
+}
+
+export type ProblemType =
+  | "NEVER_STARTED"
+  | "DROPPED_OUT"
+  | "INACTIVE"
+  | "LOW_EXAM_SCORE";
+
+export interface ProblemLearner {
+  enrollmentId: number;
+  userId: number;
+  studentName: string;
+  studentEmail: string;
+  departmentName?: string | null;
+  progressPercentage: number;
+  inactiveDays: number;
+  enrolledAt: string;
+  lastAccessedAt?: string | null;
+  primaryProblem: ProblemType;
+  problems: ProblemType[];
+  riskLevel: "HIGH" | "MEDIUM" | "LOW" | string;
+  riskScore: number;
+  examScorePercent?: number | null;
+  lastLessonId?: number | null;
+  lastLessonTitle?: string | null;
+  nextLessonId?: number | null;
+  nextLessonTitle?: string | null;
+  lastNudgedAt?: string | null;
+  nudgeCount: number;
+  canNudge: boolean;
+}
+
+export interface ProblemLearnersResponse {
+  courseId: number;
+  courseName: string;
+  inactiveThresholdDays: number;
+  cooldownDays: number;
+  totalLearners: number;
+  totalProblemLearners: number;
+  neverStartedCount: number;
+  droppedOutCount: number;
+  inactiveCount: number;
+  lowExamScoreCount: number;
+  learners: ProblemLearner[];
+}
+
+export interface NudgeRequest {
+  /** Empty = every problem learner matching `problemType`. */
+  userIds?: number[];
+  problemType?: ProblemType;
+  inactiveDays?: number;
+}
+
+export interface NudgeResult {
+  requested: number;
+  sent: number;
+  skippedCooldown: number;
+  skippedNotEligible: number;
+  sentUserIds: number[];
+}
+
+export type TopLearnerSortBy = "STUDY_TIME" | "LESSONS_COMPLETED";
+
+export interface TopLearnerItem {
+  rank: number;
+  userId: number;
+  studentName: string;
+  studentEmail: string;
+  departmentName?: string | null;
+  studySeconds: number;
+  studyHours: number;
+  lessonsCompleted: number;
+  coursesEnrolled: number;
+  coursesCompleted: number;
+  lastAccessedAt?: string | null;
+}
+
+export interface DepartmentTopLearners {
+  departmentId: number;
+  departmentCode?: string | null;
+  departmentName: string;
+  learnerCount: number;
+  activeLearnerCount: number;
+  totalStudyHours: number;
+  topLearners: TopLearnerItem[];
+}
+
+export interface TopLearnersResponse {
+  courseId?: number | null;
+  courseName: string;
+  limit: number;
+  sortBy: TopLearnerSortBy;
+  totalLearners: number;
+  systemTopLearners: TopLearnerItem[];
+  departments: DepartmentTopLearners[];
+}

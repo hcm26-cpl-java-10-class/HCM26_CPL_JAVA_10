@@ -1,9 +1,10 @@
+import { assessmentPreparationPath, learnerAssessmentReturnPath } from '@/utils/assessment-navigation';
 import {
     runCode,
     saveExamAnswers,
     sendEntryPhoto,
     sendIntegrityEvents, // NEW (anti-cheat)
-    startOrResumeExam,
+    getCurrentExamAttempt,
     submitExamAttempt,
     type ExamAttemptAnswer,
     type SaveExamAnswerRequest,
@@ -14,7 +15,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Loader2, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { CodingWorkspace } from './components/CodingWorkspace';
@@ -99,7 +100,21 @@ export default function StudentExamTakingPage() {
     const { examId: rawExamId } = useParams();
     const examId = Number(rawExamId);
     const validExamId = Number.isSafeInteger(examId) && examId > 0;
+    const location = useLocation();
     const navigate = useNavigate();
+    const navigationState = location.state as { returnTo?: unknown } | null;
+    const returnTo = learnerAssessmentReturnPath(new URLSearchParams(location.search).get('returnTo') ?? navigationState?.returnTo);
+    const isCourseReturnPath = returnTo.startsWith('/enrollments/') || returnTo.startsWith('/courses/');
+    const returnLabel = returnTo === '/invitations'
+        ? 'Back to Invitations'
+        : isCourseReturnPath
+            ? 'Back to Course'
+            : 'Back to Exam Schedule';
+    const returnCrumbLabel = returnTo === '/invitations'
+        ? 'Invitations'
+        : isCourseReturnPath
+            ? 'Course Learning'
+            : 'Exam Schedule';
     const [searchParams, setSearchParams] = useSearchParams();
     const essayParam = Number(searchParams.get('essay'));
     const codeParam = Number(searchParams.get('code'));
@@ -126,7 +141,7 @@ export default function StudentExamTakingPage() {
 
     const attemptQuery = useQuery({
         queryKey: validExamId ? attemptQueryKey(examId) : ['student-exam-attempt', 'invalid'],
-        queryFn: () => startOrResumeExam(examId),
+        queryFn: () => getCurrentExamAttempt(examId),
         enabled: validExamId,
         retry: false,
         refetchOnWindowFocus: false,
@@ -143,6 +158,10 @@ export default function StudentExamTakingPage() {
             writeDrafts(attempt.id, {});
             clearAllPendingSaves();
             queryClient.invalidateQueries({ queryKey: ["my-exam-scores"] });
+            queryClient.invalidateQueries({ queryKey: ["exam-preparation", examId] });
+            queryClient.invalidateQueries({ queryKey: ["student-exam-attempts"] });
+            queryClient.invalidateQueries({ queryKey: ["lesson-progress"] });
+            queryClient.invalidateQueries({ queryKey: ["course-exams"] });
             if (attempt.status === 'EXPIRED') {
                 toast.warning('Time is up! Your exam has been automatically submitted.');
             } else {
@@ -165,6 +184,8 @@ export default function StudentExamTakingPage() {
         send: sendIntegrityEvents,
         sendEntryPhoto,
         onEntryPhotoSaved: () => void attemptQuery.refetch(),
+        supervisorStreaming: true,
+
     });
 
     const questionFont = useQuestionFontSize();
@@ -365,8 +386,15 @@ export default function StudentExamTakingPage() {
         if (requireConfirmation && !skipConfirmRef.current) {
             // In-page dialog: a native confirm() would take the browser out of fullscreen.
             const unsaved = attempt.questions.filter((q) => q.type === 'ESSAY' && !answersRef.current[q.id]?.saved).length;
+            const unanswered = attempt.questions.filter((q) => {
+                const a = answersRef.current[q.id];
+                return q.type === 'ESSAY' || q.type === 'CODING'
+                    ? (a?.textAnswer ?? '').trim().length === 0
+                    : (a?.selectedOptionIds.length ?? 0) === 0;
+            }).length;
             setConfirmText(
                 'Are you sure you want to submit your exam? Please double-check your answers before proceeding.' +
+                (unanswered > 0 ? `\n\nYou have ${unanswered} unanswered question(s) out of ${attempt.questions.length}.` : '') +
                 (unsaved > 0 ? `\n\nThere are ${unsaved} essay question(s) that have not been saved (unsaved content will still be submitted).` : ''),
             );
             return;
@@ -488,9 +516,11 @@ export default function StudentExamTakingPage() {
         scheduleAnswerSave(questionId, next);
     };
 
-    const openEssay = (questionId: number) => setSearchParams({ essay: String(questionId) });
-    const openCode = (questionId: number) => setSearchParams({ code: String(questionId) });
-    const closeEssay = () => setSearchParams({});
+    const openEssay = (questionId: number) =>
+        setSearchParams({ returnTo, essay: String(questionId) }, { state: { ...location.state, returnTo } });
+    const openCode = (questionId: number) =>
+        setSearchParams({ returnTo, code: String(questionId) }, { state: { ...location.state, returnTo } });
+    const closeEssay = () => setSearchParams({ returnTo }, { state: { ...location.state, returnTo } });
 
     const hasText = (questionId: number) => (answers[questionId]?.textAnswer ?? '').trim().length > 0;
     const isAnswered = (question: { id: number; type: string }) =>
@@ -559,7 +589,8 @@ export default function StudentExamTakingPage() {
             <MainLayout>
                 <div role="alert" className="space-y-4 rounded-lg border border-destructive p-6 text-destructive">
                     <p>{getStartErrorMessage(attemptQuery.error)}</p>
-                    <Button variant="outline" onClick={() => navigate('/invitations')}>Back to Invitations</Button>
+                    <Button variant="outline" onClick={() => navigate(assessmentPreparationPath(examId, returnTo))}>Assessment overview</Button>
+                    <Button variant="outline" onClick={() => navigate(returnTo)}>{returnLabel}</Button>
                 </div>
             </MainLayout>
         );
@@ -684,7 +715,11 @@ export default function StudentExamTakingPage() {
 
     if (!isFinished && currentCode) {
         return (
-            <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }} focusMode>
+            <MainLayout
+                pathName={{ exams: returnCrumbLabel, take: 'Take Exam' }}
+                pathLinks={{ exams: returnTo }}
+                focusMode
+            >
                 {timeUpOverlay}
 {confirmOverlay}
                 <CodingWorkspace
@@ -708,7 +743,11 @@ export default function StudentExamTakingPage() {
     }
 
     return (
-        <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }} focusMode={!isFinished}>
+        <MainLayout
+            pathName={{ exams: returnCrumbLabel, take: 'Take Exam' }}
+            pathLinks={{ exams: returnTo }}
+            focusMode={!isFinished}
+        >
             {timeUpOverlay}
 {confirmOverlay}
             <main className="flex w-full flex-col gap-5">
@@ -790,8 +829,9 @@ export default function StudentExamTakingPage() {
                                     Final score will be updated once grading is finished: coding answers are graded automatically within a few minutes, and essay answers are graded by your teacher.
                                 </p>
                             )}
-                            <Button className="mt-5" variant="outline" onClick={() => navigate('/invitations')}>
-                                Back to Invitations
+                            <Button className="mt-5 mr-2" variant="outline" onClick={() => navigate(assessmentPreparationPath(examId, returnTo))}>Assessment overview</Button>
+                            <Button className="mt-5" variant="outline" onClick={() => navigate(returnTo)}>
+                                {returnLabel}
                             </Button>
                         </section>
                     ) : (

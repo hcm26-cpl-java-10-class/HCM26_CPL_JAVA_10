@@ -12,6 +12,19 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import com.example.starter_project_2025.system.demo.syllabus.service.StudentSyllabusCatalogService;
+import com.example.starter_project_2025.system.demo.syllabus.entity.Syllabus;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusClo;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusCloRepository;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusMaterialRepository;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusRepository;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusSection;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusSectionRepository;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusStatus;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusTopic;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusTopicCloLink;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusTopicCloLinkRepository;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusTopicRepository;
 
 @ExtendWith(MockitoExtension.class)
 class StudentSyllabusTopicCloViewTest {

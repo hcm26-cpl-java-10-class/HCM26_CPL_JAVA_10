@@ -1,4 +1,5 @@
 import { examApi, questionApi } from "@/api";
+import { aiQuestionGeneratorApi } from "@/api/features/ai-question-generator.api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -6,12 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ExamDTO, QuestionDTO, QuestionDifficulty, QuestionType } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, ChevronUp, Dices, Eye, EyeOff, Pencil, Plus, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, ChevronUp, Dices, Eye, EyeOff, Pencil, Plus, Save, Search, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
 import { QuestionAnswersPreview } from "./question/components/QuestionAnswersPreview";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { getErrorMessage } from "./examConfig";
 import { EditExamQuestionDialog, isExamStarted } from "./ExamQuestionParts";
+import { AiQuestionGeneratorDialog } from "./components/AiQuestionGeneratorDialog";
+import axios from "axios";
 
 const PAGE_SIZE = 8;
 
@@ -69,8 +72,15 @@ function toggleIn<T>(set: Set<T>, value: T): Set<T> {
 function QuestionMeta({ q }: { q: QuestionDTO }) {
   const typeCfg = TYPE_CONFIG[q.type] ?? { label: q.type, badge: "bg-muted text-foreground border-border" };
   const diffCfg = DIFFICULTY_CONFIG[q.difficulty] ?? { label: q.difficulty, badge: "bg-muted text-foreground border-border" };
+  const isAi = Boolean(q.isAiGenerated || q.source === "AI_GENERATED");
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      {isAi && (
+        <span className="rounded-md border border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-800 dark:bg-purple-950/70 dark:text-purple-300 px-2 py-0.5 font-semibold flex items-center gap-1 shadow-2xs">
+          <Sparkles className="size-3 text-purple-600 dark:text-purple-400" />
+          ✨ AI Generated
+        </span>
+      )}
       <span className={`rounded-md border px-2 py-0.5 font-medium ${typeCfg.badge}`}>{typeCfg.label}</span>
       <span className={`rounded-md border px-2 py-0.5 font-semibold ${diffCfg.badge}`}>{diffCfg.label}</span>
       <span className="rounded-md border border-border/60 bg-muted/40 px-2 py-0.5 text-muted-foreground font-medium">
@@ -89,6 +99,7 @@ function LibraryCard({
   onToggleExpand,
   onAdd,
   onUndo,
+  onDeletePermanent,
 }: {
   q: QuestionDTO;
   state: "available" | "staged" | "inExam";
@@ -97,7 +108,9 @@ function LibraryCard({
   onToggleExpand: () => void;
   onAdd: () => void;
   onUndo: () => void;
+  onDeletePermanent?: () => void;
 }) {
+  const isAi = Boolean(q.isAiGenerated || q.source === "AI_GENERATED");
   return (
     <div className={`rounded-xl border bg-card p-4 shadow-xs transition-all hover:border-primary/40 ${state === "inExam" ? "opacity-75" : ""}`}>
       <div className="flex items-start justify-between gap-3">
@@ -114,16 +127,32 @@ function LibraryCard({
             {isExpanded ? "Hide preview" : "Preview"}
           </Button>
           {state === "available" && (
-            <Button
-              type="button"
-              size="icon-sm"
-              aria-label="Add to selected questions"
-              title="Add to selected questions"
-              disabled={locked}
-              onClick={onAdd}
-            >
-              <Plus className="size-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              {isAi && onDeletePermanent && (
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="outline"
+                  className="text-rose-600 border-rose-300 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950/50"
+                  aria-label="Xóa hẳn câu hỏi AI"
+                  title="Xóa hẳn câu hỏi AI khỏi cơ sở dữ liệu"
+                  disabled={locked}
+                  onClick={onDeletePermanent}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="icon-sm"
+                aria-label="Add to selected questions"
+                title="Add to selected questions"
+                disabled={locked}
+                onClick={onAdd}
+              >
+                <Plus className="size-4" />
+              </Button>
+            </div>
           )}
           {state === "staged" && (
             <Button
@@ -316,6 +345,12 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
   const setActiveExam = (exam: ExamDTO | null) => {
     if (exam) queryClient.setQueryData(["exam-detail", examId], exam);
   };
+  const poolConfigQuery = useQuery({
+    queryKey: ["exam-question-pool", examId],
+    queryFn: () => examApi.getQuestionPoolConfig(examId),
+    enabled: Boolean(activeExam?.id),
+    retry: false,
+  });
 
   // Filters
   const [search, setSearch] = useState("");
@@ -332,21 +367,54 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
   const [expandedIds, setExpandedIds] = useState<Set<number | string>>(new Set());
   const [expandedSelectedIds, setExpandedSelectedIds] = useState<Set<number | string>>(new Set());
   const [isRandomOpen, setIsRandomOpen] = useState(false);
+  const [isAiGenOpen, setIsAiGenOpen] = useState(false);
   const [randomCount, setRandomCount] = useState(10);
   const [randomTopic, setRandomTopic] = useState<string>("");
   const [randomDifficulty, setRandomDifficulty] = useState<string>("ALL");
   const [randomQuestionType, setRandomQuestionType] = useState<string>("ALL");
+  // Question Pool configuration
+  const [poolRandomEnabled, setPoolRandomEnabled] = useState(true);
+  const [poolRandomCount, setPoolRandomCount] = useState(10);
+  const [poolShuffleOrder, setPoolShuffleOrder] = useState(true);
 
-  const lockedQuestionType: QuestionType | null =
-      activeExam?.examType === "MULTIPLE_CHOICE" ? "MULTIPLE_CHOICE"
-          : activeExam?.examType === "ESSAY" ? "ESSAY"
-          : activeExam?.examType === "CODING" ? "CODING"
-              : null;
-  const isPairExam = activeExam?.examType === "MC_CODING";
-  const allowedTypes: QuestionType[] = lockedQuestionType
-      ? [lockedQuestionType]
-      : isPairExam ? ["MULTIPLE_CHOICE", "CODING"] : ["MULTIPLE_CHOICE", "ESSAY", "CODING"];
+  // Derive allowed question types strictly from backend exam configuration
+  const allowedTypes: QuestionType[] = useMemo(() => {
+    if (activeExam?.allowedQuestionTypes && activeExam.allowedQuestionTypes.length > 0) {
+      return activeExam.allowedQuestionTypes;
+    }
+    const type = activeExam?.examType;
+    if (type === "MULTIPLE_CHOICE") return ["MULTIPLE_CHOICE"];
+    if (type === "CODING") return ["CODING"];
+    if (type === "ESSAY") return ["ESSAY"];
+    if (type === "MC_CODING") return ["MULTIPLE_CHOICE", "CODING"];
+    if (type === "MIXED") return ["MULTIPLE_CHOICE", "ESSAY", "CODING"];
+    // Safe fallback for unconfigured legacy exams: do NOT open all types!
+    return ["MULTIPLE_CHOICE"];
+  }, [activeExam?.allowedQuestionTypes, activeExam?.examType]);
+
+  const lockedQuestionType: QuestionType | null = useMemo(() => {
+    return allowedTypes.length === 1 ? allowedTypes[0] : null;
+  }, [allowedTypes]);
+
+  const isPairExam = allowedTypes.length === 2 && allowedTypes.includes("MULTIPLE_CHOICE") && allowedTypes.includes("CODING");
   const activeExamStarted = isExamStarted(activeExam);
+
+  // Clear any disallowed type filters whenever allowedTypes changes
+  useEffect(() => {
+    setTypeFilter((prev) => {
+      const next = new Set<QuestionType>();
+      for (const t of prev) {
+        if (allowedTypes.includes(t)) next.add(t);
+      }
+      return next;
+    });
+  }, [allowedTypes]);
+
+  const savedQuestions = activeExam?.questions ?? [];
+
+  const savedQuestionIds = savedQuestions
+      .map((question) => question.id)
+      .filter((id): id is number => id != null);
 
   const bankQuery = useQuery({
     queryKey: ["exam-question-all-bank", lockedQuestionType],
@@ -359,10 +427,50 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
         ),
     staleTime: 30_000,
   });
+  const examAiQuery = useQuery({
+    queryKey: ["exam-ai-questions", examId],
+    queryFn: () => aiQuestionGeneratorApi.getExamAiQuestions(examId),
+    enabled: Boolean(examId),
+  });
+
+  const deleteAiQuestionMutation = useMutation({
+    mutationFn: (questionId: number) => aiQuestionGeneratorApi.deleteExamAiQuestion(examId, questionId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["exam-ai-questions", examId] });
+      void queryClient.invalidateQueries({ queryKey: ["exam-detail", examId] });
+      void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
+      toast.success("Đã xóa vĩnh viễn câu hỏi AI khỏi hệ thống.");
+    },
+    onError: (error) => toast.error(getErrorMessage(error, "Không thể xóa câu hỏi AI")),
+  });
+
+  const handleDeleteAiQuestionPermanent = (questionId: number) => {
+    if (activeExamStarted) {
+      toast.error("Bài thi đã bắt đầu, không thể xóa câu hỏi.");
+      return;
+    }
+    if (window.confirm("Bạn có chắc chắn muốn xóa HẲN câu hỏi AI này khỏi cơ sở dữ liệu? Hành động này không thể hoàn tác.")) {
+      deleteAiQuestionMutation.mutate(questionId);
+    }
+  };
+
   const allBankQuestions = useMemo(
-    () => (bankQuery.data?.content ?? []).filter((q) => allowedTypes.includes(q.type)),
+    () => {
+      const bankItems = (bankQuery.data?.content ?? []).filter((q) => allowedTypes.includes(q.type));
+      const aiItems = (examAiQuery.data ?? []).filter((q) => allowedTypes.includes(q.type));
+      const mergedMap = new Map<number, QuestionDTO>();
+      for (const item of aiItems) {
+        if (item.id != null) mergedMap.set(item.id, item);
+      }
+      for (const item of bankItems) {
+        if (item.id != null && !mergedMap.has(item.id)) {
+          mergedMap.set(item.id, item);
+        }
+      }
+      return Array.from(mergedMap.values());
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [bankQuery.data?.content, lockedQuestionType, isPairExam],
+    [bankQuery.data?.content, examAiQuery.data, lockedQuestionType, isPairExam],
   );
 
   const refreshExams = () => {
@@ -375,6 +483,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       setActiveExam(exam);
       refreshExams();
       void queryClient.invalidateQueries({ queryKey: ["exam-question-all-bank"] });
+      void queryClient.invalidateQueries({ queryKey: ["exam-ai-questions", examId] });
     },
     onError: (error) => toast.error(getErrorMessage(error, "Failed to add questions to assessment")),
   });
@@ -386,6 +495,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       setActiveExam(exam);
       refreshExams();
       void queryClient.invalidateQueries({ queryKey: ["exam-question-all-bank"] });
+      void queryClient.invalidateQueries({ queryKey: ["exam-ai-questions", examId] });
       toast.success("Question removed from assessment");
     },
     onError: (error) => toast.error(getErrorMessage(error, "Failed to remove question from assessment")),
@@ -460,7 +570,132 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
     });
   };
 
-  const savedQuestions = activeExam?.questions ?? [];
+  useEffect(() => {
+    const questionIds = savedQuestions
+        .map((q) => q.id)
+        .filter((id): id is number => id != null);
+
+    const config = poolConfigQuery.data;
+
+    if (config) {
+      // Chỉ giữ những câu hỏi vừa thuộc Exam vừa có trong Pool đã lưu.
+      const configuredIds = new Set(config.questionIds ?? []);
+      const validPoolIds = questionIds.filter((id) => configuredIds.has(id));
+
+      setPoolRandomEnabled(config.randomSelectionEnabled);
+      setPoolRandomCount(
+          Math.min(
+              validPoolIds.length,
+              Math.max(1, config.randomQuestionCount)
+          )
+      );
+      setPoolShuffleOrder(config.shuffleQuestionOrder);
+      return;
+    }
+
+    if (
+        poolConfigQuery.isError &&
+        axios.isAxiosError(poolConfigQuery.error) &&
+        poolConfigQuery.error.response?.status === 404
+    ) {
+      // Chưa có cấu hình: mặc định chọn toàn bộ câu hỏi đã lưu trong Exam.
+      setPoolRandomEnabled(true);
+      setPoolRandomCount(Math.min(10, Math.max(1, questionIds.length)));
+      setPoolShuffleOrder(true);
+    }
+  }, [
+    poolConfigQuery.data,
+    poolConfigQuery.isError,
+    poolConfigQuery.error,
+    savedQuestions,
+  ]);
+
+  const savePoolConfigMutation = useMutation({
+    mutationFn: (config: {
+      randomSelectionEnabled: boolean;
+      randomQuestionCount: number;
+      shuffleQuestionOrder: boolean;
+    }) =>
+        examApi.saveQuestionPoolConfig(examId, {
+          ...config,
+          questionIds: savedQuestionIds,
+        }),
+
+    onSuccess: (config) => {
+      setPoolRandomEnabled(config.randomSelectionEnabled);
+      setPoolRandomCount(config.randomQuestionCount);
+      setPoolShuffleOrder(config.shuffleQuestionOrder);
+
+      void queryClient.invalidateQueries({
+        queryKey: ["exam-question-pool", examId],
+      });
+
+      toast.success("Question Pool settings saved successfully.");
+    },
+
+    onError: (error) => {
+      toast.error(getErrorMessage(error, "Failed to save Question Pool configuration."));
+    },
+  });
+
+  const handlePoolRandomToggle = (enabled: boolean) => {
+    if (
+        savedQuestionIds.length === 0 ||
+        savePoolConfigMutation.isPending
+    ) return;
+
+    const nextCount = Math.min(
+        savedQuestionIds.length,
+        Math.max(1, poolRandomCount)
+    );
+
+    setPoolRandomEnabled(enabled);
+    setPoolRandomCount(nextCount);
+
+    savePoolConfigMutation.mutate({
+      randomSelectionEnabled: enabled,
+      randomQuestionCount: enabled ? nextCount : savedQuestionIds.length,
+      shuffleQuestionOrder: poolShuffleOrder,
+    });
+  };
+
+  const handlePoolCountChange = (value: number) => {
+    setPoolRandomCount(value);
+  };
+
+  const handlePoolCountSave = () => {
+    if (
+        !poolRandomEnabled ||
+        savePoolConfigMutation.isPending ||
+        !Number.isInteger(poolRandomCount) ||
+        poolRandomCount < 1 ||
+        poolRandomCount > savedQuestionIds.length
+    ) return;
+
+    savePoolConfigMutation.mutate({
+      randomSelectionEnabled: true,
+      randomQuestionCount: poolRandomCount,
+      shuffleQuestionOrder: poolShuffleOrder,
+    });
+  };
+
+  const handlePoolShuffleChange = (checked: boolean) => {
+    if (
+        savePoolConfigMutation.isPending ||
+        savedQuestionIds.length === 0
+    ) return;
+
+    setPoolShuffleOrder(checked);
+
+    savePoolConfigMutation.mutate({
+      randomSelectionEnabled: poolRandomEnabled,
+      randomQuestionCount: poolRandomEnabled
+          ? poolRandomCount
+          : savedQuestionIds.length,
+      shuffleQuestionOrder: checked,
+    });
+  };
+
   const selectedAll = useMemo(() => [...savedQuestions, ...stagedQuestions], [savedQuestions, stagedQuestions]);
 
   const isAllSelectedExpanded =
@@ -486,17 +721,22 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
 
   const stageQuestion = (q: QuestionDTO) => {
     if (activeExamStarted || sourceIdsInExam.has(q.id)) return;
+    if (!allowedTypes.includes(q.type)) {
+      toast.error(`Đề thi không cho phép loại câu hỏi ${TYPE_LABEL[q.type] || q.type}`);
+      return;
+    }
     setStagedQuestions((prev) => (prev.some((item) => item.id === q.id) ? prev : [...prev, q]));
   };
   const unstageQuestion = (id: number) => setStagedQuestions((prev) => prev.filter((item) => item.id !== id));
 
   const addAllMatching = () => {
     if (activeExamStarted || addable.length === 0) return;
+    const validAddable = addable.filter((q) => allowedTypes.includes(q.type));
     setStagedQuestions((prev) => {
       const existing = new Set(prev.map((q) => q.id));
-      return [...prev, ...addable.filter((q) => !existing.has(q.id))];
+      return [...prev, ...validAddable.filter((q) => !existing.has(q.id))];
     });
-    toast.success(`Added ${addable.length} question(s) to the selection. Click "Save to Assessment" to keep them.`);
+    toast.success(`Added ${validAddable.length} question(s) to the selection. Click "Save to Assessment" to keep them.`);
   };
 
   const handleSaveStagedToExam = () => {
@@ -505,6 +745,11 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       return;
     }
     if (!activeExam?.id || stagedQuestions.length === 0) return;
+    const disallowed = stagedQuestions.filter((q) => !allowedTypes.includes(q.type));
+    if (disallowed.length > 0) {
+      toast.error(`Đề thi không cho phép câu hỏi loại: ${disallowed.map((q) => TYPE_LABEL[q.type] || q.type).join(", ")}`);
+      return;
+    }
     const ids = stagedQuestions.map((q) => q.id);
     addQuestionsMutation.mutate(ids, {
       onSuccess: () => {
@@ -585,7 +830,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       )}
 
       <div className={`grid gap-4 lg:h-[calc(100vh-12rem)] lg:min-h-[36rem] ${
-        filtersOpen ? "lg:grid-cols-[230px_minmax(0,1fr)_minmax(300px,0.75fr)]" : "lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.6fr)]"
+        filtersOpen ? "lg:grid-cols-[220px_minmax(0,1.35fr)_minmax(280px,0.8fr)]" : "lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.7fr)]"
       }`}>
         {/* ---------------- Filters ---------------- */}
         <aside className={`min-h-0 flex-col gap-4 overflow-y-auto rounded-md border p-4 ${filtersOpen ? "flex" : "hidden"}`}>
@@ -603,13 +848,34 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
 
           <fieldset className="grid gap-2">
             <legend className="mb-1 text-sm font-semibold">Question type</legend>
-            {allowedTypes.map((type) => (
-              <label key={type} className="flex cursor-pointer items-center gap-2 text-sm">
-                <input type="checkbox" className="size-4 cursor-pointer accent-primary" checked={typeFilter.has(type)} onChange={() => setTypeFilter((s) => toggleIn(s, type))} />
-                {TYPE_LABEL[type]}
-              </label>
-            ))}
-            {allowedTypes.length < 3 && <p className="text-[11px] text-muted-foreground">Limited by the assessment&apos;s question format.</p>}
+            {(["MULTIPLE_CHOICE", "CODING", "ESSAY"] as QuestionType[]).map((type) => {
+              const isAllowed = allowedTypes.includes(type);
+              return (
+                <label
+                  key={type}
+                  className={`flex items-center gap-2 text-sm select-none ${
+                    isAllowed ? "cursor-pointer" : "cursor-not-allowed opacity-50 text-muted-foreground pointer-events-none"
+                  }`}
+                  title={!isAllowed ? "Loại câu hỏi này bị khóa theo định dạng của đề thi" : undefined}
+                >
+                  <input
+                    type="checkbox"
+                    className="size-4 cursor-pointer accent-primary disabled:cursor-not-allowed pointer-events-auto"
+                    disabled={!isAllowed}
+                    checked={isAllowed && typeFilter.has(type)}
+                    onChange={() => {
+                      if (!isAllowed) return;
+                      setTypeFilter((s) => toggleIn(s, type));
+                    }}
+                  />
+                  <span>{TYPE_LABEL[type]}</span>
+                  {!isAllowed && <span className="text-[10px] text-muted-foreground italic">(Khóa)</span>}
+                </label>
+              );
+            })}
+            {allowedTypes.length < 3 && (
+              <p className="text-[11px] text-muted-foreground">Bị giới hạn theo định dạng của đề thi ({activeExam?.examType}).</p>
+            )}
           </fieldset>
 
           <fieldset className="grid gap-2">
@@ -642,33 +908,64 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
 
         {/* ---------------- Question library ---------------- */}
         <section className="flex min-h-0 flex-col rounded-md border">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
-            <div>
+          <div className="flex items-center justify-between gap-2 border-b p-2.5 flex-wrap xl:flex-nowrap">
+            <div className="shrink-0 flex items-center gap-2">
               <h3 className="text-sm font-semibold">Question library</h3>
-              <p className="text-xs text-muted-foreground">{filtered.length} question(s)</p>
+              <span className="text-xs text-muted-foreground">({filtered.length})</span>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 flex-nowrap py-0.5">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={togglePreviewAll}
-                className="gap-1.5 text-xs"
+                className="gap-1 text-xs h-8 px-2 shrink-0"
               >
                 {isAllExpanded ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                 <span>{isAllExpanded ? "Collapse all" : "Preview all"}</span>
               </Button>
-              <Button type="button" variant="outline" size="sm" aria-pressed={filtersOpen} onClick={() => setFiltersOpen((v) => !v)}>
-                <SlidersHorizontal className="mr-1 size-4" />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-pressed={filtersOpen}
+                onClick={() => setFiltersOpen((v) => !v)}
+                className="text-xs h-8 px-2 shrink-0"
+              >
+                <SlidersHorizontal className="mr-1 size-3.5" />
                 {filtersOpen ? "Hide filters" : "Show filters"}
               </Button>
-              <Button type="button" variant="outline" size="sm" disabled={activeExamStarted || addable.length === 0} onClick={addAllMatching}>
-                <Plus className="mr-1 size-4" />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={activeExamStarted || addable.length === 0}
+                onClick={addAllMatching}
+                className="text-xs h-8 px-2 shrink-0"
+              >
+                <Plus className="mr-1 size-3.5" />
                 Add all matching ({addable.length})
               </Button>
-              <Button type="button" size="sm" className="bg-indigo-600 text-white hover:bg-indigo-700" disabled={activeExamStarted} onClick={openRandomDialog}>
-                <Dices className="mr-1 size-4" />
+              <Button
+                type="button"
+                size="sm"
+                className="bg-indigo-600 text-white hover:bg-indigo-700 text-xs h-8 px-2 shrink-0"
+                disabled={activeExamStarted}
+                onClick={openRandomDialog}
+              >
+                <Dices className="mr-1 size-3.5" />
                 Random...
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="inline-flex items-center gap-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-xs text-xs h-8 px-2 whitespace-nowrap shrink-0"
+                disabled={activeExamStarted}
+                onClick={() => setIsAiGenOpen(true)}
+                title="Tạo câu hỏi bằng AI"
+              >
+                <Sparkles className="size-3.5 shrink-0" />
+                <span>AI Generate</span>
               </Button>
             </div>
           </div>
@@ -689,6 +986,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                 onToggleExpand={() => togglePreview(q.id)}
                 onAdd={() => stageQuestion(q)}
                 onUndo={() => unstageQuestion(q.id)}
+                onDeletePermanent={() => handleDeleteAiQuestionPermanent(q.id)}
               />
             ))}
           </div>
@@ -727,6 +1025,105 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                 {isAllSelectedExpanded ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                 <span>{isAllSelectedExpanded ? "Collapse all" : "Preview all"}</span>
               </Button>
+            )}
+          </div>
+
+          {/* Question Pool loading / error */}
+          {poolConfigQuery.isLoading && (
+              <p className="mx-3 text-xs text-muted-foreground">
+                Loading Question Pool configuration...
+              </p>
+          )}
+
+          {poolConfigQuery.isError &&
+              !(axios.isAxiosError(poolConfigQuery.error) &&
+                  poolConfigQuery.error.response?.status === 404) && (
+                  <p className="mx-3 text-xs text-destructive">
+                    Failed to load Question Pool configuration. Please try again.
+                  </p>
+              )}
+          {/* ---------------- Random Question Selection ---------------- */}
+          <div className="border-b bg-card/40 px-3.5 py-2.5 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+      <span className="text-xs text-muted-foreground">
+        Pool: {savedQuestionIds.length} questions
+      </span>
+
+                {savePoolConfigMutation.isPending && (
+                    <span className="text-xs text-muted-foreground">
+          Saving...
+        </span>
+                )}
+              </div>
+
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                    type="checkbox"
+                    className="size-4 accent-primary"
+                    checked={poolRandomEnabled}
+                    onChange={(e) => handlePoolRandomToggle(e.target.checked)}
+                    disabled={
+                        activeExamStarted ||
+                        savedQuestionIds.length === 0 ||
+                        poolConfigQuery.isLoading ||
+                        savePoolConfigMutation.isPending
+                    }
+                />
+                Randomly Select
+              </label>
+            </div>
+
+            {poolRandomEnabled && (
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-2">
+                  <div className="flex items-center gap-2">
+                    <label
+                        htmlFor="pool-random-count"
+                        className="text-xs text-muted-foreground"
+                    >
+                      Number of random questions
+                    </label>
+
+                    <Input
+                        id="pool-random-count"
+                        type="number"
+                        min={1}
+                        max={savedQuestionIds.length}
+                        value={poolRandomCount}
+                        onChange={(e) =>
+                            handlePoolCountChange(Number(e.target.value))
+                        }
+                        onBlur={handlePoolCountSave}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.currentTarget.blur();
+                          }
+                        }}
+                        disabled={
+                            activeExamStarted ||
+                            savePoolConfigMutation.isPending ||
+                            savedQuestionIds.length === 0
+                        }
+                        className="h-8 w-20"
+                    />
+                  </div>
+
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <input
+                        type="checkbox"
+                        className="size-4 accent-primary"
+                        checked={poolShuffleOrder}
+                        onChange={(e) =>
+                            handlePoolShuffleChange(e.target.checked)
+                        }
+                        disabled={
+                            activeExamStarted ||
+                            savePoolConfigMutation.isPending
+                        }
+                    />
+                    Shuffle Question Order
+                  </label>
+                </div>
             )}
           </div>
 
@@ -839,7 +1236,15 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                   min={1}
                   max={eligibleForRandom.length || 100}
                   value={randomCount}
-                  onChange={(e) => setRandomCount(Math.max(1, parseInt(e.target.value) || 1))}
+                  onChange={(e) => {
+                    const value = Number(e.target.value);
+                    setRandomCount(
+                        Math.min(
+                            eligibleForRandom.length,
+                            Math.max(1, Number.isFinite(value) ? value : 1)
+                        )
+                    );
+                  }}
                   placeholder="e.g. 15, 25, 50"
               />
             </div>
@@ -951,6 +1356,23 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
           }}
         />
       )}
+
+      <AiQuestionGeneratorDialog
+        open={isAiGenOpen}
+        onOpenChange={setIsAiGenOpen}
+        examId={examId}
+        examTitle={activeExam?.title}
+        examType={activeExam?.examType}
+        allowedTypes={allowedTypes}
+        courseId={activeExam?.courseId}
+        courseName={activeExam?.courseName}
+        onQuestionsAdded={() => {
+          void queryClient.invalidateQueries({ queryKey: ["exam-detail", examId] });
+          void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
+          void queryClient.invalidateQueries({ queryKey: ["exam-question-all-bank"] });
+          void queryClient.invalidateQueries({ queryKey: ["exam-ai-questions", examId] });
+        }}
+      />
     </div>
   );
 }

@@ -10,13 +10,13 @@ import com.example.starter_project_2025.system.demo.lesson.Lesson;
 import com.example.starter_project_2025.system.demo.lesson.LessonContentType;
 import com.example.starter_project_2025.system.demo.progress.LessonProgress;
 import com.example.starter_project_2025.system.demo.section.Section;
-import com.example.starter_project_2025.system.exam.domain.Exam;
-import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
-import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
-import com.example.starter_project_2025.system.exam.domain.ExamRepository;
-import com.example.starter_project_2025.system.exam.domain.ExamResultPublication;
-import com.example.starter_project_2025.system.exam.domain.ScoreReleasePolicy;
-import com.example.starter_project_2025.system.exam.service.ExamResultAccessService;
+import com.example.starter_project_2025.system.exam.core.domain.Exam;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttempt;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptRepository;
+import com.example.starter_project_2025.system.exam.core.domain.ExamRepository;
+import com.example.starter_project_2025.system.exam.result.domain.ExamResultPublication;
+import com.example.starter_project_2025.system.exam.result.domain.ScoreReleasePolicy;
+import com.example.starter_project_2025.system.exam.result.service.ExamResultAccessService;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.user.User;
 import org.junit.jupiter.api.BeforeEach;
@@ -193,6 +193,11 @@ class StudentAnalyticsServiceTest {
 
     @Test
     void batchedCourseScoresUseOnlyPublishedExamResults() {
+        exam.setCourseWeight(new BigDecimal("100"));
+        com.example.starter_project_2025.system.question.core.domain.Question q=new com.example.starter_project_2025.system.question.core.domain.Question();
+        q.setContent("Assessment question");q.setType(com.example.starter_project_2025.system.question.core.domain.QuestionType.MULTIPLE_CHOICE);
+        q.setDifficulty(com.example.starter_project_2025.system.question.core.domain.Difficulty.EASY);q.setIsActive(true);
+        db.persist(q);exam.getQuestions().add(q);
         ExamAttempt attempt = new ExamAttempt();
         attempt.setExam(exam);
         attempt.setStudent(student);
@@ -200,6 +205,7 @@ class StudentAnalyticsServiceTest {
         attempt.setSubmittedAt(Instant.parse("2026-11-02T03:30:00Z"));
         attempt.setDurationMinutes(30);
         attempt.setFinalScore(new BigDecimal("8.50"));
+        attempt.setStatus(com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus.SUBMITTED);
         db.persist(attempt);
         ExamResultPublication publication = new ExamResultPublication();
         publication.setExam(exam);
@@ -215,7 +221,8 @@ class StudentAnalyticsServiceTest {
         when(attempts.findAllByStudent_IdOrderByStartedAtDesc(student.getId())).thenReturn(List.of(attempt));
         when(exams.findByCourseLink(course.getId(), null, null, false)).thenReturn(List.of(exam));
         when(access.canStudentSeeScoreOnMyScores(exam)).thenReturn(true);
-        CourseMyScoresService actual = new CourseMyScoresService(enrollments, exams, attempts, access, db.getEntityManager());
+        CourseMyScoresService actual = new CourseMyScoresService(enrollments, exams, attempts, access, db.getEntityManager(),
+                org.mockito.Mockito.mock(com.example.starter_project_2025.system.exam.gradebook.GradebookPublishedItemRepository.class));
         var result = actual.findCourseScoresForStudents(java.util.Map.of(student.getId(), List.of(course)));
         assertEquals(new BigDecimal("8.50"), result.get(student.getId()).getFirst().overallScore());
         assertEquals(actual.findMyCourseScores(student.getId()).getFirst(),

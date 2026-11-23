@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.ProjectMemberRole;
 import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.system.project.template.repository.ProjectTemplateRepository;
@@ -43,6 +45,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Profile("!prod")
 @ConditionalOnProperty(prefix = "app.seed.team-allocation", name = "enabled", havingValue = "true", matchIfMissing = true)
+@StartupMutation
 public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner {
     private static final String SEED_ACTION = "PROJECT_TEMPLATE_DEMO_SEEDED_V2";
     private static final List<String> RUBRIC_NAMES = List.of(

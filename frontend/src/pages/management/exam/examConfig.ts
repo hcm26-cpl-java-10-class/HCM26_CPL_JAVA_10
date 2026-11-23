@@ -1,6 +1,7 @@
-import { EXAM_CATEGORY_LABEL, type ExamCategory, type ExamDTO, type ExamType, type LatePolicy, type ResultVisibility } from "@/types";
+import { EXAM_CATEGORY_LABEL, type ExamCategory, type ExamDTO, type ExamStatus, type ExamType, type LatePolicy, type ResultVisibility } from "@/types";
 
 export interface ExamConfigForm {
+  status: ExamStatus;
   startTime: string;
   endTime: string;
   maxAttempts: string;
@@ -11,6 +12,7 @@ export interface ExamConfigForm {
   category: ExamCategory | "";
   passScore: string;
   maxScore: string;
+  courseWeight: string;
   latePolicy: LatePolicy;
   latePenaltyPercent: string;
   lateGraceMinutes: string;
@@ -26,6 +28,10 @@ export interface ExamConfigForm {
   singleSession: boolean;
   cameraProctoring: boolean;
   notifyOnViolation: boolean;
+  /** Anti-cheat coefficients, set at creation only. "" = keep the default. */
+  headTurnAngleDeg: string;
+  headTurnSeconds: string;
+  fastSubmitPercent: string;
   /** Optional link to a course / section / lesson ("" = not linked). */
   courseId: string;
   sectionId: string;
@@ -33,9 +39,16 @@ export interface ExamConfigForm {
   courseName?: string;
   sectionTitle?: string;
   lessonTitle?: string;
+  // Tu danh gia / danh gia cheo (UFR-EXM-012)
+  selfReviewEnabled: boolean;
+  peerReviewEnabled: boolean;
+  peerReviewCount: string;
+  peerReviewAnonymous: boolean;
+  peerReviewShowReference: boolean;
 }
 
 export const DEFAULT_CONFIG: ExamConfigForm = {
+  status: "PUBLISHED",
   startTime: "",
   endTime: "",
   maxAttempts: "",
@@ -45,6 +58,7 @@ export const DEFAULT_CONFIG: ExamConfigForm = {
   category: "",
   passScore: "",
   maxScore: "",
+  courseWeight: "",
   latePolicy: "NOT_ALLOWED",
   latePenaltyPercent: "",
   lateGraceMinutes: "0",
@@ -58,12 +72,20 @@ export const DEFAULT_CONFIG: ExamConfigForm = {
   singleSession: true,
   cameraProctoring: false,
   notifyOnViolation: false,
+  headTurnAngleDeg: "",
+  headTurnSeconds: "",
+  fastSubmitPercent: "",
   courseId: "",
   sectionId: "",
   lessonId: "",
   courseName: "",
   sectionTitle: "",
   lessonTitle: "",
+  selfReviewEnabled: false,
+  peerReviewEnabled: false,
+  peerReviewCount: "2",
+  peerReviewAnonymous: true,
+  peerReviewShowReference: false,
 };
 
 export const LATE_POLICY_LABEL: Record<LatePolicy, string> = {
@@ -88,8 +110,6 @@ export const RESULT_VISIBILITY_LABEL: Record<ResultVisibility, string> = {
   MANUAL_RELEASE: "Manually released by teacher",
 };
 
-export const toInputDateTime = (value?: string | null) => (value ? value.slice(0, 16) : "");
-
 export const getLocalDatetimeString = (date = new Date()) => {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
@@ -106,19 +126,25 @@ const pickEnum = <T extends string, F extends string = T>(
 ): T | F => (value && value in allowed ? (value as T) : fallback);
 
 export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
-  startTime: toInputDateTime(exam.startTime),
-  endTime: toInputDateTime(exam.endTime),
+  status: exam.status ?? "PUBLISHED",
+  startTime: exam.startTime ? exam.startTime.slice(0, 16) : "",
+  endTime: exam.endTime ? exam.endTime.slice(0, 16) : "",
   maxAttempts: String(exam.maxAttempts ?? 1),
   shuffleQuestions: exam.shuffleQuestions ?? false,
   shuffleOptions: exam.shuffleOptions ?? false,
   showAnswersAfterExam: exam.showAnswersAfterExam ?? false,
   category: pickEnum(exam.category, EXAM_CATEGORY_LABEL, ""),
   passScore: exam.passScore != null ? String(exam.passScore) : "",
+  courseWeight: exam.courseWeight != null ? String(exam.courseWeight) : "",
   maxScore: exam.maxScore != null ? String(exam.maxScore) : "",
   latePolicy: pickEnum(exam.latePolicy, LATE_POLICY_LABEL, "NOT_ALLOWED"),
   latePenaltyPercent: exam.latePenaltyPercent != null ? String(exam.latePenaltyPercent) : "",
   lateGraceMinutes: String(exam.lateGraceMinutes ?? 0),
-  resultVisibility: pickEnum(exam.resultVisibility, RESULT_VISIBILITY_LABEL, "IMMEDIATE"),
+  resultVisibility: pickEnum(
+    exam.resultVisibility,
+    RESULT_VISIBILITY_LABEL,
+    "IMMEDIATE",
+  ),
   examType: pickEnum(exam.examType, EXAM_TYPE_LABEL, ""),
   accessCode: exam.accessCode ?? "",
   antiCheatEnabled: exam.antiCheatEnabled ?? false,
@@ -128,12 +154,20 @@ export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   singleSession: exam.singleSession ?? false,
   cameraProctoring: exam.cameraProctoring ?? false,
   notifyOnViolation: exam.notifyOnViolation ?? false,
+  headTurnAngleDeg: exam.headTurnAngleDeg != null ? String(exam.headTurnAngleDeg) : "",
+  headTurnSeconds: exam.headTurnSeconds != null ? String(exam.headTurnSeconds) : "",
+  fastSubmitPercent: exam.fastSubmitPercent != null ? String(exam.fastSubmitPercent) : "",
   courseId: exam.courseId != null ? String(exam.courseId) : "",
   sectionId: exam.sectionId != null ? String(exam.sectionId) : "",
   lessonId: exam.lessonId != null ? String(exam.lessonId) : "",
   courseName: exam.courseName ?? "",
   sectionTitle: exam.sectionTitle ?? "",
   lessonTitle: exam.lessonTitle ?? "",
+  selfReviewEnabled: exam.selfReviewEnabled ?? false,
+  peerReviewEnabled: exam.peerReviewEnabled ?? false,
+  peerReviewCount: exam.peerReviewCount != null ? String(exam.peerReviewCount) : "2",
+  peerReviewAnonymous: exam.peerReviewAnonymous ?? true,
+  peerReviewShowReference: exam.peerReviewShowReference ?? false,
 });
 
 /** Required selects that must be chosen by the teacher (no default value). */
@@ -141,58 +175,44 @@ export function getRequiredFieldErrors(cfg: ExamConfigForm): { examType?: string
   const errors: { examType?: string; category?: string; maxAttempts?: string } = {};
   if (!cfg.examType) errors.examType = "Please select a question format.";
   if (!cfg.category) errors.category = "Please select a category.";
-  if (cfg.maxAttempts.trim() === "") errors.maxAttempts = "Please enter the maximum number of attempts.";
-  else if (!(Number(cfg.maxAttempts) >= 1)) errors.maxAttempts = "Maximum attempts must be at least 1.";
+  // blank = default 1 attempt
+  if (cfg.maxAttempts.trim() !== "" && !(Number(cfg.maxAttempts) >= 1)) errors.maxAttempts = "Maximum attempts must be at least 1.";
   return errors;
 }
 
-export function validateConfig(
-  duration: number,
-  cfg: ExamConfigForm,
-  originalStartTime?: string,
-  originalEndTime?: string,
-): string | null {
+export function validateConfig(duration: number, cfg: ExamConfigForm): string | null {
   const required = getRequiredFieldErrors(cfg);
   if (required.examType) return required.examType;
   if (required.category) return required.category;
   if (required.maxAttempts) return required.maxAttempts;
 
-  const now = Date.now() - 60 * 1000; // Allow 1-min grace when saving
-
-  if (cfg.startTime) {
-    const start = new Date(cfg.startTime).getTime();
-    const isStartChanged = !originalStartTime || new Date(originalStartTime).getTime() !== start;
-    if (isStartChanged && start < now) {
-      return "Start time must be at current time or later (recommended: set at least 1 minute ahead so students have time to join).";
-    }
-  }
-
-  if (cfg.endTime) {
-    const end = new Date(cfg.endTime).getTime();
-    const isEndChanged = !originalEndTime || new Date(originalEndTime).getTime() !== end;
-    if (isEndChanged && end < now) {
-      return "End time cannot be in the past.";
-    }
-  }
-
   if (cfg.startTime && cfg.endTime) {
-    const start = new Date(cfg.startTime).getTime();
-    const end = new Date(cfg.endTime).getTime();
-    if (start >= end) return "End time must be after start time.";
-    const windowMinutes = Math.floor((end - start) / 60000);
-    if (duration > windowMinutes) return `Exam duration (${duration} mins) exceeds the available time window (${windowMinutes} mins).`;
+    const startMs = Date.parse(cfg.startTime);
+    const endMs = Date.parse(cfg.endTime);
+    if (!Number.isNaN(startMs) && !Number.isNaN(endMs)) {
+      if (endMs <= startMs) return "End time must be after start time.";
+      const windowMinutes = Math.floor((endMs - startMs) / 60000);
+      if (Number.isFinite(duration) && duration > 0 && duration > windowMinutes) {
+        return `Duration (${duration} mins) cannot exceed the open window (${windowMinutes} mins).`;
+      }
+    }
   }
-  if (!(Number(cfg.maxAttempts) >= 1)) return "Maximum attempts must be at least 1.";
+
+  if (cfg.maxAttempts.trim() !== "" && !(Number(cfg.maxAttempts) >= 1)) return "Maximum attempts must be at least 1.";
+  if (cfg.courseWeight !== "" && (!Number.isFinite(Number(cfg.courseWeight)) || Number(cfg.courseWeight)<0 || Number(cfg.courseWeight)>100 || !/^\d+(\.\d{1,2})?$/.test(cfg.courseWeight))) return "Course weight must be 0–100 with at most two decimal places.";
   if (cfg.maxScore !== "" && !(Number(cfg.maxScore) > 0 && Number(cfg.maxScore) <= 1000)) return "Max score must be greater than 0 and at most 1000.";
   if (cfg.passScore !== "" && Number(cfg.passScore) < 0) return "Passing score must be >= 0.";
   if (cfg.passScore !== "" && Number(cfg.passScore) > (cfg.maxScore !== "" ? Number(cfg.maxScore) : 10)) return "Passing score cannot exceed the max score.";
-  if (cfg.latePolicy !== "NOT_ALLOWED" && !cfg.endTime) return "End time is required when setting a late submission policy.";
   if (cfg.latePolicy === "ALLOWED_WITH_PENALTY") {
     const pct = Number(cfg.latePenaltyPercent);
     if (!(pct >= 1 && pct <= 100)) return "Late penalty percentage must be between 1% and 100%.";
   }
   if (Number(cfg.lateGraceMinutes) < 0) return "Grace period minutes must be >= 0.";
   if (cfg.latePolicy === "NOT_ALLOWED" && Number(cfg.lateGraceMinutes) > 0) return "Grace period can only be set when late submissions are allowed.";
+  if (cfg.peerReviewEnabled && cfg.peerReviewCount.trim() !== "") {
+    const count = Number(cfg.peerReviewCount);
+    if (!Number.isInteger(count) || count < 1 || count > 5) return "Number of peer reviewers must be between 1 and 5.";
+  }
   return null;
 }
 
@@ -208,15 +228,18 @@ export function buildExamRequest(title: string, duration: string, cfg: ExamConfi
   return {
     title: title.trim(),
     durationMinutes: Number(duration),
+    status: cfg.status || "PUBLISHED",
+    startTime: cfg.startTime ? (cfg.startTime.length === 16 ? `${cfg.startTime}:00` : cfg.startTime) : null,
+    endTime: cfg.endTime ? (cfg.endTime.length === 16 ? `${cfg.endTime}:00` : cfg.endTime) : null,
     isActive,
-    startTime: cfg.startTime || undefined,
-    endTime: cfg.endTime || undefined,
-    maxAttempts: Number(cfg.maxAttempts),
+    maxAttempts: cfg.maxAttempts.trim() === "" ? 1 : Number(cfg.maxAttempts),
     shuffleQuestions: cfg.shuffleQuestions,
     shuffleOptions: cfg.shuffleOptions,
     showAnswersAfterExam: cfg.showAnswersAfterExam,
     category: cfg.category || undefined,
-    passScore: cfg.passScore !== "" ? Number(cfg.passScore) : undefined,
+    // blank = 5 (capped at the max score when that is lower)
+    passScore: cfg.passScore !== "" ? Number(cfg.passScore) : Math.min(5, cfg.maxScore !== "" ? Number(cfg.maxScore) : 10),
+    courseWeight: cfg.courseWeight !== "" ? Number(cfg.courseWeight) : null,
     maxScore: cfg.maxScore !== "" ? Number(cfg.maxScore) : undefined,
     latePolicy: cfg.latePolicy || undefined,
     latePenaltyPercent:
@@ -234,9 +257,19 @@ export function buildExamRequest(title: string, duration: string, cfg: ExamConfi
     singleSession: cfg.singleSession,
     cameraProctoring: cfg.cameraProctoring,
     notifyOnViolation: cfg.notifyOnViolation,
+    // blank = default; the server ignores these once students have attempted the exam
+    headTurnAngleDeg: cfg.headTurnAngleDeg ? Number(cfg.headTurnAngleDeg) : null,
+    headTurnSeconds: cfg.headTurnSeconds ? Number(cfg.headTurnSeconds) : null,
+    fastSubmitPercent: cfg.fastSubmitPercent ? Number(cfg.fastSubmitPercent) : null,
     // null (not undefined) so that clearing the link on an existing exam is sent to the server
     courseId: cfg.courseId ? Number(cfg.courseId) : null,
     sectionId: cfg.sectionId ? Number(cfg.sectionId) : null,
     lessonId: cfg.lessonId ? Number(cfg.lessonId) : null,
+    // Tu danh gia / danh gia cheo
+    selfReviewEnabled: cfg.selfReviewEnabled,
+    peerReviewEnabled: cfg.peerReviewEnabled,
+    peerReviewCount: cfg.peerReviewCount.trim() === "" ? 2 : Number(cfg.peerReviewCount),
+    peerReviewAnonymous: cfg.peerReviewAnonymous,
+    peerReviewShowReference: cfg.peerReviewShowReference,
   };
 }

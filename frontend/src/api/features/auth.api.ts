@@ -1,11 +1,13 @@
 import axiosInstance from "../axios";
 import { normalizeAuthRolePayload } from "@/utils/rbac.utils";
 import {
+    type ChangePasswordRequest,
     type ForgotPasswordEmailRequest,
     type ForgotPasswordRequest,
     type LoginRequest,
     type LoginResponse,
     type RegisterRequest,
+    type UserSessionDTO,
 } from "../../types/features/auth";
 
 interface BackendAuthenticationResponse {
@@ -31,7 +33,7 @@ const AUTH_STORAGE_KEYS = [
     "viewRole",
 ];
 
-const mapAuthResponse = (data: BackendAuthenticationResponse): LoginResponse => {
+export const mapAuthResponse = (data: BackendAuthenticationResponse): LoginResponse => {
     const normalized = normalizeAuthRolePayload({
         role: data.role,
         roles: data.roles,
@@ -51,7 +53,7 @@ const mapAuthResponse = (data: BackendAuthenticationResponse): LoginResponse => 
     };
 };
 
-const clearAuthStorage = () => {
+export const clearAuthStorage = () => {
     AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
 };
 
@@ -60,7 +62,13 @@ export const authApi = {
         const response = await axiosInstance.post<BackendAuthenticationResponse>("/auth/login", {
             email: credentials.email,
             password: credentials.password,
+            rememberMe: Boolean(credentials.isRememberedMe),
         });
+        return mapAuthResponse(response.data);
+    },
+
+    refreshSession: async (): Promise<LoginResponse> => {
+        const response = await axiosInstance.post<BackendAuthenticationResponse>("/auth/refresh", {});
         return mapAuthResponse(response.data);
     },
 
@@ -70,6 +78,28 @@ export const authApi = {
         } finally {
             clearAuthStorage();
         }
+    },
+
+    changePassword: async (payload: ChangePasswordRequest): Promise<void> => {
+        await axiosInstance.post("/auth/change-password", payload);
+    },
+
+    listSessions: async (): Promise<UserSessionDTO[]> => {
+        const response = await axiosInstance.get<UserSessionDTO[]>("/auth/sessions");
+        return response.data;
+    },
+
+    revokeSession: async (sessionId: string): Promise<void> => {
+        await axiosInstance.delete(`/auth/sessions/${encodeURIComponent(sessionId)}`);
+    },
+
+    revokeOtherSessions: async (): Promise<{ revokedCount: number }> => {
+        const response = await axiosInstance.post<{ revokedCount: number }>("/auth/sessions/revoke-others");
+        return response.data;
+    },
+
+    revokeUserSessions: async (userId: number): Promise<void> => {
+        await axiosInstance.post(`/users/${userId}/revoke-sessions`);
     },
 
     register: async (data: RegisterRequest): Promise<void> => {

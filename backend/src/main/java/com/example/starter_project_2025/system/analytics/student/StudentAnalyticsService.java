@@ -4,7 +4,7 @@ import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course.CourseMyScoresService;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
-import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttempt;
 import com.example.starter_project_2025.system.rbac.user.User;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;

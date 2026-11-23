@@ -197,7 +197,7 @@ public abstract class BaseCrudServiceImpl<
         }
     }
 
-    private Specification<E> buildSearchSpec(String keyword) {
+    protected Specification<E> buildSearchSpec(String keyword) {
 
         if (keyword == null || keyword.isBlank()) return null;
 
