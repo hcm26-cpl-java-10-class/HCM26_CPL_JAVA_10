@@ -12,7 +12,7 @@ const source = fs.readFileSync(path.join(__dirname, "../src/pages/management/wor
 const compiled = ts.transpileModule(source, {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
 const scope = {exports:{}, Intl, Date};
 vm.runInNewContext(compiled, scope);
-const {charterProgressLabel, charterTimeZone, formatCharterDate} = scope.exports;
+const {charterProgressLabel, charterTimeZone, formatCharterDate, parseCoreHours, formatCoreHours, validateCoreHours} = scope.exports;
 const view = {
   progress:"NEEDS_REVIEW", contentComplete:true,
   charter:{mission:"Mission", definitionOfDone:"Tests", primaryChannel:"Slack", coreHours:"19–21", conflictResolution:"Discuss"},
@@ -64,5 +64,23 @@ test("legacy/invalid zones have an explicit UTC fallback", () => {
 test("missing or invalid timestamps are safe to render", () => {
   for (const value of [null, undefined, "", "not-a-date"]) {
     assert.equal(formatCharterDate(value, "Asia/Tokyo"), "Not available");
+  }
+});
+
+test("core hours are stored in weekday order and can be reopened for editing", () => {
+  const value = formatCoreHours({days: ["Fri", "Mon"], start: "19:00", end: "21:00"});
+  assert.equal(value, "Mon, Fri · 19:00–21:00");
+  assert.equal(formatCoreHours(parseCoreHours(value)), value);
+  assert.equal(validateCoreHours(value), null);
+  assert.equal(parseCoreHours("Mon–Fri, 19:00–21:00"), null);
+});
+
+test("core hours allow an empty draft but reject incomplete and overnight selections", () => {
+  assert.equal(validateCoreHours(""), null);
+  for (const value of [" · 19:00–21:00", "Mon · 19:00–", "Mon · –", "Mon · 24:00–23:00"]) {
+    assert.match(validateCoreHours(value), /at least one day/);
+  }
+  for (const end of ["19:00", "18:00"]) {
+    assert.match(validateCoreHours(formatCoreHours({days: ["Mon"], start: "19:00", end})), /later than start/);
   }
 });
