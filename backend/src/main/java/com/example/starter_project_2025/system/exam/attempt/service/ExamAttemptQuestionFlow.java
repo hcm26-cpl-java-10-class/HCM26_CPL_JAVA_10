@@ -145,7 +145,7 @@ class ExamAttemptQuestionFlow {
         );
     }
 
-    private boolean isPoolSnapshotStructurallyValid(
+    boolean isPoolSnapshotStructurallyValid(
             ExamPoolQuestion question
     ) {
         if (question == null

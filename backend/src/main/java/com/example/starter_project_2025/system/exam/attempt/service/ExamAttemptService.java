@@ -96,13 +96,13 @@ public class ExamAttemptService {
             try {
                 ExamQuestionPoolVersion pool = poolVersionRepository.findTopByExam_IdOrderByVersionNumberDesc(examId).orElse(null);
                 if (pool == null) {
-                    var questions = activeQuestions(exam);
+                    var questions = examAttemptQuestionFlow.activeQuestions(exam);
                     count = questions.size();
                     if (count == 0 || questions.stream().mapToInt(Question::getPoints).sum() <= 0)
                         reason = "This assessment has no valid questions yet.";
                 } else {
                     // Uses the same snapshot validation as start, without selecting or exposing questions.
-                    int available = (int) pool.getQuestions().stream().filter(this::isPoolSnapshotStructurallyValid).count();
+                    int available = (int) pool.getQuestions().stream().filter(examAttemptQuestionFlow::isPoolSnapshotStructurallyValid).count();
                     count = Boolean.TRUE.equals(pool.getRandomSelectionEnabled())
                             ? Optional.ofNullable(pool.getRandomQuestionCount()).orElse(0) : available;
                     if (count < 1 || count > available) reason = "This assessment's question pool is unavailable.";
@@ -120,7 +120,7 @@ public class ExamAttemptService {
         final int attemptsRemaining = remaining;
         List<ExamPreparationDTO.Attempt> summaries = attempts.stream()
                 .sorted(Comparator.comparingInt(ExamAttempt::getAttemptNumber).reversed())
-                .map(a -> new ExamPreparationDTO.Attempt(toSummary(a),
+                .map(a -> new ExamPreparationDTO.Attempt(examAttemptMappingFlow.toSummary(a),
                         resultAccessService.canStudentViewOwnSubmission(exam, a.getStatus())
                         || (resultAccessService.canStudentViewScore(exam)
                             && resultAccessService.canStudentViewAnswers(exam, a.getStatus(), attemptsRemaining))))
@@ -145,7 +145,7 @@ public class ExamAttemptService {
         if (!Boolean.TRUE.equals(attempt.getExam().getIsActive()))
             throw new ResourceNotFoundException("Assessment is unavailable");
         if (attempt.getStatus() == ExamAttemptStatus.IN_PROGRESS) expireIfOverdue(attempt.getId(), Instant.now());
-        return toResponse(attempt);
+        return examAttemptMappingFlow.toResponse(attempt);
     }
 
     public ExamAttemptDTO startOrResume(Long examId, Long studentId) {
