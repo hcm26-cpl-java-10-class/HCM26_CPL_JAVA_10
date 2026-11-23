@@ -236,7 +236,7 @@ export default function CertificateInsights() {
 
           <div>
             <h2 className="text-lg font-semibold">
-              Competency Heatmap
+              Skill Certification Overview
             </h2>
 
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
