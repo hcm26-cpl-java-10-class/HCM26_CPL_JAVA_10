@@ -22,5 +22,17 @@ export function learnerAssessmentReturnPath(value: unknown): string {
   } catch { return "/student/exams"; }
 }
 export function assessmentPreparationPath(examId: number, returnTo: unknown) {
+  const target = learnerAssessmentReturnPath(returnTo);
+  if (/^\/enrollments\/[1-9]\d*\/learn\/?(?:[?#]|$)/.test(target)) {
+    const url = new URL(target, "https://app.invalid");
+    url.searchParams.set("assessmentId", String(examId));
+    return url.pathname + url.search + url.hash;
+  }
   return `/student/exams/${examId}/prepare?returnTo=${encodeURIComponent(learnerAssessmentReturnPath(returnTo))}`;
+}
+
+export function courseMappingReturnPath(value: string | null, courseId: number): string {
+  const safe = assessmentReturnPath(value);
+  if (/^\/(courses|course-enrollments)\/[1-9]\d*\/?(?:[?#]|$)/.test(safe)) return safe;
+  return courseId > 0 ? `/courses/${courseId}#course-assessments` : "/courses";
 }

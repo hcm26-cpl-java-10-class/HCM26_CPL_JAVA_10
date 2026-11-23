@@ -80,7 +80,18 @@ class AssessmentLessonControllerTest {
         verifyNoInteractions(lessons,exams);
     }
     @Test void examLessonAcceptsFinalTest() {
-        assertEquals(ExamCategory.FINAL_TEST,controller.create(request(LessonContentType.EXAM,ExamCategory.FINAL_TEST)).assessment().getCategory());
+        var result=controller.create(request(LessonContentType.EXAM,ExamCategory.FINAL_TEST));
+        assertEquals(ExamCategory.FINAL_TEST,result.assessment().getCategory());
+        assertEquals(7L,result.assessment().getCourseId());
+        assertEquals(11L,result.assessment().getSectionId());
+        assertEquals(101L,result.assessment().getLessonId());
+    }
+    @Test void examLessonAcceptsMidterm() {
+        var result=controller.create(request(LessonContentType.EXAM,ExamCategory.MIDTERM));
+        assertEquals(ExamCategory.MIDTERM,result.assessment().getCategory());
+        assertEquals(7L,result.assessment().getCourseId());
+        assertEquals(11L,result.assessment().getSectionId());
+        assertEquals(101L,result.assessment().getLessonId());
     }
     @Test void assignmentLessonAcceptsAssignment() {
         assertEquals(ExamCategory.ASSIGNMENT,controller.create(request(LessonContentType.ASSIGNMENT,ExamCategory.ASSIGNMENT)).assessment().getCategory());

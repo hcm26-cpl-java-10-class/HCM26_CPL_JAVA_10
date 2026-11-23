@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { courseApi, type CourseSyllabusPreview } from "@/api/features/demo/course.api";
+import { syllabusExtrasApi } from "@/api/features/demo/syllabus-extras.api";
 import { categoryApi } from "@/api/features/demo/category.api";
 import { COURSE_LEVEL_OPTIONS, type CourseLevel } from "@/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,6 +25,7 @@ import SyllabusSourcePreviewPanel from "./SyllabusSourcePreviewPanel";
 import { flattenCategoryTree, recommendCategoryIds, recommendCourseLevel } from "./courseFromSyllabusSuggestions";
 import { usePermissions } from "@/hooks/usePermissions";
 import { readWorkspaceDraft, syncWorkspaceDraft, clearWorkspaceDraft } from "./SyllabusCourseWorkspaceDraft";
+import { allSourceTopicIds, buildCourseOutline, scopeSignature, suggestFocusedCourseTitle, type CourseScopeMode } from "./courseFromSyllabusScope";
 
 type DraftLesson = { key: string; title: string };
 type DraftSection = { key: string; title: string; lessons: DraftLesson[] };
@@ -32,14 +34,7 @@ const clean = (value: string) => value.trim().replace(/\s+/g, " ");
 const titleKey = (value: string) => clean(value).toLocaleLowerCase("vi");
 
 function makeDraft(source: CourseSyllabusPreview): DraftSection[] {
-  return source.sections.map((section) => ({
-    key: `source-section-${section.id}`,
-    title: section.title,
-    lessons: section.topics.map((topic) => ({
-      key: `source-topic-${topic.id}`,
-      title: topic.title,
-    })),
-  }));
+  return buildCourseOutline(source, "FULL", []);
 }
 
 function validateDraft(name: string, description: string, sections: DraftSection[]): string | null {
@@ -104,8 +99,17 @@ export default function CreateCourseFromSyllabusPage() {
     refetchOnWindowFocus: false, // preserve unsaved inline edits when switching windows
   });
   const source = sourceQuery.data;
+  // Existing Courses are advisory: multiple focused Courses may legitimately use one Syllabus.
+  const existingCoursesQuery = useQuery({
+    queryKey: ["syllabus-course-usage"],
+    queryFn: () => syllabusExtrasApi.courseUsage(),
+    enabled: validId && allowed && hasPermission("COURSE_READ"),
+    retry: false,
+  });
+  const linkedCourses = existingCoursesQuery.data?.find((row) => row.syllabusId === syllabusId)?.courses ?? [];
   const nameTouchedRef = useRef(false);
   const categoryTouchedRef = useRef(false);
+  const levelTouchedRef = useRef(false);
   const [nameStartAt, setNameStartAt] = useState(1);
   const suggestionQuery = useQuery({
     queryKey: ["syllabus-course-name-suggestion", syllabusId, nameStartAt],
@@ -114,8 +118,10 @@ export default function CreateCourseFromSyllabusPage() {
     retry: false,
   });
   const categoriesQuery = useQuery({
-    queryKey: ["course-creation-category-tree", "active"],
-    queryFn: () => hasPermission("CATEGORY_READ") ? categoryApi.getTree(true) : courseApi.getCatalogCategories(),
+    queryKey: ["course-creation-category-tree", hasPermission("CATEGORY_READ") ? "all-active" : "catalog-fallback"],
+    // /categories/tree?onlyActive=true prunes categories without published Courses.
+    // The Course creation form must also offer unused active categories.
+    queryFn: () => hasPermission("CATEGORY_READ") ? categoryApi.getTree(false) : courseApi.getCatalogCategories(),
     enabled: allowed && (hasPermission("CATEGORY_READ") || hasPermission("COURSE_READ")), retry: false,
   });
   const categoryOptions = useMemo(() => flattenCategoryTree(categoriesQuery.data ?? []), [categoriesQuery.data]);
@@ -129,6 +135,14 @@ export default function CreateCourseFromSyllabusPage() {
   const [expanded, setExpanded] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
+  const [scopeMode, setScopeMode] = useState<CourseScopeMode>("FULL");
+  const [selectedTopicIds, setSelectedTopicIds] = useState<number[]>([]);
+  const [appliedScopeSignature, setAppliedScopeSignature] = useState("FULL");
+  const [outlineEdited, setOutlineEdited] = useState(false);
+  const currentScopeSignature = scopeSignature(scopeMode, selectedTopicIds);
+  const scopePending = currentScopeSignature !== appliedScopeSignature;
+  const sourceTopicCount = source ? allSourceTopicIds(source).length : 0;
+  const selectedCount = scopeMode === "FULL" ? sourceTopicCount : selectedTopicIds.length;
 
   useEffect(() => {
     if (!source || initializedSyllabusId.current === source.syllabusId) return;
@@ -145,8 +159,13 @@ export default function CreateCourseFromSyllabusPage() {
     })) : makeDraft(source);
     nameTouchedRef.current = Boolean(restored?.nameCustomized);
     categoryTouchedRef.current = Boolean(restored?.categoryCustomized);
+    levelTouchedRef.current = Boolean(restored?.levelCustomized);
     setNameStartAt(1);
-    setCourseName(restored?.name ?? `${source.syllabusName} - Class 01`.slice(0, 150));
+    setScopeMode("FULL");
+    setSelectedTopicIds(allSourceTopicIds(source));
+    setAppliedScopeSignature("FULL");
+    setOutlineEdited(Boolean(restored));
+    setCourseName(restored?.name ?? `${source.syllabusName} - Course 01`.slice(0, 150));
     setCourseLevel(restored?.level ?? recommendCourseLevel(source.syllabusName, source.syllabusDescription).level);
     setCategoryIds(restored?.categoryIds ?? []);
     setDescription((restored?.description ?? source.syllabusDescription ?? "").slice(0, 500));
@@ -157,8 +176,11 @@ export default function CreateCourseFromSyllabusPage() {
   }, [source]);
 
   useEffect(() => {
-    if (suggestionQuery.data && !nameTouchedRef.current) setCourseName(suggestionQuery.data.name);
-  }, [suggestionQuery.data]);
+    // A delayed server name suggestion must never overwrite a focused title or manual edit.
+    if (scopeMode === "FULL" && suggestionQuery.data && !nameTouchedRef.current) {
+      setCourseName(suggestionQuery.data.name);
+    }
+  }, [suggestionQuery.data, scopeMode]);
 
   useEffect(() => {
     if (!source || !categoriesQuery.data || categoryTouchedRef.current) return;
@@ -176,7 +198,7 @@ export default function CreateCourseFromSyllabusPage() {
     retry: false,
   });
   const nameIsDuplicate = clean(courseName) === debouncedName && nameCheckQuery.data?.available === false;
-  const levelHint = source ? recommendCourseLevel(source.syllabusName, source.syllabusDescription).reason : "";
+  const levelHint = source ? recommendCourseLevel(courseName || source.syllabusName, source.syllabusDescription).reason : "";
   const categorySuggestions = source ? recommendCategoryIds(source.syllabusName, source.syllabusDescription, categoryOptions) : [];
   const selectedCategoryNames = categoryOptions.filter((cat) => categoryIds.includes(cat.id));
   const filteredCategories = categoryOptions.filter((cat) => `${cat.path} ${cat.code}`.toLowerCase().includes(categorySearch.toLowerCase()));
@@ -215,6 +237,7 @@ export default function CreateCourseFromSyllabusPage() {
   const updateSection = (key: string, fn: (section: DraftSection) => DraftSection) => {
     setDraftSections((current) => current.map((row) => row.key === key ? fn(row) : row));
     setDirty(true);
+    setOutlineEdited(true);
   };
   const moveSection = (index: number, direction: number) => {
     const nextIndex = index + direction;
@@ -225,6 +248,7 @@ export default function CreateCourseFromSyllabusPage() {
       return next;
     });
     setDirty(true);
+    setOutlineEdited(true);
   };
   const moveLesson = (sectionKey: string, index: number, direction: number) => {
     updateSection(sectionKey, (row) => {
@@ -240,13 +264,18 @@ export default function CreateCourseFromSyllabusPage() {
     clearWorkspaceDraft(syllabusId);
     const initial = makeDraft(source);
     setDraftSections(initial);
-    setCourseName(suggestionQuery.data?.name ?? `${source.syllabusName} - Class 01`.slice(0, 150));
+    setCourseName(suggestionQuery.data?.name ?? `${source.syllabusName} - Course 01`.slice(0, 150));
     nameTouchedRef.current = false;
     categoryTouchedRef.current = false;
+    levelTouchedRef.current = false;
     setCourseLevel(recommendCourseLevel(source.syllabusName, source.syllabusDescription).level);
     setCategoryIds(categorySuggestions);
     setDescription((source.syllabusDescription ?? "").slice(0, 500));
     setExpanded(initial.map((s) => s.key));
+    setScopeMode("FULL");
+    setSelectedTopicIds(allSourceTopicIds(source));
+    setAppliedScopeSignature("FULL");
+    setOutlineEdited(false);
     setShowValidation(false);
     setDirty(false);
   };
@@ -256,11 +285,53 @@ export default function CreateCourseFromSyllabusPage() {
     setDraftSections((s) => [...s, { key, title: "New Section", lessons: [{ key: nextKey(), title: "New Lesson" }] }]);
     setExpanded((s) => [...s, key]);
     setDirty(true);
+    setOutlineEdited(true);
+  };
+  const toggleTopic = (topicId: number, checked: boolean) => {
+    setSelectedTopicIds((current) => checked
+      ? [...new Set([...current, topicId])]
+      : current.filter((id) => id !== topicId));
+  };
+  const toggleSection = (topicIds: number[], checked: boolean) => {
+    setSelectedTopicIds((current) => checked
+      ? [...new Set([...current, ...topicIds])]
+      : current.filter((id) => !topicIds.includes(id)));
+  };
+  /** Apply selected source scope explicitly so manual Course edits are never silently overwritten. */
+  const applyScope = () => {
+    if (!source || createMutation.isPending || !scopePending) return;
+    const outline = buildCourseOutline(source, scopeMode, selectedTopicIds);
+    if (outline.length === 0) {
+      toast.error("Choose at least one Topic from the Syllabus.");
+      return;
+    }
+    if (outlineEdited && !window.confirm("Applying this scope will replace your edited Course Sections and Lessons. Continue?")) return;
+    setDraftSections(outline);
+    setExpanded(outline.map((section) => section.key));
+    setOutlineEdited(false);
+    setAppliedScopeSignature(currentScopeSignature);
+    setDirty(true);
+    const proposedName = scopeMode === "FOCUSED"
+      ? suggestFocusedCourseTitle(source, selectedTopicIds)
+      : null;
+    if (!nameTouchedRef.current) {
+      setCourseName(proposedName ?? suggestionQuery.data?.name ?? `${source.syllabusName} - Course 01`.slice(0, 150));
+    }
+    if (!levelTouchedRef.current) {
+      setCourseLevel(recommendCourseLevel(proposedName ?? source.syllabusName, source.syllabusDescription).level);
+    }
+    if (!categoryTouchedRef.current) {
+      setCategoryIds(recommendCategoryIds(proposedName ?? source.syllabusName, source.syllabusDescription, categoryOptions));
+    }
   };
   const confirmLeaving = () => !dirty || window.confirm("Discard unsaved Course preview changes?");
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setShowValidation(true);
+    if (scopePending) {
+      toast.error("Apply the selected Syllabus scope to Course Preview before creating the Course.");
+      return;
+    }
     if (courseError || nameIsDuplicate || createMutation.isPending || !source) return;
     createMutation.mutate();
   };
@@ -288,8 +359,17 @@ export default function CreateCourseFromSyllabusPage() {
           <div className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">Loading the active Syllabus outline...</div>
         ) : (
           <form onSubmit={submit} className="space-y-5">
+            {linkedCourses.length > 0 && <div className="rounded-xl border bg-card px-4 py-3 text-sm" role="status">
+              <p className="font-medium">This Syllabus is linked to {linkedCourses.length} existing Course{linkedCourses.length === 1 ? "" : "s"}.</p>
+              <p className="mt-1 text-xs text-muted-foreground">You can create a different Course from this source. Review existing Courses first to avoid accidental duplicates.</p>
+              <div className="mt-2 flex flex-wrap gap-2">{linkedCourses.slice(0, 4).map((linked) => <Link key={linked.id} to={`/courses/${linked.id}`} target="_blank" rel="noreferrer" className="rounded-md border px-2 py-1 text-xs hover:bg-accent">{linked.name} ({linked.status})</Link>)}{linkedCourses.length > 4 && <span className="text-xs text-muted-foreground">+{linkedCourses.length - 4} more</span>}</div>
+            </div>}
             <div className="grid min-w-0 items-start gap-4 lg:grid-cols-2">
-              <SyllabusSourcePreviewPanel source={source} syllabusId={syllabusId} />
+              <SyllabusSourcePreviewPanel source={source} syllabusId={syllabusId}
+                scopeMode={scopeMode} onScopeModeChange={setScopeMode}
+                selectedTopicIds={selectedTopicIds} onToggleTopic={toggleTopic} onToggleSection={toggleSection}
+                selectedCount={selectedCount} scopePending={scopePending} onApplyScope={applyScope}
+                selectionDisabled={createMutation.isPending} />
               <section className="min-w-0 space-y-4 rounded-xl border bg-card p-4" aria-label="Editable Course preview">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h2 className="flex items-center gap-2 text-base font-semibold"><BookPlus className="size-4"/> New Course</h2>
@@ -314,7 +394,7 @@ export default function CreateCourseFromSyllabusPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="min-w-0 space-y-1.5">
                     <label htmlFor="course-from-syllabus-level" className="text-sm font-medium">Course Level</label>
-                    <Select value={courseLevel} onValueChange={(value) => { setCourseLevel(value as CourseLevel); setDirty(true); }}>
+                    <Select value={courseLevel} onValueChange={(value) => { levelTouchedRef.current = true; setCourseLevel(value as CourseLevel); setDirty(true); }}>
                       <SelectTrigger id="course-from-syllabus-level" className="w-full"><SelectValue placeholder="Choose difficulty"/></SelectTrigger>
                       <SelectContent>{COURSE_LEVEL_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                     </Select>
@@ -362,6 +442,7 @@ export default function CreateCourseFromSyllabusPage() {
                     <RotateCcw className="size-3.5" /> Reset
                   </Button>
                 </div>
+                {scopePending && <div className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs" role="status">You changed the Syllabus scope. Apply it in the left panel before creating the Course. Existing manual edits are kept until you confirm replacement.</div>}
                 <p className="mb-3 text-xs text-muted-foreground">{draftSections.length} Sections • {lessonCount} Lessons. Change titles and order, add or remove rows.</p>
                 <div className="space-y-3">
                   {draftSections.map((section, index) => {
@@ -377,7 +458,7 @@ export default function CreateCourseFromSyllabusPage() {
                             onChange={(event) => updateSection(section.key, (s) => ({ ...s, title: event.target.value }))} className="min-w-0 flex-1 font-semibold" />
                           <button type="button" className={iconButton} disabled={index === 0 || createMutation.isPending} onClick={() => moveSection(index, -1)} aria-label={`Move Section ${index + 1} up`} title="Move up"><ArrowUp className="size-4" /></button>
                           <button type="button" className={iconButton} disabled={index === draftSections.length - 1 || createMutation.isPending} onClick={() => moveSection(index, 1)} aria-label={`Move Section ${index + 1} down`} title="Move down"><ArrowDown className="size-4" /></button>
-                          <button type="button" className={`${iconButton} hover:text-destructive`} disabled={createMutation.isPending} onClick={() => { setDraftSections((rows) => rows.filter((row) => row.key !== section.key)); setDirty(true); }} aria-label={`Remove Section ${index + 1}`} title="Remove Section"><Trash2 className="size-4" /></button>
+                          <button type="button" className={`${iconButton} hover:text-destructive`} disabled={createMutation.isPending} onClick={() => { setDraftSections((rows) => rows.filter((row) => row.key !== section.key)); setDirty(true); setOutlineEdited(true); }} aria-label={`Remove Section ${index + 1}`} title="Remove Section"><Trash2 className="size-4" /></button>
                         </div>
                         {isExpanded && <div className="space-y-2 p-3">
                           {section.lessons.map((lesson, lessonIndex) => (
@@ -411,7 +492,7 @@ export default function CreateCourseFromSyllabusPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button type="button" variant="outline" disabled={createMutation.isPending} onClick={() => { if (confirmLeaving()) navigate(`/syllabuses/${syllabusId}`); }}>Cancel</Button>
-                  <Button type="submit" disabled={createMutation.isPending || Boolean(courseError) || nameIsDuplicate}>
+                  <Button type="submit" disabled={createMutation.isPending || Boolean(courseError) || nameIsDuplicate || scopePending}>
                     <BookPlus className="size-4" /> {createMutation.isPending ? "Creating Course..." : "Create Draft Course"}
                   </Button>
                 </div>

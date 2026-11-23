@@ -5,6 +5,8 @@ import { Provider } from "react-redux";
 import App from "./App";
 import "./index.css";
 import { store } from "./store/store";
+import { setAuthInitialized, setLogin } from "./store/slices/auth/authSlice";
+import { installAuthTabSessionBridge } from "./store/slices/auth/authTabSession";
 
 export const queryClient = new QueryClient();
 
@@ -29,6 +31,11 @@ const initializeTheme = () => {
 };
 
 initializeTheme();
+installAuthTabSessionBridge(
+  () => store.getState().auth,
+  (session) => store.dispatch(setLogin(session)),
+  () => store.dispatch(setAuthInitialized()),
+);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

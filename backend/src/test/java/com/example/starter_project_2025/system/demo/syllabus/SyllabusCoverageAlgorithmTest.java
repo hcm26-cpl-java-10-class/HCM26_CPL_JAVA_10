@@ -6,6 +6,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
+import com.example.starter_project_2025.system.demo.syllabus.service.SyllabusCoverageAlgorithm;
 
 class SyllabusCoverageAlgorithmTest {
     @Test

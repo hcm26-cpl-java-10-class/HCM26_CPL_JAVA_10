@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { toast } from "sonner";
-import { BookCopy, BookOpen, Eye } from "lucide-react";
+import { BookCopy, BookOpen, Eye, Sparkles } from "lucide-react";
 
 import {
   syllabusApi,
@@ -11,6 +11,7 @@ import {
 } from "@/api/features/demo/syllabus.api";
 import { syllabusExtrasApi } from "@/api/features/demo/syllabus-extras.api";
 import { MainLayout } from "@/components/layout/MainLayout";
+import SyllabusAiGenerator from "./SyllabusAiGenerator";
 import { FormModal } from "@/components/datatable/modal/form/FormModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -88,6 +89,7 @@ export default function SyllabusTemplatesPage() {
   const canCreate = hasPermission("SYLLABUS_CREATE");
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const [aiMode, setAiMode] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(0);
@@ -145,6 +147,13 @@ export default function SyllabusTemplatesPage() {
     }
   }
 
+  if (aiMode) {
+    return <MainLayout pathName={{ syllabuses: "Syllabuses", templates: "Syllabus Templates", ai: "AI Generator" }}
+      pathLinks={{ syllabuses: "/syllabuses", templates: "/syllabuses/templates" }}>
+      <SyllabusAiGenerator onClose={() => setAiMode(false)} />
+    </MainLayout>;
+  }
+
   return (
     <MainLayout pathName={{ syllabuses: "Syllabuses", templates: "Syllabus Templates" }}
       pathLinks={{ syllabuses: "/syllabuses" }}>
@@ -156,9 +165,14 @@ export default function SyllabusTemplatesPage() {
               Reuse an existing Syllabus to create an independent Draft with CLOs, Sections, Topics and Materials.
             </p>
           </div>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/syllabuses"><BookOpen className="size-4" /> Syllabuses</Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {canCreate && <Button size="sm" onClick={() => setAiMode(true)}>
+              <Sparkles className="size-4" /> Generate with AI
+            </Button>}
+            <Button asChild variant="outline" size="sm">
+              <Link to="/syllabuses"><BookOpen className="size-4" /> Syllabuses</Link>
+            </Button>
+          </div>
         </header>
 
         <SyllabusListToolbar

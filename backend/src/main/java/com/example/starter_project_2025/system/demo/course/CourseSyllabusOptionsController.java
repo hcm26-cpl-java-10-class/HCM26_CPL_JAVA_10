@@ -1,9 +1,9 @@
 package com.example.starter_project_2025.system.demo.course;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
-import com.example.starter_project_2025.system.demo.syllabus.Syllabus;
-import com.example.starter_project_2025.system.demo.syllabus.SyllabusRepository;
-import com.example.starter_project_2025.system.demo.syllabus.SyllabusStatus;
+import com.example.starter_project_2025.system.demo.syllabus.entity.Syllabus;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusRepository;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;

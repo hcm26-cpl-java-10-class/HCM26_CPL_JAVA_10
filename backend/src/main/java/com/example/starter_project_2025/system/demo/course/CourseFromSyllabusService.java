@@ -9,7 +9,6 @@ import com.example.starter_project_2025.system.demo.lesson.LessonDTO;
 import com.example.starter_project_2025.system.demo.lesson.LessonService;
 import com.example.starter_project_2025.system.demo.section.SectionDTO;
 import com.example.starter_project_2025.system.demo.section.SectionService;
-import com.example.starter_project_2025.system.demo.syllabus.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -21,6 +20,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import com.example.starter_project_2025.system.demo.syllabus.entity.Syllabus;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusRepository;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusSection;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusSectionRepository;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusStatus;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusTopic;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusTopicRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -62,12 +68,12 @@ public class CourseFromSyllabusService {
             throw new BusinessValidationException(Map.of("startAt", List.of("Choose a sequence from 1 to 9999")));
         }
         for (int sequence = startAt; sequence <= 9999; sequence++) {
-            String suffix = String.format(Locale.ROOT, " - Class %02d", sequence);
+            String suffix = String.format(Locale.ROOT, " - Course %02d", sequence);
             String name = clean(source.getName());
             name = name.substring(0, Math.min(name.length(), 150 - suffix.length())).stripTrailing() + suffix;
             if (!courses.existsByName(name)) return new NameSuggestion(name, sequence);
         }
-        throw new BusinessValidationException(Map.of("name", List.of("No available class name; enter a custom name")));
+        throw new BusinessValidationException(Map.of("name", List.of("No available Course name; enter a custom name")));
     }
 
     @Transactional(readOnly = true)

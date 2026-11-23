@@ -55,7 +55,7 @@ beforeEach(() => {
 function renderApp(path: string, permissions = rights, role = "ADMIN") {
     window.history.replaceState({}, "", path);
     const store = configureStore({ reducer: { auth: authReducer }, preloadedState: { auth: {
-        ...authReducer(undefined, { type: "init" }), isAuthenticated: true, token: "test", role, roles: [role],
+        ...authReducer(undefined, { type: "init" }), isAuthenticated: true, isAuthInitialized: true, token: "test", role, roles: [role],
         permissions, rolePermissions: { [role]: permissions },
     } } });
     const user = userEvent.setup();
