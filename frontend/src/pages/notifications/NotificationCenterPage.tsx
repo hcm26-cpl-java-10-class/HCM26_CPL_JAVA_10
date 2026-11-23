@@ -15,7 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { NotificationCategory, NotificationDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, CheckCheck, Settings2, Trash2 } from "lucide-react";
+import { Bell, BookOpen, CheckCheck, ClipboardCheck, FolderKanban, Settings2, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -26,6 +26,12 @@ const CATEGORY_LABEL: Record<NotificationCategory, string> = {
   PROJECT: "Projects",
   SYSTEM: "System",
 };
+const CATEGORY_ICON = {
+  EXAM: ClipboardCheck,
+  COURSE: BookOpen,
+  PROJECT: FolderKanban,
+  SYSTEM: Bell,
+} as const;
 const CATEGORY_ORDER: NotificationCategory[] = ["EXAM", "COURSE", "PROJECT", "SYSTEM"];
 const PAGE_SIZE = 15;
 
@@ -127,16 +133,21 @@ export default function NotificationCenterPage() {
     if (n.targetUrl?.startsWith("/")) navigate(n.targetUrl);
   };
 
+  const total = data?.unreadCount ?? 0;
+  const empty = !query.isLoading && data && data.items.length === 0;
+
   return (
     <MainLayout pathName={{ notifications: "Notifications" }}>
-      <div className="mx-auto max-w-3xl space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="w-full space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold">Notifications</h1>
-            <p className="text-sm text-muted-foreground">{data?.unreadCount ?? 0} unread</p>
+            <h1 className="text-2xl font-semibold">Notifications</h1>
+            <p className="text-sm text-muted-foreground">
+              {total > 0 ? `You have ${total} unread notification${total > 1 ? "s" : ""}.` : "You are all caught up."}
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" disabled={!data?.unreadCount || markAllRead.isPending} onClick={() => markAllRead.mutate()}>
+            <Button variant="outline" size="sm" disabled={!total || markAllRead.isPending} onClick={() => markAllRead.mutate()}>
               <CheckCheck className="mr-1 size-4" /> Mark all read
             </Button>
             <Button variant="outline" size="sm" disabled={removeRead.isPending} onClick={() => removeRead.mutate()}>
@@ -148,74 +159,114 @@ export default function NotificationCenterPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Notification filters">
-          <Button size="sm" variant={category === undefined ? "default" : "outline"} onClick={() => pick(undefined)}>
-            All
-          </Button>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {CATEGORY_ORDER.map((c) => {
             const unread = data?.unreadByCategory?.[c] ?? 0;
+            const Icon = CATEGORY_ICON[c];
             return (
-              <Button key={c} size="sm" variant={category === c ? "default" : "outline"} onClick={() => pick(c)}>
-                {CATEGORY_LABEL[c]}
-                {unread > 0 && (
-                  <span className="ml-1.5 rounded-full bg-red-500 px-1.5 text-[10px] font-semibold leading-4 text-white">{unread}</span>
+              <button
+                key={c}
+                type="button"
+                onClick={() => pick(category === c ? undefined : c)}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl border bg-card p-4 text-left transition-colors hover:bg-accent",
+                  category === c && "border-primary ring-1 ring-primary",
                 )}
-              </Button>
+              >
+                <span className="flex size-10 items-center justify-center rounded-lg bg-muted">
+                  <Icon className="size-5 text-muted-foreground" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-2xl font-semibold leading-none">{unread}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">Unread · {CATEGORY_LABEL[c]}</span>
+                </span>
+              </button>
             );
           })}
-          <label className="ml-auto flex items-center gap-2 text-sm">
-            <Switch checked={unreadOnly} onCheckedChange={(v) => { setUnreadOnly(v); setPage(0); }} aria-label="Unread only" />
-            Unread only
-          </label>
         </div>
 
-        {query.isError && !data ? (
-          <ApiErrorState error={query.error} onRetry={() => void query.refetch()} />
-        ) : query.isLoading ? (
-          <div className="space-y-2">
-            {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
-          </div>
-        ) : data && data.items.length > 0 ? (
-          <ul className="divide-y rounded-lg border">
-            {data.items.map((n) => (
-              <li key={n.id} className={cn("flex items-start gap-3 px-4 py-3", !n.read && "bg-blue-50/70 dark:bg-blue-950/20")}>
-                <span className={cn("mt-2 size-2 shrink-0 rounded-full", n.read ? "bg-transparent" : "bg-blue-600")} />
-                <button type="button" className="min-w-0 flex-1 text-left" onClick={() => open(n)}>
-                  <span className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{n.title}</span>
-                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                      {CATEGORY_LABEL[categoryOf(n)]}
-                    </span>
-                  </span>
-                  <span className="mt-0.5 block text-sm text-muted-foreground">{n.message}</span>
-                  <span className="mt-1 block text-[11px] text-muted-foreground">{new Date(n.createdAt).toLocaleString()}</span>
-                </button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Delete notification"
-                  disabled={remove.isPending}
-                  onClick={() => remove.mutate(n.id)}
-                >
-                  <Trash2 className="size-4 text-muted-foreground" />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
-            <Bell className="size-6" />
-            {unreadOnly || category ? "No notifications match this filter." : "You have no notifications yet."}
-          </div>
-        )}
+        <div>
+          <section className="flex min-h-[32rem] flex-col rounded-xl border bg-card">
+            <div className="flex items-center justify-between gap-3 border-b px-5 py-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                {category ? CATEGORY_LABEL[category] : "All notifications"}
+                {category && (
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => pick(undefined)}>
+                    Clear filter
+                  </Button>
+                )}
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                Unread only
+                <Switch checked={unreadOnly} onCheckedChange={(v) => { setUnreadOnly(v); setPage(0); }} aria-label="Unread only" />
+              </label>
+            </div>
+            {query.isError && !data ? (
+              <div className="flex-1"><ApiErrorState error={query.error} onRetry={() => void query.refetch()} /></div>
+            ) : query.isLoading ? (
+              <div className="space-y-2 p-4">
+                {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
+              </div>
+            ) : empty ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center">
+                <span className="flex size-16 items-center justify-center rounded-full bg-muted">
+                  <Bell className="size-8 text-muted-foreground" />
+                </span>
+                <h2 className="text-lg font-semibold">
+                  {unreadOnly || category ? "Nothing matches this filter" : "No notifications yet"}
+                </h2>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  {unreadOnly || category
+                    ? "Try another category or turn off “Unread only”."
+                    : "Exam results, course updates and project deadlines will show up here as they happen."}
+                </p>
+                <div className="flex gap-2">
+                  {(unreadOnly || category) && (
+                    <Button size="sm" onClick={() => { setUnreadOnly(false); pick(undefined); }}>Show everything</Button>
+                  )}
+                  <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}>
+                    <Settings2 className="mr-1 size-4" /> Notification settings
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <ul className="flex-1 divide-y">
+                {data?.items.map((n) => (
+                  <li key={n.id} className={cn("flex items-start gap-3 px-5 py-4", !n.read && "bg-blue-50/70 dark:bg-blue-950/20")}>
+                    <span className={cn("mt-2 size-2 shrink-0 rounded-full", n.read ? "bg-transparent" : "bg-blue-600")} />
+                    <button type="button" className="min-w-0 flex-1 text-left" onClick={() => open(n)}>
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium">{n.title}</span>
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                          {CATEGORY_LABEL[categoryOf(n)]}
+                        </span>
+                      </span>
+                      <span className="mt-0.5 block text-sm text-muted-foreground">{n.message}</span>
+                      <span className="mt-1 block text-[11px] text-muted-foreground">{new Date(n.createdAt).toLocaleString()}</span>
+                    </button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Delete notification"
+                      disabled={remove.isPending}
+                      onClick={() => remove.mutate(n.id)}
+                    >
+                      <Trash2 className="size-4 text-muted-foreground" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
 
-        {data && data.totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm">
-            <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>Previous</Button>
-            <span className="text-muted-foreground">Page {data.page + 1} of {data.totalPages}</span>
-            <Button variant="outline" size="sm" disabled={page + 1 >= data.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
-          </div>
-        )}
+            {data && data.totalPages > 1 && (
+              <div className="flex items-center justify-between border-t px-5 py-3 text-sm">
+                <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>Previous</Button>
+                <span className="text-muted-foreground">Page {data.page + 1} of {data.totalPages}</span>
+                <Button variant="outline" size="sm" disabled={page + 1 >= data.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+              </div>
+            )}
+          </section>
+        </div>
       </div>
       <PreferencesDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </MainLayout>
