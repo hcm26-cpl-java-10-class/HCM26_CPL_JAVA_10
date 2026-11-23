@@ -1,3 +1,4 @@
+import { formatDateNow } from "@/i18n/format";
 import { enrollmentApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +26,7 @@ const checklistItems = [
 
 const formatEnrollmentDate = (value: string) => {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("vi-VN");
+  return Number.isNaN(date.getTime()) ? value : formatDateNow(date);
 };
 
 export default function StudentLandingPage() {

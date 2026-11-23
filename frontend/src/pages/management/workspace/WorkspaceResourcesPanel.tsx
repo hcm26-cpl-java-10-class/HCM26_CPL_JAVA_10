@@ -1,3 +1,4 @@
+import { formatDateTimeNow } from "@/i18n/format";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { workspaceApi } from "@/api/features/workspace.api";
@@ -44,7 +45,7 @@ function humanSize(bytes: number) {
 function formatDate(value?: string | null) {
   if (!value) return "Not available";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Not available" : date.toLocaleString("en-GB");
+  return Number.isNaN(date.getTime()) ? "Not available" : formatDateTimeNow(date);
 }
 
 /**

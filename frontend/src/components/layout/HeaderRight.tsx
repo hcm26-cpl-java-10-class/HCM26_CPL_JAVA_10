@@ -1,4 +1,6 @@
 import ToggleTheme from "@/components/ToggleTheme";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { useTranslation } from "react-i18next";
 import { startTransition, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge.tsx";
 import type { RootState } from "@/store/store";
@@ -21,6 +23,7 @@ export default function HeaderRight() {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const primaryRole = normalizeRole(role);
   const assignedRoles = uniqueRoles(roles, primaryRole);
@@ -44,6 +47,7 @@ export default function HeaderRight() {
   if (!role) {
     return (
       <div className="flex items-center gap-3">
+        <LanguageSwitcher />
         <ToggleTheme />
       </div>
     );
@@ -60,6 +64,8 @@ export default function HeaderRight() {
         </Badge>
 
         <NotificationBell key={email} />
+        <LanguageSwitcher />
+        <NotificationBell />
         <ToggleTheme />
       </div>
     );
@@ -108,7 +114,7 @@ export default function HeaderRight() {
           ) : (
             <ShieldCheck size={14} />
           )}
-          <span>{formatRoleLabel(currentRole)} View</span>
+          <span>{t("{{role}} View", { role: formatRoleLabel(currentRole) })}</span>
           <ChevronDown
             size={13}
             className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}
@@ -134,7 +140,7 @@ export default function HeaderRight() {
                     }`}
                 >
                   {studentRow ? <GraduationCap size={15} /> : <ShieldCheck size={15} />}
-                  {formatRoleLabel(availableRole)} View
+                  {t("{{role}} View", { role: formatRoleLabel(availableRole) })}
                   {(selected || !isAssignedRole) && (
                     <span className="ml-auto flex items-center gap-2">
                       {selected && (
@@ -162,6 +168,8 @@ export default function HeaderRight() {
         </Badge>
       )}
 
+      <LanguageSwitcher />
+        <NotificationBell />
       <NotificationBell key={email} />
       <ToggleTheme />
     </div >

@@ -1,3 +1,4 @@
+import { formatDateTimeNow } from "@/i18n/format";
 import { Badge } from "@/components/ui/badge";
 import type { BacklogCounts, ReportStatus } from "@/types/features/project-report";
 import { statusColors, statusLabels } from "./report-utils";
@@ -28,13 +29,13 @@ export function BacklogSummary({ counts, expanded = false }: { counts: BacklogCo
     <dl className={"grid grid-cols-2 gap-2.5 " + (counts.other ? "@[640px]/reports:grid-cols-3" : "@[640px]/reports:grid-cols-4")}>
       {entries.map(entry => <div key={entry.label} className={"min-w-0 rounded-lg border p-3 " + entry.style}>
         <dt className="flex items-center justify-between gap-1.5 text-[11px] font-medium"><span>{entry.label}</span><span aria-hidden="true" className={"size-2 shrink-0 rounded-full " + entry.color} /></dt>
-        <dd className="mt-2.5 text-[26px] font-semibold leading-none tracking-tight tabular-nums">{entry.value.toLocaleString("vi-VN")}</dd><dd className="mt-1.5 text-[10px] leading-4 opacity-75">{entry.note}</dd>
+        <dd className="mt-2.5 text-[26px] font-semibold leading-none tracking-tight tabular-nums">{formatDateTimeNow(entry.value)}</dd><dd className="mt-1.5 text-[10px] leading-4 opacity-75">{entry.note}</dd>
       </div>)}
     </dl>
   </div>;
   return <dl className="flex min-w-48 flex-wrap gap-x-3 gap-y-1.5">
     {entries.map(entry => <div key={entry.label} className="flex items-center gap-1.5 text-[11px]">
-      <span aria-hidden="true" className={"size-1.5 shrink-0 rounded-full " + entry.color} /><dt className="text-muted-foreground">{entry.label}</dt><dd className="font-semibold tabular-nums">{entry.value.toLocaleString("vi-VN")}</dd>
+      <span aria-hidden="true" className={"size-1.5 shrink-0 rounded-full " + entry.color} /><dt className="text-muted-foreground">{entry.label}</dt><dd className="font-semibold tabular-nums">{formatDateTimeNow(entry.value)}</dd>
     </div>)}
   </dl>;
 }

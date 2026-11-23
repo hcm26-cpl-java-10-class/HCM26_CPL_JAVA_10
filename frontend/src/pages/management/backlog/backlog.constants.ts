@@ -1,3 +1,4 @@
+import { formatDateCustomNow } from "@/i18n/format";
 import type {
   BacklogPriority,
   BacklogStatus,
@@ -191,7 +192,7 @@ const shortDate = (value?: string | null) => {
     return "";
   }
 
-  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return formatDateCustomNow(date, { day: "numeric", month: "short" });
 };
 
 /** `24 Oct – 31 Oct`, the range shown next to the sprint name. */

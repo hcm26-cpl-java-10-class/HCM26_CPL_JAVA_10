@@ -3,15 +3,16 @@ import { ArrowLeft, CalendarClock, ChevronDown, ExternalLink, FileText, GitBranc
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArtifactReviewStatusBadge } from "@/pages/student/components/ArtifactReviewStatusBadge";
+import { formatDateTimeNow } from "@/i18n/format";
 import type { SubmissionDetail } from "@/types";
 import styles from "./SubmittedArtifactDetail.module.css";
 
-const date = (value?: string | null) => value ? new Date(value).toLocaleString() : "Not available";
+const date = (value?: string | null) => value ? formatDateTimeNow(value) : "Not available";
 
 function ReadOnlyText({ label, value }: { label: string; value?: string | null }) {
   return <section className="min-w-0 space-y-2">
     <h2 className="text-sm font-semibold">{label}</h2>
-    <div className={styles.text} tabIndex={value ? 0 : undefined} aria-label={label}>{value || "Not provided"}</div>
+    <div className={styles.text} tabIndex={value ? 0 : undefined} aria-label={label} data-no-translate>{value || "Not provided"}</div>
   </section>;
 }
 
@@ -22,7 +23,7 @@ function ArtifactLink({ label, url, repository = false }: { label: string; url?:
       <span className="flex min-w-0 items-center gap-2 text-sm font-semibold"><Icon className="size-4 shrink-0 text-blue-600" />{label}</span>
       {url && <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-blue-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-blue-500 dark:text-blue-300" aria-label={`Open ${label}`}><ExternalLink className="size-3.5" />Open link</a>}
     </div>
-    {url ? <details className="mt-2 min-w-0 text-xs"><summary className="group flex cursor-pointer list-none items-start gap-2 rounded-md bg-background/70 px-3 py-2 focus-visible:outline-2 focus-visible:outline-blue-500" aria-label={`Show full ${label} URL`}><ChevronDown className="mt-0.5 size-3 shrink-0 transition group-open:rotate-180" /><span className="min-w-0 flex-1"><span className="block truncate">{url}</span><span className="mt-1 block text-xs text-muted-foreground">Full URL</span></span></summary><p className="mt-2 select-text rounded-md border bg-background p-3 [overflow-wrap:anywhere]">{url}</p></details> : <p className="mt-2 text-sm text-muted-foreground">Not provided</p>}
+    {url ? <details className="mt-2 min-w-0 text-xs" data-no-translate><summary className="group flex cursor-pointer list-none items-start gap-2 rounded-md bg-background/70 px-3 py-2 focus-visible:outline-2 focus-visible:outline-blue-500" aria-label={`Show full ${label} URL`}><ChevronDown className="mt-0.5 size-3 shrink-0 transition group-open:rotate-180" /><span className="min-w-0 flex-1"><span className="block truncate">{url}</span><span className="mt-1 block text-xs text-muted-foreground">Full URL</span></span></summary><p className="mt-2 select-text rounded-md border bg-background p-3 [overflow-wrap:anywhere]">{url}</p></details> : <p className="mt-2 text-sm text-muted-foreground">Not provided</p>}
   </div>;
 }
 
@@ -56,7 +57,7 @@ export function SubmittedArtifactDetail({ item, onBack }: { item: SubmissionDeta
         <ReadOnlyText label="Release notes" value={product?.releaseNotes} />
         {!product && <p className="-mt-2 text-xs leading-5 text-muted-foreground">Separate release notes and attachment metadata are not available for this version.</p>}
         <section className="min-w-0 space-y-3"><h2 className="flex items-center gap-2 text-sm font-semibold"><GitBranch className="size-4 text-blue-600" />Source code and deployment</h2><ArtifactLink label="Repository" url={repository} repository /><ArtifactLink label="Deployment" url={deployment} />{otherLinks.map((link, index) => <ArtifactLink key={link.id ?? index} label={link.name || link.type.replaceAll("_", " ")} url={link.url} />)}{selected.submissionUrl && !links.some(link => link.url === selected.submissionUrl) && selected.submissionUrl !== repository && selected.submissionUrl !== deployment && <ArtifactLink label="Submission link" url={selected.submissionUrl} />}</section>
-        <section className="min-w-0 space-y-3"><h2 className="flex items-center gap-2 text-sm font-semibold"><Paperclip className="size-4 text-blue-600" />Attachments {attachments ? `(${attachments.length})` : ""}</h2>{attachments?.length ? <ul className="space-y-2">{attachments.map(file => <li key={file.id} className={styles.link}><div className="flex items-start gap-2"><FileText className="mt-0.5 size-4 shrink-0 text-blue-600" /><span className="min-w-0 text-sm font-medium [overflow-wrap:anywhere]">{file.fileName}</span></div><p className="mt-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">{file.contentType} · {file.sizeBytes.toLocaleString()} bytes</p></li>)}</ul> : <div className="grid justify-items-center gap-2 rounded-lg bg-muted/30 p-6 text-center text-sm text-muted-foreground"><Paperclip className="size-6 opacity-60" /><p>{attachments ? "No files attached to this artifact version." : "Attachment information is not available for this version."}</p></div>}</section>
+        <section className="min-w-0 space-y-3"><h2 className="flex items-center gap-2 text-sm font-semibold"><Paperclip className="size-4 text-blue-600" />Attachments {attachments ? `(${attachments.length})` : ""}</h2>{attachments?.length ? <ul className="space-y-2">{attachments.map(file => <li key={file.id} className={styles.link} data-no-translate><div className="flex items-start gap-2"><FileText className="mt-0.5 size-4 shrink-0 text-blue-600" /><span className="min-w-0 text-sm font-medium [overflow-wrap:anywhere]">{file.fileName}</span></div><p className="mt-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">{file.contentType} · {file.sizeBytes.toLocaleString()} bytes</p></li>)}</ul> : <div className="grid justify-items-center gap-2 rounded-lg bg-muted/30 p-6 text-center text-sm text-muted-foreground"><Paperclip className="size-6 opacity-60" /><p>{attachments ? "No files attached to this artifact version." : "Attachment information is not available for this version."}</p></div>}</section>
         {reviews.map(review => <section key={review.id} className="min-w-0 space-y-3 rounded-lg border border-blue-100 bg-blue-50/40 p-4 dark:border-blue-900 dark:bg-blue-950/20"><h2 className="flex items-center gap-2 text-sm font-semibold"><MessageSquare className="size-4 text-blue-600" />Reviewer feedback</h2><p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">{review.decision === "ACCEPT" ? "Accepted" : review.decision === "REJECT" ? "Rejected" : "Changes requested"}{review.reviewerName ? ` · ${review.reviewerName}` : ""}{review.reviewedAt ? ` · ${date(review.reviewedAt)}` : ""}</p><ReadOnlyText label="Overall feedback" value={review.overallFeedback} />{review.evaluations.filter(evaluation => evaluation.feedback).map(evaluation => <ReadOnlyText key={evaluation.criterionId} label={evaluation.criterionName} value={evaluation.feedback} />)}</section>)}
       </article>
       <aside className={styles.history} aria-label="Version history">

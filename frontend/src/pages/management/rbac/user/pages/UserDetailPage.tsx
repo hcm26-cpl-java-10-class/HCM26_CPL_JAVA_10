@@ -1,3 +1,4 @@
+import { formatDateTimeNow } from "@/i18n/format";
 import { departmentApi, roleApi, userApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { PermissionGate } from "@/components/PermissionGate";
@@ -15,7 +16,7 @@ import { extractServerErrors } from "../user-form.utils";
 function formatDate(value?: string): string {
   if (!value) return "-";
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleString("vi-VN");
+  return Number.isNaN(d.getTime()) ? value : formatDateTimeNow(d);
 }
 
 const STATUS_VARIANT: Record<UserStatus, "default" | "secondary" | "destructive"> = {
@@ -28,7 +29,8 @@ function Item({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid gap-1">
       <span className="font-medium text-muted-foreground">{label}</span>
-      <div>{children || "-"}</div>
+      {/* Giá trị lấy từ DB không được máy dịch. */}
+      <div data-no-translate>{children || "-"}</div>
     </div>
   );
 }
@@ -107,11 +109,11 @@ export function UserDetailPage() {
                 <Item label="Họ tên">
                   <span className="text-base font-semibold">{fullName}</span>
                 </Item>
-                <Item label="Username">{user?.username}</Item>
-                <Item label="Email">{user?.email}</Item>
-                <Item label="Mã nhân viên">{user?.employeeCode}</Item>
-                <Item label="Mã sinh viên">{user?.userCode || "Chưa được gán"}</Item>
-                <Item label="Số điện thoại">{user?.phone}</Item>
+                <Item label="Username" data-no-translate>{user?.username}</Item>
+                <Item label="Email" data-no-translate>{user?.email}</Item>
+                <Item label="Mã nhân viên" data-no-translate>{user?.employeeCode}</Item>
+                <Item label="Mã sinh viên" data-no-translate>{user?.userCode || "Chưa được gán"}</Item>
+                <Item label="Số điện thoại" data-no-translate>{user?.phone}</Item>
                 <Item label="Trạng thái">
                   <Badge variant={STATUS_VARIANT[status]}>{statusLabel}</Badge>
                 </Item>

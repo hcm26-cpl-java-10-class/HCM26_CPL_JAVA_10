@@ -1,3 +1,4 @@
+import { getCurrentLocale } from "@/i18n/format";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -17,7 +18,7 @@ type Report = {
 type Interval = "DAY" | "WEEK" | "MONTH";
 
 function vietnamToday(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  return new Intl.DateTimeFormat(getCurrentLocale(), { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
 function BarList({ items }: { items: { label: string; count: number }[] }) {

@@ -1,3 +1,4 @@
+import { getCurrentLocale } from "@/i18n/format";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { courseAnalyticsApi } from "@/api/features/demo/course-analytics.api";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,7 @@ type Props = {
 };
 
 const todayIso = () =>
-  new Intl.DateTimeFormat("en-CA", {
+  new Intl.DateTimeFormat(getCurrentLocale(), {
     timeZone: "Asia/Ho_Chi_Minh",
     year: "numeric",
     month: "2-digit",
