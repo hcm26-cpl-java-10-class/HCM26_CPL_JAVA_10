@@ -7,8 +7,10 @@ import java.util.List;
 /**
  * WS-GH-02: activity of a project's repository over a period ({@code from}..{@code to}, both
  * included, in the server time zone) plus the current state of its open pull requests.
- * {@code repositoryId} is null when no repository is linked: then every count is 0, {@code daily}
- * still lists each day of the period and the other lists are empty.
+ * {@code buckets} cover the whole period per {@code granularity} (DAY, WEEK or MONTH);
+ * {@code daily} lists each day only for periods up to about 90 days (empty for longer ones).
+ * {@code repositoryId} is null when no repository is linked: then every count is 0 and the other lists are empty.
+ * {@code truncated} is always false now that the period is counted in the database (kept for existing clients).
  */
 public record RepositoryInsightsView(
         Long repositoryId,
@@ -18,6 +20,8 @@ public record RepositoryInsightsView(
         LocalDateTime generatedAt,
         Summary summary,
         List<DailyActivity> daily,
+        String granularity,
+        List<ActivityBucket> buckets,
         List<ContributorStat> contributors,
         long otherContributors,
         List<BranchStat> branches,
@@ -31,6 +35,10 @@ public record RepositoryInsightsView(
     }
 
     public record DailyActivity(LocalDate date, long commits, long pullRequestsOpened, long pullRequestsMerged) {
+    }
+
+    /** Activity of one day, week or month of the period ({@code start}..{@code end}, both included). */
+    public record ActivityBucket(LocalDate start, LocalDate end, long commits, long pullRequestsOpened, long pullRequestsMerged) {
     }
 
     /**

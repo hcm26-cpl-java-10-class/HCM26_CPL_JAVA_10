@@ -85,6 +85,10 @@ public interface GitPullRequestRepository extends JpaRepository<GitPullRequest, 
         LocalDateTime getMergedAt();
     }
 
+    /** WS-GH-02: when the first synchronized pull request of the repositories was opened (start of "all time"). */
+    @Query("select min(p.githubCreatedAt) from GitPullRequest p where p.repositoryId in :repositoryIds")
+    LocalDateTime earliestOpenedAt(@Param("repositoryIds") Collection<Long> repositoryIds);
+
     /** WS-GH-02: pull requests opened in {@code [from, to)}. */
     @Query("""
             select p.authorLogin as authorLogin, p.authorGithubId as authorGithubId,

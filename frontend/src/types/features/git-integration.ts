@@ -623,7 +623,27 @@ export interface GitWebhookEventQuery {
 
 // ---- WS-GH-02: repository activity insights ------------------------------------------------------
 
-export type GitInsightsRange = "7d" | "30d" | "90d";
+/** WS-GH-02: fixed periods end today; `all` starts at the first synchronized activity; `custom` uses since..until. */
+export type GitInsightsRange = "7d" | "30d" | "90d" | "6m" | "1y" | "all" | "custom";
+
+/** WS-GH-02: the period of the insights; `since`/`until` (`YYYY-MM-DD`, both included) only go with `custom`. */
+export interface GitInsightsPeriod {
+  range: GitInsightsRange;
+  since?: string;
+  until?: string;
+}
+
+/** How the activity chart groups the days of the period (chosen by the server from its length). */
+export type GitInsightsGranularity = "DAY" | "WEEK" | "MONTH";
+
+/** Activity of one day, week or month of the period (`start`..`end`, both included). */
+export interface GitActivityBucket {
+  start: string;
+  end: string;
+  commits: number;
+  pullRequestsOpened: number;
+  pullRequestsMerged: number;
+}
 
 export interface GitDailyActivity {
   /** Local date `2026-11-19`. */
@@ -674,7 +694,12 @@ export interface GitRepositoryInsights {
     pullRequestsMerged: number;
     medianHoursToMerge: number | null;
   };
+  /** Every day for periods up to about 90 days; empty for longer ones (use `buckets`). */
   daily: GitDailyActivity[];
+  /** Absent from servers older than the long periods (treat as DAY). */
+  granularity?: GitInsightsGranularity;
+  /** The whole period per `granularity`; the first and last buckets are clipped to it. Absent from older servers. */
+  buckets?: GitActivityBucket[];
   contributors: GitContributorStat[];
   otherContributors: number;
   branches: GitBranchItem[];

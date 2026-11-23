@@ -6,11 +6,9 @@ import com.example.starter_project_2025.system.git_integration.domain.GitPullReq
 import com.example.starter_project_2025.system.git_integration.domain.GitPullRequestReview;
 import com.example.starter_project_2025.system.git_integration.domain.GitPullRequestState;
 import com.example.starter_project_2025.system.git_integration.domain.GitReviewState;
-import com.example.starter_project_2025.system.git_integration.service.RepositoryInsightsQueryService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.Clock;
@@ -35,7 +33,6 @@ class RepositoryInsightsIntegrationTest extends AbstractTaskLinkIntegrationTest 
     private static final AtomicLong IDS = new AtomicLong(1_000);
 
     @Autowired @Qualifier("gitIntegrationClock") Clock clock;
-    @Autowired RepositoryInsightsQueryService insightsService;
 
     private ResultActions insights(String token, Long projectId, String range) throws Exception {
         var request = get(BASE + "/insights", projectId).header("Authorization", "Bearer " + token);
@@ -114,10 +111,69 @@ class RepositoryInsightsIntegrationTest extends AbstractTaskLinkIntegrationTest 
                 .andExpect(jsonPath("$.from").value(today().minusDays(6).toString()))
                 .andExpect(jsonPath("$.to").value(today().toString()))
                 .andExpect(jsonPath("$.daily[0].date").value(today().minusDays(6).toString()));
-        insights(readerToken, masterId, "90d").andExpect(jsonPath("$.daily", hasSize(90)));
-        insights(readerToken, masterId, "1y")
+        insights(readerToken, masterId, "90d").andExpect(jsonPath("$.daily", hasSize(90)))
+                .andExpect(jsonPath("$.granularity").value("WEEK"));
+        insights(readerToken, masterId, "2y")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("GIT_INSIGHTS_RANGE_INVALID"));
+    }
+
+    @Test
+    void longPeriodsAreGroupedByWeekOrMonthAndCountEveryCommit() throws Exception {
+        LocalDate today = today();
+        storeCommit(noon(), "dev-a");
+        storeCommit(today.minusMonths(3).atTime(12, 0), "dev-a");
+        storeCommit(today.minusMonths(10).atTime(12, 0), "dev-b");
+        storeCommit(today.minusYears(3).atTime(12, 0), "dev-b");
+
+        insights(readerToken, masterId, "6m")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.range").value("6m"))
+                .andExpect(jsonPath("$.from").value(today.minusMonths(6).plusDays(1).toString()))
+                .andExpect(jsonPath("$.granularity").value("WEEK"))
+                .andExpect(jsonPath("$.daily", hasSize(0)))
+                .andExpect(jsonPath("$.summary.commits").value(2))
+                .andExpect(jsonPath("$.buckets[-1:].commits").value(1));
+        insights(readerToken, masterId, "1y")
+                .andExpect(jsonPath("$.granularity").value("MONTH"))
+                .andExpect(jsonPath("$.buckets[0].start").value(today.minusYears(1).plusDays(1).toString()))
+                .andExpect(jsonPath("$.buckets[-1:].end").value(today.toString()))
+                .andExpect(jsonPath("$.summary.commits").value(3))
+                .andExpect(jsonPath("$.summary.contributors").value(2))
+                .andExpect(jsonPath("$.truncated").value(false));
+        // "All time" starts at the first synchronized commit.
+        insights(readerToken, masterId, "all")
+                .andExpect(jsonPath("$.from").value(today.minusYears(3).toString()))
+                .andExpect(jsonPath("$.summary.commits").value(4))
+                .andExpect(jsonPath("$.contributors[?(@.login == 'dev-b')].commits").value(2));
+    }
+
+    @Test
+    void aCustomPeriodNeedsSinceAndUntilInOrderAndNotInTheFuture() throws Exception {
+        LocalDate today = today();
+        storeCommit(today.minusDays(40).atTime(12, 0), "dev-a");
+        storeCommit(today.minusDays(5).atTime(12, 0), "dev-a");
+        var custom = get(BASE + "/insights", masterId).header("Authorization", "Bearer " + readerToken)
+                .param("range", "custom").param("since", today.minusDays(45).toString()).param("until", today.minusDays(30).toString());
+        mvc.perform(custom)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.range").value("custom"))
+                .andExpect(jsonPath("$.from").value(today.minusDays(45).toString()))
+                .andExpect(jsonPath("$.to").value(today.minusDays(30).toString()))
+                .andExpect(jsonPath("$.granularity").value("DAY"))
+                .andExpect(jsonPath("$.daily", hasSize(16)))
+                .andExpect(jsonPath("$.summary.commits").value(1));
+
+        for (var invalid : java.util.List.of(
+                java.util.Map.of("range", "custom", "since", today.minusDays(5).toString()),
+                java.util.Map.of("range", "custom", "since", today.toString(), "until", today.minusDays(1).toString()),
+                java.util.Map.of("range", "custom", "since", today.toString(), "until", today.plusDays(1).toString()),
+                java.util.Map.of("range", "30d", "since", today.minusDays(5).toString()))) {
+            var request = get(BASE + "/insights", masterId).header("Authorization", "Bearer " + readerToken);
+            invalid.forEach(request::param);
+            mvc.perform(request).andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("GIT_INSIGHTS_RANGE_INVALID"));
+        }
     }
 
     @Test
@@ -250,21 +306,6 @@ class RepositoryInsightsIntegrationTest extends AbstractTaskLinkIntegrationTest 
                 .andExpect(jsonPath("$[0].commits").value(2));
         mvc.perform(get(BASE + "/branches", masterId).param("limit", "0").header("Authorization", "Bearer " + readerToken))
                 .andExpect(jsonPath("$", hasSize(1)));
-    }
-
-    @Test
-    void aPeriodWithMoreCommitsThanTheCapIsMarkedTruncated() throws Exception {
-        LocalDateTime now = noon();
-        for (int i = 0; i < 3; i++) storeCommit(now.minusMinutes(i), "dev-a");
-        Object previous = ReflectionTestUtils.getField(insightsService, "maxCommits");
-        ReflectionTestUtils.setField(insightsService, "maxCommits", 2);
-        try {
-            insights(readerToken, masterId, "7d")
-                    .andExpect(jsonPath("$.truncated").value(true))
-                    .andExpect(jsonPath("$.summary.commits").value(2));
-        } finally {
-            ReflectionTestUtils.setField(insightsService, "maxCommits", previous);
-        }
     }
 
     @Test

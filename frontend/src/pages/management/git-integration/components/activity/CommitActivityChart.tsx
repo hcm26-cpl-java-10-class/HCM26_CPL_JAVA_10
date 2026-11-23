@@ -1,6 +1,6 @@
 import { Bar, CartesianGrid, ComposedChart, ResponsiveContainer, Scatter, Tooltip, XAxis, YAxis } from "recharts";
-import type { GitDailyActivity, GitInsightsRange } from "@/types/features/git-integration";
-import { byDay, byWeek, shortDate, spanLabel, weekday, type ActivityBucket } from "../../insights.utils";
+import type { GitActivityBucket, GitInsightsGranularity } from "@/types/features/git-integration";
+import { monthLabel, monthLongLabel, periodLabel, shortDate, spanLabel, weekday, type ActivityBucket } from "../../insights.utils";
 import { CHART_COLORS } from "../git-integration.styles";
 
 interface Point extends ActivityBucket {
@@ -18,13 +18,29 @@ function plural(count: number, word: string) {
   return `${count} ${word}${count === 1 ? "" : "s"}`;
 }
 
-function ChartTooltip({ active, payload }: { active?: boolean; payload?: ReadonlyArray<{ payload?: Point }> }) {
+/** True when `from`..`to` is a whole calendar month (the edge months of a period are clipped). */
+function isWholeMonth(from: string, to: string) {
+  const [year, month, day] = to.split("-").map(Number);
+  return from.endsWith("-01") && from.slice(0, 7) === to.slice(0, 7) && new Date(year, month, 0).getDate() === day;
+}
+
+/** "Mon, 16 Nov", "Week of 10–16 Nov" or "November 2025" (with the days when the month is clipped). */
+function bucketLabel(point: ActivityBucket, granularity: GitInsightsGranularity) {
+  if (granularity === "DAY") return spanLabel(point.from, point.from);
+  if (granularity === "WEEK") return `Week of ${spanLabel(point.from, point.to)}`;
+  return isWholeMonth(point.from, point.to) ? monthLongLabel(point.from)
+    : `${monthLongLabel(point.from)} (${periodLabel(point.from, point.to)})`;
+}
+
+function ChartTooltip({ active, payload, granularity = "DAY" }: {
+  active?: boolean; payload?: ReadonlyArray<{ payload?: Point }>; granularity?: GitInsightsGranularity;
+}) {
   const point = active ? payload?.[0]?.payload : undefined;
   if (!point) return null;
   const prs = [point.pullRequestsOpened > 0 && `${point.pullRequestsOpened} opened`, point.pullRequestsMerged > 0 && `${point.pullRequestsMerged} merged`]
     .filter(Boolean).join(" · ");
   return <div className="rounded-md border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-sm">
-    <p className="font-medium">{point.from === point.to ? spanLabel(point.from, point.to) : `Week of ${spanLabel(point.from, point.to)}`}</p>
+    <p className="font-medium">{bucketLabel(point, granularity)}</p>
     <p className="mt-0.5 flex items-center gap-1.5 text-muted-foreground">
       <span className="size-2 rounded-[2px]" style={{ background: CHART_COLORS.bar }} aria-hidden="true" />{plural(point.commits, "commit")}
     </p>
@@ -41,22 +57,26 @@ function MergedDot({ cx, cy }: { cx?: number; cy?: number }) {
   return <circle cx={cx} cy={cy} r={4} fill={CHART_COLORS.merged} stroke={CHART_COLORS.surface} strokeWidth={2} />;
 }
 
+const UNIT: Record<GitInsightsGranularity, string> = { DAY: "day", WEEK: "week", MONTH: "month" };
+
 /**
- * WS-GH-02: commits per day (per week for 90 days) as columns, with a violet dot on the
- * days a pull request was merged. One axis, zero baseline; the whole column band is the
- * hit target and opens the commits of that day / week. A hidden table carries every value.
+ * WS-GH-02: commits per day, week or month (the server picks it from the length of the period) as
+ * columns, with a violet dot where a pull request was merged. One axis, zero baseline; the whole
+ * column band is the hit target and opens the commits of that span. A hidden table carries every value.
  */
-export function CommitActivityChart({ daily, range, onSelect }: {
-  daily: GitDailyActivity[];
-  range: GitInsightsRange;
+export function CommitActivityChart({ buckets, granularity, onSelect }: {
+  buckets: GitActivityBucket[];
+  granularity: GitInsightsGranularity;
   onSelect: (from: string, to: string) => void;
 }) {
-  const buckets = range === "90d" ? byWeek(daily) : byDay(daily);
-  const data: Point[] = buckets.map(bucket => ({ ...bucket, key: bucket.from, merged: bucket.pullRequestsMerged > 0 ? 0 : null }));
+  const data: Point[] = buckets.map(bucket => ({ from: bucket.start, to: bucket.end, commits: bucket.commits,
+    pullRequestsOpened: bucket.pullRequestsOpened, pullRequestsMerged: bucket.pullRequestsMerged,
+    key: bucket.start, merged: bucket.pullRequestsMerged > 0 ? 0 : null }));
   const empty = data.every(point => point.commits === 0);
-  const tick = (key: string) => range === "7d" ? weekday(key) : shortDate(key);
-  // Daily labels every 5 days for 30 days; 7 days and the 90-day weeks show every label.
-  const interval = range === "30d" ? 4 : 0;
+  const tick = (key: string) => granularity === "MONTH" ? monthLabel(key)
+    : granularity === "DAY" && data.length <= 7 ? weekday(key) : shortDate(key);
+  // Up to 16 columns show every label; denser charts let the axis skip labels that would overlap.
+  const interval = data.length <= 16 ? 0 : "preserveStartEnd";
   const select = (point?: Point) => { if (point && point.commits > 0) onSelect(point.from, point.to); };
 
   return <div className="space-y-3">
@@ -70,7 +90,7 @@ export function CommitActivityChart({ daily, range, onSelect }: {
             tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} interval={interval} />
           <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={36} tickCount={4}
             tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} domain={[0, niceMax]} />
-          <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--muted)", opacity: 0.6 }} isAnimationActive={false} />
+          <Tooltip content={<ChartTooltip granularity={granularity} />} cursor={{ fill: "var(--muted)", opacity: 0.6 }} isAnimationActive={false} />
           <Bar dataKey="commits" name="Commits" fill={CHART_COLORS.bar} maxBarSize={24} radius={[4, 4, 0, 0]}
             activeBar={{ fill: CHART_COLORS.barActive }} isAnimationActive={false}
             onClick={entry => select((entry as { payload?: Point }).payload)} />
@@ -84,11 +104,11 @@ export function CommitActivityChart({ daily, range, onSelect }: {
 
     {/* A table ignores the 1px box and overflow of `sr-only` and would stretch the page: the wrapper clips it. */}
     <div className="sr-only"><table>
-      <caption>Commits {range === "90d" ? "per week" : "per day"}</caption>
-      <thead><tr><th scope="col">{range === "90d" ? "Week" : "Day"}</th><th scope="col">Commits</th><th scope="col">Pull requests merged</th><th scope="col">Open</th></tr></thead>
+      <caption>Commits per {UNIT[granularity]}</caption>
+      <thead><tr><th scope="col">{UNIT[granularity][0].toUpperCase() + UNIT[granularity].slice(1)}</th><th scope="col">Commits</th><th scope="col">Pull requests merged</th><th scope="col">Open</th></tr></thead>
       <tbody>
         {data.map(point => <tr key={point.key}>
-          <th scope="row">{spanLabel(point.from, point.to)}</th>
+          <th scope="row">{bucketLabel(point, granularity)}</th>
           <td>{point.commits}</td>
           <td>{point.pullRequestsMerged}</td>
           <td>{point.commits > 0 && <button type="button" onClick={() => onSelect(point.from, point.to)}>Show commits of {spanLabel(point.from, point.to)}</button>}</td>

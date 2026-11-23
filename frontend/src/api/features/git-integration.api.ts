@@ -36,7 +36,7 @@ import type {
   GitTaskLinkRecheckResult,
   GitTaskLinkStats,
   GitBranchItem,
-  GitInsightsRange,
+  GitInsightsPeriod,
   GitRepositoryInsights,
   GitWebhookEventItem,
   GitWebhookEventQuery,
@@ -135,10 +135,15 @@ export const gitIntegrationApi = {
       signal,
     })).data,
 
-  /** WS-GH-02: activity of the period (today included) and the current state of the open pull requests. */
-  repositoryInsights: async (projectId: number, range: GitInsightsRange, signal?: AbortSignal, repositoryId?: number) =>
+  /** WS-GH-02: activity of the period and the current state of the open pull requests. */
+  repositoryInsights: async (projectId: number, period: GitInsightsPeriod, signal?: AbortSignal, repositoryId?: number) =>
     (await axiosInstance.get<GitRepositoryInsights>(`${PROJECTS}/${projectId}/repository/insights`, {
-      params: { range, repositoryId },
+      params: {
+        range: period.range,
+        since: period.range === "custom" ? period.since : undefined,
+        until: period.range === "custom" ? period.until : undefined,
+        repositoryId,
+      },
       signal,
     })).data,
 

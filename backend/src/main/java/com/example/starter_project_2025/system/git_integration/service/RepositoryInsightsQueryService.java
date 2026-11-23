@@ -16,6 +16,7 @@ import com.example.starter_project_2025.system.git_integration.dto.GitPullReques
 import com.example.starter_project_2025.system.git_integration.dto.GitTaskRef;
 import com.example.starter_project_2025.system.git_integration.dto.RepositoryInsightsView;
 import com.example.starter_project_2025.system.git_integration.dto.RepositoryInsightsView.Attention;
+import com.example.starter_project_2025.system.git_integration.dto.RepositoryInsightsView.ActivityBucket;
 import com.example.starter_project_2025.system.git_integration.dto.RepositoryInsightsView.AttentionItem;
 import com.example.starter_project_2025.system.git_integration.dto.RepositoryInsightsView.BranchStat;
 import com.example.starter_project_2025.system.git_integration.dto.RepositoryInsightsView.ContributorStat;
@@ -23,7 +24,6 @@ import com.example.starter_project_2025.system.git_integration.dto.RepositoryIns
 import com.example.starter_project_2025.system.git_integration.dto.RepositoryInsightsView.PullRequestHealth;
 import com.example.starter_project_2025.system.git_integration.dto.RepositoryInsightsView.Summary;
 import com.example.starter_project_2025.system.git_integration.repository.GitCommitRepository;
-import com.example.starter_project_2025.system.git_integration.repository.GitCommitRepository.CommitStatRow;
 import com.example.starter_project_2025.system.git_integration.repository.GitPullRequestRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitPullRequestRepository.PullRequestStatRow;
 import com.example.starter_project_2025.system.git_integration.repository.GitPullRequestReviewRepository;
@@ -58,7 +58,6 @@ import java.util.stream.Collectors;
 @Service
 public class RepositoryInsightsQueryService {
 
-    static final int MAX_COMMITS = 10_000;
     static final int MAX_OPEN_PULL_REQUESTS = 500;
     static final int TOP_CONTRIBUTORS = 10;
     static final int TOP_BRANCHES = 8;
@@ -77,9 +76,6 @@ public class RepositoryInsightsQueryService {
     private final UserRepository users;
     private final Clock clock;
 
-    /** Commits read per period; lowered by tests to exercise {@code truncated}. */
-    int maxCommits = MAX_COMMITS;
-
     public RepositoryInsightsQueryService(RepositoryActivityQueryService activity, GitCommitRepository commits,
                                           GitPullRequestRepository pullRequests, GitPullRequestReviewRepository reviews,
                                           GitTaskRefReader taskRefs, GitContributorRepository contributorRows,
@@ -96,45 +92,56 @@ public class RepositoryInsightsQueryService {
 
     @Transactional(readOnly = true)
     public RepositoryInsightsView insights(Long projectId, String rawRange) {
-        return insights(projectId, rawRange, null);
+        return insights(projectId, rawRange, null, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public RepositoryInsightsView insights(Long projectId, String rawRange, Long repositoryId) {
+        return insights(projectId, rawRange, null, null, repositoryId);
     }
 
     /**
      * GI-05: insights of the project, over every repository it ever linked (unlinked ones included),
      * or of the one {@code repositoryId} names. {@code repositoryId} of the view is the current
-     * repository (or the one asked for).
+     * repository (or the one asked for). {@code since}/{@code until} only go with {@code range=custom}.
+     * Counts are aggregated in the database, so long periods are not capped.
      */
     @Transactional(readOnly = true)
-    public RepositoryInsightsView insights(Long projectId, String rawRange, Long repositoryId) {
-        InsightsRange range = InsightsRange.parse(rawRange);
+    public RepositoryInsightsView insights(Long projectId, String rawRange, LocalDate since, LocalDate until, Long repositoryId) {
         LocalDateTime now = LocalDateTime.now(clock);
-        LocalDate to = now.toLocalDate();
-        LocalDate from = to.minusDays(range.days() - 1L);
-        Map<LocalDate, long[]> days = emptyDays(from, to);
+        LocalDate today = now.toLocalDate();
+        InsightsRange range = InsightsPeriod.requireValid(rawRange, since, until, today);
 
         RepositoryActivityQueryService.ProjectRepositories scope = activity.repositoriesFor(projectId);
         if (scope.isEmpty()) {
-            return new RepositoryInsightsView(null, range.key(), from, to, now, Summary.NONE, daily(days), List.of(), 0,
+            InsightsPeriod period = InsightsPeriod.resolve(range, since, until, today, () -> null);
+            Map<LocalDate, long[]> days = emptyDays(period.from(), period.to());
+            return new RepositoryInsightsView(null, range.key(), period.from(), period.to(), now, Summary.NONE,
+                    daily(period, days), period.granularity().name(), buckets(period, days), List.of(), 0,
                     List.of(), new PullRequestHealth(0, 0, 0, 0, STALE_DAYS, List.of()), false);
         }
         List<Long> repositoryIds = scope.select(repositoryId);
         Long viewRepositoryId = repositoryId != null ? repositoryId : scope.current() != null ? scope.current().getId() : null;
-        LocalDateTime start = from.atStartOfDay();
-        LocalDateTime end = to.plusDays(1).atStartOfDay();
+        InsightsPeriod period = InsightsPeriod.resolve(range, since, until, today, () -> earliestActivity(repositoryIds));
+        Map<LocalDate, long[]> days = emptyDays(period.from(), period.to());
+        LocalDateTime start = period.from().atStartOfDay();
+        LocalDateTime end = period.to().plusDays(1).atStartOfDay();
 
-        List<CommitStatRow> commitRows = commits.statsBetween(repositoryIds, start, end, PageRequest.of(0, maxCommits + 1));
-        boolean truncated = commitRows.size() > maxCommits;
-        if (truncated) commitRows = commitRows.subList(0, maxCommits);
+        long commitCount = 0;
+        for (GitCommitRepository.DayCountRow row : commits.commitsPerDay(repositoryIds, start, end)) {
+            long[] counts = days.get(row.getDay());
+            long count = row.getCount() == null ? 0 : row.getCount();
+            if (counts != null) counts[0] += count;
+            commitCount += count;
+        }
         List<PullRequestStatRow> opened = pullRequests.openedBetween(repositoryIds, start, end);
         List<PullRequestStatRow> merged = pullRequests.mergedBetween(repositoryIds, start, end);
         List<ReviewStatRow> reviewRows = reviews.submittedBetween(repositoryIds, start, end);
-
-        commitRows.forEach(row -> count(days, row.getCommittedAt(), 0));
         opened.forEach(row -> count(days, row.getGithubCreatedAt(), 1));
         merged.forEach(row -> count(days, row.getMergedAt(), 2));
 
         ContributorDirectory directory = new ContributorDirectory(contributorRows.findByMasterProjectIdOrderByIdAsc(scope.master().getId()));
-        Map<String, Tally> people = contributors(commitRows, opened, reviewRows, directory);
+        Map<String, Tally> people = contributors(commits.authorsBetween(repositoryIds, start, end), opened, reviewRows, directory);
         nameMembers(people.values());
         List<ContributorStat> top = people.values().stream()
                 .sorted(Comparator.comparingLong((Tally t) -> t.commits).reversed()
@@ -146,11 +153,24 @@ public class RepositoryInsightsQueryService {
                 .toList();
 
         long activeDays = days.values().stream().filter(counts -> counts[0] > 0).count();
-        Summary summary = new Summary(commitRows.size(), activeDays, people.size(), opened.size(), merged.size(),
+        Summary summary = new Summary(commitCount, activeDays, people.size(), opened.size(), merged.size(),
                 medianHoursToMerge(merged));
-        return new RepositoryInsightsView(viewRepositoryId, range.key(), from, to, now, summary, daily(days), top,
-                Math.max(0, people.size() - TOP_CONTRIBUTORS), branchesOf(commitRows), pullRequestHealth(scope, repositoryIds, now),
-                truncated);
+        List<BranchStat> branches = commits.branchesBetween(repositoryIds, start, end, PageRequest.of(0, TOP_BRANCHES)).stream()
+                .map(row -> new BranchStat(row.getRef().substring(HEADS.length()), row.getCommits() == null ? 0 : row.getCommits(),
+                        row.getLastCommitAt()))
+                .filter(branch -> !branch.name().isEmpty())
+                .toList();
+        return new RepositoryInsightsView(viewRepositoryId, range.key(), period.from(), period.to(), now, summary,
+                daily(period, days), period.granularity().name(), buckets(period, days), top,
+                Math.max(0, people.size() - TOP_CONTRIBUTORS), branches, pullRequestHealth(scope, repositoryIds, now), false);
+    }
+
+    /** First day with a synchronized commit or pull request of the repositories; null when there is none. */
+    private LocalDate earliestActivity(List<Long> repositoryIds) {
+        LocalDateTime commit = commits.earliestCommittedAt(repositoryIds);
+        LocalDateTime pullRequest = pullRequests.earliestOpenedAt(repositoryIds);
+        LocalDateTime first = commit == null ? pullRequest : pullRequest == null || commit.isBefore(pullRequest) ? commit : pullRequest;
+        return first == null ? null : first.toLocalDate();
     }
 
     /** All-time branches of the project's repository, latest activity first ({@code q} matches the name). */
@@ -182,10 +202,25 @@ public class RepositoryInsightsQueryService {
         if (counts != null) counts[index]++;
     }
 
-    private static List<DailyActivity> daily(Map<LocalDate, long[]> days) {
+    /** Every day of periods up to about 90 days; empty for longer ones (the chart reads {@code buckets}). */
+    private static List<DailyActivity> daily(InsightsPeriod period, Map<LocalDate, long[]> days) {
+        if (!period.listsDays()) return List.of();
         return days.entrySet().stream()
                 .map(entry -> new DailyActivity(entry.getKey(), entry.getValue()[0], entry.getValue()[1], entry.getValue()[2]))
                 .toList();
+    }
+
+    private static List<ActivityBucket> buckets(InsightsPeriod period, Map<LocalDate, long[]> days) {
+        List<ActivityBucket> result = new ArrayList<>();
+        for (LocalDate[] bucket : period.buckets()) {
+            long[] sum = new long[3];
+            for (LocalDate day = bucket[0]; !day.isAfter(bucket[1]); day = day.plusDays(1)) {
+                long[] counts = days.get(day);
+                for (int i = 0; i < 3; i++) sum[i] += counts[i];
+            }
+            result.add(new ActivityBucket(bucket[0], bucket[1], sum[0], sum[1], sum[2]));
+        }
+        return result;
     }
 
     /** Median of merged_at − created_at in hours (one decimal); null when nothing was merged. */
@@ -244,17 +279,17 @@ public class RepositoryInsightsQueryService {
         return null;
     }
 
-    private static Map<String, Tally> contributors(List<CommitStatRow> commitRows, List<PullRequestStatRow> opened,
-                                                   List<ReviewStatRow> reviewRows, ContributorDirectory directory) {
+    private static Map<String, Tally> contributors(List<GitCommitRepository.AuthorActivityRow> authorRows,
+                                                   List<PullRequestStatRow> opened, List<ReviewStatRow> reviewRows,
+                                                   ContributorDirectory directory) {
         Map<String, Tally> people = new HashMap<>();
-        // Commits are newest first: the first one seen gives the display name and login spelling.
-        for (CommitStatRow row : commitRows) {
-            Tally tally = tally(people, row.getAuthorLogin(), row.getAuthorName(),
-                    directory.resolve(row.getAuthorGithubId(), row.getAuthorLogin(), row.getAuthorEmail()));
+        // Author identities are most recently active first: the first one seen gives the display name and login spelling.
+        for (GitCommitRepository.AuthorActivityRow row : authorRows) {
+            Tally tally = tally(people, row.getLogin(), row.getName(), directory.resolve(row.getGithubId(), row.getLogin(), row.getEmail()));
             if (tally == null) continue;
-            if (tally.name == null && row.getAuthorName() != null && !row.getAuthorName().isBlank()) tally.name = row.getAuthorName().trim();
-            tally.commits++;
-            tally.touch(row.getCommittedAt());
+            if (tally.name == null && row.getName() != null && !row.getName().isBlank()) tally.name = row.getName().trim();
+            tally.commits += row.getCount() == null ? 0 : row.getCount();
+            tally.touch(row.getLastAt());
         }
         for (PullRequestStatRow row : opened) {
             Tally tally = tally(people, row.getAuthorLogin(), null, directory.resolve(row.getAuthorGithubId(), row.getAuthorLogin(), null));
@@ -309,30 +344,6 @@ public class RepositoryInsightsQueryService {
         people.forEach(t -> {
             if (t.userId != null) t.memberName = names.get(t.userId);
         });
-    }
-
-    // ---- branches -------------------------------------------------------------------------------
-
-    private static List<BranchStat> branchesOf(List<CommitStatRow> commitRows) {
-        Map<String, BranchStat> byName = new HashMap<>();
-        for (CommitStatRow row : commitRows) {
-            String ref = row.getFirstSeenRef();
-            if (ref == null || !ref.startsWith(HEADS) || ref.length() == HEADS.length()) continue;
-            String name = ref.substring(HEADS.length());
-            byName.merge(name, new BranchStat(name, 1, row.getCommittedAt()), (a, b) -> new BranchStat(name, a.commits() + 1,
-                    later(a.lastCommitAt(), b.lastCommitAt())));
-        }
-        return byName.values().stream()
-                .sorted(Comparator.comparing(BranchStat::lastCommitAt, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(BranchStat::name))
-                .limit(TOP_BRANCHES)
-                .toList();
-    }
-
-    private static LocalDateTime later(LocalDateTime a, LocalDateTime b) {
-        if (a == null) return b;
-        if (b == null) return a;
-        return a.isAfter(b) ? a : b;
     }
 
     // ---- open pull requests ---------------------------------------------------------------------

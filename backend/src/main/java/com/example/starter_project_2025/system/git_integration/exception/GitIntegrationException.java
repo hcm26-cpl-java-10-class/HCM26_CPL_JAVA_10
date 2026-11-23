@@ -220,10 +220,10 @@ public class GitIntegrationException extends RuntimeException {
                 "Repository đã được lưu trữ (archived) hoặc bị vô hiệu hóa trên GitHub nên không thể liên kết");
     }
 
-    /** WS-GH-02: {@code range} of the insights is not one of 7d, 30d, 90d. */
+    /** WS-GH-02: {@code range} (or the since/until of a custom range) of the insights is not valid. */
     public static GitIntegrationException insightsRangeInvalid() {
         return new GitIntegrationException(HttpStatus.BAD_REQUEST, "GIT_INSIGHTS_RANGE_INVALID",
-                "Khoảng thời gian không hợp lệ (chỉ hỗ trợ 7d, 30d, 90d)");
+                "Khoảng thời gian không hợp lệ (hỗ trợ 7d, 30d, 90d, 6m, 1y, all; custom cần since ≤ until ≤ hôm nay)");
     }
 
     public static GitIntegrationException repositoryNotLinked() {
