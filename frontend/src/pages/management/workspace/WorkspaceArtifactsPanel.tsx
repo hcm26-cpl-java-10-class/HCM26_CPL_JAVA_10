@@ -194,17 +194,17 @@ export function WorkspaceArtifactsPanel({
         <Button type="button" variant="outline" size="sm" onClick={() => void submissionsQuery.refetch()}>Try again</Button>
       </div>}
 
-      {milestone ? <section aria-label="Milestone deliverable" className="rounded-xl border bg-card p-5 shadow-sm">
+      {milestone ? <section aria-label="Milestone deliverable" className="min-w-0 rounded-xl border bg-card p-5 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3"><span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"><FileCheck2 className="size-5" /></span><div><h3 className="font-semibold">{milestone.title}</h3><p className="mt-1 text-sm text-muted-foreground">{historyReady ? singleRow?.history.length ?? 0 : "—"} submitted version(s)</p></div></div>
           {submissionsQuery.isPending ? <Skeleton className="h-7 w-28" /> : <Badge variant="outline" className={ARTIFACT_REVIEW_STATES[singleRow?.state ?? "UNKNOWN"].tone}>{historyReady ? ARTIFACT_REVIEW_STATES[singleRow?.state ?? "UNKNOWN"].label : "Not verified"}</Badge>}
         </div>
-        {submissionsQuery.isPending ? <div className="mt-5 grid gap-3"><Skeleton className="h-5 w-56" /><Skeleton className="h-5 w-40" /></div> : singleRow?.latest ? <div className="mt-5 grid gap-3 border-t pt-4 text-sm sm:grid-cols-2">
+        {submissionsQuery.isPending ? <div className="mt-5 grid gap-3"><Skeleton className="h-5 w-56" /><Skeleton className="h-5 w-40" /></div> : singleRow?.latest ? <div className="mt-5 grid min-w-0 grid-cols-1 gap-3 border-t pt-4 text-sm sm:grid-cols-2">
           <div><p className="text-muted-foreground">Latest version</p><p className="mt-1 font-medium">v{singleRow.latest.version} · {new Date(singleRow.latest.submittedAt).toLocaleString()}</p></div>
           <div><p className="text-muted-foreground">Submission timing</p><p className="mt-1 font-medium">{singleRow.latest.submittedLate ? `Late${singleRow.latest.latePenaltyPercent != null ? ` · ${singleRow.latest.latePenaltyPercent}% penalty` : ""}` : "On time"}</p></div>
           {singleRow.latest.repositoryUrl ? <div className="min-w-0"><p className="text-muted-foreground">Repository</p><a className="mt-1 block truncate font-medium text-blue-700 underline underline-offset-2 dark:text-blue-300" href={singleRow.latest.repositoryUrl} target="_blank" rel="noreferrer">{singleRow.latest.repositoryUrl}</a></div> : null}
           {singleRow.latest.deploymentUrl ? <div className="min-w-0"><p className="text-muted-foreground">Deployment</p><a className="mt-1 block truncate font-medium text-blue-700 underline underline-offset-2 dark:text-blue-300" href={singleRow.latest.deploymentUrl} target="_blank" rel="noreferrer">{singleRow.latest.deploymentUrl}</a></div> : null}
-          {singleRow.latest.releaseNotes ? <div className="sm:col-span-2"><p className="text-muted-foreground">Release notes</p><p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words">{singleRow.latest.releaseNotes}</p></div> : null}
+          {singleRow.latest.releaseNotes ? <div className="min-w-0 sm:col-span-2"><p className="text-muted-foreground">Release notes</p><p className="mt-1 line-clamp-3 whitespace-pre-wrap [overflow-wrap:anywhere]">{singleRow.latest.releaseNotes}</p></div> : null}
         </div> : !historyReady ? <p className="mt-5 rounded-lg border border-dashed p-5 text-sm text-muted-foreground">Submission status could not be verified. Try Refresh.</p> : <p className="mt-5 rounded-lg border border-dashed p-5 text-sm text-muted-foreground">No submitted versions yet. The team can submit when this milestone is open.</p>}
         <div className="mt-5 flex flex-wrap gap-2 border-t pt-4">
           <Button type="button" variant="outline" size="sm" onClick={() => setHistoryMilestone(milestone)} disabled={!historyReady}><History className="size-4" /> Submission history</Button>

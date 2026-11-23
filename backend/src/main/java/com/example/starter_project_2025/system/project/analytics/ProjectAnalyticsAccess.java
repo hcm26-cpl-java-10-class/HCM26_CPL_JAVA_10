@@ -17,9 +17,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * US-ANL-001: deny-by-default access control for project Analytics.
+ * US-ANL-010: export access control (Mentor, Program Manager, Admin or active
+ * Student Team Leader of the target project).
  *
  * <p>A caller needs an authenticated, active account in an ACTIVE tenant plus
  * valid project scope (team member, assigned mentor or PM/admin scope). The
@@ -34,10 +37,19 @@ public class ProjectAnalyticsAccess {
     /** US-ANL-001: the single permission that gates the Analytics workspace. */
     public static final String READ_PERMISSION = "PROJECT_ANALYTICS_READ";
 
+    /** US-ANL-010: permission gating CSV / PDF report export. */
+    public static final String EXPORT_PERMISSION = "PROJECT_ANALYTICS_EXPORT";
+
+    /** Non-student management/staff roles eligible to export any authorized project. */
+    private static final Set<String> EXPORT_STAFF_ROLES = Set.of(
+            "ADMIN", "SUPER_ADMIN", "SYSTEM_ADMIN", "PO",
+            "PROGRAM_MANAGER", "PM", "MENTOR", "TEACHER", "TRAINER", "CLASS_ADMIN", "TEAM_LEADER");
+
     private final UserRepository users;
     private final TenantRepository tenants;
     private final ProjectRepository projects;
     private final WorkspaceAccessService workspaceAccess;
+    private final ProjectAnalyticsWorkItemRepository workItems;
 
     /**
      * Resolves the signed-in user and enforces session, account, tenant and
@@ -93,6 +105,45 @@ public class ProjectAnalyticsAccess {
     /** Returns whether the caller has project membership, mentor or PM scope. */
     public boolean canView(User user, Project project) {
         return workspaceAccess.canAccessProject(user, project);
+    }
+
+    /**
+     * US-ANL-010: returns whether the caller is allowed to export analytics for
+     * the given project (Mentor, Program Manager, Admin/Teacher/PM with export
+     * permission, or an active Student Team Leader of the project).
+     */
+    public boolean canExport(User user, Project project) {
+        if (user == null || project == null) {
+            return false;
+        }
+        if (!Objects.equals(project.getTenantId(), user.getTenantId())) {
+            return false;
+        }
+        if (!hasPermission(user, EXPORT_PERMISSION)) {
+            return false;
+        }
+        if (!workspaceAccess.canAccessProject(user, project)) {
+            return false;
+        }
+        boolean hasStaffRole = user.getRoles().stream()
+                .filter(role -> Boolean.TRUE.equals(role.getIsActive()))
+                .map(role -> role.getName() == null ? "" : role.getName().trim().toUpperCase())
+                .anyMatch(EXPORT_STAFF_ROLES::contains);
+        if (hasStaffRole) {
+            return true;
+        }
+        return workItems.isProjectTeamLeader(user.getId(), project);
+    }
+
+    /**
+     * US-ANL-010 AC02: enforces export permission and project scope before any
+     * export file or audit log is generated.
+     */
+    public void requireExportAccess(User user, Project project) {
+        if (!canExport(user, project)) {
+            throw new AccessDeniedException(
+                    "Only authorized Mentors, Program Managers, and Team Leaders may export project analytics");
+        }
     }
 
     public boolean hasPermission(User user, String permission) {

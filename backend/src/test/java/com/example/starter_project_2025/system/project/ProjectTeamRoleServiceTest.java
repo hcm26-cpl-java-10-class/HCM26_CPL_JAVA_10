@@ -77,7 +77,7 @@ class ProjectTeamRoleServiceTest {
                 outboxRepository,
                 historyService,
                 entityManager,
-                new ObjectMapper());
+                new ObjectMapper(), org.mockito.Mockito.mock(com.example.starter_project_2025.system.project.charter.TeamCharterIntegrity.class));
 
         TrainingClass trainingClass = TrainingClass.builder().id(7L).build();
         session = TeamAllocationSession.builder()

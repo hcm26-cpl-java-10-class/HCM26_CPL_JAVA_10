@@ -105,7 +105,9 @@ public class AllocationReadinessService {
                         classId, ClassMemberStatus.ACTIVE).stream()
                 .filter(AllocationStudentEligibility::isEligible).toList();
 
-        List<ProjectTeam> teams = teamRepository.findAllByAllocationSession_IdOrderByIdAsc(session.getId())
+        // Soft-deleted drafts keep status=DRAFT and only flip isActive=false, so the
+        // isActive-aware query is required to keep ghost teams out of the counts.
+        List<ProjectTeam> teams = teamRepository.findAllByAllocationSession_IdAndIsActiveTrueOrderByIdAsc(session.getId())
                 .stream().filter(team -> team.getStatus() != ProjectTeamStatus.ARCHIVED).toList();
         Map<Long, List<ProjectMember>> rosters = new HashMap<>();
         Map<Long, Integer> membershipCounts = new HashMap<>();

@@ -66,4 +66,9 @@ public interface ProjectTeamRepository
             Long sessionId,
             ProjectTeamStatus status
     );
+
+    boolean existsByAllocationSession_IdAndIsActiveTrueAndStatus(
+            Long sessionId,
+            ProjectTeamStatus status
+    );
 }
