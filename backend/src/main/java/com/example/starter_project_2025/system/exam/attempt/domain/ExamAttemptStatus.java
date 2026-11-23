@@ -5,5 +5,6 @@ public enum ExamAttemptStatus {
     IN_PROGRESS,
     SUBMITTED,
     PENDING_REVIEW,
+    RETURNED_FOR_REVISION,
     EXPIRED
 }

@@ -85,8 +85,14 @@ public class ExamAttempt extends BaseEntity {
     private BigDecimal firstScore;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 30)
     private ExamAttemptStatus status = ExamAttemptStatus.IN_PROGRESS;
+
+    @Column(name = "revision_note", length = 1000)
+    private String revisionNote;
+
+    @Column(name = "revision_deadline")
+    private Instant revisionDeadline;
 
     // NEW (anti-cheat): tab/thiet bi gan nhat dang lam bai (phat hien mo nhieu noi)
     @Column(length = 64)

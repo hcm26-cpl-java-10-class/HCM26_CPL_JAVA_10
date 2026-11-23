@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.exam.result.service;
 
 import com.example.starter_project_2025.system.exam.core.domain.Exam;
+import com.example.starter_project_2025.system.exam.core.domain.ExamStatus;
 import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus;
 import com.example.starter_project_2025.system.exam.result.domain.ExamResultPublication;
 import com.example.starter_project_2025.system.exam.result.domain.ExamResultPublicationRepository;
@@ -125,9 +126,17 @@ public class ExamResultAccessService {
 
         return switch (visibility) {
             case IMMEDIATE -> true;
-
-            // AFTER_EXAM_CLOSED la gia tri cu (khong con gio dong de): coi nhu MANUAL_RELEASE.
-            case AFTER_EXAM_CLOSED, MANUAL_RELEASE -> true;
+            case MANUAL_RELEASE -> true;
+            case AFTER_EXAM_CLOSED -> {
+                if (exam.getStatus() == ExamStatus.CLOSED || exam.getStatus() == ExamStatus.ARCHIVED) {
+                    yield true;
+                }
+                if (exam.getEndTime() != null) {
+                    yield LocalDateTime.now().isAfter(exam.getEndTime());
+                }
+                // Legacy exams without an end time fall back to manual publication behavior.
+                yield true;
+            }
         };
     }
 

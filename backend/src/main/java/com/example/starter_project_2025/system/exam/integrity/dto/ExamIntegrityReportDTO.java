@@ -77,6 +77,13 @@ public class ExamIntegrityReportDTO {
         private boolean flagged;
 
         private Long durationSeconds;            // thoi gian lam bai thuc te (giay)
+
+        // --- tham dinh co bat thuong (UFR-EXM-009, BR-UNI-19) ---
+        private com.example.starter_project_2025.system.exam.integrity.domain.IntegrityReviewStatus reviewStatus =
+                com.example.starter_project_2025.system.exam.integrity.domain.IntegrityReviewStatus.UNREVIEWED;
+        private String reviewNote;
+        private Long reviewedBy;
+        private Instant reviewedAt;
     }
 
     /** Mot cau tra loi trung/giong bai cua sinh vien khac (tu ExamSimilarityService). */

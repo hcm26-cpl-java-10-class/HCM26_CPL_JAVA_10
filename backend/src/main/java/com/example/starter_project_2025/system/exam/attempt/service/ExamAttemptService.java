@@ -38,6 +38,7 @@ import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptSt
 import com.example.starter_project_2025.system.exam.code.CodingScoring;
 import com.example.starter_project_2025.system.exam.core.domain.Exam;
 import com.example.starter_project_2025.system.exam.core.domain.ExamRepository;
+import com.example.starter_project_2025.system.exam.core.domain.ExamStatus;
 import com.example.starter_project_2025.system.exam.core.domain.LatePolicy;
 import com.example.starter_project_2025.system.exam.courselink.service.ExamProgressLockService;
 import com.example.starter_project_2025.system.exam.grading.service.ExamScoring;
@@ -177,13 +178,16 @@ public class ExamAttemptService {
         List<ExamAttempt> attempts = attemptRepository
                 .findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(examId, studentId);
         Optional<ExamAttempt> existing = attempts.stream()
-                .filter(candidate -> candidate.getStatus() == ExamAttemptStatus.IN_PROGRESS)
+                .filter(candidate -> candidate.getStatus() == ExamAttemptStatus.IN_PROGRESS
+                        || candidate.getStatus() == ExamAttemptStatus.RETURNED_FOR_REVISION)
                 .max(Comparator.comparingInt(ExamAttempt::getAttemptNumber));
         if (existing.isPresent()) {
             ExamAttempt attempt = existing.get();
             expireIfOverdue(attempt.getId(), Instant.now());
             return examAttemptMappingFlow.toResponse(attempt);
         }
+
+        assertExamOpenForNewAttempt(exam);
 
         if (!anonymousGuest || progressLockService.requiresCourseEnrollment(exam)) {
             progressLockService.assertUnlocked(exam, studentId);
@@ -197,8 +201,9 @@ public class ExamAttemptService {
         if (attempts.size() >= maxAttempts) {
             throw new BadRequestException("Bạn đã sử dụng hết số lần làm bài");
         }
-        ExamQuestionPoolVersion poolVersion =
-                poolVersionRepository
+        ExamQuestionPoolVersion poolVersion = poolVersionRepository == null
+                ? null
+                : poolVersionRepository
                         .findTopByExam_IdOrderByVersionNumberDesc(examId)
                         .orElse(null);
 
@@ -337,8 +342,6 @@ public class ExamAttemptService {
     public ExamAttempt findAttemptForReview(Long attemptId) {
         return examAttemptReviewFlow.findAttemptForReview(attemptId);
     }
-
-
 
     public ExamAttemptDTO saveAnswers(
             Long attemptId,
@@ -519,8 +522,25 @@ public class ExamAttemptService {
 
 
 
-     int maxAttempts(Exam exam) {
+    int maxAttempts(Exam exam) {
         return exam.getMaxAttempts() == null ? 1 : exam.getMaxAttempts();
+    }
+
+    private void assertExamOpenForNewAttempt(Exam exam) {
+        ExamStatus status = exam.getStatus();
+        if (status == ExamStatus.DRAFT) {
+            throw new BadRequestException("Assessment is still in draft and not published yet");
+        }
+        if (status == ExamStatus.CLOSED || status == ExamStatus.ARCHIVED) {
+            throw new BadRequestException("Assessment is closed and no longer accepts new attempts");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (exam.getStartTime() != null && now.isBefore(exam.getStartTime())) {
+            throw new BadRequestException("Assessment has not opened yet");
+        }
+        if (exam.getEndTime() != null && now.isAfter(exam.getEndTime())) {
+            throw new BadRequestException("Assessment window has closed");
+        }
     }
 
     private void ensureExamPasswordValid(Exam exam, String password) {

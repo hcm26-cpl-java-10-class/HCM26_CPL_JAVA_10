@@ -48,11 +48,18 @@ function toLoginResponse(auth: AuthState): LoginResponse {
     };
 }
 
+function shouldSkipRefreshBootstrap(pathname: string): boolean {
+    return pathname === "/oauth2/redirect"
+        || pathname === "/logout"
+        || pathname.startsWith("/anonymous-exam");
+}
+
 export function installAuthTabSessionBridge(
     getAuthState: () => AuthState,
     acceptSession: (session: LoginResponse) => void,
     markAuthInitialized: () => void,
     currentWindow: Window = window,
+    refreshSession?: () => Promise<LoginResponse>,
 ) {
     currentWindow.addEventListener("message", (event: MessageEvent<unknown>) => {
         if (event.origin !== currentWindow.location.origin || !event.source) return;
@@ -75,11 +82,31 @@ export function installAuthTabSessionBridge(
         ).postMessage(response, { targetOrigin: event.origin });
     });
 
+    const restoreViaRefresh = () => {
+        const pathname = currentWindow.location?.pathname ?? "";
+        if (!refreshSession || shouldSkipRefreshBootstrap(pathname)) {
+            markAuthInitialized();
+            return;
+        }
+        refreshSession()
+            .then((session) => {
+                if (isLoginResponse(session)) {
+                    acceptSession(session);
+                }
+            })
+            .catch(() => {
+                // No active cookie session; proceed unauthenticated.
+            })
+            .finally(() => {
+                markAuthInitialized();
+            });
+    };
+
     const navigationType = currentWindow.performance.getEntriesByType("navigation")
         .map((entry) => (entry as PerformanceNavigationTiming).type)[0];
     const opener = currentWindow.opener;
     if (!opener || navigationType === "reload") {
-        markAuthInitialized();
+        restoreViaRefresh();
         return;
     }
 
@@ -101,9 +128,9 @@ export function installAuthTabSessionBridge(
     timeoutId = currentWindow.setTimeout(
         () => {
             currentWindow.removeEventListener("message", handleAuthResponse);
-            markAuthInitialized();
+            restoreViaRefresh();
         },
-        10_000,
+        1500,
     );
     opener.postMessage(
         { type: AUTH_REQUEST },

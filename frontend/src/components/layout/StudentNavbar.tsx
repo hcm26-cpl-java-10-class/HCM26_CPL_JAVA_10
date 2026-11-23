@@ -13,17 +13,17 @@ import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { usePendingInvitations } from "@/hooks/usePendingInvitations";
 import { InvitationBell } from "@/components/features/invitation/InvitationBell";
 import { cn } from "@/lib/utils";
-import { authApi } from "@/api/features/auth.api";
 import { iconMap } from "@/components/datatable/iconMap";
 import { getHomePathByRole } from "@/utils/rbac.utils";
 import { usePermissions } from "@/hooks/usePermissions";
-import { ChevronDown, FileCheck2, LogOutIcon, Menu, MoreHorizontal } from "lucide-react";
+import { ChevronDown, FileCheck2, LogOutIcon, Menu, MoreHorizontal, ShieldCheck } from "lucide-react";
 import { fittingNavigationCount } from "./student-navigation-overflow";
 import { useLayoutEffect, useRef, useState, useMemo } from "react";
 import { useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
-import { setLogout } from "@/store/slices/auth/authSlice";
 import { useQueryClient } from "@tanstack/react-query";
+import { performAppLogout } from "@/utils/auth-logout";
+import { useRoleSwitch } from "@/contexts/RoleSwitchContext";
 
 const normalizePath = (path?: string) => {
   const trimmed = (path || "/").replace(/\/+$/, "");
@@ -251,14 +251,14 @@ export function StudentNavbar() {
   }, [sizingKey, inlineLimit]);
   const overflow = navigation.slice(inlineCount);
 
+  const { setViewRole } = useRoleSwitch();
   const handleLogout = async () => {
-    try {
-      await authApi.logout();
-    } finally {
-      queryClient.removeQueries({ queryKey: ["sidebar-menu"] });
-      dispatch(setLogout());
-      navigate("/login", { replace: true });
-    }
+    await performAppLogout({
+      dispatch,
+      queryClient,
+      navigate,
+      clearViewRole: () => setViewRole(null),
+    });
   };
 
   return (
@@ -475,6 +475,18 @@ export function StudentNavbar() {
             <div className="min-w-0 max-w-full [&>div]:flex-wrap">
               <HeaderRight />
             </div>
+
+            {/* SECURITY & SESSIONS */}
+            <TooltipWrapper content="Security & Sessions">
+              <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  onClick={() => navigate("/account/security")}
+              >
+                <ShieldCheck className="size-4" />
+              </Button>
+            </TooltipWrapper>
 
             {/* LOGOUT */}
             <TooltipWrapper content="Logout">

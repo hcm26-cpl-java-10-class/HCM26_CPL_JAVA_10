@@ -64,6 +64,10 @@ public class Question extends BaseEntity {
     @Column(name = "is_ai_generated")
     private Boolean isAiGenerated = false;
 
+    @Version
+    @Column(name = "version")
+    private Long version;
+
     @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<QuestionOption> options = new ArrayList<>();
 

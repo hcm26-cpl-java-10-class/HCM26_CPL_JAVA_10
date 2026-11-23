@@ -17,6 +17,8 @@ public class ExamAttemptReviewDTO {
     private String title;
     private int attemptNumber;
     private ExamAttemptStatus status;
+    private String revisionNote;
+    private Instant revisionDeadline;
     private int totalPoints;
     private BigDecimal maxScore;
     private BigDecimal objectiveScore;

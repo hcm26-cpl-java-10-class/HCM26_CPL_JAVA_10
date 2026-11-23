@@ -1,10 +1,13 @@
 package com.example.starter_project_2025.system.exam.integrity.controller;
 
 import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.system.exam.integrity.domain.ExamAttemptIntegrityReview;
 import com.example.starter_project_2025.system.exam.integrity.dto.ExamIntegrityReportDTO;
 import com.example.starter_project_2025.system.exam.integrity.dto.IntegrityEventRequest;
+import com.example.starter_project_2025.system.exam.integrity.dto.IntegrityReviewRequest;
 import com.example.starter_project_2025.system.exam.integrity.dto.ProctorPhotoRequest;
 import com.example.starter_project_2025.system.exam.invitation.service.AnonymousExamService;
+import com.example.starter_project_2025.system.exam.integrity.service.ExamIntegrityReviewService;
 import com.example.starter_project_2025.system.exam.integrity.service.ExamIntegrityService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -23,6 +26,7 @@ import java.util.List;
 public class ExamIntegrityController {
 
     private final ExamIntegrityService service;
+    private final ExamIntegrityReviewService reviewService;
     private final AnonymousExamService anonymousExamService;
 
     /** Sinh vien co tai khoan gui su kien / heartbeat. */
@@ -85,7 +89,21 @@ public class ExamIntegrityController {
     @GetMapping("/{examId}/integrity-report")
     @PreAuthorize("hasAuthority('EXAM_UPDATE')")
     public ResponseEntity<ExamIntegrityReportDTO> report(@PathVariable Long examId) {
-        return ResponseEntity.ok(service.getReport(examId));
+        return ResponseEntity.ok(reviewService.enrichReport(service.getReport(examId)));
+    }
+
+    /** Reviewer tham dinh va dong co bat thuong (UFR-EXM-009, BR-UNI-19). */
+    @PutMapping("/{examId}/integrity-report/attempts/{attemptId}/review")
+    @PreAuthorize("hasAuthority('EXAM_UPDATE')")
+    public ResponseEntity<ExamAttemptIntegrityReview> reviewAttemptFlags(
+            @PathVariable Long examId,
+            @PathVariable Long attemptId,
+            @Valid @RequestBody IntegrityReviewRequest request,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(
+                reviewService.submitReview(examId, attemptId, request, principal.getUser().getId())
+        );
     }
 
     @GetMapping("/{examId}/integrity-report/attempts/{attemptId}/events")

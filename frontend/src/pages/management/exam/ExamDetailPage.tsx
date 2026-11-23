@@ -5,10 +5,11 @@ import HeaderRight from "@/components/layout/HeaderRight";
 import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 import { Button } from "@/components/ui/button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { ArrowLeft, BookOpen, ClipboardCheck, Copy, Mail, Pencil, BarChart3 } from "lucide-react";
+import { Archive, ArrowLeft, BookOpen, CheckCircle2, ClipboardCheck, Copy, Lock, Mail, Pencil, BarChart3 } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
+import { getErrorMessage } from "./examConfig";
 import { ExamEditPanel } from "./ExamEditPanel";
 import { ExamQuestionsPanel } from "./ExamQuestionsPanel";
 import ResultStatisticsPage from "./ResultStatisticsPage";
@@ -56,20 +57,33 @@ export default function ExamDetailPage() {
     };
   }, []);
 
+  const queryClient = useQueryClient();
   const examQuery = useQuery({
     queryKey: ["exam-detail", id],
     queryFn: () => examApi.getById(examId),
     enabled: Number.isFinite(id) && id > 0,
   });
-  const queryClient = useQueryClient();
-  const duplicateMutation = useMutation({
-    mutationFn: () => examApi.duplicate(id),
-    onSuccess: (copy) => {
-      queryClient.invalidateQueries({ queryKey: ["exams"] });
-      toast.success("Exam duplicated", { duration: 3000 });
-      navigate(`/exams/${copy.id}/questions${returnQuery}`);
+  const examStatus = examQuery.data?.status ?? "PUBLISHED";
+
+  const lifecycleMutation = useMutation({
+    mutationFn: async (action: "publish" | "close" | "archive" | "duplicate") => {
+      if (action === "publish") return { action, exam: await examApi.publish(id) };
+      if (action === "close") return { action, exam: await examApi.close(id) };
+      if (action === "archive") return { action, exam: await examApi.archive(id) };
+      return { action, exam: await examApi.duplicate(id) };
     },
-    onError: () => toast.error("Could not duplicate this exam"),
+    onSuccess: ({ action, exam }) => {
+      void queryClient.invalidateQueries({ queryKey: ["exam-detail", id] });
+      void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
+      void queryClient.invalidateQueries({ queryKey: ["exams"] });
+      if (action === "duplicate" && exam?.id) {
+        toast.success("Exam duplicated", { duration: 3000 });
+        navigate(`/exams/${exam.id}/questions${returnQuery}`);
+      } else {
+        toast.success(`Assessment ${action}d successfully`, { duration: 3000 });
+      }
+    },
+    onError: (err) => toast.error(getErrorMessage(err, "Action failed")),
   });
   const title = examQuery.data?.title;
   const counts: Partial<Record<TabKey, { value: number; warn?: boolean }>> = {
@@ -114,15 +128,55 @@ export default function ExamDetailPage() {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={duplicateMutation.isPending || !examQuery.data}
-            onClick={() => duplicateMutation.mutate()}
-          >
-            <Copy className="mr-1 size-4" />
-            {duplicateMutation.isPending ? "Duplicating..." : "Duplicate"}
-          </Button>
+          {examQuery.data && (
+            <div className="hidden items-center gap-1.5 sm:flex">
+              <span className="rounded-md bg-slate-900 px-2 py-0.5 text-xs font-medium text-white dark:bg-slate-100 dark:text-slate-900">
+                {examStatus}
+              </span>
+              {(examStatus === "DRAFT" || examStatus === "CLOSED") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={lifecycleMutation.isPending}
+                  onClick={() => lifecycleMutation.mutate("publish")}
+                >
+                  <CheckCircle2 className="mr-1 size-3.5" />
+                  Publish
+                </Button>
+              )}
+              {examStatus === "PUBLISHED" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={lifecycleMutation.isPending}
+                  onClick={() => lifecycleMutation.mutate("close")}
+                >
+                  <Lock className="mr-1 size-3.5" />
+                  Close
+                </Button>
+              )}
+              {examStatus !== "ARCHIVED" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={lifecycleMutation.isPending}
+                  onClick={() => lifecycleMutation.mutate("archive")}
+                >
+                  <Archive className="mr-1 size-3.5" />
+                  Archive
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={lifecycleMutation.isPending}
+                onClick={() => lifecycleMutation.mutate("duplicate")}
+              >
+                <Copy className="mr-1 size-3.5" />
+                {lifecycleMutation.isPending && lifecycleMutation.variables === "duplicate" ? "Duplicating..." : "Duplicate"}
+              </Button>
+            </div>
+          )}
           <HeaderRight />
         </div>
       </header>

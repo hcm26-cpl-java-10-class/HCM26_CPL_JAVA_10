@@ -5,6 +5,7 @@ import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
 import com.example.starter_project_2025.base.crud.dto.OnUpdate;
 import com.example.starter_project_2025.system.exam.core.domain.ExamCategory;
+import com.example.starter_project_2025.system.exam.core.domain.ExamStatus;
 import com.example.starter_project_2025.system.exam.core.domain.ExamType;
 import com.example.starter_project_2025.system.exam.core.domain.LatePolicy;
 import com.example.starter_project_2025.system.exam.result.domain.ResultVisibility;
@@ -53,6 +54,27 @@ public class ExamDTO extends BaseDTO {
     @NotNull(groups = OnCreate.class)
     @Min(value = 1, groups = {OnCreate.class, OnUpdate.class})
     private Integer durationMinutes;
+
+    private ExamStatus status;
+
+    private LocalDateTime startTime;
+
+    private LocalDateTime endTime;
+
+    @JsonIgnore
+    private boolean scheduleProvided;
+
+    public void setStartTime(LocalDateTime startTime) {
+        this.startTime = startTime;
+        this.scheduleProvided = true;
+    }
+
+    public void setEndTime(LocalDateTime endTime) {
+        this.endTime = endTime;
+        this.scheduleProvided = true;
+    }
+
+    private Long version;
 
     @Min(value = 1, groups = {OnCreate.class, OnUpdate.class}, message = "maxAttempts phải >= 1")
     private Integer maxAttempts;

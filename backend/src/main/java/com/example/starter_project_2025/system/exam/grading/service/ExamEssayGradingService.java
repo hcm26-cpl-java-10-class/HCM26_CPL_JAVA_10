@@ -377,6 +377,44 @@ public class ExamEssayGradingService {
         BigDecimal penalized = ExamScoring.applyPenalty(unpenalizedTotal, attempt.getLatePenaltyPercentApplied());
         attempt.setFinalScore(ExamScoring.clamp(penalized, maxScore));
         attempt.setStatus(ExamAttemptStatus.SUBMITTED);
+        attempt.setRevisionNote(null);
+        attempt.setRevisionDeadline(null);
+        attemptRepository.save(attempt);
+
+        return getDetail(examId, attemptId);
+    }
+
+    @Transactional
+    public EssayGradingDTO.Detail returnForRevision(
+            Long examId,
+            Long attemptId,
+            com.example.starter_project_2025.system.exam.grading.dto.ReturnForRevisionRequest request
+    ) {
+        requireExam(examId);
+        ExamAttempt attempt = attemptRepository.findById(attemptId)
+                .filter(candidate -> candidate.getExam().getId().equals(examId))
+                .orElseThrow(() -> new ResourceNotFoundException("Exam attempt not found"));
+
+        if (!ExamAttemptLifecycle.canTransition(attempt.getStatus(), ExamAttemptStatus.RETURNED_FOR_REVISION)) {
+            throw new BadRequestException("Cannot return attempt for revision from status " + attempt.getStatus());
+        }
+        String note = request == null || request.note() == null ? "" : request.note().trim();
+        if (note.isEmpty()) {
+            throw new BadRequestException("Revision note is required");
+        }
+        java.time.Instant now = java.time.Instant.now();
+        java.time.Instant newDeadline = request.deadline() != null
+                ? request.deadline()
+                : now.plus(java.time.Duration.ofHours(24));
+        if (!newDeadline.isAfter(now)) {
+            throw new BadRequestException("Revision deadline must be in the future");
+        }
+
+        attempt.setStatus(ExamAttemptStatus.RETURNED_FOR_REVISION);
+        attempt.setRevisionNote(note);
+        attempt.setRevisionDeadline(newDeadline);
+        attempt.setOfficialDeadlineAt(newDeadline);
+        attempt.setDeadlineAt(newDeadline);
         attemptRepository.save(attempt);
 
         return getDetail(examId, attemptId);

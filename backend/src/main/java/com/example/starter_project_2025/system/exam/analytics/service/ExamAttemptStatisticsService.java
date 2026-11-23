@@ -65,11 +65,8 @@ public class ExamAttemptStatisticsService {
                 .toList();
     }
 
-    /** Ly do khong duoc sua; null neu duoc sua. Dung chung cho hien thi va kiem tra server. */
-    static String lockReason(ExamAttempt attempt, long violationCount) {
-        if (violationCount <= 0) {
-            return "Chưa bị gắn cờ gian lận";
-        }
+    /** Ly do khong duoc sua; null neu duoc sua. Cho phep override co ly do + audit voi moi bai da cham xong (UFR-EXM-011). */
+    public static String lockReason(ExamAttempt attempt, long violationCount) {
         if (attempt.getStatus() != ExamAttemptStatus.SUBMITTED || attempt.getFinalScore() == null) {
             return "Bài chưa chấm xong";
         }

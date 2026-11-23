@@ -18,6 +18,7 @@ import SessionDetailPage from "@/pages/management/demo/session/SessionDetailPage
 import SessionManagementPage from "@/pages/management/demo/session/SessionManagementPage";
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
+import AccountSecurityPage from "@/pages/auth/AccountSecurityPage";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
 import { Login } from "@/pages/auth/Login";
 import RegisterPage from "@/pages/auth/RegisterPage";
@@ -587,6 +588,10 @@ export const routes: RouteConfig[] = [
   ...buildEntityRoutes(),
 
   // AUTHENTICATION
+  {
+    path: "/account/security",
+    component: AccountSecurityPage,
+  },
   {
     path: "/not-found-page",
     component: NotFoundPage,

@@ -75,6 +75,8 @@ function getAttemptStatus(attempt?: ExamAttemptSummary) {
     switch (attempt.status) {
         case 'IN_PROGRESS':
             return { label: 'In Progress', variant: 'secondary' as const };
+        case 'RETURNED_FOR_REVISION':
+            return { label: 'Returned for Revision', variant: 'outline' as const };
         case 'PENDING_REVIEW':
             return { label: 'Pending Essay Grading', variant: 'outline' as const };
         case 'SUBMITTED':
@@ -117,7 +119,7 @@ function ExamCard({
     lock?: ExamLock;
 }) {
     const status = getAttemptStatus(attempt);
-    const isInProgress = attempt?.status === 'IN_PROGRESS';
+    const isInProgress = attempt?.status === 'IN_PROGRESS' || attempt?.status === 'RETURNED_FOR_REVISION';
     const isSubmitted = attempt?.status === 'SUBMITTED' || attempt?.status === 'PENDING_REVIEW';
 
     const locked = lock?.locked === true && !isInProgress;
@@ -384,9 +386,27 @@ function ExamCard({
     );
 }
 
+type ScheduleFilter = 'ALL' | 'OPEN' | 'UPCOMING' | 'CLOSED_OR_DONE';
+
+function classifyExamWindow(exam: Exam, attempt?: ExamAttemptSummary): Exclude<ScheduleFilter, 'ALL'> {
+    const now = Date.now();
+    const startMs = exam.startTime ? Date.parse(exam.startTime) : Number.NaN;
+    const endMs = exam.endTime ? Date.parse(exam.endTime) : Number.NaN;
+    const isClosed = exam.status === 'CLOSED' || exam.status === 'ARCHIVED' || (!Number.isNaN(endMs) && now > endMs);
+    const isUpcoming = !Number.isNaN(startMs) && now < startMs;
+    const isSubmitted = attempt?.status === 'SUBMITTED' || attempt?.status === 'PENDING_REVIEW';
+    const outOfAttempts = (attempt?.attemptsUsed ?? 0) > 0 && (attempt?.attemptsRemaining ?? 0) <= 0
+        && attempt?.status !== 'IN_PROGRESS' && attempt?.status !== 'RETURNED_FOR_REVISION';
+
+    if (isUpcoming) return 'UPCOMING';
+    if (isClosed || (isSubmitted && outOfAttempts)) return 'CLOSED_OR_DONE';
+    return 'OPEN';
+}
+
 export default function StudentExamList() {
     const navigate = useNavigate();
     const [page, setPage] = useState(1);
+    const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>('ALL');
 
     const examsQuery = useQuery({
         queryKey: examsQueryKey,
@@ -409,10 +429,22 @@ export default function StudentExamList() {
     const exams = examsQuery.data ?? [];
     const attempts = attemptsQuery.data ?? [];
 
-    const totalPages = Math.max(1, Math.ceil(exams.length / PAGE_SIZE));
+    const latestAttemptByExam = new Map<number, ExamAttemptSummary>();
+    attempts.forEach((a) => {
+        const prev = latestAttemptByExam.get(a.examId);
+        if (!prev || a.attemptNumber > prev.attemptNumber) {
+            latestAttemptByExam.set(a.examId, a);
+        }
+    });
+
+    const filteredExams = scheduleFilter === 'ALL'
+        ? exams
+        : exams.filter((e) => classifyExamWindow(e, latestAttemptByExam.get(e.id)) === scheduleFilter);
+
+    const totalPages = Math.max(1, Math.ceil(filteredExams.length / PAGE_SIZE));
     const currentPage = Math.min(page, totalPages);
     const firstIndex = (currentPage - 1) * PAGE_SIZE;
-    const pagedExams = exams.slice(firstIndex, firstIndex + PAGE_SIZE);
+    const pagedExams = filteredExams.slice(firstIndex, firstIndex + PAGE_SIZE);
 
     const goToPage = (next: number) => {
         setPage(Math.min(Math.max(next, 1), totalPages));
@@ -473,6 +505,39 @@ export default function StudentExamList() {
                         </Button>
                     )}
                 </header>
+
+                {!isLoading && !examsQuery.isError && exams.length > 0 && (
+                    <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter exams by schedule">
+                        {([
+                            { key: 'ALL', label: `All (${exams.length})` },
+                            {
+                                key: 'OPEN',
+                                label: `Open (${exams.filter((e) => classifyExamWindow(e, latestAttemptByExam.get(e.id)) === 'OPEN').length})`,
+                            },
+                            {
+                                key: 'UPCOMING',
+                                label: `Upcoming (${exams.filter((e) => classifyExamWindow(e, latestAttemptByExam.get(e.id)) === 'UPCOMING').length})`,
+                            },
+                            {
+                                key: 'CLOSED_OR_DONE',
+                                label: `Completed / Closed (${exams.filter((e) => classifyExamWindow(e, latestAttemptByExam.get(e.id)) === 'CLOSED_OR_DONE').length})`,
+                            },
+                        ] as { key: ScheduleFilter; label: string }[]).map((tab) => (
+                            <Button
+                                key={tab.key}
+                                type="button"
+                                size="sm"
+                                variant={scheduleFilter === tab.key ? 'default' : 'outline'}
+                                onClick={() => {
+                                    setScheduleFilter(tab.key);
+                                    setPage(1);
+                                }}
+                            >
+                                {tab.label}
+                            </Button>
+                        ))}
+                    </div>
+                )}
 
                 {hasError && (
                     <div

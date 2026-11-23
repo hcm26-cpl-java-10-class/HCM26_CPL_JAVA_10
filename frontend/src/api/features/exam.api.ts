@@ -330,6 +330,29 @@ export const examApi = {
     );
     return response.data;
   },
+  publish: async (examId: number): Promise<ExamDTO> => {
+    const response = await axiosInstance.post<ExamDTO>(`/exams/${examId}/publish`);
+    return response.data;
+  },
+  close: async (examId: number): Promise<ExamDTO> => {
+    const response = await axiosInstance.post<ExamDTO>(`/exams/${examId}/close`);
+    return response.data;
+  },
+  archive: async (examId: number): Promise<ExamDTO> => {
+    const response = await axiosInstance.post<ExamDTO>(`/exams/${examId}/archive`);
+    return response.data;
+  },
+  returnForRevision: async (
+    examId: number,
+    attemptId: number,
+    payload: { note: string; deadline?: string | null }
+  ): Promise<EssayGradingDetail> => {
+    const response = await axiosInstance.post<EssayGradingDetail>(
+      `/exams/${examId}/grading/attempts/${attemptId}/return-for-revision`,
+      payload
+    );
+    return response.data;
+  },
 };
 
 export const questionApi = createBaseApiService<QuestionDTO, QuestionFilter>({ path: "/questions" });

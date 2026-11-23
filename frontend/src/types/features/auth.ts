@@ -15,6 +15,23 @@ export interface LoginResponse {
   rolePermissions: Record<string, string[]>;
 }
 
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  revokeOtherSessions?: boolean;
+}
+
+export interface UserSessionDTO {
+  sessionId: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  rememberMe: boolean;
+  current: boolean;
+  createdAt?: string | null;
+  lastUsedAt?: string | null;
+  expiresAt?: string | null;
+}
+
 export interface AuthContextType {
   user: LoginResponse | null;
   login: (credentials: LoginRequest) => Promise<LoginResponse>;

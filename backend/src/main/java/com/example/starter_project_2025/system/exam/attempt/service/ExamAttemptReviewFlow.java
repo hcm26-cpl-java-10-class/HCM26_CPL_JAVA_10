@@ -111,6 +111,8 @@ class ExamAttemptReviewFlow {
         response.setTitle(exam.getTitle());
         response.setAttemptNumber(attempt.getAttemptNumber());
         response.setStatus(attempt.getStatus());
+        response.setRevisionNote(attempt.getRevisionNote());
+        response.setRevisionDeadline(attempt.getRevisionDeadline());
         response.setTotalPoints(attempt.getTotalPoints());
         response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore()));
         // Chua cong bo ket qua: an diem va dap an dung/sai, chi con cau da lam.

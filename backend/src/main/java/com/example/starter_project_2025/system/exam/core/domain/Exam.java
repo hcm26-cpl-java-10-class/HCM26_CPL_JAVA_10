@@ -46,8 +46,21 @@ public class Exam extends BaseEntity {
     @Column(nullable = false)
     private int durationMinutes;
 
-    // Tinh nang dat lich (start/end) da bi go bo: de thi luon "mo tu do", chi gioi han boi thoi luong, so lan lam va
-    // loi moi. Cot start_time / end_time cu van con trong DB nhung khong con duoc ORM doc hay ghi.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    @ColumnDefault("'PUBLISHED'")
+    private ExamStatus status = ExamStatus.PUBLISHED;
+
+    /** Khung gio mo/dong tuy chon (BR-UNI-14). Null = mo tu do. */
+    @Column(name = "start_time")
+    private LocalDateTime startTime;
+
+    @Column(name = "end_time")
+    private LocalDateTime endTime;
+
+    @Version
+    @Column(name = "version")
+    private Long version;
 
     @Column(nullable = false)
     private Integer maxAttempts = 1;

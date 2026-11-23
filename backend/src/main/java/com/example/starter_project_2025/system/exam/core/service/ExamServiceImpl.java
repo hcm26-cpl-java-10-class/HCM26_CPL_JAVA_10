@@ -32,6 +32,7 @@ import com.example.starter_project_2025.system.exam.core.domain.Exam;
 import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptRepository;
 import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus;
 import com.example.starter_project_2025.system.exam.reminder.domain.ExamReminder;
+import com.example.starter_project_2025.system.exam.core.domain.ExamStatus;
 import com.example.starter_project_2025.system.exam.core.domain.ExamType;
 import com.example.starter_project_2025.system.exam.reminder.domain.ExamReminderRepository;
 import com.example.starter_project_2025.system.exam.core.domain.ExamRepository;
@@ -542,6 +543,100 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 			result.add(questionRepository.save(copyOf(source)));
 		}
 		return result;
+	}
+
+	public ExamDTO publishExam(Long examId) {
+		checkPermission(CrudAction.UPDATE);
+		Exam exam = findExam(examId);
+		if (exam.getStatus() == ExamStatus.ARCHIVED) {
+			throw new BadRequestException("Cannot publish an archived assessment");
+		}
+		boolean hasActiveQuestions = exam.getQuestions().stream()
+				.anyMatch(q -> Boolean.TRUE.equals(q.getIsActive()));
+		boolean hasPool = exam.getQuestionPoolVersions() != null && !exam.getQuestionPoolVersions().isEmpty();
+		if (!hasActiveQuestions && !hasPool) {
+			throw new BadRequestException("Assessment must have at least one active question before publishing");
+		}
+		exam.setStatus(ExamStatus.PUBLISHED);
+		exam.setIsActive(Boolean.TRUE);
+		return examMapper.toResponse(examRepository.save(exam));
+	}
+
+	public ExamDTO closeExam(Long examId) {
+		checkPermission(CrudAction.UPDATE);
+		Exam exam = findExam(examId);
+		if (exam.getStatus() == ExamStatus.ARCHIVED) {
+			throw new BadRequestException("Archived assessment cannot be closed");
+		}
+		exam.setStatus(ExamStatus.CLOSED);
+		return examMapper.toResponse(examRepository.save(exam));
+	}
+
+	public ExamDTO archiveExam(Long examId) {
+		checkPermission(CrudAction.UPDATE);
+		Exam exam = findExam(examId);
+		if (examAttemptRepository.existsByExam_IdAndStatusIn(
+				exam.getId(),
+				List.of(ExamAttemptStatus.NOT_STARTED, ExamAttemptStatus.IN_PROGRESS))) {
+			throw new BadRequestException("Cannot archive assessment while student attempts are in progress");
+		}
+		exam.setStatus(ExamStatus.ARCHIVED);
+		exam.setIsActive(Boolean.FALSE);
+		return examMapper.toResponse(examRepository.save(exam));
+	}
+
+	public ExamDTO duplicateExam(Long examId) {
+		checkPermission(CrudAction.CREATE);
+		Exam source = findExam(examId);
+
+		Exam copy = new Exam();
+		copy.setIsActive(Boolean.TRUE);
+		copy.setStatus(ExamStatus.DRAFT);
+		String baseTitle = source.getTitle() == null ? "Assessment" : source.getTitle().trim();
+		String copyTitle = baseTitle + " (Copy)";
+		copy.setTitle(copyTitle.length() > 200 ? copyTitle.substring(0, 200) : copyTitle);
+		copy.setDurationMinutes(source.getDurationMinutes());
+		copy.setStartTime(source.getStartTime());
+		copy.setEndTime(source.getEndTime());
+		copy.setMaxAttempts(source.getMaxAttempts());
+		copy.setShuffleQuestions(source.getShuffleQuestions());
+		copy.setShuffleOptions(source.getShuffleOptions());
+		copy.setShowAnswersAfterExam(source.getShowAnswersAfterExam());
+		copy.setPassScore(source.getPassScore());
+		copy.setMaxScore(source.getMaxScore());
+		copy.setLatePolicy(source.getLatePolicy());
+		copy.setLatePenaltyPercent(source.getLatePenaltyPercent());
+		copy.setLateGraceMinutes(source.getLateGraceMinutes());
+		copy.setResultVisibility(source.getResultVisibility());
+		copy.setExamType(source.getExamType());
+		copy.setCategory(source.getCategory());
+		copy.setAccessCode(source.getAccessCode());
+		copy.setAntiCheatEnabled(source.getAntiCheatEnabled());
+		copy.setDetectTabSwitch(source.getDetectTabSwitch());
+		copy.setBlockCopyPaste(source.getBlockCopyPaste());
+		copy.setRequireFullscreen(source.getRequireFullscreen());
+		copy.setSingleSession(source.getSingleSession());
+		copy.setCameraProctoring(source.getCameraProctoring());
+		copy.setNotifyOnViolation(source.getNotifyOnViolation());
+		copy.setHeadTurnAngleDeg(source.getHeadTurnAngleDeg());
+		copy.setHeadTurnSeconds(source.getHeadTurnSeconds());
+		copy.setFastSubmitPercent(source.getFastSubmitPercent());
+		copy.setSelfReviewEnabled(source.getSelfReviewEnabled());
+		copy.setPeerReviewEnabled(source.getPeerReviewEnabled());
+		copy.setPeerReviewCount(source.getPeerReviewCount());
+		copy.setPeerReviewAnonymous(source.getPeerReviewAnonymous());
+		copy.setPeerReviewShowReference(source.getPeerReviewShowReference());
+		copy.setCourse(source.getCourse());
+		copy.setSection(source.getSection());
+		copy.setLesson(source.getLesson());
+
+		Set<Question> clonedQuestions = new LinkedHashSet<>();
+		for (Question q : source.getQuestions()) {
+			clonedQuestions.add(questionRepository.save(copyOf(q)));
+		}
+		copy.setQuestions(clonedQuestions);
+
+		return examMapper.toResponse(examRepository.save(copy));
 	}
 
 	private Question copyOf(Question source) {

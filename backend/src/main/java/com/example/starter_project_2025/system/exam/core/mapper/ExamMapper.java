@@ -4,6 +4,7 @@ import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.system.exam.core.domain.Exam;
 import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptRepository;
 import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus;
+import com.example.starter_project_2025.system.exam.core.domain.ExamStatus;
 import com.example.starter_project_2025.system.exam.core.domain.ExamType;
 import com.example.starter_project_2025.system.exam.invitation.domain.InvitationRepository;
 import com.example.starter_project_2025.system.exam.core.dto.ExamDTO;
@@ -53,6 +54,10 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setUpdatedBy(e.getUpdatedBy());
         d.setTitle(e.getTitle());
         d.setDurationMinutes(e.getDurationMinutes());
+        d.setStatus(e.getStatus() == null ? ExamStatus.PUBLISHED : e.getStatus());
+        d.setStartTime(e.getStartTime());
+        d.setEndTime(e.getEndTime());
+        d.setVersion(e.getVersion());
 
         d.setMaxAttempts(e.getMaxAttempts());
         d.setShuffleQuestions(e.getShuffleQuestions());
@@ -162,6 +167,12 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         if (d.isCourseWeightProvided()) e.setCourseWeight(d.getCourseWeight());
         if (d.getTitle() != null) e.setTitle(d.getTitle().trim());
         if (d.getDurationMinutes() != null) e.setDurationMinutes(d.getDurationMinutes());
+        if (d.getStatus() != null) e.setStatus(d.getStatus());
+        else if (e.getStatus() == null) e.setStatus(ExamStatus.PUBLISHED);
+        if (d.isScheduleProvided()) {
+            e.setStartTime(d.getStartTime());
+            e.setEndTime(d.getEndTime());
+        }
 
         if (d.getMaxAttempts() != null) e.setMaxAttempts(d.getMaxAttempts());
         if (d.getShuffleQuestions() != null) e.setShuffleQuestions(d.getShuffleQuestions());

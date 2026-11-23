@@ -37,7 +37,9 @@ public final class ExamAttemptLifecycle {
     }
 
     public static boolean isFinished(ExamAttemptStatus status) {
-        return status != ExamAttemptStatus.NOT_STARTED && status != ExamAttemptStatus.IN_PROGRESS;
+        return status != ExamAttemptStatus.NOT_STARTED
+                && status != ExamAttemptStatus.IN_PROGRESS
+                && status != ExamAttemptStatus.RETURNED_FOR_REVISION;
     }
 
     public static boolean canTransition(ExamAttemptStatus from, ExamAttemptStatus to) {
@@ -46,11 +48,12 @@ public final class ExamAttemptLifecycle {
         }
         return switch (from) {
             case NOT_STARTED -> to == ExamAttemptStatus.IN_PROGRESS;
-            case IN_PROGRESS -> to == ExamAttemptStatus.SUBMITTED
+            case IN_PROGRESS, RETURNED_FOR_REVISION -> to == ExamAttemptStatus.SUBMITTED
                     || to == ExamAttemptStatus.PENDING_REVIEW
                     || to == ExamAttemptStatus.EXPIRED;
-            case PENDING_REVIEW, EXPIRED -> to == ExamAttemptStatus.SUBMITTED;
-            case SUBMITTED -> false;
+            case PENDING_REVIEW, EXPIRED -> to == ExamAttemptStatus.SUBMITTED
+                    || to == ExamAttemptStatus.RETURNED_FOR_REVISION;
+            case SUBMITTED -> to == ExamAttemptStatus.RETURNED_FOR_REVISION;
         };
     }
 
@@ -62,14 +65,14 @@ public final class ExamAttemptLifecycle {
     }
 
     public static SaveAction decideSave(ExamAttemptStatus status, boolean expired) {
-        if (status != ExamAttemptStatus.IN_PROGRESS) {
+        if (status != ExamAttemptStatus.IN_PROGRESS && status != ExamAttemptStatus.RETURNED_FOR_REVISION) {
             return SaveAction.IGNORE;
         }
         return expired ? SaveAction.EXPIRE : SaveAction.APPLY;
     }
 
     public static SubmitAction decideSubmit(ExamAttemptStatus status, boolean expired) {
-        if (status != ExamAttemptStatus.IN_PROGRESS) {
+        if (status != ExamAttemptStatus.IN_PROGRESS && status != ExamAttemptStatus.RETURNED_FOR_REVISION) {
             return SubmitAction.RETURN_CURRENT;
         }
         return expired ? SubmitAction.GRADE_AS_EXPIRED : SubmitAction.GRADE_WITH_ANSWERS;

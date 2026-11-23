@@ -65,6 +65,9 @@ export default function EssayAttemptDetailPage() {
     const [aiProposals, setAiProposals] = useState<Record<number, AiQuestionProposal>>({});
     const [aiModelUsed, setAiModelUsed] = useState<string | null>(null);
     const [isOverwriteModalOpen, setIsOverwriteModalOpen] = useState(false);
+    const [isRevisionModalOpen, setIsRevisionModalOpen] = useState(false);
+    const [revisionNote, setRevisionNote] = useState("");
+    const [revisionDeadline, setRevisionDeadline] = useState("");
     const [selectedTab, setSelectedTab] = useState<"essay" | "coding" | null>(null);
 
     const detailQuery = useQuery({
@@ -125,6 +128,25 @@ export default function EssayAttemptDetailPage() {
         },
         onError: (error) => {
             toast.error(getErrorMessage(error, "Failed to save official grades."));
+        },
+    });
+
+    const returnForRevisionMutation = useMutation({
+        mutationFn: () =>
+            examApi.returnForRevision(numericExamId, numericAttemptId, {
+                note: revisionNote.trim(),
+                deadline: revisionDeadline ? new Date(revisionDeadline).toISOString() : null,
+            }),
+        onSuccess: () => {
+            setIsRevisionModalOpen(false);
+            setRevisionNote("");
+            setRevisionDeadline("");
+            void queryClient.invalidateQueries({ queryKey: ["essay-attempt", numericExamId, numericAttemptId] });
+            void queryClient.invalidateQueries({ queryKey: ["essay-attempts", numericExamId] });
+            toast.success("Attempt returned to student for revision.");
+        },
+        onError: (error) => {
+            toast.error(getErrorMessage(error, "Failed to return attempt for revision."));
         },
     });
 
@@ -239,6 +261,13 @@ export default function EssayAttemptDetailPage() {
                                 Apply All AI Suggestions
                             </Button>
                         )}
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsRevisionModalOpen(true)}
+                            disabled={saveGradeMutation.isPending || returnForRevisionMutation.isPending}
+                        >
+                            Return for Revision
+                        </Button>
                         <Button
                             variant="outline"
                             className="border-purple-300 hover:border-purple-400 hover:bg-purple-50/50 dark:border-purple-800"
@@ -813,6 +842,58 @@ export default function EssayAttemptDetailPage() {
                                 onClick={handleConfirmOverwrite}
                             >
                                 {saveGradeMutation.isPending ? "Overwriting..." : "Overwrite & Save Grade"}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Return for Revision Dialog */}
+                <Dialog open={isRevisionModalOpen} onOpenChange={setIsRevisionModalOpen}>
+                    <DialogContent className="sm:max-w-lg">
+                        <DialogHeader>
+                            <DialogTitle>Return Attempt for Revision</DialogTitle>
+                            <DialogDescription>
+                                Provide clear feedback so the student can revise and resubmit before the deadline (default: 24 hours).
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-2">
+                            <div className="space-y-1.5">
+                                <label htmlFor="revision-note" className="text-sm font-medium">
+                                    Revision Instructions *
+                                </label>
+                                <Textarea
+                                    id="revision-note"
+                                    rows={4}
+                                    placeholder="Explain what needs to be improved or clarified..."
+                                    value={revisionNote}
+                                    onChange={(e) => setRevisionNote(e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label htmlFor="revision-deadline" className="text-sm font-medium">
+                                    Resubmission Deadline (optional)
+                                </label>
+                                <Input
+                                    id="revision-deadline"
+                                    type="datetime-local"
+                                    value={revisionDeadline}
+                                    onChange={(e) => setRevisionDeadline(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter className="gap-2 sm:gap-0">
+                            <Button
+                                variant="outline"
+                                disabled={returnForRevisionMutation.isPending}
+                                onClick={() => setIsRevisionModalOpen(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                disabled={returnForRevisionMutation.isPending || !revisionNote.trim()}
+                                onClick={() => returnForRevisionMutation.mutate()}
+                            >
+                                {returnForRevisionMutation.isPending ? "Returning..." : "Confirm Return"}
                             </Button>
                         </DialogFooter>
                     </DialogContent>

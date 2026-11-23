@@ -87,6 +87,7 @@ public class ExamController extends BaseCrudController<Long, ExamDTO, ExamFilter
     }
 
     @PostMapping("/{id}/duplicate")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_CREATE')")
     public ResponseEntity<ExamDTO> duplicate(@PathVariable Long id) {
         return ResponseEntity.ok(service.duplicate(id));
     }
@@ -112,6 +113,22 @@ public class ExamController extends BaseCrudController<Long, ExamDTO, ExamFilter
         return ResponseEntity.ok(service.updateQuestion(id, questionId, request));
     }
 
+    @PostMapping("/{id}/publish")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_UPDATE')")
+    public ResponseEntity<ExamDTO> publish(@PathVariable Long id) {
+        return ResponseEntity.ok(service.publishExam(id));
+    }
 
+    @PostMapping("/{id}/close")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_UPDATE')")
+    public ResponseEntity<ExamDTO> close(@PathVariable Long id) {
+        return ResponseEntity.ok(service.closeExam(id));
+    }
+
+    @PostMapping("/{id}/archive")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_UPDATE')")
+    public ResponseEntity<ExamDTO> archive(@PathVariable Long id) {
+        return ResponseEntity.ok(service.archiveExam(id));
+    }
 
 }

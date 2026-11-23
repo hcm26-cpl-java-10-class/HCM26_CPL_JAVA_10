@@ -30,6 +30,8 @@ public class ExamAttemptDTO {
     private boolean resultPublished;
 
     private ExamAttemptStatus status;
+    private String revisionNote;
+    private Instant revisionDeadline;
     private Instant startedAt;
     private Instant officialDeadlineAt;
     private Instant deadlineAt;

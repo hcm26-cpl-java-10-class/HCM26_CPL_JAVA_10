@@ -1,9 +1,11 @@
 package com.example.starter_project_2025.system.exam.grading.controller;
 
 import com.example.starter_project_2025.system.exam.grading.dto.EssayGradingDTO;
+import com.example.starter_project_2025.system.exam.grading.dto.ReturnForRevisionRequest;
 import com.example.starter_project_2025.system.exam.integrity.dto.ExamSimilarityDTO;
 import com.example.starter_project_2025.system.exam.grading.service.ExamEssayGradingService;
 import com.example.starter_project_2025.system.exam.integrity.service.ExamSimilarityService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -46,6 +48,16 @@ public class ExamGradingController {
             @RequestBody EssayGradingDTO.GradeSubmissionRequest request
     ) {
         return ResponseEntity.ok(service.submitOfficialGrade(examId, attemptId, request));
+    }
+
+    /** Tra bai yeu cau sinh vien sua va nop lai (UFR-EXM-011). */
+    @PostMapping("/attempts/{attemptId}/return-for-revision")
+    public ResponseEntity<EssayGradingDTO.Detail> returnForRevision(
+            @PathVariable Long examId,
+            @PathVariable Long attemptId,
+            @Valid @RequestBody ReturnForRevisionRequest request
+    ) {
+        return ResponseEntity.ok(service.returnForRevision(examId, attemptId, request));
     }
 
     /** Lay Reference Answer va Rubric da submit cho mot cau hoi trong de thi. */

@@ -65,5 +65,24 @@ public class ExamConfigValidator {
         if (latePolicy == LatePolicy.NOT_ALLOWED && lateGraceMinutes != null && lateGraceMinutes > 0) {
             ctx.add("lateGraceMinutes", "Chỉ cấu hình thời gian gia hạn khi cho phép nộp muộn");
         }
+
+        LocalDateTime startTime = r.isScheduleProvided()
+                ? r.getStartTime()
+                : (existing == null ? null : existing.getStartTime());
+        LocalDateTime endTime = r.isScheduleProvided()
+                ? r.getEndTime()
+                : (existing == null ? null : existing.getEndTime());
+
+        if (startTime != null && endTime != null) {
+            if (!endTime.isAfter(startTime)) {
+                ctx.add("endTime", "Thời gian kết thúc phải sau thời gian bắt đầu");
+            } else if (duration != null && duration > 0) {
+                long windowMinutes = Duration.between(startTime, endTime).toMinutes();
+                if (duration > windowMinutes) {
+                    ctx.add("durationMinutes", "Thời lượng làm bài (" + duration
+                            + " phút) không được vượt quá khung thời gian mở đề (" + windowMinutes + " phút)");
+                }
+            }
+        }
     }
 }

@@ -89,6 +89,8 @@ class ExamAttemptMappingFlow {
             }
         }
         response.setStatus(attempt.getStatus());
+        response.setRevisionNote(attempt.getRevisionNote());
+        response.setRevisionDeadline(attempt.getRevisionDeadline());
         response.setStartedAt(attempt.getStartedAt());
         response.setOfficialDeadlineAt(attempt.getOfficialDeadlineAt());
         response.setDeadlineAt(attempt.getDeadlineAt() != null
@@ -149,6 +151,8 @@ class ExamAttemptMappingFlow {
         response.setExamId(attempt.getExam().getId());
         response.setAttemptNumber(attempt.getAttemptNumber());
         response.setStatus(attempt.getStatus());
+        response.setRevisionNote(attempt.getRevisionNote());
+        response.setRevisionDeadline(attempt.getRevisionDeadline());
         response.setTotalPoints(attempt.getTotalPoints());
         response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore()));
         response.setPassScore(ExamScoring.effectivePassScore(attempt));
