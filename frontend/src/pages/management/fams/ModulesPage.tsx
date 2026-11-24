@@ -7,6 +7,7 @@ import { FullModuleTable } from "@/pages/management/fams/components/FullModuleTa
 import { ModuleModal } from "@/pages/management/fams/components/ModuleModal";
 import { DeleteConfirmDialog } from "@/pages/management/fams/components/DeleteConfirmDialog";
 import { ImportExportModal } from "@/pages/management/fams/components/ImportExportModal";
+import { StickyPageHeader } from "@/pages/management/fams/components/StickyPageHeader";
 import { initialModuleGroups, initialModules } from "@/pages/management/fams/mockData";
 import { moduleGroupApi } from "@/api/features/menu/module_group.api";
 import { moduleApi } from "@/api/features/menu/module.api";
@@ -228,28 +229,20 @@ export const ModulesPage: React.FC = () => {
     return (
         <MainLayout>
             <div className="flex flex-col gap-5 font-sans">
-                {/* Header */}
-                <div className="flex flex-col gap-2">
-                    {/* Breadcrumbs */}
-                    <div className="flex items-center text-xs text-gray-500 font-medium">
-                        <span className="text-gray-500">System</span>
-                        <span className="mx-2 text-gray-300">/</span>
-                        <span className="text-gray-800 dark:text-gray-200 font-semibold">
-                            Modules
-                        </span>
-                    </div>
-
-                    {/* Title & Actions */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
-                        <div>
-                            <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
+                {/* Sticky Page Header */}
+                <StickyPageHeader
+                    breadcrumbs={
+                        <div className="flex items-center text-xs text-gray-500 font-medium">
+                            <span className="text-gray-500">System</span>
+                            <span className="mx-2 text-gray-300">/</span>
+                            <span className="text-gray-800 dark:text-gray-200 font-semibold">
                                 Modules
-                            </h1>
-                            <p className="text-sm text-gray-500 mt-1">
-                                Quản lý các module chức năng của hệ thống
-                            </p>
+                            </span>
                         </div>
-
+                    }
+                    title="Modules"
+                    description="Quản lý các module chức năng của hệ thống"
+                    actions={
                         <div className="flex items-center gap-3">
                             <button
                                 type="button"
@@ -269,8 +262,18 @@ export const ModulesPage: React.FC = () => {
                                 <span>+ Thêm module</span>
                             </button>
                         </div>
-                    </div>
-                </div>
+                    }
+                    compactActions={
+                        <button
+                            type="button"
+                            onClick={handleAddModule}
+                            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-medium shadow-xs transition-colors cursor-pointer"
+                        >
+                            <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            <span>+ Thêm module</span>
+                        </button>
+                    }
+                />
 
                 {/* Full-width Management Table Card */}
                 <FullModuleTable

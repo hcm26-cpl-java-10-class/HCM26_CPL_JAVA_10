@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useDispatch } from "react-redux";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { setLogout } from "@/store/slices/auth/authSlice";
 import { authApi } from "@/api/features/auth.api";
@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { iconMap } from "@/components/datatable/iconMap";
 import { getHomePathByRole } from "@/utils/rbac.utils";
 import { usePermissions } from "@/hooks/usePermissions";
-import { ChevronDown, LogOutIcon, Menu } from "lucide-react";
+import { ChevronDown, GraduationCap, LogOutIcon, Menu } from "lucide-react";
 
 const normalizePath = (path?: string) => {
   const trimmed = (path || "/").replace(/\/+$/, "");
@@ -58,7 +58,7 @@ export function StudentNavbar() {
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
-  const { activeRole, user, effectivePermissions, hasPermission } = usePermissions();
+  const { activeRole, user, effectivePermissions, hasPermission, canLearn } = usePermissions();
   const { data: moduleGroups = [] } = useActiveModuleGroups();
   const { count: pendingInvitationCount } = usePendingInvitations();
   const pathname = normalizePath(location.pathname);
@@ -224,7 +224,7 @@ export function StudentNavbar() {
 
   return (
     <header className="border-b border-sidebar-border bg-sidebar text-sidebar-foreground">
-      <div className="flex h-16 items-center gap-3 px-4">
+      <div className="flex h-16 items-center gap-2 px-2 sm:gap-3 sm:px-4">
         {/* BRAND */}
         <Button
           type="button"
@@ -323,7 +323,19 @@ export function StudentNavbar() {
         </nav>
 
         {/* MOBILE NAVIGATION */}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1 sm:gap-2">
+          {canLearn && (
+            <Button asChild variant="ghost" size="sm" className="shrink-0">
+              <Link
+                to="/my-learning"
+                aria-label="AI Learning Insights"
+                aria-current={pathname === "/my-learning" ? "page" : undefined}
+              >
+                <GraduationCap aria-hidden="true" className="size-4" />
+                <span className="hidden xl:inline">AI Learning Insights</span>
+              </Link>
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -390,7 +402,7 @@ export function StudentNavbar() {
           <InvitationBell />
 
           {/* EXISTING ROLE SWITCHER */}
-          <HeaderRight />
+          <HeaderRight compact />
 
           {/* LOGOUT */}
           <TooltipWrapper content="Logout">

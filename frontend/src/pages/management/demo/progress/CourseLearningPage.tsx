@@ -80,6 +80,7 @@ export function CourseLearningPage() {
     onSuccess: (updated: EnrollmentProgress) => {
       queryClient.setQueryData(["lesson-progress", enrollmentId], updated);
       toast.success("Progress updated.");
+      void queryClient.invalidateQueries({ queryKey: ["personal-learning-roadmap"] });
     },
     onError: (error: any) => {
       toast.error(error?.response?.data?.message || "Could not update progress.");

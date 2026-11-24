@@ -6,6 +6,7 @@ import { StudentNavbar } from "@/components/layout/StudentNavbar";
 import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import type { ReactNode } from "react";
+import { Outlet } from "react-router-dom";
 
 export function MainLayout({
                                children,
@@ -13,7 +14,7 @@ export function MainLayout({
                                pathLinks,
                                dense = false,
                            }: {
-    children: ReactNode;
+    children?: ReactNode;
     pathName?: Record<string, string>;
     pathLinks?: Record<string, string>;
     /** Tighter header / content padding (Course Online pages). */
@@ -21,6 +22,7 @@ export function MainLayout({
 }) {
     const { activeRole } = usePermissions();
     const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
+    const content = children ?? <Outlet />;
 
     if (isStudentView) {
         return (
@@ -32,7 +34,7 @@ export function MainLayout({
                 </header>
 
                 <main className="flex-1 px-6 pb-6 pt-4">
-                    {children}
+                    {content}
                 </main>
             </div>
         );
@@ -53,7 +55,7 @@ export function MainLayout({
                 </header>
 
                 <main className={`min-h-0 min-w-0 flex-1 flex flex-col overflow-x-hidden overflow-y-auto ${dense ? "px-4 pb-3 pt-1" : "px-6 pb-6 pt-6"}`}>
-                    {children}
+                    {content}
                 </main>
             </SidebarInset>
         </SidebarProvider>

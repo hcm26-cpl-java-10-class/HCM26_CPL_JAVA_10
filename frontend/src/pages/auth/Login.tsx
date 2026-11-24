@@ -142,7 +142,7 @@ export const Login: React.FC = () => {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
-                                placeholder="ΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇó"
+                                placeholder="••••••••"
                                 className="bg-background "
                             />
                             <Button

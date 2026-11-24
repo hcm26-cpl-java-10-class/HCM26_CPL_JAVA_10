@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ModuleGroupModal } from "@/pages/management/fams/components/ModuleGroupModal";
 import { DeleteConfirmDialog } from "@/pages/management/fams/components/DeleteConfirmDialog";
 import { ModuleGroupTable } from "@/pages/management/fams/components/ModuleGroupTable";
+import { StickyPageHeader } from "@/pages/management/fams/components/StickyPageHeader";
 import { initialModuleGroups } from "@/pages/management/fams/mockData";
 import { moduleGroupApi } from "@/api/features/menu/module_group.api";
 import { moduleApi } from "@/api/features/menu/module.api";
@@ -184,28 +185,20 @@ export const ModuleGroupsPage: React.FC = () => {
     return (
         <MainLayout>
             <div className="flex flex-col gap-5 font-sans">
-                {/* Header */}
-                <div className="flex flex-col gap-2">
-                    {/* Breadcrumbs */}
-                    <div className="flex items-center text-xs text-gray-500 font-medium">
-                        <span className="text-gray-500">System</span>
-                        <span className="mx-2 text-gray-300">/</span>
-                        <span className="text-gray-800 dark:text-gray-200 font-semibold">
-                            Module Groups
-                        </span>
-                    </div>
-
-                    {/* Title & Primary Action */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
-                        <div>
-                            <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
+                {/* Sticky Page Header */}
+                <StickyPageHeader
+                    breadcrumbs={
+                        <div className="flex items-center text-xs text-gray-500 font-medium">
+                            <span className="text-gray-500">System</span>
+                            <span className="mx-2 text-gray-300">/</span>
+                            <span className="text-gray-800 dark:text-gray-200 font-semibold">
                                 Module Groups
-                            </h1>
-                            <p className="text-sm text-gray-500 mt-1">
-                                Quản lý nhóm chức năng trong hệ thống
-                            </p>
+                            </span>
                         </div>
-
+                    }
+                    title="Module Groups"
+                    description="Quản lý nhóm chức năng trong hệ thống"
+                    actions={
                         <button
                             type="button"
                             onClick={handleAddGroup}
@@ -214,8 +207,8 @@ export const ModuleGroupsPage: React.FC = () => {
                             <Plus className="h-4 w-4" />
                             <span>+ Thêm nhóm</span>
                         </button>
-                    </div>
-                </div>
+                    }
+                />
 
                 {/* Management Card */}
                 <div className="bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-border shadow-xs p-5 flex flex-col gap-4">

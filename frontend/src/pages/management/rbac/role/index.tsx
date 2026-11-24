@@ -126,10 +126,10 @@ function RoleFormModal({
   onClose,
   initial,
   onSubmit,
-  isSubmitting,
-  relationOptions,
-  fieldErrors,
-}: RoleFormModalProps) {
+  isSubmitting = false,
+  relationOptions = {},
+  fieldErrors = {},
+}: Partial<RoleFormModalProps> & { open: boolean; onClose: (open: boolean) => void; onSubmit: (data: Record<string, unknown>) => void }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isActive, setIsActive] = useState(true);
@@ -137,7 +137,7 @@ function RoleFormModal({
 
   const permissionGroups = useMemo(() => {
     const groups = new Map<string, PermissionGroup>();
-    for (const permission of relationOptions.permissionIds ?? []) {
+    for (const permission of relationOptions?.permissionIds ?? []) {
       const resource = permission.resource?.trim() || "OTHER";
       const group = groups.get(resource) ?? {
         resource,
@@ -199,7 +199,7 @@ function RoleFormModal({
     });
   };
 
-  const nameErrors = fieldErrors.name ?? [];
+  const nameErrors = fieldErrors?.name ?? [];
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
@@ -390,9 +390,9 @@ export default function RoleManagementPage() {
               onClose={props.onClose}
               initial={props.initial as Record<string, unknown> | null}
               onSubmit={props.onSubmit}
-              isSubmitting={props.isSubmitting}
-              relationOptions={props.relationOptions}
-              fieldErrors={props.fieldErrors}
+              isSubmitting={table.isSubmitting}
+              relationOptions={table.relationOptions}
+              fieldErrors={table.fieldErrors}
             />
           )}
         />

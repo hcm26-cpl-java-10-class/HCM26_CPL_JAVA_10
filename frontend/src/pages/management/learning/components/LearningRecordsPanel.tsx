@@ -11,15 +11,21 @@ import { learningApi } from "@/api/features/learning.api";
 import type { RootState } from "@/store/store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import type { RoadmapCourse } from "@/api/features/learning-roadmap.api";
 import type { Enrollment } from "@/types";
 
 // A target ID is used only by User Detail. Personal callers always use /learning/me.
 export function LearningRecordsPanel({
   userId,
   compact = false,
+  hideMetrics = false,
+  courseProgress,
 }: {
   userId?: string;
   compact?: boolean;
+  hideMetrics?: boolean;
+  courseProgress?: RoadmapCourse[];
 }) {
   const { email } = useSelector((state: RootState) => state.auth);
 
@@ -41,9 +47,9 @@ export function LearningRecordsPanel({
 
   const backendRecords = query.data;
   const allEnrolled: Enrollment[] = backendRecords.enrolledCourses;
-  // The current enrollment contract has no per-course progress/completion evidence.
-  const inProgressList: Enrollment[] = [];
-  const completedList: Enrollment[] = [];
+  const progressById = new Map(courseProgress?.map(course => [course.id, course]));
+  const inProgressList = allEnrolled.filter(course => progressById.get(course.courseId)?.status === "IN_PROGRESS");
+  const completedList = allEnrolled.filter(course => progressById.get(course.courseId)?.status === "COMPLETED");
   const inProgressCourses = backendRecords.inProgressCourses;
   const completedCourses = backendRecords.completedCourses;
   const calculatedOverallProgress = backendRecords.overallProgress;
@@ -61,7 +67,7 @@ export function LearningRecordsPanel({
   return (
     <div className="space-y-5">
       {/* 4 Top Metric Cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {!hideMetrics && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {metrics.map(([label, value]) => (
           <Card key={String(label)} className="py-0 shadow-sm">
             <CardContent className="p-4">
@@ -72,7 +78,7 @@ export function LearningRecordsPanel({
             </CardContent>
           </Card>
         ))}
-      </div>
+      </div>}
 
       {compact ? (
         allEnrolled.length === 0 ? (
@@ -189,9 +195,21 @@ export function LearningRecordsPanel({
                     </CardContent>
                   </Card>
                 ) : (
-                  allEnrolled.map((course) => (
-                    <CourseCard key={course.id} course={enrollmentToCourse(course)} />
-                  ))
+                  allEnrolled.map((course) => {
+                    const percent = progressById.get(course.courseId)?.progressPercent;
+                    if (!courseProgress) return <CourseCard key={course.id} course={enrollmentToCourse(course)} />;
+                    return (
+                      <article key={course.id} className="space-y-2 rounded-lg border bg-card p-3">
+                        <Link to={`/courses/${course.courseId}`} className="text-sm font-semibold hover:underline">{course.courseName}</Link>
+                        {percent == null ? <p className="text-xs text-muted-foreground">Progress unavailable</p> :
+                          <div className="flex items-center gap-2">
+                            <Progress value={percent} className={percent === 100 ? "[&>[data-slot=progress-indicator]]:bg-emerald-600" : undefined}
+                              aria-label={`${course.courseName} progress`} />
+                            <span className="text-xs tabular-nums">{percent}%</span>
+                          </div>}
+                      </article>
+                    );
+                  })
                 )}
               </TabsContent>
 
@@ -204,7 +222,7 @@ export function LearningRecordsPanel({
                 ) : (
                   <Unavailable
                     title="In-progress courses"
-                    text="Course progress tracking is not available. Enrollments are shown in the Enrolled tab."
+                    text={courseProgress ? "You have no courses in progress." : "Course progress tracking is not available. Enrollments are shown in the Enrolled tab."}
                   />
                 )}
               </TabsContent>
@@ -218,7 +236,7 @@ export function LearningRecordsPanel({
                 ) : (
                   <Unavailable
                     title="Completed courses"
-                    text="Course completion records are not available."
+                    text={courseProgress ? "You have no completed courses yet." : "Course completion records are not available."}
                   />
                 )}
               </TabsContent>
@@ -249,7 +267,7 @@ export function LearningRecordsPanel({
         </Tabs>
       )}
 
-      {calculatedOverallProgress === null ? (
+      {!courseProgress && (calculatedOverallProgress === null ? (
         <p className="text-xs text-muted-foreground">
           Completion and progress tracking are not available for these enrollments.
         </p>
@@ -257,7 +275,7 @@ export function LearningRecordsPanel({
         <p className="text-xs text-muted-foreground">
           Progress and course completion are automatically tracked for all your enrolled courses.
         </p>
-      )}
+      ))}
     </div>
   );
 }

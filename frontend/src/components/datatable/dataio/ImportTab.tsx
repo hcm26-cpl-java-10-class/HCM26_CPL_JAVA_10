@@ -291,7 +291,7 @@ export function ImportTab({
 
               <p className="text-xs text-muted-foreground">
                 {allowedExtensions.join(", ")}
-                {" ΓÇö max "}
+                {" — max "}
                 {maxSizeLabel}
               </p>
 

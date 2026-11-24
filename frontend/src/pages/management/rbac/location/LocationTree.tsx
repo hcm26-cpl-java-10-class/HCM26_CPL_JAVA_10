@@ -385,13 +385,13 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
                           <td className="py-2.5 px-3 text-muted-foreground">
                             <div className="flex items-center gap-1">
                               <Mail className="size-3 text-muted-foreground/70" />
-                              {usr.email || "ΓÇö"}
+                              {usr.email || "—"}
                             </div>
                           </td>
                           <td className="py-2.5 px-3 text-muted-foreground">
                             <div className="flex items-center gap-1">
                               <Phone className="size-3 text-muted-foreground/70" />
-                              {usr.phone || "ΓÇö"}
+                              {usr.phone || "—"}
                             </div>
                           </td>
                         </tr>

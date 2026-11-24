@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import { useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -12,12 +12,15 @@ import { AlertCircle, LoaderCircle, LogOutIcon, RefreshCw } from "lucide-react";
 import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { iconMap } from "@/components/datatable/iconMap";
 
+const SIDEBAR_SCROLL_KEY = "sidebar_scroll_top";
+
 export function SidebarMenu() {
     const dispatch = useDispatch();
     const location = useLocation();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { toggleSidebar, state } = useSidebar();
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const {
         data: moduleGroups = [],
         isPending: isMenuLoading,
@@ -25,10 +28,30 @@ export function SidebarMenu() {
         refetch: refetchMenu,
     } = useActiveModuleGroups();
 
+    // Preserve scroll position across renders and navigation
+    useLayoutEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
+        const savedScroll = sessionStorage.getItem(SIDEBAR_SCROLL_KEY);
+        if (savedScroll !== null) {
+            const parsed = parseInt(savedScroll, 10);
+            if (!Number.isNaN(parsed)) {
+                container.scrollTop = parsed;
+            }
+        }
+    }, [location.pathname]);
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const scrollTop = e.currentTarget.scrollTop;
+        sessionStorage.setItem(SIDEBAR_SCROLL_KEY, scrollTop.toString());
+    };
+
     const handleLogout = async () => {
         try {
             await authApi.logout();
         } finally {
+            sessionStorage.removeItem(SIDEBAR_SCROLL_KEY);
             queryClient.removeQueries({ queryKey: ["sidebar-menu"] });
             dispatch(setLogout());
             navigate("/login", { replace: true });
@@ -107,7 +130,7 @@ export function SidebarMenu() {
                 </Button>
             </SidebarHeader>
 
-            <SidebarContent>
+            <SidebarContent ref={scrollContainerRef} onScroll={handleScroll}>
                 {isMenuLoading ? (
                     <div className="flex items-center justify-center px-3 py-6 text-muted-foreground">
                         <LoaderCircle className="size-5 animate-spin" />

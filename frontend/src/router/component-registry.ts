@@ -132,7 +132,7 @@ export const routes: RouteConfig[] = [
   { path: "/admin/audit-log", component: AuditLogPage, isModuleDriven: true },
 
   // Dashboard
-  { path: "/dashboard", component: Dashboard, requiredPermission: "USER_READ", isModuleDriven: true },
+  { path: "/dashboard", component: Dashboard, requiredPermission: "USER_READ", isModuleDriven: false },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
   { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ" },
   { path: "/management/alerts", component: ProjectAlertsPage, requiredPermission: "PROJECT_ALERT_READ" },

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { ChevronRight, type LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -32,6 +33,22 @@ export function NavMain({
     sidebarState: "expanded" | "collapsed";
 }) {
     const groupActive = items.some((i) => i.isActive);
+    const [isOpen, setIsOpen] = useState(true);
+    const activeItemRef = useRef<HTMLLIElement>(null);
+
+    // If an item in this group becomes active, make sure the collapsible is open
+    useEffect(() => {
+        if (groupActive) {
+            setIsOpen(true);
+        }
+    }, [groupActive]);
+
+    // On initial mount or when active item changes, ensure active item is visible in view
+    useEffect(() => {
+        if (groupActive && activeItemRef.current) {
+            activeItemRef.current.scrollIntoView({ block: "nearest", behavior: "auto" });
+        }
+    }, [groupActive]);
 
     if (sidebarState !== "expanded") {
         return (
@@ -79,8 +96,8 @@ export function NavMain({
     return (
         <Collapsible
             key={title}
-            asChild
-            defaultOpen={true}
+            open={isOpen}
+            onOpenChange={setIsOpen}
             className="group/collapsible"
         >
             <SidebarMenuItem>
@@ -108,7 +125,10 @@ export function NavMain({
                 <CollapsibleContent>
                     <SidebarMenuSub>
                         {items.map((subItem) => (
-                            <SidebarMenuSubItem key={subItem.title}>
+                            <SidebarMenuSubItem
+                                key={subItem.title}
+                                ref={subItem.isActive ? activeItemRef : undefined}
+                            >
                                 <SidebarMenuSubButton
                                     asChild
                                     isActive={subItem.isActive}

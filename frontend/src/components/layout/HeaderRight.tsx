@@ -26,7 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export default function HeaderRight() {
+export default function HeaderRight({ compact = false }: { compact?: boolean } = {}) {
   const { canLearn } = usePermissions();
   const dispatch = useDispatch();
   const auth = useSelector((state: RootState) => state.auth);
@@ -178,7 +178,7 @@ export default function HeaderRight() {
 
   if (!role) {
     return (
-      <div className="flex items-center gap-3">
+      <div className={compact ? "flex items-center gap-1 sm:gap-3" : "flex items-center gap-3"}>
         {renderUserAccountMenu()}
         <NotificationBell />
         <ToggleTheme />
@@ -188,10 +188,10 @@ export default function HeaderRight() {
 
   if (!canSwitchRole) {
     return (
-      <div className="flex items-center gap-3">
+      <div className={compact ? "flex items-center gap-1 sm:gap-3" : "flex items-center gap-3"}>
         <Badge
           variant="secondary"
-          className="text-sm text-blue-700 bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300"
+          className={`text-sm text-blue-700 bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 ${compact ? "hidden sm:inline-flex" : ""}`}
         >
           {formatRoleLabel(currentRole)} View
         </Badge>
@@ -203,12 +203,13 @@ export default function HeaderRight() {
   }
 
   return (
-    <div className="flex items-center gap-3" ref={dropdownRef}>
+    <div className={compact ? "flex items-center gap-1 sm:gap-3" : "flex items-center gap-3"} ref={dropdownRef}>
       {/* Existing Role / View-mode selector */}
       <div className="relative">
         <button
           onClick={() => setOpen((o) => !o)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer dark:bg-card dark:border-border dark:text-foreground ${isStudentRole
+          aria-label={`Switch view. Current view: ${formatRoleLabel(currentRole)}`}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer dark:bg-card dark:border-border dark:text-foreground ${compact ? "max-sm:px-1.5" : ""} ${isStudentRole
             ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
             : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
             }`}
@@ -218,7 +219,7 @@ export default function HeaderRight() {
           ) : (
             <ShieldCheck size={14} />
           )}
-          <span>{formatRoleLabel(currentRole)} View</span>
+          <span className={compact ? "hidden sm:inline" : undefined}>{formatRoleLabel(currentRole)} View</span>
           <ChevronDown
             size={13}
             className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}

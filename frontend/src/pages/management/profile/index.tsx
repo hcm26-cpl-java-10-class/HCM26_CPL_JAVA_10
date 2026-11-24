@@ -10,6 +10,7 @@ import { ProfileHeader } from "./components/ProfileHeader";
 import { ProfileSummaryCard } from "./components/ProfileSummaryCard";
 import { PersonalInfoCard } from "./components/PersonalInfoCard";
 import { LearningOverviewCard } from "./components/LearningOverviewCard";
+import { LearningGoalCard } from "./components/LearningGoalCard";
 import { AccountSecurityCard } from "./components/AccountSecurityCard";
 import { SkillsCard } from "./components/SkillsCard";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
@@ -261,6 +262,7 @@ export const PersonalProfilePage: React.FC = () => {
                 onCancelEditing={() => setIsEditing(false)}
                 onSaveProfile={handleSaveProfile}
               />
+              {canLearn && auth.permissions.includes("COURSE_READ") && <LearningGoalCard key={auth.email} account={auth.email} />}
               {canLearn && <LearningOverviewCard />}
             </div>
 

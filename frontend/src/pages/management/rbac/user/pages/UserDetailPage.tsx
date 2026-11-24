@@ -229,8 +229,8 @@ export function UserDetailPage() {
                     </Section>
 
                     <div className="flex flex-wrap gap-x-6 gap-y-2 px-1 text-xs text-muted-foreground">
-                      <MetaItem icon={CalendarDays} label="Ng├áy tß║ío" value={formatDate(user?.createdAt) || "ΓÇö"} />
-                      <MetaItem icon={Clock} label="Cß║¡p nhß║¡t lß║ºn cuß╗æi" value={formatDate(user?.updatedAt) || "ΓÇö"} />
+                      <MetaItem icon={CalendarDays} label="Ng├áy tß║ío" value={formatDate(user?.createdAt) || "—"} />
+                      <MetaItem icon={Clock} label="Cß║¡p nhß║¡t lß║ºn cuß╗æi" value={formatDate(user?.updatedAt) || "—"} />
                       {user?.lastLoginAt && (
                         <MetaItem icon={Clock} label="─É─âng nhß║¡p gß║ºn nhß║Ñt" value={formatDate(user.lastLoginAt)} />
                       )}
@@ -300,8 +300,8 @@ export function UserDetailPage() {
                 </Section>
 
                 <div className="flex flex-wrap gap-x-6 gap-y-2 px-1 text-xs text-muted-foreground">
-                  <MetaItem icon={CalendarDays} label="Ng├áy tß║ío" value={formatDate(user?.createdAt) || "ΓÇö"} />
-                  <MetaItem icon={Clock} label="Cß║¡p nhß║¡t lß║ºn cuß╗æi" value={formatDate(user?.updatedAt) || "ΓÇö"} />
+                  <MetaItem icon={CalendarDays} label="Ng├áy tß║ío" value={formatDate(user?.createdAt) || "—"} />
+                  <MetaItem icon={Clock} label="Cß║¡p nhß║¡t lß║ºn cuß╗æi" value={formatDate(user?.updatedAt) || "—"} />
                   {user?.lastLoginAt && (
                     <MetaItem icon={Clock} label="─É─âng nhß║¡p gß║ºn nhß║Ñt" value={formatDate(user.lastLoginAt)} />
                   )}
