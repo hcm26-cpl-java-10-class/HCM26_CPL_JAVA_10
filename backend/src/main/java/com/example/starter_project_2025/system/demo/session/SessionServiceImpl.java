@@ -7,16 +7,23 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.ConflictException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import jakarta.persistence.criteria.Predicate;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -34,6 +41,7 @@ public class SessionServiceImpl
     private static final int MAX_REPORTED_CONFLICTS = 5;
     private static final int TITLE_MAX = 150;
     private static final int LOCATION_MAX = 150;
+    private static final String UNVERIFIED_TRAINER_NOTE_PREFIX = "Trainer: ";
     private static final DateTimeFormatter SLOT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     SessionMapper sessionMapper;
@@ -74,6 +82,7 @@ public class SessionServiceImpl
         String trimmedTitle = session.getTitle().trim();
         String normalizedRoom = normalizeLocation(request.getLocation());
         session.initializeForSchedule(trimmedTitle, normalizedRoom);
+        session.scheduleSlot(request.getStartTime(), request.getEndTime());
         ensureNoScheduleConflict(NO_SESSION, session.getClassId(), session.getTrainerId(),
                 session.getLocation(), session.getStartTime(), session.getEndTime());
     }
@@ -126,6 +135,7 @@ public class SessionServiceImpl
             request.setLocation(nextLocation);
         }
         session.updateScheduleDetails(trimmedTitle, nextLocation);
+        session.scheduleSlot(newStart, newEnd);
 
         ensureNoScheduleConflict(session.getId(), session.getClassId(), newTrainerId,
                 session.getLocation(), newStart, newEnd);
@@ -351,6 +361,7 @@ public class SessionServiceImpl
 
             Session entity = sessionMapper.toEntity(r);
             entity.initializeForSchedule(r.getTitle().trim(), normalizeLocation(r.getLocation()));
+            entity.scheduleSlot(r.getStartTime(), r.getEndTime());
 
             ensureNoBatchOverlap(entity, toSave);
             ensureNoScheduleConflict(NO_SESSION, entity.getClassId(), entity.getTrainerId(),
@@ -383,6 +394,74 @@ public class SessionServiceImpl
                         + "' is already used by '" + other.getTitle() + "' in this time slot.");
             }
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SessionDTO> getCalendarSessions(
+            LocalDateTime from,
+            LocalDateTime to,
+            Session.SessionStatus status,
+            Long classId,
+            Long trainerId,
+            Long topicId,
+            String location,
+            Collection<Long> scopedTrainerIds,
+            Collection<Long> scopedClassIds,
+            boolean restrictToScope,
+            Pageable pageable
+    ) {
+        checkPermission(CrudAction.READ);
+
+        boolean hasScopedTrainers = scopedTrainerIds != null && !scopedTrainerIds.isEmpty();
+        boolean hasScopedClasses = scopedClassIds != null && !scopedClassIds.isEmpty();
+        if (restrictToScope && !hasScopedTrainers && !hasScopedClasses) {
+            return Page.empty(pageable);
+        }
+
+        Specification<Session> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.isTrue(root.get("isActive")));
+            // Half-open overlap: matches any session intersecting [from, to), including cross-day sessions.
+            predicates.add(cb.lessThan(root.get("startTime"), to));
+            predicates.add(cb.greaterThan(root.get("endTime"), from));
+
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+            if (classId != null) {
+                predicates.add(cb.equal(root.get("classId"), classId));
+            }
+            if (trainerId != null) {
+                predicates.add(cb.equal(root.get("trainerId"), trainerId));
+            }
+            if (topicId != null) {
+                predicates.add(cb.equal(root.get("topicId"), topicId));
+            }
+            if (location != null && !location.isBlank()) {
+                String pattern = "%" + location.trim().toLowerCase(Locale.ROOT) + "%";
+                predicates.add(cb.like(cb.lower(root.get("location")), pattern));
+            }
+            if (restrictToScope) {
+                List<Predicate> scopePredicates = new ArrayList<>(2);
+                if (hasScopedTrainers) {
+                    // Exclude legacy local records whose trainer was only stored as a note ("Trainer: ...")
+                    // while falling back to a default trainerId, so verified trainers never inherit them.
+                    Predicate notNoteOnlyTrainer = cb.or(
+                            cb.isNull(root.get("note")),
+                            cb.not(cb.like(root.get("note"), UNVERIFIED_TRAINER_NOTE_PREFIX + "%"))
+                    );
+                    scopePredicates.add(cb.and(root.get("trainerId").in(scopedTrainerIds), notNoteOnlyTrainer));
+                }
+                if (hasScopedClasses) {
+                    scopePredicates.add(root.get("classId").in(scopedClassIds));
+                }
+                predicates.add(cb.or(scopePredicates.toArray(Predicate[]::new)));
+            }
+            return cb.and(predicates.toArray(Predicate[]::new));
+        };
+
+        return sessionRepository.findAll(spec, pageable).map(sessionMapper::toResponse);
     }
 
     @Override

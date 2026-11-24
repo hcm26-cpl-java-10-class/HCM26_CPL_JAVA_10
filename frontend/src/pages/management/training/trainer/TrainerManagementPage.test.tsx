@@ -156,3 +156,146 @@ it.each([false, true])("previews the Trainer Excel and commits only a fully vali
     expect(fakeHttp.callsTo("post", "/trainers/import")).toHaveLength(valid ? 1 : 0);
     expect(fakeHttp.calls.some(c => c.url.includes("trainee"))).toBe(false);
 });
+
+it("clamps to the last valid page after deactivating the sole trainer on page 2 of Active filter while keeping filters", async () => {
+    const records = Array.from({ length: 21 }, (_, idx) => ({
+        id: idx + 1,
+        trainerCode: `TR_${String(idx + 1).padStart(2, "0")}`,
+        fullName: `Active Trainer ${idx + 1}`,
+        email: `trainer${idx + 1}@example.test`,
+        specialization: "Java",
+        status: "ACTIVE" as "ACTIVE" | "INACTIVE",
+        source: "INTERNAL",
+        teachingTopics: [],
+    }));
+
+    fakeHttp.on("get", "/trainers", (req: { params?: Record<string, unknown> }) => {
+        const filterStatus = String(req.params?.status ?? "all");
+        const filterSearch = String(req.params?.search ?? "").trim().toLowerCase();
+        const reqPage = Number(req.params?.page ?? 0);
+        const reqSize = Number(req.params?.size ?? 20);
+        const filtered = records.filter(item =>
+            (filterStatus === "all" || item.status === filterStatus)
+            && (!filterSearch || item.fullName.toLowerCase().includes(filterSearch) || item.trainerCode.toLowerCase().includes(filterSearch)),
+        );
+        const totalPages = Math.ceil(filtered.length / reqSize);
+        const slice = filtered.slice(reqPage * reqSize, (reqPage + 1) * reqSize);
+        return { content: slice, totalElements: filtered.length, totalPages };
+    });
+
+    fakeHttp.on("patch", "/trainers/21/status", () => {
+        records[20].status = "INACTIVE";
+        return records[20];
+    });
+
+    const { user } = renderAt(<TrainerManagementPage />, { route: "/trainers" });
+    await screen.findByText("Active Trainer 1");
+
+    await user.type(screen.getByLabelText("Search Trainers"), "Active");
+    await user.selectOptions(screen.getByLabelText("Filter Trainer Status"), "ACTIVE");
+    await screen.findByText("21 trainers · Page 1 / 2");
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await screen.findByText("Active Trainer 21");
+    expect(screen.getByText("21 trainers · Page 2 / 2")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Actions for TR_21" }));
+    await user.click(screen.getByRole("menuitem", { name: "Deactivate TR_21" }));
+
+    await screen.findByText("20 trainers · Page 1 / 1");
+    expect(screen.getByText("Active Trainer 1")).toBeInTheDocument();
+    expect(screen.getByText("Active Trainer 20")).toBeInTheDocument();
+    expect(screen.queryByText("Active Trainer 21")).not.toBeInTheDocument();
+
+    const lastCall = fakeHttp.callsTo("get", "/trainers").at(-1);
+    expect(lastCall?.params).toEqual({ search: "Active", status: "ACTIVE", page: 0, size: 20 });
+});
+
+it("uses a v-flag-compatible Trainer ID pattern and rejects domainless Work Email like review@localhost", async () => {
+    const { user } = renderAt(<TrainerManagementPage />, { route: "/trainers" });
+    await screen.findByText("Trainer Twelve");
+
+    await user.click(screen.getByRole("button", { name: "Add Trainer" }));
+    await screen.findByRole("option", { name: /JAVA@1/ });
+    const codeInput = screen.getByLabelText("Trainer ID *") as HTMLInputElement;
+    const pattern = codeInput.getAttribute("pattern") ?? "";
+
+    // Must compile cleanly under HTML's unicodeSets (v) flag
+    const vRegex = new RegExp(`^(?:${pattern})$`, "v");
+    expect(vRegex.test("TR-01_A")).toBe(true);
+    expect(vRegex.test("A".repeat(20))).toBe(true);
+    expect(vRegex.test("A".repeat(21))).toBe(false);
+    expect(vRegex.test("TR@01")).toBe(false);
+    expect(vRegex.test("_TR01")).toBe(false);
+    expect(codeInput.maxLength).toBe(20);
+
+    await user.type(codeInput, "TR-02_B");
+    await user.type(screen.getByLabelText("Full Name *"), "Local Email Trainer");
+    await user.type(screen.getByLabelText("Work Email *"), "review@localhost");
+    await user.click(screen.getByRole("button", { name: "Save Trainer" }));
+
+    expect(await screen.findByText(/Work Email must be a valid email address/i)).toBeInTheDocument();
+    expect(fakeHttp.callsTo("post", "/trainers")).toHaveLength(0);
+});
+
+it("preserves legacy over-length fields without silent truncation, clearly flags which field to shorten, and saves once fixed", async () => {
+    const legacyName = "L".repeat(92);
+    const legacySpec = "S".repeat(215);
+    const legacyTrainer = {
+        id: 9,
+        trainerCode: "TR_LEGACY",
+        fullName: legacyName,
+        email: "legacy@example.test",
+        specialization: legacySpec,
+        status: "ACTIVE" as const,
+        source: "INTERNAL",
+        teachingTopics: [],
+    };
+    let savedPayload: unknown = null;
+
+    fakeHttp.on("get", "/trainers", {
+        content: [legacyTrainer],
+        totalElements: 1,
+        totalPages: 1,
+    });
+    fakeHttp.on("get", "/trainers/9", legacyTrainer);
+    fakeHttp.on("put", "/trainers/9", (req: { data?: unknown }) => {
+        savedPayload = req.data;
+        return {
+            id: 9,
+            ...(req.data as Record<string, unknown>),
+            source: "INTERNAL",
+            teachingTopics: [],
+        };
+    });
+
+    const { user } = renderAt(<TrainerManagementPage />, { route: "/trainers" });
+    await screen.findByText("TR_LEGACY");
+    await user.click(screen.getByRole("button", { name: "Actions for TR_LEGACY" }));
+    await user.click(screen.getByRole("menuitem", { name: "Edit TR_LEGACY" }));
+
+    const nameInput = await screen.findByLabelText("Full Name *") as HTMLInputElement;
+    await screen.findByRole("option", { name: /JAVA@1/ });
+    const specInput = screen.getByLabelText("Specialization") as HTMLInputElement;
+
+    // Legacy values are NOT silently truncated
+    expect(nameInput.value).toBe(legacyName);
+    expect(specInput.value).toBe(legacySpec);
+    expect(screen.getByText(/Full Name exceeds the 80-character limit/i)).toBeInTheDocument();
+    expect(screen.getByText(/Specialization exceeds the 200-character limit/i)).toBeInTheDocument();
+
+    // Submitting before fixing is blocked cleanly
+    await user.click(screen.getByRole("button", { name: "Save Trainer" }));
+    expect(fakeHttp.callsTo("put", "/trainers/9")).toHaveLength(0);
+
+    // Once shortened within limits, save succeeds
+    await user.clear(nameInput);
+    await user.type(nameInput, "Shortened Legacy Name");
+    await user.clear(specInput);
+    await user.type(specInput, "Java, Spring");
+    await user.click(screen.getByRole("button", { name: "Save Trainer" }));
+
+    await waitFor(() => expect(fakeHttp.callsTo("put", "/trainers/9")).toHaveLength(1));
+    expect((savedPayload as { fullName?: string; specialization?: string })?.fullName).toBe("Shortened Legacy Name");
+    expect((savedPayload as { fullName?: string; specialization?: string })?.specialization).toBe("Java, Spring");
+});

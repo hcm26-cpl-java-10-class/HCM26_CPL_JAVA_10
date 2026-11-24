@@ -86,7 +86,7 @@ Người dùng điều hướng đến mục **Training Operations → Topics & 
 }
 ```
 * **Kết quả mong đợi:** HTTP Status Code `201 Created`, phản hồi đối tượng môn học vừa tạo kèm ID và ngày tạo hệ thống.
-* **Kết quả thực tế:** 
+* **Kết quả thực tế:**
   * HTTP Status: `201 Created`
   * Response Time: `85 ms`
   * Response Body:

@@ -40,10 +40,10 @@ export function SessionCard({
       session={session}
       trigger={
         <article
-          className={`group relative cursor-pointer overflow-hidden rounded-xl border border-border/80 border-l-4 ${accentBorderClass} bg-card p-3 shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md text-left`}
+          className={`group relative w-full min-w-0 cursor-pointer overflow-hidden rounded-lg border border-border/80 border-l-4 ${accentBorderClass} bg-card p-2 shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md text-left`}
         >
-          <div className="flex flex-wrap items-center justify-between gap-1.5 pb-2 border-b border-border/60">
-            <div className="inline-flex items-center gap-1 text-[11px] font-bold text-primary whitespace-nowrap">
+          <div className="flex flex-wrap items-center justify-between gap-1 pb-1.5 border-b border-border/60">
+            <div className="inline-flex min-w-0 items-center gap-1 text-[10px] font-bold text-primary whitespace-nowrap">
               <Clock className="h-3 w-3 shrink-0" />
               <span>{timeLabel}</span>
               {durationText && (
@@ -51,38 +51,38 @@ export function SessionCard({
               )}
             </div>
             {typeof sessionIndex === "number" && (
-              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary whitespace-nowrap shrink-0">
+              <span className="rounded bg-primary/10 px-1 py-0.5 text-[10px] font-bold text-primary whitespace-nowrap shrink-0">
                 Ca {sessionIndex}
               </span>
             )}
           </div>
 
-          <div className="pt-2 space-y-2 text-xs">
-            <h4 className="font-bold text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+          <div className="pt-1.5 space-y-1.5 text-[11px]">
+            <h4 className="font-bold text-foreground leading-snug line-clamp-2 break-words group-hover:text-primary transition-colors">
               {session.title || "Buổi học đào tạo"}
             </h4>
 
-            <div className="space-y-1 text-[11px] text-muted-foreground">
-              <div className="flex items-start gap-1.5">
-                <GraduationCap className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground/70" />
-                <span className="break-words leading-snug">
+            <div className="space-y-1 text-[10px] text-muted-foreground">
+              <div className="flex items-start gap-1 min-w-0">
+                <GraduationCap className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground/70" />
+                <span className="min-w-0 break-words leading-tight line-clamp-2">
                   {getClassCode(session.classId)} · {getTopicCode(session.topicId, session.title)}
                 </span>
               </div>
-              <div className="flex items-start gap-1.5">
-                <User className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground/70" />
-                <span className="font-medium text-foreground/85 leading-snug break-words">
-                  {getTrainerName(session.trainerId)}
+              <div className="flex items-start gap-1 min-w-0">
+                <User className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground/70" />
+                <span className="min-w-0 font-medium text-foreground/85 leading-tight break-words line-clamp-2">
+                  {getTrainerName(session.trainerId, session.note)}
                 </span>
               </div>
-              <div className="flex items-start gap-1.5">
-                <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground/70" />
-                <span className="leading-snug break-words">{session.location || "Chưa xếp phòng"}</span>
+              <div className="flex items-start gap-1 min-w-0">
+                <MapPin className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground/70" />
+                <span className="min-w-0 leading-tight break-words line-clamp-2">{session.location || "Chưa xếp phòng"}</span>
               </div>
             </div>
 
-            <div className="pt-1.5 flex items-center justify-between gap-2 border-t border-border/40">
-              <span className={`inline-block rounded px-2 py-0.5 text-[10px] font-semibold border whitespace-nowrap shrink-0 ${statusClass}`}>
+            <div className="pt-1.5 flex flex-wrap items-center justify-between gap-1 border-t border-border/40">
+              <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold border whitespace-nowrap shrink-0 ${statusClass}`}>
                 {STATUS_LABELS[session.status] ?? session.status}
               </span>
               <span className="text-[10px] text-primary/80 opacity-0 group-hover:opacity-100 transition-opacity font-medium flex items-center gap-0.5 whitespace-nowrap shrink-0">

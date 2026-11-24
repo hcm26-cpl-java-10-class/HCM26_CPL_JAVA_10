@@ -9,13 +9,13 @@
     <text x="24" y="29" fill="#ffffff" font-size="14" font-weight="bold">GET</text>
     <text x="85" y="30" fill="#3b4151" font-size="15" font-weight="bold" font-family="monospace">/api/subjects</text>
     <text x="220" y="30" fill="#666666" font-size="13">Lấy danh sách các môn học / chủ đề có phân trang, tìm kiếm và lọc</text>
-    
+
     <text x="20" y="80" fill="#3b4151" font-size="14" font-weight="bold">Parameters:</text>
     <text x="30" y="105" fill="#333333" font-size="12" font-family="monospace">• search (string, query): "Java"</text>
     <text x="30" y="125" fill="#333333" font-size="12" font-family="monospace">• status (string, query): "ACTIVE"</text>
     <text x="30" y="145" fill="#333333" font-size="12" font-family="monospace">• page (integer, query): 0</text>
     <text x="30" y="165" fill="#333333" font-size="12" font-family="monospace">• size (integer, query): 10</text>
-    
+
     <text x="20" y="205" fill="#3b4151" font-size="14" font-weight="bold">Responses:</text>
     <rect x="20" y="220" width="1080" height="330" rx="4" fill="#292d3e"/>
     <text x="35" y="245" fill="#49cc90" font-size="13" font-weight="bold">Code: 200 OK (application/json)</text>

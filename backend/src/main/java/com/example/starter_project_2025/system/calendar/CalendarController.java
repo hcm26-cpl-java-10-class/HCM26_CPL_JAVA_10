@@ -1,9 +1,10 @@
 package com.example.starter_project_2025.system.calendar;
 
 import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.system.demo.session.Session;
 import com.example.starter_project_2025.system.demo.session.SessionDTO;
-import com.example.starter_project_2025.system.demo.session.SessionFilter;
 import com.example.starter_project_2025.system.demo.session.SessionService;
+import com.example.starter_project_2025.system.rbac.user.User;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -21,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Locale;
 
 @RestController
 @RequiredArgsConstructor
@@ -29,6 +31,7 @@ import java.time.LocalDateTime;
 public class CalendarController {
 
     private final SessionService sessionService;
+    private final CalendarPersonalScopeResolver personalScopeResolver;
 
     private void validateDateRange(LocalDateTime from, LocalDateTime to, int page, int size) {
         if (!from.isBefore(to)) {
@@ -53,15 +56,26 @@ public class CalendarController {
         }
     }
 
-    private Long getCurrentUserId() {
+    private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.isAuthenticated()) {
             Object principal = authentication.getPrincipal();
             if (principal instanceof UserPrincipal userPrincipal && userPrincipal.getUser() != null) {
-                return userPrincipal.getUser().getId();
+                return userPrincipal.getUser();
             }
         }
         return null;
+    }
+
+    private static Session.SessionStatus parseStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+        try {
+            return Session.SessionStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     @GetMapping("/sessions")
@@ -97,9 +111,19 @@ public class CalendarController {
     ) {
         validateDateRange(from, to, page, size);
 
-        SessionFilter filter = SessionFilter.forCalendarRange(
-                from, to, status, classId, trainerId, topicId, location);
-        return sessionService.getAll(sessionPage(page, size), null, filter);
+        return sessionService.getCalendarSessions(
+                from,
+                to,
+                parseStatus(status),
+                classId,
+                trainerId,
+                topicId,
+                location,
+                null,
+                null,
+                false,
+                sessionPage(page, size)
+        );
     }
 
     @GetMapping("/my-sessions")
@@ -126,17 +150,28 @@ public class CalendarController {
     ) {
         validateDateRange(from, to, page, size);
 
-        Long currentUserId = getCurrentUserId();
-        if (currentUserId == null) {
+        User currentUser = getCurrentUser();
+        if (currentUser == null) {
             throw new ResponseStatusException(
                     HttpStatus.UNAUTHORIZED,
                     "User must be authenticated to view personal schedule"
             );
         }
 
-        SessionFilter filter = SessionFilter.forCalendarRange(
-                from, to, status, classId, currentUserId, null, null);
-        return sessionService.getAll(sessionPage(page, size), null, filter);
+        CalendarPersonalScopeResolver.PersonalScope scope = personalScopeResolver.resolveFor(currentUser);
+        return sessionService.getCalendarSessions(
+                from,
+                to,
+                parseStatus(status),
+                classId,
+                null,
+                null,
+                null,
+                scope.trainerIds(),
+                scope.classIds(),
+                true,
+                sessionPage(page, size)
+        );
     }
 
     private static PageRequest sessionPage(int page, int size) {
@@ -150,4 +185,3 @@ public class CalendarController {
         );
     }
 }
-

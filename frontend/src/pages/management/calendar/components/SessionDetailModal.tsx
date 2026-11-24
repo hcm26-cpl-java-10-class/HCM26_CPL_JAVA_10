@@ -83,7 +83,7 @@ export function SessionDetailModal({
             <dt className="text-muted-foreground flex items-center gap-1.5">
               <User className="h-4 w-4" /> Giảng viên
             </dt>
-            <dd className="font-medium text-foreground">{getTrainerName(session.trainerId)}</dd>
+            <dd className="font-medium text-foreground">{getTrainerName(session.trainerId, session.note)}</dd>
           </div>
 
           <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-2 p-3">

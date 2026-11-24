@@ -11,7 +11,7 @@
   <text x="27" y="34" fill="#ffffff" font-size="18" font-weight="bold">F</text>
   <text x="62" y="34" fill="#0f172a" font-size="16" font-weight="bold">FAMS Training Platform</text>
   <text x="260" y="34" fill="#64748b" font-size="13">Training Operations / <tspan fill="#0f172a" font-weight="600">Topics &amp; Syllabus Management</tspan></text>
-  
+
   <!-- User Profile in Top Bar -->
   <circle cx="1140" cy="28" r="16" fill="#e2e8f0"/>
   <text x="1132" y="33" fill="#475569" font-size="12" font-weight="bold">MH</text>
@@ -20,18 +20,18 @@
   <!-- Left Sidebar (Training Operations) -->
   <rect x="0" y="56" width="230" height="764" fill="#ffffff" stroke="#e2e8f0"/>
   <text x="24" y="90" fill="#94a3b8" font-size="11" font-weight="700" letter-spacing="0.5">TRAINING OPERATIONS</text>
-  
+
   <rect x="12" y="105" width="206" height="36" rx="6" fill="transparent"/>
   <text x="44" y="128" fill="#475569" font-size="13">Class</text>
-  
+
   <rect x="12" y="145" width="206" height="36" rx="6" fill="transparent"/>
   <text x="44" y="168" fill="#475569" font-size="13">Weekly Timetable</text>
-  
+
   <!-- Active Sidebar Item: Topics & Syllabus -->
   <rect x="12" y="185" width="206" height="36" rx="6" fill="#eff6ff"/>
   <text x="44" y="208" fill="#2563eb" font-size="13" font-weight="bold">Topics &amp; Syllabus</text>
   <circle cx="28" cy="203" r="4" fill="#2563eb"/>
-  
+
   <rect x="12" y="225" width="206" height="36" rx="6" fill="transparent"/>
   <text x="44" y="248" fill="#475569" font-size="13">Training Programs</text>
 
@@ -41,7 +41,7 @@
   <!-- Main Modal Dialog (TopicSyllabusEditorDialog) -->
   <g transform="translate(260, 80)" filter="url(#modalShadow)">
     <rect x="0" y="0" width="910" height="710" rx="10" fill="#ffffff"/>
-    
+
     <!-- Modal Header -->
     <rect x="0" y="0" width="910" height="64" rx="10" fill="#ffffff"/>
     <line x1="0" y1="64" x2="910" y2="64" stroke="#e2e8f0"/>
@@ -102,7 +102,7 @@
 
     <!-- Lessons Table Container -->
     <rect x="28" y="285" width="852" height="330" rx="6" fill="#ffffff" stroke="#e2e8f0"/>
-    
+
     <!-- Table Header -->
     <rect x="28" y="285" width="852" height="36" fill="#f8fafc" stroke="#e2e8f0"/>
     <text x="44" y="308" fill="#64748b" font-size="11" font-weight="bold">NO.</text>
@@ -168,7 +168,7 @@
 
     <!-- Modal Footer Actions -->
     <line x1="0" y1="635" x2="910" y2="635" stroke="#e2e8f0"/>
-    
+
     <rect x="28" y="652" width="130" height="38" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
     <text x="46" y="676" fill="#475569" font-size="13" font-weight="500">Reset to Default</text>
 

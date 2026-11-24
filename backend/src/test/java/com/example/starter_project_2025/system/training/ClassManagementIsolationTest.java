@@ -102,9 +102,10 @@ class ClassManagementIsolationTest {
   em.persist(subject);em.flush();
   var ps=new com.example.starter_project_2025.system.trainingprogram.ProgramSubject();
   ps.setProgram(program);ps.setSubject(subject);ps.setOrderIndex(1);em.persist(ps);em.flush();
-  var trainer=new com.example.starter_project_2025.system.trainer.Trainer();
-  trainer.setTrainerCode("SYNTHETIC_TRAINER");trainer.setFullName("Synthetic internal trainer");trainer.setEmail("trainer@example.test");
-  trainer.setTeachingTopics(new java.util.LinkedHashSet<>(List.of(subject)));em.persist(trainer);em.flush();
+  var trainer=com.example.starter_project_2025.system.trainer.Trainer.create(
+      "SYNTHETIC_TRAINER","Synthetic internal trainer","trainer@example.test",null,
+      com.example.starter_project_2025.system.trainer.TrainerStatus.ACTIVE,List.of(subject));
+  em.persist(trainer);em.flush();
   var d=service.get(fixture);d.setMasterTrainerId(trainer.getId());d.setMasterTrainer(trainer.getFullName());service.update(fixture,d);
   return new SetupFixture(program.getId(),ps.getId(),trainer.getId());
  }
@@ -308,5 +309,3 @@ class ClassManagementIsolationTest {
   new ObjectMapper().writeValue(Path.of(System.getProperty("srs.independent.report-dir", "target/class-management-isolation"),"independent-domain-observations.json").toFile(),Map.of("scope","JPA, MockMvc and method authorization; no live HTTP, JWT login, SMTP or Swagger acceptance","jdbcUrl",URL,"databaseLifetime","Test JVM only; IDs expire when JVM exits","snapshots",observations,"businessApiPass",0,"ucAccepted",0));
  }
 }
-
-

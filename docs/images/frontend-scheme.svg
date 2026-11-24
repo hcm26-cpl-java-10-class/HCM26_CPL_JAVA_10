@@ -30,7 +30,7 @@
     <!-- Right Pie Chart Visualization -->
     <rect x="360" y="105" width="310" height="320" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
     <text x="430" y="135" fill="#334155" font-size="13" font-weight="bold">Assessment Weight Breakdown</text>
-    
+
     <!-- Pie Chart Graphic -->
     <circle cx="515" cy="240" r="80" fill="none" stroke="#3b82f6" stroke-width="45" stroke-dasharray="75 427" stroke-dashoffset="0"/>
     <circle cx="515" cy="240" r="80" fill="none" stroke="#10b981" stroke-width="45" stroke-dasharray="125 377" stroke-dashoffset="-75"/>

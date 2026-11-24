@@ -4,10 +4,10 @@ import jakarta.validation.constraints.*;
 import java.util.Set;
 
 public record UpdateTrainerRequest(
-    @NotBlank @Size(max = 50) @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9_-]{0,49}") String trainerCode,
-    @NotBlank @Size(max = 150) String fullName,
-    @NotBlank @Email @Size(max = 254) String email,
-    @Size(max = 500) String specialization,
+    @NotBlank @Size(max = Trainer.MAX_CODE_LENGTH) @Pattern(regexp = Trainer.CODE_REGEX) String trainerCode,
+    @NotBlank @Size(max = Trainer.MAX_FULL_NAME_LENGTH) String fullName,
+    @NotBlank @Email(regexp = Trainer.EMAIL_REGEX, message = "Work Email must be a valid email address.") @Size(max = Trainer.MAX_EMAIL_LENGTH) String email,
+    @Size(max = Trainer.MAX_SPECIALIZATION_LENGTH) String specialization,
     @NotNull TrainerStatus status,
     @Size(max = 100) Set<@NotNull @Positive Long> teachingTopicIds
 ) {

@@ -65,7 +65,7 @@ class ClassReadinessIntegrationTest {
     }
     private void session() {
         var s = new Session(); s.setClassId(item.getId()); s.setTrainerId(900L); s.setTopicId(1L); s.setTitle("Readiness session");
-        s.setStartTime(item.getStartDate().atTime(9, 0)); s.setEndTime(item.getStartDate().atTime(11, 0)); sessions.saveAndFlush(s);
+        s.scheduleSlot(item.getStartDate().atTime(9, 0), item.getStartDate().atTime(11, 0)); sessions.saveAndFlush(s);
     }
     private void linkProgramAndTrainer() {
         var p = new TrainingProgram(); p.setCode("READY_PROGRAM"); p.setName("Program"); p.setVersion("1"); p.setStatus(ProgramStatus.ACTIVE); programs.saveAndFlush(p);
@@ -200,10 +200,18 @@ class ClassReadinessIntegrationTest {
         assertEquals(2, item.getPlannedSize());
     }
     @Test void cancelledAndOutOfRangeSessionsDoNotMakeCalendarReady() {
-        session(); var s = sessions.findByClassId(item.getId()).getFirst(); s.setStatus(Session.SessionStatus.CANCELLED); sessions.saveAndFlush(s);
+        session(); var s = sessions.findByClassId(item.getId()).getFirst(); s.cancel("Cancelled for readiness test"); sessions.saveAndFlush(s);
         assertEquals(ClassReadinessService.State.NOT_READY, check("calendar").status());
-        s.setStatus(Session.SessionStatus.SCHEDULED); s.setStartTime(item.getEndDate().plusDays(1).atTime(9, 0));
-        s.setEndTime(item.getEndDate().plusDays(1).atTime(10, 0)); sessions.saveAndFlush(s);
+        var outOfRange = Session.builder()
+                .classId(item.getId())
+                .trainerId(900L)
+                .topicId(1L)
+                .title("Out of range session")
+                .startTime(item.getEndDate().plusDays(1).atTime(9, 0))
+                .endTime(item.getEndDate().plusDays(1).atTime(10, 0))
+                .status(Session.SessionStatus.SCHEDULED)
+                .build();
+        sessions.saveAndFlush(outOfRange);
         assertEquals(ClassReadinessService.State.NOT_READY, check("calendar").status());
     }
     @Test void onlineFormatRequiresValidMeetingUrlAndUnknownFormatIsUnknown() {

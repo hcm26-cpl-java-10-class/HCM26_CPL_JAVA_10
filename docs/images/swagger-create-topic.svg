@@ -48,7 +48,7 @@
   <!-- Response Body Box with Copy & Download -->
   <text x="120" y="495" fill="#888888" font-size="11">Response body</text>
   <rect x="120" y="505" width="950" height="195" rx="4" fill="#292d3e"/>
-  
+
   <!-- Buttons Copy & Download -->
   <rect x="940" y="515" width="55" height="22" rx="3" fill="#3f445b"/>
   <text x="952" y="530" fill="#ffffff" font-size="11">Copy</text>

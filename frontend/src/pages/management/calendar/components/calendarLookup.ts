@@ -28,7 +28,7 @@ export function formatCalendarTime(value: string) {
 export interface CalendarLookupContextType {
   getClassName: (classId?: number) => string;
   getClassCode: (classId?: number) => string;
-  getTrainerName: (trainerId?: number) => string;
+  getTrainerName: (trainerId?: number, note?: string | null) => string;
   getTopicName: (topicId?: number, sessionTitle?: string) => string;
   getTopicCode: (topicId?: number, sessionTitle?: string) => string;
 }
@@ -36,7 +36,13 @@ export interface CalendarLookupContextType {
 export const CalendarLookupContext = createContext<CalendarLookupContextType>({
   getClassName: (id) => (id ? `Lớp #${id}` : "—"),
   getClassCode: (id) => (id ? `Lớp #${id}` : "—"),
-  getTrainerName: (id) => (id ? `Trainer #${id}` : "Chưa phân công"),
+  getTrainerName: (id, note) => {
+    if (note?.startsWith("Trainer: ")) {
+      const fromNote = note.slice("Trainer: ".length).trim();
+      if (fromNote) return fromNote;
+    }
+    return id ? `Trainer #${id}` : "Chưa phân công";
+  },
   getTopicName: (id, title) => {
     const match = title?.match(/^\[(.*?)\]/);
     if (match) return `[${match[1]}]`;

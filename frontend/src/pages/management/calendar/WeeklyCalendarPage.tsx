@@ -1,11 +1,12 @@
-import { getCalendarSessions, getMyCalendarSessions } from "@/api/features/calendar.api";
-import { clsApi, type TrainingClass } from "@/api/features/cls.api";
-import { trainerApi, type Trainer } from "@/api/features/trainer.api";
+import { fetchAllCalendarSessions } from "@/api/features/calendar.api";
+import { clsApi } from "@/api/features/cls.api";
+import { ALL_STATUSES, externalApi } from "@/api/features/external.api";
 import type {
   CalendarSessionResponse,
   CalendarSessionsPage,
 } from "@/api/features/calendar.api";
 import { MainLayout } from "@/components/layout/MainLayout";
+import type { ExternalTrainer } from "@/types";
 import type { CalendarSessionStatus } from "@/types/features/calendar";
 import { isAxiosError } from "axios";
 import dayjs from "dayjs";
@@ -41,7 +42,16 @@ import {
 import { SessionCard } from "./components/SessionCard";
 import { SessionDetailModal } from "./components/SessionDetailModal";
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 200;
+
+function sessionIntersectsDay(session: CalendarSessionResponse, dayDateKey: string): boolean {
+  if (!session.startTime || !session.endTime) return false;
+  const dayStart = dayjs.tz(`${dayDateKey}T00:00:00`, TIME_ZONE);
+  const dayEnd = dayStart.add(1, "day");
+  const start = dayjs.tz(session.startTime, TIME_ZONE);
+  const end = dayjs.tz(session.endTime, TIME_ZONE);
+  return start.valueOf() < dayEnd.valueOf() && end.valueOf() > dayStart.valueOf();
+}
 
 function getCurrentWeekStart() {
   const today = dayjs().tz(TIME_ZONE).startOf("day");
@@ -85,21 +95,29 @@ export default function WeeklyCalendarPage() {
   // Bộ lọc lớp học (classId)
   const classFilter = searchParams.get("classId") || "ALL";
 
-  const [systemClasses, setSystemClasses] = useState<TrainingClass[]>([]);
-  const [trainers, setTrainers] = useState<Trainer[]>([]);
+  const [systemClasses, setSystemClasses] = useState<Array<{ id: number; code?: string; name?: string }>>([]);
+  const [trainers, setTrainers] = useState<ExternalTrainer[]>([]);
   const [systemSubjects, setSystemSubjects] = useState<Array<{ id: number; code: string; name: string }>>([]);
 
   useEffect(() => {
     clsApi.getAllClasses().then((res) => {
-      if (Array.isArray(res)) {
+      if (Array.isArray(res) && res.length > 0) {
         setSystemClasses(res);
       }
-    }).catch(() => { });
+    }).catch(() => {
+      // Fallback for users who have SESSION_READ without CLASS_READ.
+      externalApi.getClasses(ALL_STATUSES).then((fallback) => {
+        if (Array.isArray(fallback)) {
+          setSystemClasses(fallback);
+        }
+      }).catch(() => { });
+    });
 
-    trainerApi.list({ page: 0, size: 200 }).then((res) => {
-      const list = res?.content || [];
-      if (Array.isArray(list)) {
-        setTrainers(list);
+    // Session.trainerId is verified against the external training directory (SessionContextVerifier),
+    // and /api/external/trainers does not require TRAINER_READ.
+    externalApi.getTrainers(ALL_STATUSES).then((res) => {
+      if (Array.isArray(res)) {
+        setTrainers(res);
       }
     }).catch(() => { });
 
@@ -130,10 +148,14 @@ export default function WeeklyCalendarPage() {
     return found?.code || `Lớp #${classId}`;
   };
 
-  const getTrainerName = (trainerId?: number): string => {
+  const getTrainerName = (trainerId?: number, note?: string | null): string => {
+    if (note?.startsWith("Trainer: ")) {
+      const fromNote = note.slice("Trainer: ".length).trim();
+      if (fromNote) return fromNote;
+    }
     if (!trainerId) return "Chưa phân công";
     const found = trainers.find((t) => t.id === trainerId);
-    return found?.fullName || `Trainer #${trainerId}`;
+    return found?.name || `Trainer #${trainerId}`;
   };
 
   const getTopicName = (topicId?: number, sessionTitle?: string): string => {
@@ -164,30 +186,23 @@ export default function WeeklyCalendarPage() {
     return "—";
   };
 
-  const rawPage = searchParams.get("page") ?? "0";
-  const parsedPage = Number(rawPage);
-  const page =
-    /^\d+$/.test(rawPage) && Number.isSafeInteger(parsedPage) && parsedPage <= 2147483647
-      ? parsedPage
-      : 0;
-
   const [result, setResult] = useState<CalendarSessionsPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Tính khoảng ngày gọi API tùy theo viewMode (không vượt quá 31 ngày theo quy định backend)
+  // Tính khoảng ngày [from, to) với to là đầu kỳ tiếp theo (tối đa 31 ngày theo quy định backend)
   const { from, to, dateTitle } = useMemo(() => {
     if (viewMode === "month") {
       const startOfMonth = selectedDate.startOf("month");
-      const endOfMonth = selectedDate.endOf("month");
+      const startOfNextMonth = startOfMonth.add(1, "month");
       return {
         from: startOfMonth.format("YYYY-MM-DDTHH:mm:ss"),
-        to: endOfMonth.format("YYYY-MM-DDTHH:mm:ss"),
+        to: startOfNextMonth.format("YYYY-MM-DDTHH:mm:ss"),
         dateTitle: `Tháng ${selectedDate.format("MM / YYYY")}`,
       };
     } else {
-      // week hoặc list: xem theo khoảng 7 ngày của tuần đã chọn
+      // week hoặc list: xem theo khoảng 7 ngày [Thứ Hai 00:00, Thứ Hai tuần sau 00:00)
       return {
         from: weekStart.format("YYYY-MM-DDTHH:mm:ss"),
         to: weekStart.add(7, "day").format("YYYY-MM-DDTHH:mm:ss"),
@@ -204,19 +219,17 @@ export default function WeeklyCalendarPage() {
       setError(null);
 
       try {
-        const queryParams = {
-          from,
-          to,
-          status: statusFilter === "ALL" ? undefined : statusFilter,
-          classId: classFilter !== "ALL" ? Number(classFilter) : undefined,
-          page,
-          size: PAGE_SIZE,
-        };
-
-        const data =
-          scope === "mine"
-            ? await getMyCalendarSessions(queryParams, controller.signal)
-            : await getCalendarSessions(queryParams, controller.signal);
+        const data = await fetchAllCalendarSessions(
+          scope,
+          {
+            from,
+            to,
+            status: statusFilter === "ALL" ? undefined : statusFilter,
+            classId: classFilter !== "ALL" ? Number(classFilter) : undefined,
+            size: PAGE_SIZE,
+          },
+          controller.signal,
+        );
 
         if (!controller.signal.aborted) {
           setResult(data);
@@ -224,6 +237,7 @@ export default function WeeklyCalendarPage() {
       } catch (requestError) {
         if (controller.signal.aborted) return;
 
+        setResult(null);
         const forbidden =
           isAxiosError(requestError) && requestError.response?.status === 403;
         const unauthorized =
@@ -245,7 +259,7 @@ export default function WeeklyCalendarPage() {
 
     void loadSessions();
     return () => controller.abort();
-  }, [from, to, statusFilter, classFilter, scope, page, reloadKey]);
+  }, [from, to, statusFilter, classFilter, scope, reloadKey]);
 
   function updateCalendarUrl(values: Record<string, string>) {
     const nextParams = new URLSearchParams(searchParams);
@@ -294,7 +308,7 @@ export default function WeeklyCalendarPage() {
         const matchTitle = (s.title || "").toLowerCase().includes(q);
         const matchLoc = (s.location || "").toLowerCase().includes(q);
         const matchClass = `class-${s.classId}`.toLowerCase().includes(q) || String(s.classId).includes(q) || getClassCode(s.classId).toLowerCase().includes(q) || getClassName(s.classId).toLowerCase().includes(q);
-        const matchTrainer = `trainer-${s.trainerId}`.toLowerCase().includes(q) || String(s.trainerId).includes(q) || getTrainerName(s.trainerId).toLowerCase().includes(q);
+        const matchTrainer = `trainer-${s.trainerId}`.toLowerCase().includes(q) || String(s.trainerId).includes(q) || getTrainerName(s.trainerId, s.note).toLowerCase().includes(q);
         const matchTopic = getTopicCode(s.topicId, s.title).toLowerCase().includes(q) || getTopicName(s.topicId, s.title).toLowerCase().includes(q);
         return matchTitle || matchLoc || matchClass || matchTrainer || matchTopic;
       }
@@ -335,7 +349,7 @@ export default function WeeklyCalendarPage() {
       `"${(s.title || "").replace(/"/g, '""')}"`,
       `"${getClassCode(s.classId)}"`,
       `"${getTopicCode(s.topicId, s.title)}"`,
-      `"${getTrainerName(s.trainerId)}"`,
+      `"${getTrainerName(s.trainerId, s.note)}"`,
       `"${(s.location || "Chưa có").replace(/"/g, '""')}"`,
       `"${formatCalendarTime(s.startTime)}"`,
       `"${formatCalendarTime(s.endTime)}"`,
@@ -368,7 +382,7 @@ export default function WeeklyCalendarPage() {
     "Thứ Năm",
     "Thứ Sáu",
     "Thứ Bảy",
-    "Chủ nhật",
+    "Chủ Nhật",
   ].map((label, index) => {
     const date = weekStart.add(index, "day");
     return {
@@ -410,10 +424,7 @@ export default function WeeklyCalendarPage() {
     for (let day = 1; day <= daysInMonth; day++) {
       const curDate = startOfMonth.date(day);
       const dateKey = curDate.format("YYYY-MM-DD");
-      const daySessions = sessions.filter((s) => {
-        if (!s.startTime) return false;
-        return s.startTime.substring(0, 10) === dateKey;
-      });
+      const daySessions = sessions.filter((s) => sessionIntersectsDay(s, dateKey));
 
       list.push({
         dateKey,
@@ -724,61 +735,64 @@ export default function WeeklyCalendarPage() {
                 </div>
               )}
 
-              {/* 1. CHẾ ĐỘ XEM TUẦN (WEEK VIEW - RESPONSIVE GRID, KHÔNG CẮT CHỦ NHẬT) */}
+              {/* 1. CHẾ ĐỘ XEM TUẦN (WEEK VIEW - 1 HÀNG 7 CỘT, CUỘN NGANG TRONG KHUNG KHI HẸP) */}
               {viewMode === "week" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7 gap-3">
-                  {weekDays.map((day) => {
-                    const daySessions = sessions
-                      .filter((s) => s.startTime && s.startTime.substring(0, 10) === day.dateKey)
-                      .sort(
-                        (a, b) =>
-                          dayjs.tz(a.startTime, TIME_ZONE).valueOf() -
-                          dayjs.tz(b.startTime, TIME_ZONE).valueOf(),
-                      );
+                <div data-testid="week-timetable-scroll" className="w-full min-w-0 overflow-x-auto pb-1">
+                  <div data-testid="week-timetable-grid" className="grid grid-cols-7 gap-2 min-w-[840px]">
+                    {weekDays.map((day) => {
+                      const daySessions = sessions
+                        .filter((s) => sessionIntersectsDay(s, day.dateKey))
+                        .sort(
+                          (a, b) =>
+                            dayjs.tz(a.startTime, TIME_ZONE).valueOf() -
+                            dayjs.tz(b.startTime, TIME_ZONE).valueOf(),
+                        );
 
-                    return (
-                      <section
-                        key={day.dateKey}
-                        className={`flex flex-col overflow-hidden rounded-xl border bg-card shadow-xs ${day.isToday ? "border-primary/50 ring-1 ring-primary/20" : "border-border"
-                          }`}
-                      >
-                        <header
-                          className={`border-b px-3 py-2.5 text-center ${day.isToday ? "bg-primary/10" : "bg-muted/40"
+                      return (
+                        <section
+                          key={day.dateKey}
+                          data-testid={`week-day-${day.dateKey}`}
+                          className={`flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card shadow-xs ${day.isToday ? "border-primary/50 ring-1 ring-primary/20" : "border-border"
                             }`}
                         >
-                          <p className="text-xs font-semibold text-muted-foreground">{day.label}</p>
-                          <p className={`mt-0.5 text-base font-bold ${day.isToday ? "text-primary" : "text-foreground"}`}>
-                            {day.dateLabel}
-                          </p>
-                          <div className="mt-1 flex items-center justify-center gap-1.5">
-                            {day.isToday && (
-                              <span className="text-[10px] font-bold text-primary whitespace-nowrap">● Hôm nay</span>
-                            )}
-                            <span className="rounded-full bg-background/80 px-2 py-0.5 text-[10px] font-medium text-muted-foreground border whitespace-nowrap">
-                              {daySessions.length} buổi
-                            </span>
-                          </div>
-                        </header>
-
-                        <div className={`flex-1 p-2.5 space-y-2.5 min-h-[240px] ${day.isToday ? "bg-primary/[0.02]" : "bg-background"}`}>
-                          {daySessions.length === 0 ? (
-                            <div className="flex h-full min-h-[180px] flex-col items-center justify-center py-8 text-center text-muted-foreground/50">
-                              <CalendarIcon className="h-6 w-6 stroke-1 mb-1.5 opacity-40" />
-                              <span className="text-xs">Không có buổi học</span>
+                          <header
+                            className={`border-b px-1.5 py-2 text-center ${day.isToday ? "bg-primary/10" : "bg-muted/40"
+                              }`}
+                          >
+                            <p className="text-[11px] font-semibold text-muted-foreground truncate">{day.label}</p>
+                            <p className={`mt-0.5 text-sm font-bold ${day.isToday ? "text-primary" : "text-foreground"}`}>
+                              {day.dateLabel}
+                            </p>
+                            <div className="mt-1 flex flex-wrap items-center justify-center gap-1">
+                              {day.isToday && (
+                                <span className="text-[10px] font-bold text-primary whitespace-nowrap">● Hôm nay</span>
+                              )}
+                              <span className="rounded-full bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground border whitespace-nowrap">
+                                {daySessions.length} buổi
+                              </span>
                             </div>
-                          ) : (
-                            daySessions.map((session, index) => (
-                              <SessionCard
-                                key={String(session.id || index)}
-                                session={session}
-                                sessionIndex={index + 1}
-                              />
-                            ))
-                          )}
-                        </div>
-                      </section>
-                    );
-                  })}
+                          </header>
+
+                          <div className={`flex-1 p-1.5 space-y-2 min-h-[240px] ${day.isToday ? "bg-primary/[0.02]" : "bg-background"}`}>
+                            {daySessions.length === 0 ? (
+                              <div className="flex h-full min-h-[180px] flex-col items-center justify-center py-6 px-1 text-center text-muted-foreground/50">
+                                <CalendarIcon className="h-5 w-5 stroke-1 mb-1.5 opacity-40" />
+                                <span className="text-[11px] leading-tight">Không có buổi học</span>
+                              </div>
+                            ) : (
+                              daySessions.map((session, index) => (
+                                <SessionCard
+                                  key={String(session.id || index)}
+                                  session={session}
+                                  sessionIndex={index + 1}
+                                />
+                              ))
+                            )}
+                          </div>
+                        </section>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -895,7 +909,11 @@ export default function WeeklyCalendarPage() {
                                 {formatCalendarTime(s.startTime)}
                               </div>
                               <span className="text-[11px] text-muted-foreground">
-                                đến {dayjs.tz(s.endTime, TIME_ZONE).format("HH:mm")}
+                                đến{" "}
+                                {dayjs.tz(s.startTime, TIME_ZONE).format("YYYY-MM-DD") ===
+                                dayjs.tz(s.endTime, TIME_ZONE).format("YYYY-MM-DD")
+                                  ? dayjs.tz(s.endTime, TIME_ZONE).format("HH:mm")
+                                  : formatCalendarTime(s.endTime)}
                               </span>
                             </td>
                             <td className="px-4 py-3">
@@ -910,7 +928,7 @@ export default function WeeklyCalendarPage() {
                               {getTopicCode(s.topicId, s.title)}
                             </td>
                             <td className="px-4 py-3 text-muted-foreground">
-                              {getTrainerName(s.trainerId)}
+                              {getTrainerName(s.trainerId, s.note)}
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-1 text-xs">

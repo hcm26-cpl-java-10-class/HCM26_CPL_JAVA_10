@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Archive, Eye, MoreHorizontal, Pencil, Plus, Power, Search, Upload, Users } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { trainerApi, type Trainer } from "@/api/features/trainer.api";
@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { NativeSelect } from "@/components/common/NativeSelect";
 import { ApiErrorState } from "@/components/common/ApiErrorState";
 import { Table, TableHeader, TableHead, TableRow, TableBody, TableCell } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { usePermissions } from "@/hooks/usePermissions";
 import { describeApiError } from "@/utils/api-error.utils";
@@ -17,21 +17,56 @@ import { TrainerForm } from "./TrainerForm";
 import { TrainerImportModal } from "./TrainerImportModal";
 
 export default function TrainerManagementPage() {
-    const { hasPermission } = usePermissions(); const client = useQueryClient();
-    const [search, setSearch] = useState(""); const [status, setStatus] = useState("all"); const [page, setPage] = useState(0);
-    const [edit, setEdit] = useState<Trainer | null | undefined>(); const [detail, setDetail] = useState<Trainer>();
-    const [deleting, setDeleting] = useState<Trainer>(); const [importing, setImporting] = useState(false);
-    const [busy, setBusy] = useState(false); const [message, setMessage] = useState(""); const [error, setError] = useState("");
-    const list = useQuery({ queryKey: ["trainers", "list", search, status, page], queryFn: () => trainerApi.list({ search, status, page, size: 20 }),
-        enabled: hasPermission("TRAINER_READ"), retry: false });
+    const { hasPermission } = usePermissions();
+    const client = useQueryClient();
+    const [search, setSearch] = useState("");
+    const [status, setStatus] = useState("all");
+    const [page, setPage] = useState(0);
+    const [edit, setEdit] = useState<Trainer | null | undefined>();
+    const [detail, setDetail] = useState<Trainer>();
+    const [deleting, setDeleting] = useState<Trainer>();
+    const [importing, setImporting] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [message, setMessage] = useState("");
+    const [error, setError] = useState("");
+
+    const list = useQuery({
+        queryKey: ["trainers", "list", search, status, page],
+        queryFn: () => trainerApi.list({ search, status, page, size: 20 }),
+        enabled: hasPermission("TRAINER_READ"),
+        retry: false,
+    });
+
+    useEffect(() => {
+        if (list.isFetching || !list.data) return;
+        const lastValidPage = Math.max(0, list.data.totalPages - 1);
+        if (page > lastValidPage) {
+            setPage(lastValidPage);
+        }
+    }, [list.data, list.isFetching, page]);
+
     const refresh = async () => {
-        await Promise.all([client.invalidateQueries({ queryKey: ["trainers"] }), client.invalidateQueries({ queryKey: ["class-setup", "verified-trainers"] }),
-            client.invalidateQueries({ queryKey: ["classes"] })]);
+        await Promise.all([
+            client.invalidateQueries({ queryKey: ["trainers"] }),
+            client.invalidateQueries({ queryKey: ["class-setup", "verified-trainers"] }),
+            client.invalidateQueries({ queryKey: ["classes"] }),
+        ]);
     };
+
     const action = async (operation: () => Promise<unknown>, success: string) => {
-        setBusy(true); setError(""); setMessage("");
-        try { await operation(); await refresh(); setMessage(success); setDeleting(undefined); }
-        catch (err) { setError(describeApiError(err).message); } finally { setBusy(false); }
+        setBusy(true);
+        setError("");
+        setMessage("");
+        try {
+            await operation();
+            await refresh();
+            setMessage(success);
+            setDeleting(undefined);
+        } catch (err) {
+            setError(describeApiError(err).message);
+        } finally {
+            setBusy(false);
+        }
     };
     return <MainLayout><div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center"><div className="flex items-start gap-3">
@@ -74,11 +109,11 @@ export default function TrainerManagementPage() {
         </>}
         {edit !== undefined && <TrainerForm key={edit?.id ?? "new"} trainer={edit ?? undefined} close={() => setEdit(undefined)} saved={async () => { await refresh(); setMessage("Trainer saved."); }} />}
         {importing && <TrainerImportModal close={() => setImporting(false)} saved={async () => { await refresh(); setPage(0); setMessage("Trainers imported successfully."); }} />}
-        {detail && <Dialog open onOpenChange={open => { if (!open) setDetail(undefined); }}><DialogContent><DialogHeader><DialogTitle>Trainer Details — {detail.trainerCode}</DialogTitle></DialogHeader>
+        {detail && <Dialog open onOpenChange={open => { if (!open) setDetail(undefined); }}><DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Trainer Details — {detail.trainerCode}</DialogTitle><DialogDescription className="text-xs">Approved internal trainer profile and assigned teaching topics.</DialogDescription></DialogHeader>
             <dl className="space-y-3 text-sm">{[["Full Name", detail.fullName], ["Work Email", detail.email], ["Specialization", detail.specialization || "—"], ["Status", detail.status], ["Teaching Topics", detail.teachingTopics.map(t => `${t.code}@${t.version} — ${t.name}`).join("; ") || "—"]].map(([label, value]) => <div key={label}><dt className="font-semibold">{label}</dt><dd className="break-words text-muted-foreground">{value}</dd></div>)}</dl>
             <DialogFooter><Button onClick={() => setDetail(undefined)}>Close Details</Button></DialogFooter></DialogContent></Dialog>}
-        {deleting && <Dialog open onOpenChange={open => { if (!open && !busy) setDeleting(undefined); }}><DialogContent><DialogHeader><DialogTitle>Archive Trainer {deleting.trainerCode}?</DialogTitle></DialogHeader>
-            <p>This preserves the identity. Trainers referenced by classes or teaching assignments cannot be archived.</p>{error && <p role="alert">{error}</p>}
+        {deleting && <Dialog open onOpenChange={open => { if (!open && !busy) setDeleting(undefined); }}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Archive Trainer {deleting.trainerCode}?</DialogTitle><DialogDescription className="text-xs">This preserves the identity. Trainers referenced by classes or teaching assignments cannot be archived.</DialogDescription></DialogHeader>
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setDeleting(undefined)}>Cancel</Button><Button disabled={busy} onClick={() => void action(() => trainerApi.delete(deleting.id), "Trainer archived.")}>Confirm Archive</Button></DialogFooter></DialogContent></Dialog>}
     </div></MainLayout>;
 }

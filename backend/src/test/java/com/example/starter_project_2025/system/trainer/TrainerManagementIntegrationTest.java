@@ -120,6 +120,35 @@ class TrainerManagementIntegrationTest {
         assertThrows(BusinessValidationException.class, () -> imports.commit(invalid));
         assertEquals(0, service.list("TR_ATOMIC", "all", 0, 20).getTotalElements());
     }
+    @Test void workEmailRuleIsSynchronizedAcrossApiEntityPreviewAndCommit() throws Exception {
+        // review@localhost lacks a dot in domain -> rejected consistently across create API, update API, preview and commit
+        mvc.perform(post("/api/trainers").header("Authorization", "Bearer " + admin)
+                .contentType("application/json").content(mapper.writeValueAsBytes(input("TR_LOCAL", "review@localhost"))))
+            .andExpect(status().isBadRequest());
+
+        var existing = service.create(input("TR_VALID_MAIL", "valid@company.com"));
+        var badUpdate = new UpdateTrainerRequest("TR_VALID_MAIL", "Trainer Test", "review@localhost", "Java", TrainerStatus.ACTIVE, Set.of(topicId));
+        mvc.perform(put("/api/trainers/" + existing.id()).header("Authorization", "Bearer " + admin)
+                .contentType("application/json").content(mapper.writeValueAsBytes(badUpdate)))
+            .andExpect(status().isBadRequest());
+
+        var mixedFile = file(List.of(
+            List.of("TR_IMP_OK", "Good Trainer", "good@company.com", "Java", "", "ACTIVE"),
+            List.of("TR_IMP_BAD", "Local Email", "review@localhost", "Java", "", "ACTIVE")
+        ));
+        var preview = imports.preview(mixedFile);
+        assertFalse(preview.canImport());
+        assertEquals(2, preview.totalRows());
+        assertEquals(1, preview.validRows());
+        assertTrue(preview.rows().get(0).valid());
+        assertFalse(preview.rows().get(1).valid());
+        assertEquals(3, preview.rows().get(1).rowNumber());
+        assertTrue(preview.rows().get(1).errors().stream().anyMatch(e -> e.toLowerCase(Locale.ROOT).contains("email")));
+
+        // Atomic commit rejects the whole file without saving row 2
+        assertThrows(BusinessValidationException.class, () -> imports.commit(mixedFile));
+        assertEquals(0, service.list("TR_IMP_OK", "all", 0, 20).getTotalElements());
+    }
     @Test void excelDuplicatesOnBothRowsAndFormulaRejection() throws Exception {
         var duplicates = file(List.of(List.of("TR_DUP", "One", "dup@test.example", "", "", ""), List.of("tr_dup", "Two", "DUP@test.example", "", "", "")));
         assertTrue(imports.preview(duplicates).rows().stream().allMatch(r -> !r.valid()));
