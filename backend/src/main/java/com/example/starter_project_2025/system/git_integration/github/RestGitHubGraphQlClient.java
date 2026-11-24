@@ -2,7 +2,9 @@ package com.example.starter_project_2025.system.git_integration.github;
 
 import com.example.starter_project_2025.system.git_integration.config.GitHubAppProperties;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubActor;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubBranchPage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommitHistoryPage;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubComparePage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubHistoryCommit;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubPullRequestNode;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubPullRequestPage;
@@ -28,7 +30,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * SY-01 / SY-02: {@link GitHubGraphQlClient} over {@code POST /graphql}. GraphQL reports most
+ * SY-01 / SY-02 / SY-07: {@link GitHubGraphQlClient} over {@code POST /graphql}. GraphQL reports most
  * failures with HTTP 200 and an {@code errors} array; they are mapped to the same
  * {@link GitHubApiException} kinds as the REST client. Messages never contain tokens or
  * response bodies.
@@ -39,6 +41,15 @@ public class RestGitHubGraphQlClient implements GitHubGraphQlClient {
     static final String OPERATION = "commit history";
     static final String PULL_REQUESTS_OPERATION = "pull requests";
     static final String REVIEWS_OPERATION = "pull request reviews";
+    static final String BRANCHES_OPERATION = "branches";
+    static final String COMPARE_OPERATION = "branch commits";
+
+    /** Fields of a commit, shared by the default branch history (SY-01) and the branch compare (SY-07). */
+    static final String COMMIT_FIELDS = """
+            oid message url authoredDate committedDate
+            parents { totalCount }
+            author { name email user { login databaseId } }
+            committer { name email user { login databaseId } }""";
 
     static final String COMMIT_HISTORY_QUERY = """
             query($owner: String!, $name: String!, $first: Int!, $after: String, $since: GitTimestamp) {
@@ -52,18 +63,45 @@ public class RestGitHubGraphQlClient implements GitHubGraphQlClient {
                       history(first: $first, after: $after, since: $since) {
                         totalCount
                         pageInfo { hasNextPage endCursor }
-                        nodes {
-                          oid message url authoredDate committedDate
-                          parents { totalCount }
-                          author { name email user { login databaseId } }
-                          committer { name email user { login databaseId } }
-                        }
+                        nodes { %s }
                       }
                     }
                   }
                 }
               }
+            }""".formatted(COMMIT_FIELDS);
+
+    /** SY-07: branches in name order (a stable cursor), each with its head commit. */
+    static final String BRANCHES_QUERY = """
+            query($owner: String!, $name: String!, $first: Int!, $after: String) {
+              rateLimit { remaining resetAt cost }
+              repository(owner: $owner, name: $name) {
+                defaultBranchRef { name }
+                refs(refPrefix: "refs/heads/", first: $first, after: $after,
+                     orderBy: {field: ALPHABETICAL, direction: ASC}) {
+                  totalCount
+                  pageInfo { hasNextPage endCursor }
+                  nodes { name target { oid ... on Commit { committedDate } } }
+                }
+              }
             }""";
+
+    /** SY-07: the commits of {@code $head} that are not on {@code $base} (qualified ref names). */
+    static final String COMPARE_QUERY = """
+            query($owner: String!, $name: String!, $base: String!, $head: String!, $first: Int!, $after: String) {
+              rateLimit { remaining resetAt cost }
+              repository(owner: $owner, name: $name) {
+                ref(qualifiedName: $base) {
+                  compare(headRef: $head) {
+                    status aheadBy behindBy
+                    commits(first: $first, after: $after) {
+                      pageInfo { hasNextPage endCursor }
+                      nodes { %s }
+                    }
+                  }
+                }
+              }
+            }""".formatted(COMMIT_FIELDS);
 
     /** SY-02: submitted reviews only; PENDING (a draft only its author sees) is never requested (AC06). */
     static final String REVIEW_STATES = "states: [APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]";
@@ -108,6 +146,8 @@ public class RestGitHubGraphQlClient implements GitHubGraphQlClient {
                 }
               }
             }""".formatted(REVIEW_STATES, REVIEW_FIELDS);
+
+    private static final String HEADS = "refs/heads/";
 
     private final RestClient restClient;
     private final GitHubAppProperties properties;
@@ -155,6 +195,29 @@ public class RestGitHubGraphQlClient implements GitHubGraphQlClient {
         }
         return new GitHubReviewPage(reviews(reviews), reviews.path("pageInfo").path("hasNextPage").asBoolean(false),
                 text(reviews.path("pageInfo"), "endCursor"), errors.rateLimit());
+    }
+
+    @Override
+    public GitHubBranchPage branches(String installationToken, String owner, String name, String after, int first) {
+        Map<String, Object> variables = new LinkedHashMap<>();
+        variables.put("owner", owner);
+        variables.put("name", name);
+        variables.put("first", Math.max(1, Math.min(first, 100)));
+        variables.put("after", after);
+        return parseBranches(execute(installationToken, BRANCHES_QUERY, variables, BRANCHES_OPERATION), after != null);
+    }
+
+    @Override
+    public GitHubComparePage compare(String installationToken, String owner, String name, String base, String head,
+                                     String after, int first) {
+        Map<String, Object> variables = new LinkedHashMap<>();
+        variables.put("owner", owner);
+        variables.put("name", name);
+        variables.put("base", HEADS + base);
+        variables.put("head", HEADS + head);
+        variables.put("first", Math.max(1, Math.min(first, 100)));
+        variables.put("after", after);
+        return parseCompare(execute(installationToken, COMPARE_QUERY, variables, COMPARE_OPERATION), after != null);
     }
 
     private JsonNode execute(String token, String query, Map<String, Object> variables, String operation) {
@@ -224,17 +287,72 @@ public class RestGitHubGraphQlClient implements GitHubGraphQlClient {
         }
         List<GitHubHistoryCommit> commits = new ArrayList<>();
         for (JsonNode node : history.path("nodes")) {
-            if (node.isNull()) continue;
-            commits.add(new GitHubHistoryCommit(
-                    text(node, "oid"), text(node, "message"), text(node, "url"),
-                    text(node, "authoredDate"), text(node, "committedDate"),
-                    integer(node.path("parents"), "totalCount"),
-                    person(node.path("author")), person(node.path("committer"))));
+            if (!node.isNull()) commits.add(historyCommit(node));
         }
         JsonNode pageInfo = history.path("pageInfo");
         return new GitHubCommitHistoryPage(true, false, text(branch, "name"), text(branch.path("target"), "oid"),
                 commits, pageInfo.path("hasNextPage").asBoolean(false), text(pageInfo, "endCursor"),
                 integer(history, "totalCount"), rateLimit);
+    }
+
+    static GitHubBranchPage parseBranches(JsonNode body, boolean withCursor) {
+        Errors errors = errors(body, withCursor, BRANCHES_OPERATION);
+        GitHubCommitHistoryPage.RateLimit rateLimit = errors.rateLimit();
+        JsonNode repository = body.path("data").path("repository");
+        if (repository.isMissingNode() || repository.isNull()) {
+            if (!errors.any() || errors.types().contains("NOT_FOUND")) return GitHubBranchPage.notFound(rateLimit);
+            throw new GitHubApiException(GitHubApiException.Kind.UNAVAILABLE, BRANCHES_OPERATION, 200);
+        }
+        JsonNode refs = repository.path("refs");
+        if (refs.isMissingNode() || refs.isNull()) {
+            if (errors.cursorRejected()) return GitHubBranchPage.invalidCursor(rateLimit);
+            throw new GitHubApiException(GitHubApiException.Kind.UNAVAILABLE, BRANCHES_OPERATION, 200);
+        }
+        List<GitHubBranchPage.Branch> branches = new ArrayList<>();
+        for (JsonNode node : refs.path("nodes")) {
+            String branch = node.isNull() ? null : text(node, "name");
+            if (branch == null || branch.isBlank()) continue;
+            JsonNode target = node.path("target");
+            branches.add(new GitHubBranchPage.Branch(branch, text(target, "oid"), text(target, "committedDate")));
+        }
+        JsonNode pageInfo = refs.path("pageInfo");
+        return new GitHubBranchPage(true, false, text(repository.path("defaultBranchRef"), "name"), branches,
+                pageInfo.path("hasNextPage").asBoolean(false), text(pageInfo, "endCursor"), integer(refs, "totalCount"), rateLimit);
+    }
+
+    static GitHubComparePage parseCompare(JsonNode body, boolean withCursor) {
+        Errors errors = errors(body, withCursor, COMPARE_OPERATION);
+        GitHubCommitHistoryPage.RateLimit rateLimit = errors.rateLimit();
+        JsonNode repository = body.path("data").path("repository");
+        if (repository.isMissingNode() || repository.isNull()) {
+            if (!errors.any() || errors.types().contains("NOT_FOUND")) return GitHubComparePage.notFound(rateLimit);
+            throw new GitHubApiException(GitHubApiException.Kind.UNAVAILABLE, COMPARE_OPERATION, 200);
+        }
+        JsonNode base = repository.path("ref");
+        if (base.isMissingNode() || base.isNull()) return GitHubComparePage.refMissing(rateLimit); // base branch gone
+        JsonNode comparison = base.path("compare");
+        JsonNode commitsNode = comparison.path("commits");
+        if (comparison.isMissingNode() || comparison.isNull() || commitsNode.isMissingNode() || commitsNode.isNull()) {
+            if (errors.cursorRejected()) return GitHubComparePage.invalidCursor(rateLimit);
+            if (errors.types().contains("NOT_FOUND")) return GitHubComparePage.refMissing(rateLimit); // head branch gone
+            throw new GitHubApiException(GitHubApiException.Kind.UNAVAILABLE, COMPARE_OPERATION, 200);
+        }
+        List<GitHubHistoryCommit> commits = new ArrayList<>();
+        for (JsonNode node : commitsNode.path("nodes")) {
+            if (!node.isNull()) commits.add(historyCommit(node));
+        }
+        JsonNode pageInfo = commitsNode.path("pageInfo");
+        return new GitHubComparePage(true, true, false, text(comparison, "status"), integer(comparison, "aheadBy"),
+                integer(comparison, "behindBy"), commits, pageInfo.path("hasNextPage").asBoolean(false),
+                text(pageInfo, "endCursor"), rateLimit);
+    }
+
+    private static GitHubHistoryCommit historyCommit(JsonNode node) {
+        return new GitHubHistoryCommit(
+                text(node, "oid"), text(node, "message"), text(node, "url"),
+                text(node, "authoredDate"), text(node, "committedDate"),
+                integer(node.path("parents"), "totalCount"),
+                person(node.path("author")), person(node.path("committer")));
     }
 
     static GitHubPullRequestPage parsePullRequests(JsonNode body, boolean withCursor) {

@@ -1,7 +1,9 @@
 package com.example.starter_project_2025.system.git_integration.github;
 
 import com.example.starter_project_2025.system.git_integration.config.GitHubAppProperties;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubBranchPage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommitHistoryPage;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubComparePage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubActor;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubHistoryCommit;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubPullRequestNode;
@@ -249,5 +251,113 @@ class RestGitHubGraphQlClientTest {
 
         assertThatThrownBy(() -> client.commitHistory("t", "team", "shop", null, null, 100))
                 .isInstanceOfSatisfying(GitHubApiException.class, e -> assertThat(e.getKind()).isEqualTo(GitHubApiException.Kind.REJECTED));
+    }
+
+    // ---- SY-07 · branches ----------------------------------------------------------------------------
+
+    @Test
+    void listsBranchesWithTheirHeadInNameOrder() {
+        server.expect(requestTo("https://api.github.com/graphql"))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer ghs_token"))
+                .andExpect(jsonPath("$.variables.after").value("b1"))
+                .andExpect(jsonPath("$.variables.first").value(100))
+                .andExpect(jsonPath("$.query").value(org.hamcrest.Matchers.containsString("refs(refPrefix: \"refs/heads/\"")))
+                .andRespond(withSuccess("""
+                        {"data": {"rateLimit": {"remaining": 4000, "resetAt": null, "cost": 1},
+                          "repository": {"defaultBranchRef": {"name": "main"},
+                            "refs": {"totalCount": 3, "pageInfo": {"hasNextPage": true, "endCursor": "b2"},
+                              "nodes": [
+                                {"name": "feature/cart", "target": {"oid": "f1", "committedDate": "2026-11-21T08:00:00Z"}},
+                                {"name": "main", "target": {"oid": "m1", "committedDate": "2026-11-20T08:00:00Z"}},
+                                {"name": "", "target": {"oid": "x"}}
+                              ]}}}}
+                        """, MediaType.APPLICATION_JSON));
+
+        GitHubBranchPage page = client.branches("ghs_token", "team", "shop", "b1", 500);
+
+        assertThat(page.repositoryFound()).isTrue();
+        assertThat(page.defaultBranch()).isEqualTo("main");
+        assertThat(page.branches()).containsExactly(
+                new GitHubBranchPage.Branch("feature/cart", "f1", "2026-11-21T08:00:00Z"),
+                new GitHubBranchPage.Branch("main", "m1", "2026-11-20T08:00:00Z"));
+        assertThat(page.hasNextPage()).isTrue();
+        assertThat(page.endCursor()).isEqualTo("b2");
+        assertThat(page.rateLimit().remaining()).isEqualTo(4000);
+        server.verify();
+    }
+
+    @Test
+    void comparesABranchWithTheDefaultBranchByQualifiedRefs() {
+        server.expect(requestTo("https://api.github.com/graphql"))
+                .andExpect(jsonPath("$.variables.base").value("refs/heads/main"))
+                .andExpect(jsonPath("$.variables.head").value("refs/heads/feature/cart"))
+                .andExpect(jsonPath("$.variables.after").isEmpty())
+                .andExpect(jsonPath("$.query").value(org.hamcrest.Matchers.containsString("compare(headRef: $head)")))
+                .andRespond(withSuccess("""
+                        {"data": {"rateLimit": {"remaining": 4000, "resetAt": null, "cost": 1},
+                          "repository": {"ref": {"compare": {"status": "DIVERGED", "aheadBy": 2, "behindBy": 5,
+                            "commits": {"pageInfo": {"hasNextPage": false, "endCursor": "c9"},
+                              "nodes": [
+                                {"oid": "f1", "message": "cart", "url": "u", "authoredDate": "2026-11-21T08:00:00Z",
+                                 "committedDate": "2026-11-21T08:00:00Z", "parents": {"totalCount": 1},
+                                 "author": {"name": "Dev", "email": "d@x.test", "user": {"login": "dev", "databaseId": 7}},
+                                 "committer": null}
+                              ]}}}}}}
+                        """, MediaType.APPLICATION_JSON));
+
+        GitHubComparePage page = client.compare("t", "team", "shop", "main", "feature/cart", null, 100);
+
+        assertThat(page.repositoryFound()).isTrue();
+        assertThat(page.refFound()).isTrue();
+        assertThat(page.status()).isEqualTo("DIVERGED");
+        assertThat(page.aheadBy()).isEqualTo(2);
+        assertThat(page.behindBy()).isEqualTo(5);
+        assertThat(page.commits()).singleElement().satisfies(commit -> {
+            assertThat(commit.oid()).isEqualTo("f1");
+            assertThat(commit.author().databaseId()).isEqualTo(7L);
+        });
+        assertThat(page.hasNextPage()).isFalse();
+        server.verify();
+    }
+
+    @Test
+    void aHeadBranchGoneIsReportedNotThrown() {
+        server.expect(requestTo("https://api.github.com/graphql"))
+                .andRespond(withSuccess("{\"data\":{\"repository\":{\"ref\":{\"compare\":null}}},"
+                        + "\"errors\":[{\"type\":\"NOT_FOUND\",\"message\":\"Could not resolve to a Ref\"}]}", MediaType.APPLICATION_JSON));
+
+        GitHubComparePage page = client.compare("t", "team", "shop", "main", "gone", null, 100);
+
+        assertThat(page.repositoryFound()).isTrue();
+        assertThat(page.refFound()).isFalse();
+    }
+
+    @Test
+    void aBaseBranchGoneIsReportedNotThrown() {
+        server.expect(requestTo("https://api.github.com/graphql"))
+                .andRespond(withSuccess("{\"data\":{\"repository\":{\"ref\":null}}}", MediaType.APPLICATION_JSON));
+
+        assertThat(client.compare("t", "team", "shop", "old-main", "x", null, 100).refFound()).isFalse();
+    }
+
+    @Test
+    void aRejectedCompareCursorAsksToReadTheBranchAgain() {
+        server.expect(requestTo("https://api.github.com/graphql"))
+                .andRespond(withSuccess("{\"data\":{\"repository\":{\"ref\":{\"compare\":{\"commits\":null}}}},"
+                        + "\"errors\":[{\"type\":\"INVALID_CURSOR_ARGUMENTS\",\"message\":\"invalid cursor\"}]}",
+                        MediaType.APPLICATION_JSON));
+
+        assertThat(client.compare("t", "team", "shop", "main", "x", "stale", 100).cursorRejected()).isTrue();
+    }
+
+    @Test
+    void aRateLimitedBranchListingIsThrownWithTheWait() {
+        server.expect(requestTo("https://api.github.com/graphql"))
+                .andRespond(withSuccess("{\"data\":null,\"errors\":[{\"type\":\"RATE_LIMITED\",\"message\":\"limit\"}]}",
+                        MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.branches("t", "team", "shop", null, 100))
+                .isInstanceOfSatisfying(GitHubApiException.class,
+                        e -> assertThat(e.getKind()).isEqualTo(GitHubApiException.Kind.RATE_LIMITED));
     }
 }

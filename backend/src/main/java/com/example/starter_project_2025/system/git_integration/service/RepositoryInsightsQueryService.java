@@ -20,6 +20,8 @@ import com.example.starter_project_2025.system.git_integration.dto.RepositoryIns
 import com.example.starter_project_2025.system.git_integration.dto.RepositoryInsightsView.DailyActivity;
 import com.example.starter_project_2025.system.git_integration.dto.RepositoryInsightsView.PullRequestHealth;
 import com.example.starter_project_2025.system.git_integration.dto.RepositoryInsightsView.Summary;
+import com.example.starter_project_2025.system.git_integration.domain.GitBranch;
+import com.example.starter_project_2025.system.git_integration.repository.GitBranchRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitCommitRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitContributorRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitPullRequestRepository;
@@ -73,12 +75,14 @@ public class RepositoryInsightsQueryService {
     private final GitTaskRefReader taskRefs;
     private final GitContributorRepository contributorRows;
     private final UserRepository users;
+    private final GitBranchRepository branchRows;
     private final Clock clock;
 
     public RepositoryInsightsQueryService(RepositoryActivityQueryService activity, GitCommitRepository commits,
                                           GitPullRequestRepository pullRequests, GitPullRequestReviewRepository reviews,
                                           GitTaskRefReader taskRefs, GitContributorRepository contributorRows,
-                                          UserRepository users, @Qualifier("gitIntegrationClock") Clock clock) {
+                                          UserRepository users, GitBranchRepository branchRows,
+                                          @Qualifier("gitIntegrationClock") Clock clock) {
         this.activity = activity;
         this.commits = commits;
         this.pullRequests = pullRequests;
@@ -86,6 +90,7 @@ public class RepositoryInsightsQueryService {
         this.taskRefs = taskRefs;
         this.contributorRows = contributorRows;
         this.users = users;
+        this.branchRows = branchRows;
         this.clock = clock;
     }
 
@@ -172,19 +177,54 @@ public class RepositoryInsightsQueryService {
         return first == null ? null : first.toLocalDate();
     }
 
-    /** All-time branches of the project's repository, latest activity first ({@code q} matches the name). */
+    /**
+     * All-time branches of the project's repository, latest activity first ({@code q} matches the name):
+     * the branches commits were first pushed to, and (SY-07) the branches the last sync found on GitHub.
+     * A deleted branch is listed only while it has commits of its own.
+     */
     @Transactional(readOnly = true)
     public List<GitBranchItem> branches(Long projectId, String q, Integer limit) {
         Optional<GitRepository> found = activity.repositoryFor(projectId);
         if (found.isEmpty()) return List.of();
+        GitRepository repository = found.get();
         int size = limit == null ? DEFAULT_BRANCH_LIMIT : Math.max(1, Math.min(limit, MAX_BRANCH_LIMIT));
         String text = q == null ? "" : q.trim().toLowerCase(Locale.ROOT);
         if (text.length() > 100) text = text.substring(0, 100);
         String pattern = HEADS + (text.isEmpty() ? "%" : "%" + text + "%");
-        return commits.branches(found.get().getId(), pattern, PageRequest.of(0, size)).stream()
-                .map(row -> new GitBranchItem(row.getRef().substring(HEADS.length()),
-                        row.getCommits() == null ? 0 : row.getCommits(), row.getLastCommitAt()))
+        Map<String, GitCommitRepository.BranchRow> counted = new LinkedHashMap<>();
+        for (GitCommitRepository.BranchRow row : commits.branches(repository.getId(), pattern, PageRequest.of(0, size))) {
+            String name = row.getRef().substring(HEADS.length());
+            if (!name.isEmpty()) counted.put(name, row);
+        }
+        Map<String, GitBranch> known = new HashMap<>();
+        for (GitBranch row : branchRows.findByRepository_Id(repository.getId())) {
+            if (text.isEmpty() || row.getName().toLowerCase(Locale.ROOT).contains(text)) known.put(row.getName(), row);
+        }
+        List<GitBranchItem> items = new ArrayList<>();
+        Set<String> names = new java.util.LinkedHashSet<>(counted.keySet());
+        names.addAll(known.keySet());
+        for (String name : names) {
+            GitCommitRepository.BranchRow row = counted.get(name);
+            GitBranch branch = known.get(name);
+            long count = row == null || row.getCommits() == null ? 0 : row.getCommits();
+            boolean deleted = branch != null && branch.getDeletedAt() != null;
+            if (row == null && deleted) continue;
+            LocalDateTime last = latest(row == null ? null : row.getLastCommitAt(), branch == null ? null : branch.getHeadCommittedAt());
+            boolean isDefault = branch != null ? branch.isDefault() : name.equals(repository.getDefaultBranch());
+            items.add(new GitBranchItem(name, count, last, branch == null ? null : branch.getAheadBy(),
+                    branch == null ? null : branch.getBehindBy(), deleted, branch != null && branch.isTruncated(), isDefault));
+        }
+        return items.stream()
+                .sorted(Comparator.comparing(GitBranchItem::lastCommitAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(GitBranchItem::name))
+                .limit(size)
                 .toList();
+    }
+
+    private static LocalDateTime latest(LocalDateTime a, LocalDateTime b) {
+        if (a == null) return b;
+        if (b == null) return a;
+        return a.isAfter(b) ? a : b;
     }
 
     // ---- period counts --------------------------------------------------------------------------

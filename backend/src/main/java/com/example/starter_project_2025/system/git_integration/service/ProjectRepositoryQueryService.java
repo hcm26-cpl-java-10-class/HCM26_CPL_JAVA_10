@@ -126,7 +126,11 @@ public class ProjectRepositoryQueryService {
                         number(stats, "commitsEnriched"),
                         new GitSyncJobView.PullRequests(job.prPages(), number(stats, "pullRequestsInserted"),
                                 number(stats, "pullRequestsUpdated"), number(stats, "pullRequestsUnchanged")),
-                        new GitSyncJobView.Reviews(number(stats, "reviewsInserted"), number(stats, "reviewsUpdated"))),
+                        new GitSyncJobView.Reviews(number(stats, "reviewsInserted"), number(stats, "reviewsUpdated")),
+                        new GitSyncJobView.Branches(job.branchPages(), number(stats, "branchesSynced"),
+                                number(stats, "branchesTotal"), number(stats, "branchesSkipped"),
+                                number(stats, "branchesPartial"), number(stats, "branchesDeleted"),
+                                number(stats, "branchCommitsInserted"), number(stats, "branchCommitsExisting"))),
                 resumable, paused ? job.getNextRunAt() : null, job.getResumedFromJobId());
     }
 

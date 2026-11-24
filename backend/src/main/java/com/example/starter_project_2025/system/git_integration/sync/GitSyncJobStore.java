@@ -15,6 +15,7 @@ import com.example.starter_project_2025.system.git_integration.ingestion.event.G
 import com.example.starter_project_2025.system.git_integration.repository.GitInstallationRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitRepositoryRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitSyncJobRepository;
+import com.example.starter_project_2025.system.git_integration.service.GitBranchWriter;
 import com.example.starter_project_2025.system.git_integration.service.GitRepositoryConnectionWriter;
 import com.example.starter_project_2025.system.git_integration.service.GitRepositoryReason;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -56,17 +57,20 @@ public class GitSyncJobStore {
     private final GitRepositoryRepository connections;
     private final GitInstallationRepository installations;
     private final GitRepositoryConnectionWriter connectionWriter;
+    private final GitBranchWriter branchWriter;
     private final GitHubAppProperties properties;
     private final ObjectMapper json;
     private final Clock clock;
 
     public GitSyncJobStore(GitSyncJobRepository jobs, GitRepositoryRepository connections,
                            GitInstallationRepository installations, GitRepositoryConnectionWriter connectionWriter,
-                           GitHubAppProperties properties, ObjectMapper json, @Qualifier("gitIntegrationClock") Clock clock) {
+                           GitBranchWriter branchWriter, GitHubAppProperties properties, ObjectMapper json,
+                           @Qualifier("gitIntegrationClock") Clock clock) {
         this.jobs = jobs;
         this.connections = connections;
         this.installations = installations;
         this.connectionWriter = connectionWriter;
+        this.branchWriter = branchWriter;
         this.properties = properties;
         this.json = json;
         this.clock = clock;
@@ -79,26 +83,48 @@ public class GitSyncJobStore {
     public record ClaimedJob(Long jobId, Long repositoryId, Long installationRowId, long githubInstallationId,
                              long externalId, int attemptCount, int maxAttempts, GitSyncPhase phase,
                              String commitCursor, LocalDateTime commitSince, String commitBranch, int pagesDone,
-                             String prCursor, LocalDateTime prSince, int prPagesDone, String claimToken) {
+                             String prCursor, LocalDateTime prSince, int prPagesDone, String claimToken,
+                             BranchCursor branch) {
 
         public ClaimedJob(Long jobId, Long repositoryId, Long installationRowId, long githubInstallationId,
                           long externalId, int attemptCount, int maxAttempts) {
             this(jobId, repositoryId, installationRowId, githubInstallationId, externalId, attemptCount, maxAttempts,
-                    GitSyncPhase.METADATA, null, null, null, 0, null, null, 0, null);
+                    GitSyncPhase.METADATA, null, null, null, 0, null, null, 0, null, BranchCursor.START);
         }
 
         /** The job after its metadata step: the commit step starts from the first page of {@code since}. */
         public ClaimedJob startingCommits(LocalDateTime since, String branch) {
             return new ClaimedJob(jobId, repositoryId, installationRowId, githubInstallationId, externalId, attemptCount,
-                    maxAttempts, GitSyncPhase.COMMITS, null, since, branch, pagesDone, prCursor, prSince, prPagesDone, claimToken);
+                    maxAttempts, GitSyncPhase.COMMITS, null, since, branch, pagesDone, prCursor, prSince, prPagesDone, claimToken,
+                    this.branch);
         }
 
-        /** SY-02: the job after its commit step: the pull request step starts from the first page. */
+        /** SY-07: the job after its commit step: the branches are listed again, then read from the first one. */
+        public ClaimedJob startingBranches() {
+            return new ClaimedJob(jobId, repositoryId, installationRowId, githubInstallationId, externalId, attemptCount,
+                    maxAttempts, GitSyncPhase.BRANCHES, commitCursor, commitSince, commitBranch, pagesDone,
+                    prCursor, prSince, prPagesDone, claimToken, BranchCursor.START);
+        }
+
+        /** SY-02: the job after its commit (SY-07: branch) step: the pull request step starts from the first page. */
         public ClaimedJob startingPullRequests(LocalDateTime since) {
             return new ClaimedJob(jobId, repositoryId, installationRowId, githubInstallationId, externalId, attemptCount,
                     maxAttempts, GitSyncPhase.PULL_REQUESTS, commitCursor, commitSince, commitBranch, pagesDone,
-                    null, since, prPagesDone, claimToken);
+                    null, since, prPagesDone, claimToken, branch);
         }
+    }
+
+    /**
+     * SY-07: where the branch step of a job stands: whether the branches were listed, and the branch
+     * being read with the cursor of its last stored page and how many of its pages were stored.
+     */
+    public record BranchCursor(boolean listed, String name, String cursor, int namePages, int pagesDone) {
+        public static final BranchCursor START = new BranchCursor(false, null, null, 0, 0);
+    }
+
+    /** SY-07: totals of one stored compare page of a branch. */
+    public record BranchPage(String branch, String endCursor, int branchPages, int inserted, int existing, int enriched,
+                             GitHubCommitHistoryPage.RateLimit rateLimit) {
     }
 
     /** SY-02: totals of one stored pull request page. */
@@ -148,7 +174,12 @@ public class GitSyncJobStore {
         return Optional.of(new ClaimedJob(job.getId(), connection.getId(), installation.getId(),
                 installation.getInstallationId(), connection.getExternalId(), job.getAttemptCount(), job.getMaxAttempts(),
                 job.effectivePhase(), job.getCommitCursor(), job.getCommitSince(), job.getCommitBranch(), job.pages(),
-                job.getPrCursor(), job.getPrSince(), job.prPages(), job.getClaimToken()));
+                job.getPrCursor(), job.getPrSince(), job.prPages(), job.getClaimToken(), branchCursor(job)));
+    }
+
+    private static BranchCursor branchCursor(GitSyncJob job) {
+        return new BranchCursor(job.branchesListed(), job.getBranchName(), job.getBranchCursor(),
+                job.getBranchCurrentPages() == null ? 0 : job.getBranchCurrentPages(), job.branchPages());
     }
 
     /**
@@ -206,10 +237,9 @@ public class GitSyncJobStore {
 
     /**
      * SY-01: the whole commit window was read: the history counts as imported up to the job's
-     * creation (never moved back by an older job finishing late). SY-02: the job moves on to its
-     * pull request step, whose window is fixed here: INITIAL, or a repository whose pull requests
-     * were never read to the end, reads them all; otherwise down to the overlap before the last
-     * complete read.
+     * creation (never moved back by an older job finishing late). SY-07: the job moves on to its
+     * branch step (unless turned off or the repository is empty); otherwise straight to its pull
+     * request step (SY-02, see {@link #startPullRequests}).
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ClaimedJob completeCommits(ClaimedJob claimed) {
@@ -221,6 +251,138 @@ public class GitSyncJobStore {
         if (connection != null && (connection.getCommitHistorySyncedAt() == null || mark.isAfter(connection.getCommitHistorySyncedAt()))) {
             connection.setCommitHistorySyncedAt(mark);
         }
+        boolean empty = Boolean.TRUE.equals(readStats(job.getStatsJson()).get("emptyRepository")) || job.getCommitBranch() == null;
+        if (properties.isSyncBranchesEnabled() && !empty) {
+            // SY-07: the other branches come next; listed again by this job.
+            job.setPhase(GitSyncPhase.BRANCHES);
+            job.setBranchListDone(false);
+            job.setBranchName(null);
+            job.setBranchCursor(null);
+            job.setBranchCurrentPages(0);
+            return claimed.startingBranches();
+        }
+        return startPullRequests(claimed, job, connection);
+    }
+
+    /** SY-07: the branches were read (or skipped): the job moves on to its pull request step. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ClaimedJob completeBranches(ClaimedJob claimed) {
+        GitSyncJob job = currentJob(claimed).orElseThrow(SupersededSync::new);
+        GitRepository connection = connections.findById(claimed.repositoryId())
+                .filter(row -> row.getStatus().receivesEvents())
+                .orElse(null);
+        job.setBranchName(null);
+        job.setBranchCursor(null);
+        job.setBranchCurrentPages(0);
+        return startPullRequests(claimed, job, connection);
+    }
+
+    /**
+     * SY-07: one page of branches is listed: adds up the statistics. The listing restarts from the
+     * first page when a run stops in the middle of it (a page costs about one GraphQL point).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void checkpointBranchList(ClaimedJob claimed, int listed, GitHubCommitHistoryPage.RateLimit rateLimit) {
+        currentJob(claimed).ifPresent(job -> {
+            Map<String, Object> stats = new LinkedHashMap<>(readStats(job.getStatsJson()));
+            add(stats, "branchesListed", listed);
+            rateLimit(stats, rateLimit);
+            job.setStatsJson(toJson(stats));
+        });
+    }
+
+    /** SY-07: the branch listing is done; {@code truncated}: it stopped at {@code sync-max-branch-pages}. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ClaimedJob branchListDone(ClaimedJob claimed, boolean truncated, int deleted) {
+        GitSyncJob job = currentJob(claimed).orElseThrow(SupersededSync::new);
+        job.setBranchListDone(true);
+        Map<String, Object> stats = new LinkedHashMap<>(readStats(job.getStatsJson()));
+        if (truncated) stats.put("branchListTruncated", true);
+        add(stats, "branchesDeleted", deleted);
+        job.setStatsJson(toJson(stats));
+        BranchCursor branch = claimed.branch();
+        return withBranch(claimed, new BranchCursor(true, branch.name(), branch.cursor(), branch.namePages(), branch.pagesDone()));
+    }
+
+    /**
+     * SY-07: what this run of the branch step found to read: {@code candidates} branches in scope,
+     * {@code changed} of them with a new head; {@code synced} branches were finished by earlier runs.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void branchPlan(ClaimedJob claimed, int candidates, int changed) {
+        currentJob(claimed).ifPresent(job -> {
+            Map<String, Object> stats = new LinkedHashMap<>(readStats(job.getStatsJson()));
+            long synced = stats.get("branchesSynced") instanceof Number number ? number.longValue() : 0;
+            if (!stats.containsKey("branchesChanged")) {
+                stats.put("branchesChanged", changed);
+                stats.put("branchesSkipped", Math.max(0, candidates - changed));
+            }
+            stats.put("branchesTotal", synced + changed);
+            job.setStatsJson(toJson(stats));
+        });
+    }
+
+    /**
+     * SY-07: a compare page of a branch is stored. On its last page ({@code synced} not null) the
+     * branch is marked imported in the same transaction, so a resumed job never reads it again.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void checkpointBranch(ClaimedJob claimed, BranchPage page, GitBranchWriter.Synced synced) {
+        GitSyncJob job = currentJob(claimed).orElseThrow(SupersededSync::new);
+        job.setBranchPagesDone(job.branchPages() + 1);
+        Map<String, Object> stats = new LinkedHashMap<>(readStats(job.getStatsJson()));
+        add(stats, "branchCommitsInserted", page.inserted());
+        add(stats, "branchCommitsExisting", page.existing());
+        add(stats, "branchCommitsEnriched", page.enriched());
+        stats.put("branchPages", job.getBranchPagesDone());
+        rateLimit(stats, page.rateLimit());
+        if (synced == null) {
+            job.setBranchName(page.branch());
+            job.setBranchCursor(page.endCursor());
+            job.setBranchCurrentPages(page.branchPages());
+        } else {
+            branchWriter.markSynced(claimed.repositoryId(), page.branch(), synced);
+            add(stats, "branchesSynced", 1);
+            if (synced.truncated()) add(stats, "branchesPartial", 1);
+            job.setBranchName(null);
+            job.setBranchCursor(null);
+            job.setBranchCurrentPages(0);
+        }
+        job.setStatsJson(toJson(stats));
+    }
+
+    /** SY-07: the branch is gone from GitHub (or its cursor was refused): forget where it stood. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void branchSkipped(ClaimedJob claimed, boolean gone) {
+        currentJob(claimed).ifPresent(job -> {
+            job.setBranchName(null);
+            job.setBranchCursor(null);
+            job.setBranchCurrentPages(0);
+            if (gone) {
+                Map<String, Object> stats = new LinkedHashMap<>(readStats(job.getStatsJson()));
+                add(stats, "branchesDeleted", 1);
+                job.setStatsJson(toJson(stats));
+            }
+        });
+    }
+
+    private static ClaimedJob withBranch(ClaimedJob c, BranchCursor branch) {
+        return new ClaimedJob(c.jobId(), c.repositoryId(), c.installationRowId(), c.githubInstallationId(), c.externalId(),
+                c.attemptCount(), c.maxAttempts(), c.phase(), c.commitCursor(), c.commitSince(), c.commitBranch(), c.pagesDone(),
+                c.prCursor(), c.prSince(), c.prPagesDone(), c.claimToken(), branch);
+    }
+
+    private static void rateLimit(Map<String, Object> stats, GitHubCommitHistoryPage.RateLimit rateLimit) {
+        if (rateLimit == null) return;
+        stats.put("rateLimitRemaining", rateLimit.remaining());
+        if (rateLimit.resetAt() != null) stats.put("rateLimitResetAt", rateLimit.resetAt().toString());
+    }
+
+    /**
+     * SY-02: fixes the window of the pull request step: INITIAL, or a repository whose pull requests
+     * were never read to the end, reads them all; otherwise down to the overlap before the last complete read.
+     */
+    private ClaimedJob startPullRequests(ClaimedJob claimed, GitSyncJob job, GitRepository connection) {
         LocalDateTime pullRequestsSyncedAt = connection == null ? null : connection.getPullRequestsSyncedAt();
         LocalDateTime since = job.getType() == GitSyncJobType.INITIAL || pullRequestsSyncedAt == null
                 ? null : pullRequestsSyncedAt.minus(properties.getSyncReconcileOverlap());
@@ -413,9 +575,9 @@ public class GitSyncJobStore {
         }
     }
 
-    /** SY-01 AC05: PARTIAL once some commit or pull request pages are stored, otherwise FAILED. Never SUCCEEDED. */
+    /** SY-01 AC05: PARTIAL once some commit (SY-07: branch) or pull request pages are stored, otherwise FAILED. Never SUCCEEDED. */
     private static GitSyncJobStatus givenUp(GitSyncJob job) {
-        return job.pages() + job.prPages() > 0 ? GitSyncJobStatus.PARTIAL : GitSyncJobStatus.FAILED;
+        return job.pages() + job.branchPages() + job.prPages() > 0 ? GitSyncJobStatus.PARTIAL : GitSyncJobStatus.FAILED;
     }
 
     private static void refreshSnapshot(GitRepository row, GitHubRepository repository) {

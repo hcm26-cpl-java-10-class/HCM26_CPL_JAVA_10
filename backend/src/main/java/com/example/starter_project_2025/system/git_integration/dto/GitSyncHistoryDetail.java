@@ -20,10 +20,14 @@ public record GitSyncHistoryDetail(
         JobInfo job,
         WebhookInfo webhook) {
 
-    /** Job: what each step stored. Null fields: the step did not run. */
+    /**
+     * Job: what each step stored. Null fields: the step did not run. SY-07: commits added from the
+     * other branches, and the branches read / unchanged (skipped) / cut at the page cap / deleted.
+     */
     public record Breakdown(Long commitsInserted, Long commitsExisting, Long pullRequestsInserted,
                             Long pullRequestsUpdated, Long pullRequestsUnchanged, Long reviewsInserted,
-                            Long reviewsUpdated) {
+                            Long reviewsUpdated, Long branchCommitsInserted, Long branchCommitsExisting,
+                            Long branchesSynced, Long branchesSkipped, Long branchesPartial, Long branchesDeleted) {
     }
 
     /** {@code code}: stable error code (jobs); {@code message}: technical text, already shortened. */

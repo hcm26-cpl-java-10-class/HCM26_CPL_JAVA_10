@@ -58,6 +58,7 @@ class PullRequestSyncIntegrationTest extends AbstractTaskLinkIntegrationTest {
     static void sync(DynamicPropertyRegistry registry) {
         registry.add("app.github.sync-max-pages-per-run", () -> "2");
         registry.add("app.github.sync-reconcile-enabled", () -> "false");
+        registry.add("app.github.sync-branches-enabled", () -> "false"); // SY-07: BranchCommitSyncIntegrationTest
     }
 
     private static final LocalDateTime T = LocalDateTime.now().minusDays(2).truncatedTo(ChronoUnit.SECONDS);

@@ -252,7 +252,8 @@ export type GitSyncJobType = "INITIAL" | "MANUAL" | "SCHEDULED" | "WEBHOOK";
 /** US-SY-01: PARTIAL = gave up after some commit pages were stored; it can resume from where it stopped. */
 export type GitSyncJobStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "PARTIAL" | "FAILED";
 
-export type GitSyncPhase = "METADATA" | "COMMITS" | "PULL_REQUESTS" | "DONE";
+/** US-SY-07: BRANCHES = importing the commits of the branches other than the default branch. */
+export type GitSyncPhase = "METADATA" | "COMMITS" | "BRANCHES" | "PULL_REQUESTS" | "DONE";
 
 export interface GitSyncJob {
   id: number;
@@ -272,6 +273,11 @@ export interface GitSyncJob {
     /** US-SY-02: pull requests and reviews stored by the job. */
     pullRequests?: { pages: number; inserted: number; updated: number; unchanged: number };
     reviews?: { inserted: number; updated: number };
+    /**
+     * US-SY-07: `done` of `total` changed branches read; `skipped` = unchanged since their last import,
+     * `partial` = stopped at the page cap, `deleted` = gone from GitHub.
+     */
+    branches?: { pages: number; done: number; total: number; skipped: number; partial: number; deleted: number; inserted: number; existing: number };
   };
   /** A PARTIAL / FAILED job that "Sync now" resumes from where it stopped. */
   resumable?: boolean;
@@ -675,6 +681,14 @@ export interface GitBranchItem {
   name: string;
   commits: number;
   lastCommitAt: string | null;
+  /** US-SY-07 (branch picker only): position against the default branch at the last sync. */
+  aheadBy?: number | null;
+  behindBy?: number | null;
+  /** Deleted on GitHub; its commits stay. */
+  deleted?: boolean;
+  /** Only its latest commits were imported (page cap). */
+  truncated?: boolean;
+  isDefault?: boolean;
 }
 
 export type GitPullRequestAttention = "CHANGES_REQUESTED" | "AWAITING_REVIEW" | "STALE";
@@ -856,6 +870,9 @@ export interface GitSyncHistoryDetail {
     commitsInserted?: number | null; commitsExisting?: number | null;
     pullRequestsInserted?: number | null; pullRequestsUpdated?: number | null; pullRequestsUnchanged?: number | null;
     reviewsInserted?: number | null; reviewsUpdated?: number | null;
+    /** US-SY-07: commits from the other branches, and branches read / unchanged / cut at the page cap / deleted. */
+    branchCommitsInserted?: number | null; branchCommitsExisting?: number | null;
+    branchesSynced?: number | null; branchesSkipped?: number | null; branchesPartial?: number | null; branchesDeleted?: number | null;
   } | null;
   error?: { code?: string | null; message?: string | null } | null;
   /** What a processed webhook did, in the platform's words. */

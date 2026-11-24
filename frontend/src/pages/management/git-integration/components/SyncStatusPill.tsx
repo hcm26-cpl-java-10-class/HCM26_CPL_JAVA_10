@@ -46,7 +46,8 @@ const TIME = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-di
 /** A job between two runs of a long import (or waiting for the rate limit) is still "syncing" to the user. */
 function pillState(job: GitSyncJob): PillState {
   if (job.status === "PENDING" && job.pausedUntil) return "PAUSED";
-  const progressed = (job.progress?.pages ?? 0) > 0 || (job.progress?.pullRequests?.pages ?? 0) > 0 || job.phase === "PULL_REQUESTS";
+  const progressed = (job.progress?.pages ?? 0) > 0 || (job.progress?.pullRequests?.pages ?? 0) > 0
+    || job.phase === "BRANCHES" || job.phase === "PULL_REQUESTS";
   if (job.status === "PENDING" && progressed) return "RUNNING";
   return job.status;
 }
@@ -70,6 +71,10 @@ export function SyncStatusPill({ job, lastSyncedAt }: { job: GitSyncJob | null; 
   } else if (state === "RUNNING" && job.phase === "PULL_REQUESTS") {
     detail = "pull requests";
     title = "Importing pull requests and their reviews";
+  } else if (state === "RUNNING" && job.phase === "BRANCHES") {
+    const branches = job.progress?.branches;
+    detail = branches && branches.total > 0 ? `branches ${NUMBER.format(branches.done)}/${NUMBER.format(branches.total)}` : "branches";
+    title = "Importing the commits of the other branches";
   } else if (state === "RUNNING" && job.phase === "COMMITS" && imported > 0) {
     detail = `${NUMBER.format(imported)} ${imported === 1 ? "commit" : "commits"}`;
     title = "Importing the commit history of the default branch";
@@ -77,7 +82,8 @@ export function SyncStatusPill({ job, lastSyncedAt }: { job: GitSyncJob | null; 
     detail = `resumes ${TIME.format(new Date(job.pausedUntil))}`;
     title = `GitHub rate limit reached · resumes automatically at ${formatDateTime(job.pausedUntil)}`;
   } else if (state === "PARTIAL") {
-    title = `${NUMBER.format(imported)} commits and ${NUMBER.format(pulls?.inserted ?? 0)} pull requests imported before it stopped`;
+    const fromBranches = job.progress?.branches?.inserted ?? 0;
+    title = `${NUMBER.format(imported + fromBranches)} commits and ${NUMBER.format(pulls?.inserted ?? 0)} pull requests imported before it stopped`;
   }
 
   return <span role="status" title={title}

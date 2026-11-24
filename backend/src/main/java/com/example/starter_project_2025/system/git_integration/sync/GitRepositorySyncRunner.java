@@ -23,8 +23,9 @@ import java.util.Optional;
  * GI-04: runs one synchronization job. Every run confirms the installation can still read the
  * repository (by its stable id, so a rename does not matter). The metadata step (once per job)
  * refreshes the snapshot (name, owner, URL, default branch, visibility) and counts the branches;
- * SY-01: the commit step then imports the history of the default branch; SY-02: the pull request
- * step imports pull requests and their reviews. A job resumes at the step (and cursor) where a
+ * SY-01: the commit step then imports the history of the default branch; SY-07: the branch step
+ * imports the commits of the other branches; SY-02: the pull request step imports pull requests
+ * and their reviews. A job resumes at the step (and cursor) where a
  * previous run stopped; both steps share the run's page budget ({@code sync-max-pages-per-run}).
  */
 @Slf4j
@@ -40,6 +41,7 @@ public class GitRepositorySyncRunner {
     private final InstallationHealth health;
     private final GitHubAppProperties properties;
     private final CommitHistorySyncStep commitStep;
+    private final BranchCommitSyncStep branchStep;
     private final PullRequestSyncStep pullRequestStep;
 
     public void run(Long jobId) {
@@ -81,6 +83,20 @@ public class GitRepositorySyncRunner {
                 }
                 job = commits.job();
                 budget -= commits.pages();
+                if (budget <= 0) {
+                    store.yieldRun(job); // the next step starts in the next run
+                    return;
+                }
+            }
+            if (job.phase() == GitSyncPhase.BRANCHES) {
+                step = GitSyncPhase.BRANCHES;
+                SyncStepResult branches = branchStep.run(job, owner, name, budget);
+                if (branches.outcome() != SyncStepResult.Outcome.DONE) {
+                    finishStep(branches);
+                    return;
+                }
+                job = branches.job();
+                budget -= branches.pages();
                 if (budget <= 0) {
                     store.yieldRun(job); // the pull request step starts in the next run
                     return;
@@ -127,6 +143,7 @@ public class GitRepositorySyncRunner {
         if (e.getKind() != GitHubApiException.Kind.RATE_LIMITED && store.stoppedIfDisconnected(job)) return;
         String unavailable = switch (step) {
             case COMMITS -> "HISTORY_UNAVAILABLE";
+            case BRANCHES -> "BRANCHES_UNAVAILABLE";
             case PULL_REQUESTS -> "PULL_REQUESTS_UNAVAILABLE";
             default -> "PROVIDER_UNAVAILABLE";
         };
@@ -153,6 +170,10 @@ public class GitRepositorySyncRunner {
                     // 403/422: the App cannot read contents (permission "Contents: Read" missing or revoked).
                     log.warn("Commit history refused: jobId={}, reason={}", job.jobId(), e.getMessage());
                     store.fail(job, "HISTORY_FORBIDDEN", "The GitHub App is not allowed to read the repository contents");
+                } else if (step == GitSyncPhase.BRANCHES) {
+                    // The default branch is imported; the other branches cannot be read (PARTIAL).
+                    log.warn("Branches refused: jobId={}, reason={}", job.jobId(), e.getMessage());
+                    store.fail(job, "BRANCHES_FORBIDDEN", "The GitHub App is not allowed to read the repository branches");
                 } else if (step == GitSyncPhase.PULL_REQUESTS) {
                     // The App lacks "Pull requests: Read"; the commits already imported are kept (PARTIAL).
                     log.warn("Pull requests refused: jobId={}, reason={}", job.jobId(), e.getMessage());

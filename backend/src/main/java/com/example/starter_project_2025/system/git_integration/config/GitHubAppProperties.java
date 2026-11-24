@@ -153,6 +153,18 @@ public class GitHubAppProperties {
     /** SY-01: reconcile jobs are spread over this many minutes so they do not all call GitHub at once. */
     private int syncReconcileSpreadMinutes = 60;
 
+    /** SY-07: after the default branch, import the commits of the other branches (tests of other steps turn this off). */
+    private boolean syncBranchesEnabled = true;
+
+    /** SY-07: branches read by one synchronization, the ones with the latest head commit first. */
+    private int syncMaxBranches = 100;
+
+    /** SY-07: compare pages (100 commits each) read for one branch; beyond, the branch is marked truncated. */
+    private int syncBranchMaxPages = 10;
+
+    /** SY-07: branches never read by a synchronization, as globs ({@code *} within a path segment, {@code **} across). */
+    private List<String> syncBranchExclude = new ArrayList<>();
+
     private int connectTimeoutMillis = 5000;
 
     private int readTimeoutMillis = 10000;
@@ -223,6 +235,9 @@ public class GitHubAppProperties {
         }
         if (syncMaxPagesPerRun < 1) {
             missing.add("app.github.sync-max-pages-per-run must be at least 1");
+        }
+        if (syncMaxBranches < 1 || syncBranchMaxPages < 1) {
+            missing.add("app.github.sync-max-branches / sync-branch-max-pages must be at least 1");
         }
         if (pushMaxApiPages < 1) {
             missing.add("app.github.push-max-api-pages must be at least 1");

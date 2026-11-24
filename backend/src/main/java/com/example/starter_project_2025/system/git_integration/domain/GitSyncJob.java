@@ -167,6 +167,26 @@ public class GitSyncJob extends BaseEntity {
     @Column(name = "pr_pages_done")
     Integer prPagesDone;
 
+    /** SY-07: the branches were listed (and {@code git_branches} refreshed) by this job; NULL = false. */
+    @Column(name = "branch_list_done")
+    Boolean branchListDone;
+
+    /** SY-07: branch whose commits are being read; NULL between branches. */
+    @Column(name = "branch_name", length = 255)
+    String branchName;
+
+    /** SY-07: GraphQL {@code endCursor} of the last compare page stored for {@link #branchName}. */
+    @Column(name = "branch_cursor", length = 255)
+    String branchCursor;
+
+    /** SY-07: compare pages stored for {@link #branchName} (for the per-branch cap); NULL = 0. */
+    @Column(name = "branch_current_pages")
+    Integer branchCurrentPages;
+
+    /** SY-07: compare pages stored by this job over all branches; NULL = 0. */
+    @Column(name = "branch_pages_done")
+    Integer branchPagesDone;
+
     /** SY-06: the stopped job this one continues (resume) or runs again (failed initial import). */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "resumed_from_job_id",
@@ -187,6 +207,14 @@ public class GitSyncJob extends BaseEntity {
 
     public int prPages() {
         return prPagesDone == null ? 0 : prPagesDone;
+    }
+
+    public int branchPages() {
+        return branchPagesDone == null ? 0 : branchPagesDone;
+    }
+
+    public boolean branchesListed() {
+        return Boolean.TRUE.equals(branchListDone);
     }
 
     /** ID exposed to existing DTOs; the entity owns an object relationship. */

@@ -12,7 +12,9 @@ import com.example.starter_project_2025.system.git_integration.domain.GitSyncJob
 import com.example.starter_project_2025.system.git_integration.github.GitHubApiClient;
 import com.example.starter_project_2025.system.git_integration.github.GitHubApiException;
 import com.example.starter_project_2025.system.git_integration.github.GitHubGraphQlClient;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubBranchPage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommitHistoryPage;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubComparePage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubPullRequestPage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubBranch;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallationToken;
@@ -194,6 +196,13 @@ class GitRepositoryLinkIntegrationTest {
                 .thenReturn(new GitHubCommitHistoryPage(true, false, "main", "abc", List.of(), false, null, 0, null));
         when(graphql.pullRequests(anyString(), anyString(), anyString(), any(), anyInt(), anyInt()))
                 .thenReturn(new GitHubPullRequestPage(true, false, List.of(), false, null, 0, null));
+        // SY-07: the branch step (covered by BranchCommitSyncIntegrationTest) finds nothing new on "develop".
+        when(graphql.branches(anyString(), anyString(), anyString(), any(), anyInt()))
+                .thenReturn(new GitHubBranchPage(true, false, "main", List.of(
+                        new GitHubBranchPage.Branch("develop", "d1", "2026-11-20T10:00:00Z"),
+                        new GitHubBranchPage.Branch("main", "abc", "2026-11-20T09:00:00Z")), false, null, 2, null));
+        when(graphql.compare(anyString(), anyString(), anyString(), anyString(), anyString(), any(), anyInt()))
+                .thenReturn(new GitHubComparePage(true, true, false, "IDENTICAL", 0, 0, List.of(), false, null, null));
     }
 
     // ---- AC01 ----------------------------------------------------------------------------------------

@@ -8,6 +8,7 @@ import com.example.starter_project_2025.system.git_integration.domain.GitSyncJob
 import com.example.starter_project_2025.system.git_integration.domain.GitSyncPhase;
 import com.example.starter_project_2025.system.git_integration.repository.GitRepositoryRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitSyncJobRepository;
+import com.example.starter_project_2025.system.git_integration.service.GitBranchWriter;
 import com.example.starter_project_2025.system.git_integration.service.GitEntityReferences;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
 import com.example.starter_project_2025.system.rbac.user.User;
@@ -42,14 +43,17 @@ public class GitSyncJobQueue {
     private final GitSyncJobRepository jobs;
     private final ApplicationEventPublisher events;
     private final GitHubAppProperties properties;
+    private final GitBranchWriter branches;
     private final Clock clock;
 
     public GitSyncJobQueue(GitRepositoryRepository connections, GitSyncJobRepository jobs, ApplicationEventPublisher events,
-                           GitHubAppProperties properties, @Qualifier("gitIntegrationClock") Clock clock) {
+                           GitHubAppProperties properties, GitBranchWriter branches,
+                           @Qualifier("gitIntegrationClock") Clock clock) {
         this.connections = connections;
         this.jobs = jobs;
         this.events = events;
         this.properties = properties;
+        this.branches = branches;
         this.clock = clock;
     }
 
@@ -80,6 +84,10 @@ public class GitSyncJobQueue {
             // A failed first import without a cursor runs again as an initial import (whole history).
             job.setType(GitSyncJobType.INITIAL);
             job.setResumedFromJob(entityReferences.get(GitSyncJob.class, latest.getId()));
+        }
+        if (type == GitSyncJobType.MANUAL && job.getResumedFromJob() == null) {
+            // SY-07: "Sync now" reads again the branches an earlier sync cut at the page cap (it may have been raised).
+            branches.resetTruncated(connection.getId());
         }
         job = jobs.saveAndFlush(job);
         events.publishEvent(new GitSyncJobRequested(job.getId()));
@@ -112,13 +120,19 @@ public class GitSyncJobQueue {
         job.setCommitHeadOid(stopped.getCommitHeadOid());
         job.setPrCursor(stopped.getPrCursor());
         job.setPrSince(stopped.getPrSince());
+        // SY-07: the branches finished by the stopped job are marked in git_branches; the one it was
+        // reading continues from its cursor (the listing is done again only if it was not finished).
+        job.setBranchListDone(stopped.getBranchListDone());
+        job.setBranchName(stopped.getBranchName());
+        job.setBranchCursor(stopped.getBranchCursor());
+        job.setBranchCurrentPages(stopped.getBranchCurrentPages());
     }
 
     /** A stopped job that got past its metadata step keeps its step, window and cursors: resuming continues it. */
     public static boolean resumable(GitSyncJob job) {
         boolean stopped = job.getStatus() == GitSyncJobStatus.PARTIAL || job.getStatus() == GitSyncJobStatus.FAILED;
         boolean progressed = job.getCommitCursor() != null || job.getPrCursor() != null
-                || job.getPhase() == GitSyncPhase.PULL_REQUESTS;
+                || job.getPhase() == GitSyncPhase.BRANCHES || job.getPhase() == GitSyncPhase.PULL_REQUESTS;
         return stopped && progressed;
     }
 

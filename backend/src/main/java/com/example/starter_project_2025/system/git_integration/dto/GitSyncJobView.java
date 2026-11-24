@@ -32,10 +32,18 @@ public record GitSyncJobView(
 
     /**
      * Commit pages stored, and commits inserted / already stored / completed (all runs of the job).
-     * SY-02: pull requests and reviews stored by the job.
+     * SY-02: pull requests and reviews stored by the job. SY-07: branches read and the commits they added.
      */
     public record Progress(int pages, long inserted, long existing, long enriched,
-                           PullRequests pullRequests, Reviews reviews) {
+                           PullRequests pullRequests, Reviews reviews, Branches branches) {
+    }
+
+    /**
+     * SY-07: {@code done} of {@code total} changed branches read; {@code skipped}: unchanged since
+     * their last import; {@code partial}: stopped at the page cap; {@code deleted}: gone from GitHub.
+     */
+    public record Branches(int pages, long done, long total, long skipped, long partial, long deleted,
+                           long inserted, long existing) {
     }
 
     public record PullRequests(int pages, long inserted, long updated, long unchanged) {
