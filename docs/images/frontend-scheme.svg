@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="1200" height="700" style="background:#f1f5f9; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <rect x="0" y="0" width="1200" height="700" fill="#0f172a" opacity="0.6"/>
+  <g transform="translate(250, 70)">
+    <rect x="0" y="0" width="700" height="560" rx="10" fill="#ffffff"/>
+    <text x="28" y="42" fill="#0f172a" font-size="18" font-weight="bold">Configure Assessment Scheme</text>
+    <text x="28" y="65" fill="#64748b" font-size="13">Cấu hình tỷ lệ % các đầu điểm thành phần. Tổng trọng số bắt buộc = 100%.</text>
+    <line x1="0" y1="80" x2="700" y2="80" stroke="#e2e8f0"/>
+
+    <!-- Left Form Fields -->
+    <text x="28" y="115" fill="#334155" font-size="13" font-weight="bold">Quiz Weight (%):</text>
+    <rect x="28" y="125" width="280" height="36" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="40" y="148" fill="#0f172a" font-size="13">15 %</text>
+
+    <text x="28" y="185" fill="#334155" font-size="13" font-weight="bold">Assignment Weight (%):</text>
+    <rect x="28" y="195" width="280" height="36" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="40" y="218" fill="#0f172a" font-size="13">25 %</text>
+
+    <text x="28" y="255" fill="#334155" font-size="13" font-weight="bold">Practical Exam Weight (%):</text>
+    <rect x="28" y="265" width="280" height="36" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="40" y="288" fill="#0f172a" font-size="13">30 %</text>
+
+    <text x="28" y="325" fill="#334155" font-size="13" font-weight="bold">Final Exam Weight (%):</text>
+    <rect x="28" y="335" width="280" height="36" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="40" y="358" fill="#0f172a" font-size="13">30 %</text>
+
+    <!-- Quick Balance Helper -->
+    <rect x="28" y="390" width="280" height="32" rx="6" fill="#f3f4f6" stroke="#d1d5db"/>
+    <text x="75" y="411" fill="#4b5563" font-size="12" font-weight="600">⚡ Auto Balance Weights (100%)</text>
+
+    <!-- Right Pie Chart Visualization -->
+    <rect x="360" y="105" width="310" height="320" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="430" y="135" fill="#334155" font-size="13" font-weight="bold">Assessment Weight Breakdown</text>
+    
+    <!-- Pie Chart Graphic -->
+    <circle cx="515" cy="240" r="80" fill="none" stroke="#3b82f6" stroke-width="45" stroke-dasharray="75 427" stroke-dashoffset="0"/>
+    <circle cx="515" cy="240" r="80" fill="none" stroke="#10b981" stroke-width="45" stroke-dasharray="125 377" stroke-dashoffset="-75"/>
+    <circle cx="515" cy="240" r="80" fill="none" stroke="#f59e0b" stroke-width="45" stroke-dasharray="150 352" stroke-dashoffset="-200"/>
+    <circle cx="515" cy="240" r="80" fill="none" stroke="#ef4444" stroke-width="45" stroke-dasharray="152 350" stroke-dashoffset="-350"/>
+    <text x="495" y="245" fill="#0f172a" font-size="16" font-weight="bold">100%</text>
+
+    <!-- Total Banner -->
+    <rect x="28" y="445" width="642" height="42" rx="6" fill="#dcfce7" stroke="#86efac"/>
+    <text x="45" y="471" fill="#15803d" font-size="13" font-weight="bold">✓ Total Weight: 100% (Passed Validation - Ready to Save)</text>
+
+    <!-- Actions -->
+    <line x1="0" y1="505" x2="700" y2="505" stroke="#e2e8f0"/>
+    <rect x="470" y="518" width="90" height="34" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="498" y="539" fill="#475569" font-size="13">Cancel</text>
+    <rect x="575" y="518" width="105" height="34" rx="6" fill="#2563eb"/>
+    <text x="590" y="539" fill="#ffffff" font-size="13" font-weight="bold">Apply Scheme</text>
+  </g>
+</svg>

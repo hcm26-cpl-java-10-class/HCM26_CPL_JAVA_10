@@ -50,7 +50,8 @@ class TrainerManagementIntegrationTest {
         assertEquals(0, classes.count());
         assertEquals(0, trainers.count());
         com.example.starter_project_2025.support.TrainingTestFixtures.create(em,
-            "TRAINER_READ", "TRAINER_CREATE", "TRAINER_UPDATE", "TRAINER_DELETE");
+            "TRAINER_READ", "TRAINER_CREATE", "TRAINER_UPDATE", "TRAINER_DELETE",
+            "CLASS_READ", "CLASS_CREATE", "CLASS_UPDATE");
         admin = token("admin@example.com");
         topicId = subjects.findByIsActiveTrue().stream().findFirst().orElseThrow().getId();
     }
@@ -177,6 +178,82 @@ class TrainerManagementIntegrationTest {
         service.changeStatus(trainer.id(), TrainerStatus.INACTIVE); c.setCode("TR_API_INACTIVE");
         assertThrows(BadRequestException.class, () -> classService.create(c));
     }
+    @Test void changedMasterTrainerPersistsThroughUpdateDetailAndListReload() throws Exception {
+        var first = service.create(input("TR_FIRST", "first@test.example"));
+        var second = service.create(new CreateTrainerRequest("TR_SECOND", "Second Trainer", "second@test.example", "Java", TrainerStatus.ACTIVE, Set.of(topicId)));
+        var input = classInput(first);
+        var saved = classService.create(input);
+        input.setMasterTrainerId(second.id()); input.setMasterTrainer(second.fullName());
+        mvc.perform(put("/api/classes/" + saved.getId()).header("Authorization", "Bearer " + admin)
+                .contentType("application/json").content(mapper.writeValueAsBytes(input)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.masterTrainerId").value(second.id()))
+            .andExpect(jsonPath("$.masterTrainer").value(second.fullName()));
+        em.flush(); em.clear(); // Read from H2 again, not the managed entity or the PUT response.
+        mvc.perform(get("/api/classes/" + saved.getId()).header("Authorization", "Bearer " + admin))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.masterTrainerId").value(second.id()))
+            .andExpect(jsonPath("$.masterTrainer").value(second.fullName()))
+            .andExpect(jsonPath("$.classAdmin").value("Existing Admin"))
+            .andExpect(jsonPath("$.program").value("PROGRAM"))
+            .andExpect(jsonPath("$.plannedSize").value(20))
+            .andExpect(jsonPath("$.startDate").value("2030-01-01"))
+            .andExpect(jsonPath("$.endDate").value("2030-03-01"));
+        mvc.perform(get("/api/classes").param("search", saved.getCode()).header("Authorization", "Bearer " + admin))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].masterTrainerId").value(second.id()))
+            .andExpect(jsonPath("$.content[0].masterTrainer").value(second.fullName()));
+    }
+
+    @Test void optionsExcludeInactiveAndArchivedAndFailedUpdatesRetainSavedTrainer() throws Exception {
+        var original = service.create(input("TR_ORIGINAL", "original@test.example"));
+        var inactive = service.create(input("TR_INACTIVE", "inactive@test.example"));
+        service.changeStatus(inactive.id(), TrainerStatus.INACTIVE);
+        var archived = service.create(input("TR_ARCHIVED", "archived@test.example"));
+        service.delete(archived.id());
+        mvc.perform(get("/api/trainers/options").header("Authorization", "Bearer " + admin))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+            .andExpect(jsonPath("$.content[0].id").value(original.id()))
+            .andExpect(jsonPath("$.content[0].status").value("ACTIVE"));
+        var input = classInput(original); var saved = classService.create(input);
+        for (Long rejectedId : List.of(inactive.id(), archived.id(), Long.MAX_VALUE)) {
+            input.setMasterTrainerId(rejectedId);
+            mvc.perform(put("/api/classes/" + saved.getId()).header("Authorization", "Bearer " + admin)
+                    .contentType("application/json").content(mapper.writeValueAsBytes(input)))
+                .andExpect(status().isBadRequest());
+            em.clear();
+            assertEquals(original.id(), classService.get(saved.getId()).getMasterTrainerId());
+        }
+        mvc.perform(put("/api/classes/" + saved.getId()).header("Authorization", "Bearer " + token("student@example.com"))
+                .contentType("application/json").content(mapper.writeValueAsBytes(classInput(original))))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test void classReadAuthorityCanReadOptionsButCannotUpdateClassesOrManageTrainers() throws Exception {
+        var readerRole = new com.example.starter_project_2025.system.rbac.role.Role();
+        readerRole.setName("CLASS_READER_ONLY");
+        var classRead = em.createQuery("select p from Permission p where p.name='CLASS_READ'", com.example.starter_project_2025.system.rbac.permission.Permission.class).getSingleResult();
+        readerRole.setPermissions(new HashSet<>(Set.of(classRead))); em.persist(readerRole);
+        var reader = new com.example.starter_project_2025.system.rbac.user.User();
+        reader.setEmail("class-reader@test.example"); reader.setFirstName("Class"); reader.setLastName("Reader");
+        reader.setPasswordHash("unused-test-hash"); reader.setRoles(new HashSet<>(Set.of(readerRole))); em.persist(reader); em.flush();
+        String readerToken = token(reader.getEmail());
+        mvc.perform(get("/api/trainers/options").header("Authorization", "Bearer " + readerToken))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+        mvc.perform(get("/api/trainers/data-source").header("Authorization", "Bearer " + readerToken))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.source").value("INTERNAL"));
+        mvc.perform(get("/api/trainers").header("Authorization", "Bearer " + readerToken)).andExpect(status().isForbidden());
+        var trainer = service.create(input("TR_READER", "reader-trainer@test.example"));
+        var input = classInput(trainer); var saved = classService.create(input);
+        mvc.perform(put("/api/classes/" + saved.getId()).header("Authorization", "Bearer " + readerToken)
+                .contentType("application/json").content(mapper.writeValueAsBytes(input))).andExpect(status().isForbidden());
+    }
+
+    TrainingClassDTO classInput(TrainerDTO trainer) {
+        var input = new TrainingClassDTO(); input.setCode("TR_CHANGE_CLASS"); input.setName("Trainer Change Class");
+        input.setStatus("planning"); input.setProgram("PROGRAM"); input.setClassAdmin("Existing Admin"); input.setPlannedSize(20);
+        input.setStartDate(LocalDate.of(2030, 1, 1)); input.setEndDate(LocalDate.of(2030, 3, 1));
+        input.setMasterTrainerId(trainer.id()); input.setMasterTrainer(trainer.fullName());
+        return input;
+    }
+
     MockMultipartFile file(List<List<String>> rows) throws Exception {
         try (var workbook = new XSSFWorkbook(new java.io.ByteArrayInputStream(imports.template())); var out = new ByteArrayOutputStream()) {
             int n = 1; for (var cells : rows) { var row = workbook.getSheetAt(0).createRow(n++); for (int i = 0; i < cells.size(); i++) row.createCell(i).setCellValue(cells.get(i)); }

@@ -250,12 +250,12 @@ export default function ClassListPage() {
 
     // Export to Excel function
     const handleExportExcel = () => {
-        const exportData = (visible.length > 0 ? visible : (data ?? [])).map((item, index) => ({
+        const exportData = visible.map((item, index) => ({
             "STT": index + 1,
             "Mã lớp (Class Code)": item.code || "",
             "Tên lớp (Class Name)": item.name || item.code || "",
-            "Khu vực (Site)": item.site || "HCM",
-            "Đối tượng (Trainee Type)": item.traineeType || "Fresher",
+            "Khu vực (Site)": item.site || "",
+            "Đối tượng (Trainee Type)": item.traineeType || "",
             "Chương trình đào tạo (Program)": item.program || programLabel(item.programId),
             "Quản lý lớp (Class Admin)": item.classAdmin || "—",
             "Sĩ số học viên (Trainees)": item.enrolledTrainees != null ? `${item.enrolledTrainees} / ${item.plannedSize ?? "—"}` : `— / ${item.plannedSize ?? "—"}`,
@@ -265,7 +265,12 @@ export default function ClassListPage() {
             "Trạng thái (Status)": getClassStatusMeta(item.status).label,
         }));
 
-        const ws = XLSX.utils.json_to_sheet(exportData);
+        const ws = XLSX.utils.json_to_sheet(exportData, { header: [
+            "STT", "Mã lớp (Class Code)", "Tên lớp (Class Name)", "Khu vực (Site)",
+            "Đối tượng (Trainee Type)", "Chương trình đào tạo (Program)", "Quản lý lớp (Class Admin)",
+            "Sĩ số học viên (Trainees)", "Ngày bắt đầu (Start Date)", "Ngày kết thúc (End Date)",
+            "Giảng viên chính (Master Trainer)", "Trạng thái (Status)",
+        ] });
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Class List");
         const today = new Date().toISOString().split("T")[0];

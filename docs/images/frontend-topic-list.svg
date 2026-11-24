@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="1200" height="700" style="background:#f8fafc; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <rect x="0" y="0" width="1200" height="56" fill="#ffffff" stroke="#e2e8f0"/>
+  <rect x="20" y="12" width="32" height="32" rx="6" fill="#2563eb"/>
+  <text x="27" y="34" fill="#ffffff" font-size="18" font-weight="bold">F</text>
+  <text x="62" y="34" fill="#0f172a" font-size="16" font-weight="bold">FAMS Training Platform</text>
+  <text x="260" y="34" fill="#64748b" font-size="13">Training Operations / <tspan fill="#0f172a" font-weight="600">Topics &amp; Syllabus</tspan></text>
+  
+  <rect x="0" y="56" width="220" height="644" fill="#ffffff" stroke="#e2e8f0"/>
+  <rect x="12" y="120" width="196" height="36" rx="6" fill="#eff6ff"/>
+  <text x="44" y="143" fill="#2563eb" font-size="13" font-weight="bold">Topics &amp; Syllabus</text>
+
+  <!-- Content Header -->
+  <text x="260" y="105" fill="#0f172a" font-size="22" font-weight="bold">Topics &amp; Syllabus Management</text>
+  <text x="260" y="130" fill="#64748b" font-size="13">Quản lý toàn bộ danh mục chủ đề, môn học và lộ trình đề cương đào tạo của học viện</text>
+  
+  <!-- Action Bar -->
+  <rect x="260" y="155" width="320" height="38" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="275" y="179" fill="#94a3b8" font-size="13">🔍 Search by topic code, name... (Java)</text>
+  <text x="560" y="179" fill="#94a3b8" font-size="13" cursor="pointer">✕</text>
+
+  <rect x="600" y="155" width="140" height="38" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="615" y="179" fill="#334155" font-size="13">Status: All ▾</text>
+
+  <rect x="910" y="155" width="120" height="38" rx="6" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="930" y="179" fill="#334155" font-size="13">📥 Import CSV</text>
+
+  <rect x="1045" y="155" width="115" height="38" rx="6" fill="#2563eb"/>
+  <text x="1058" y="179" fill="#ffffff" font-size="13" font-weight="bold">+ Create Topic</text>
+
+  <!-- Table -->
+  <g transform="translate(260, 210)">
+    <rect x="0" y="0" width="900" height="420" rx="6" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="0" y="0" width="900" height="40" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="20" y="25" fill="#64748b" font-size="12" font-weight="bold">CODE</text>
+    <text x="180" y="25" fill="#64748b" font-size="12" font-weight="bold">TOPIC NAME</text>
+    <text x="490" y="25" fill="#64748b" font-size="12" font-weight="bold">GROUP</text>
+    <text x="610" y="25" fill="#64748b" font-size="12" font-weight="bold">DURATION</text>
+    <text x="730" y="25" fill="#64748b" font-size="12" font-weight="bold">STATUS</text>
+    <text x="830" y="25" fill="#64748b" font-size="12" font-weight="bold">ACTION</text>
+
+    <!-- Row 1 -->
+    <rect x="0" y="40" width="900" height="52" fill="#ffffff" stroke="#f1f5f9"/>
+    <text x="20" y="72" fill="#0f172a" font-size="13" font-family="monospace" font-weight="bold">JAVA_CORE</text>
+    <text x="180" y="72" fill="#2563eb" font-size="13" font-weight="600" cursor="pointer">Lập trình Java Core &amp; OOP Nâng cao</text>
+    <text x="490" y="72" fill="#475569" font-size="13">Java Backend</text>
+    <text x="610" y="72" fill="#0f172a" font-size="13">40 hrs (16 buổi)</text>
+    <rect x="726" y="58" width="68" height="22" rx="4" fill="#dcfce7"/>
+    <text x="737" y="73" fill="#15803d" font-size="11" font-weight="bold">ACTIVE</text>
+    <text x="830" y="72" fill="#2563eb" font-size="13" cursor="pointer">Edit · View</text>
+
+    <!-- Row 2 -->
+    <rect x="0" y="92" width="900" height="52" fill="#f8fafc" stroke="#f1f5f9"/>
+    <text x="20" y="124" fill="#0f172a" font-size="13" font-family="monospace" font-weight="bold">SPRING_BOOT</text>
+    <text x="180" y="124" fill="#2563eb" font-size="13" font-weight="600" cursor="pointer">Phát triển Web Service với Spring Boot 3</text>
+    <text x="490" y="124" fill="#475569" font-size="13">Java Backend</text>
+    <text x="610" y="124" fill="#0f172a" font-size="13">60 hrs (24 buổi)</text>
+    <rect x="726" y="110" width="68" height="22" rx="4" fill="#dcfce7"/>
+    <text x="737" y="125" fill="#15803d" font-size="11" font-weight="bold">ACTIVE</text>
+    <text x="830" y="124" fill="#2563eb" font-size="13" cursor="pointer">Edit · View</text>
+
+    <!-- Row 3 -->
+    <rect x="0" y="144" width="900" height="52" fill="#ffffff" stroke="#f1f5f9"/>
+    <text x="20" y="176" fill="#0f172a" font-size="13" font-family="monospace" font-weight="bold">REACT_VITE</text>
+    <text x="180" y="176" fill="#2563eb" font-size="13" font-weight="600" cursor="pointer">Frontend Hiện đại với React &amp; TypeScript</text>
+    <text x="490" y="176" fill="#475569" font-size="13">Frontend</text>
+    <text x="610" y="176" fill="#0f172a" font-size="13">45 hrs (18 buổi)</text>
+    <rect x="726" y="162" width="68" height="22" rx="4" fill="#dcfce7"/>
+    <text x="737" y="177" fill="#15803d" font-size="11" font-weight="bold">ACTIVE</text>
+    <text x="830" y="176" fill="#2563eb" font-size="13" cursor="pointer">Edit · View</text>
+  </g>
+</svg>

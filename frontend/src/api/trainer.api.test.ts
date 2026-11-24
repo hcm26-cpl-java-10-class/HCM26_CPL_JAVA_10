@@ -18,3 +18,14 @@ it.each([
     fakeHttp.on("get", "/trainers/options", pageOf([])); fakeHttp.on("get", "/trainers/data-source", source);
     await expect(trainerApi.verifiedOptions()).rejects.toThrow("BLOCKED");
 });
+
+it("offers only ACTIVE internal records with a valid positive ID and name", async () => {
+    const valid = { id: 7, fullName: "Eligible Trainer", status: "ACTIVE", source: "INTERNAL" };
+    fakeHttp.on("get", "/trainers/options", pageOf([
+        valid, { ...valid, id: 8, status: "INACTIVE" }, { ...valid, id: 9, source: "EXTERNAL" },
+        { ...valid, id: 0 }, { ...valid, id: -1 }, { ...valid, id: "7" },
+        { ...valid, id: 10, fullName: "  " },
+    ]));
+    fakeHttp.on("get", "/trainers/data-source", { source: "INTERNAL", approved: true, sampleData: false });
+    expect(await trainerApi.verifiedOptions()).toEqual([valid]);
+});

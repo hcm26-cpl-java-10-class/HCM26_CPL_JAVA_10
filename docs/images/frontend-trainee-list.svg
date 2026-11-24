@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 680" width="1200" height="680" style="background:#f8fafc; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <rect x="0" y="0" width="1200" height="56" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="24" y="34" fill="#0f172a" font-size="16" font-weight="bold">FAMS Training Platform</text>
+  <text x="240" y="34" fill="#64748b" font-size="13">Class / HCM26_CA_JAVA_01 / <tspan fill="#0f172a" font-weight="bold">Trainee List (25/25)</tspan></text>
+
+  <g transform="translate(60, 75)">
+    <text x="0" y="25" fill="#0f172a" font-size="20" font-weight="bold">Class Trainees Directory (Danh sách học viên)</text>
+    <rect x="850" y="5" width="120" height="34" rx="6" fill="#059669"/>
+    <text x="865" y="27" fill="#ffffff" font-size="12" font-weight="bold">📊 Export Excel</text>
+    <rect x="980" y="5" width="100" height="34" rx="6" fill="#2563eb"/>
+    <text x="993" y="27" fill="#ffffff" font-size="12" font-weight="bold">📥 Import Excel</text>
+
+    <rect x="0" y="60" width="1080" height="500" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="0" y="60" width="1080" height="42" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="20" y="86" fill="#64748b" font-size="12" font-weight="bold">#</text>
+    <text x="60" y="86" fill="#64748b" font-size="12" font-weight="bold">STUDENT ID</text>
+    <text x="180" y="86" fill="#64748b" font-size="12" font-weight="bold">FULL NAME</text>
+    <text x="440" y="86" fill="#64748b" font-size="12" font-weight="bold">EMAIL</text>
+    <text x="700" y="86" fill="#64748b" font-size="12" font-weight="bold">PHONE</text>
+    <text x="860" y="86" fill="#64748b" font-size="12" font-weight="bold">STATUS</text>
+    <text x="980" y="86" fill="#64748b" font-size="12" font-weight="bold">ACTION</text>
+
+    <!-- Row 1: Ninh Hải Danh -->
+    <rect x="0" y="102" width="1080" height="50" fill="#ffffff" stroke="#f1f5f9"/>
+    <text x="20" y="133" fill="#64748b" font-size="13">1</text>
+    <text x="60" y="133" fill="#0f172a" font-size="13" font-family="monospace" font-weight="bold">SE196647</text>
+    <text x="180" y="133" fill="#2563eb" font-size="13" font-weight="bold">Ninh Hải Danh</text>
+    <text x="440" y="133" fill="#334155" font-size="13">danhnhse196647@fpt.edu.vn</text>
+    <text x="700" y="133" fill="#334155" font-size="13">0912 345 678</text>
+    <rect x="855" y="118" width="70" height="22" rx="4" fill="#dcfce7"/>
+    <text x="868" y="133" fill="#15803d" font-size="11" font-weight="bold">Enrolled</text>
+    <text x="980" y="133" fill="#2563eb" font-size="13">View ▾</text>
+
+    <!-- Row 2 -->
+    <rect x="0" y="152" width="1080" height="50" fill="#f8fafc" stroke="#f1f5f9"/>
+    <text x="20" y="183" fill="#64748b" font-size="13">2</text>
+    <text x="60" y="183" fill="#0f172a" font-size="13" font-family="monospace" font-weight="bold">SE182341</text>
+    <text x="180" y="183" fill="#0f172a" font-size="13" font-weight="500">Nguyễn Trần Bảo</text>
+    <text x="440" y="183" fill="#334155" font-size="13">baontse182341@fpt.edu.vn</text>
+    <text x="700" y="183" fill="#334155" font-size="13">0987 654 321</text>
+    <rect x="855" y="168" width="70" height="22" rx="4" fill="#dcfce7"/>
+    <text x="868" y="183" fill="#15803d" font-size="11" font-weight="bold">Enrolled</text>
+    <text x="980" y="183" fill="#2563eb" font-size="13">View ▾</text>
+
+    <text x="20" y="240" fill="#64748b" font-size="13">... và 23 học viên khác đã được đồng bộ hóa thành công từ file Excel chuẩn.</text>
+  </g>
+</svg>
