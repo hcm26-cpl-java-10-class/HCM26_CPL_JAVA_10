@@ -5,13 +5,16 @@ import com.example.starter_project_2025.system.demo.course.CourseLevel;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.concurrent.Semaphore;
 import static com.example.starter_project_2025.system.demo.recommendation.RecommendationModels.*;
 
-@Service @RequiredArgsConstructor
+@Service @RequiredArgsConstructor @Slf4j
 public class RecommendationService {
+    private static final int MAX_PROVIDER_CANDIDATES = 30;
+    private static final int MAX_PROVIDER_HISTORY_CHARS = 6_000;
     private final RecommendationData data;
     private final AiTextClient ai;
     private final ObjectMapper mapper;
@@ -50,12 +53,12 @@ public class RecommendationService {
         if (!acquire(id,System.currentTimeMillis())) return fallback(candidates,vi,"LIMITED");
         try {
             // Only public metadata and this account's topic preferences go to the provider.
-            var publicCandidates=candidates.stream().limit(30).map(i -> {
+            var publicCandidates=candidates.stream().limit(MAX_PROVIDER_CANDIDATES).map(i -> {
                 var c=i.course();
                 Map<String,Object> m=new LinkedHashMap<>();
-                m.put("id",c.id());m.put("title",c.name());m.put("description",c.description());
-                m.put("category",c.categoryName());m.put("difficulty",c.level());
-                m.put("contentSeconds",c.totalDuration());m.put("reason",i.reason());return m;
+                m.put("id",c.id());m.put("title",clip(c.name(),200));m.put("description",clip(c.description(),500));
+                m.put("category",clip(c.categoryName(),120));m.put("difficulty",c.level());
+                m.put("contentSeconds",c.totalDuration());m.put("reason",clip(i.reason(),200));return m;
             }).toList();
             String instruction="""
                 Help the learner choose existing courses. Return JSON only:
@@ -70,24 +73,49 @@ public class RecommendationService {
                 Guidance must only discuss choosing these candidates. Card facts are supplied separately by the server.
                 """;
             String context=mapper.writeValueAsString(Map.of("language",request.language(),"preferences",initial.preferences(),"candidates",publicCandidates));
-            List<AiTextClient.Turn> turns=new ArrayList<>();
-            turns.add(new AiTextClient.Turn("user","Recommendation data: "+context));
-            request.history().forEach(t -> turns.add(new AiTextClient.Turn(t.role(),t.content())));
-            turns.add(new AiTextClient.Turn("user",request.message()));
+            List<AiTextClient.Turn> turns=providerTurns(context,request);
             JsonNode response=ai.generateRecommendationJson(instruction,turns);
-            List<Long> ids=validatedIds(response,candidates.stream().limit(30).toList());
+            List<Long> ids=validatedIds(response,candidates.stream().limit(MAX_PROVIDER_CANDIDATES).toList());
             // Fresh read after the provider returns: publication, enrollment and dismissals may have changed.
             Map<Long,Item> current=new HashMap<>();
             data.automatic(id).recommendations().forEach(i -> current.put(i.course().id(),i));
             List<Item> items=ids.stream().filter(current::containsKey).map(current::get).toList();
             String reply=response.path("reply").asText();
+            if (technicalFailureReply(reply)) throw new IllegalArgumentException("Technical provider reply");
             if (java.util.regex.Pattern.compile("(?iu)\\b(?:course[ _-]*ids?|ids?|mã(?: khóa học)?)\\s*[:#=：-]?\\s*\\d+").matcher(reply).find())
                 reply=vi?"Bạn có thể xem các khóa học phù hợp bên dưới.":"Explore the matching courses below.";
             return new ChatResponse(reply,items,"AVAILABLE",items.isEmpty()?"NO_MATCHES":"READY");
         } catch (Exception failure) {
             // Do not leak raw provider errors, keys, prompts or private user text.
+            log.warn("Course recommendation AI fallback ({})", failure.getClass().getSimpleName());
             return fallback(filter(data.automatic(id).recommendations(),request),vi,"UNAVAILABLE");
         } finally { release(id); }
+    }
+
+    static List<AiTextClient.Turn> providerTurns(String context,ChatRequest request) {
+        List<AiTextClient.Turn> turns=new ArrayList<>();
+        turns.add(new AiTextClient.Turn("user","Recommendation data: "+context));
+        Deque<AiTextClient.Turn> history=new ArrayDeque<>();
+        int remaining=MAX_PROVIDER_HISTORY_CHARS;
+        var source=request.history().listIterator(request.history().size());
+        while(source.hasPrevious() && remaining>0) {
+            var turn=source.previous();
+            String content=clip(turn.content(),remaining);
+            history.addFirst(new AiTextClient.Turn(turn.role(),content));
+            remaining-=content.length();
+        }
+        turns.addAll(history);
+        turns.add(new AiTextClient.Turn("user",request.message()));
+        return turns;
+    }
+
+    static boolean technicalFailureReply(String reply) {
+        return reply != null && reply.trim().matches("(?iu)^(out of memory|resource exhausted|internal server error|service unavailable)[.!]?$" );
+    }
+
+    static String clip(String value,int max) {
+        if (value==null) return "";
+        return value.length()<=max ? value : value.substring(0,max);
     }
 
     static List<Long> validatedIds(JsonNode response,List<Item> candidates) {
@@ -102,7 +130,7 @@ public class RecommendationService {
                 throw new IllegalArgumentException("Unknown recommendation ID");
             ids.add(node.longValue());
         }
-        return ids.stream().limit(30).toList();
+        return ids.stream().limit(MAX_PROVIDER_CANDIDATES).toList();
     }
     static List<Item> filter(List<Item> input,ChatRequest request) {
         // Deterministic fallback also supports the common easier/shorter follow-ups in both languages.

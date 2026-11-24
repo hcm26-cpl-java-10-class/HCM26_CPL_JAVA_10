@@ -10,6 +10,7 @@ import com.example.starter_project_2025.system.project.resources.template_resour
 import com.example.starter_project_2025.system.project.resources.TemplateResourceFileStorage;
 import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -80,6 +81,20 @@ public class HierarchyDemoFiles {
     }
 
     private byte[] bytes(String name) {
+        if (name.equals("payment-sdk.zip")) {
+            try (var buffer = new ByteArrayOutputStream()) {
+                try (var zip = new ZipOutputStream(buffer)) {
+                    for (String entry : List.of("README.md", "create-payment.json", "payment-callback.json")) {
+                        zip.putNextEntry(new ZipEntry(entry));
+                        zip.write(bytes("payment-sdk/" + entry));
+                        zip.closeEntry();
+                    }
+                }
+                return buffer.toByteArray();
+            } catch (IOException exception) {
+                throw new UncheckedIOException("Unable to prepare payment demo archive", exception);
+            }
+        }
         try (var input = new ClassPathResource("project/hierarchy-demo/" + name).getInputStream()) {
             return input.readAllBytes();
         } catch (IOException exception) {
