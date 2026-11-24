@@ -64,7 +64,7 @@ public class ProjectReportKpiService {
         Map<UUID,String> latest = artifactStates(tenant, stages, source, submissions);
         Map<UUID,MilestoneArtifactSubmission> legacy = new HashMap<>();
         if (!stages.isEmpty()) for (var artifact : em.createQuery("select a from MilestoneArtifactSubmission a where a.tenantId=:tenant "
-                        + "and a.milestoneId in :ids order by a.submittedAt desc,a.version desc,a.id", MilestoneArtifactSubmission.class)
+                        + "and a.milestone.id in :ids order by a.submittedAt desc,a.version desc,a.id", MilestoneArtifactSubmission.class)
                 .setParameter("tenant", tenant).setParameter("ids", stages.keySet()).getResultList()) {
             var stage = stages.get(artifact.getMilestoneId());
             if (sameScope(stage, artifact.getProjectId(), artifact.getTeamId())) legacy.putIfAbsent(stage.getId(), artifact);
@@ -121,7 +121,7 @@ public class ProjectReportKpiService {
     private Set<UUID> waivers(Long tenant, Map<UUID,Milestone> stages) {
         if (stages.isEmpty()) return Set.of();
         Set<UUID> result = new HashSet<>();
-        for (var waiver : em.createQuery("select w from MilestoneWaiver w where w.tenantId=:tenant and w.milestoneId in :ids", MilestoneWaiver.class)
+        for (var waiver : em.createQuery("select w from MilestoneWaiver w where w.tenantId=:tenant and w.milestone.id in :ids", MilestoneWaiver.class)
                 .setParameter("tenant", tenant).setParameter("ids", stages.keySet()).getResultList()) {
             var stage = stages.get(waiver.getMilestoneId());
             if (Objects.equals(stage.getProjectId(), waiver.getProjectId()) && Objects.equals(stage.getTeamId(), waiver.getTeamId()))

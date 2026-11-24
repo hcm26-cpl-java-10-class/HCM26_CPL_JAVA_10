@@ -18,8 +18,12 @@ public class MilestoneDraftRevision {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "milestone_id", nullable = false, updatable = false)
-    private UUID milestoneId;
+    /** Not serialized: the revision API exposes {@link #getMilestoneId()} as before. */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "milestone_id", nullable = false, updatable = false,
+            foreignKey = @ForeignKey(name = "fk_milestone_draft_revision_milestone"))
+    private Milestone milestone;
 
     @Column(name = "tenant_id", nullable = false, updatable = false)
     private Long tenantId;
@@ -39,12 +43,17 @@ public class MilestoneDraftRevision {
     public static MilestoneDraftRevision capture(Milestone milestone, int number, String snapshot,
                                                   UUID actor, Instant now) {
         MilestoneDraftRevision revision = new MilestoneDraftRevision();
-        revision.milestoneId = milestone.getId();
+        revision.milestone = milestone;
         revision.tenantId = milestone.getTenantId();
         revision.revisionNumber = number;
         revision.snapshotJson = snapshot;
         revision.createdAt = now;
         revision.createdBy = actor;
         return revision;
+    }
+
+    /** Id of the owning milestone; read from the lazy proxy without loading it. */
+    public UUID getMilestoneId() {
+        return milestone.getId();
     }
 }

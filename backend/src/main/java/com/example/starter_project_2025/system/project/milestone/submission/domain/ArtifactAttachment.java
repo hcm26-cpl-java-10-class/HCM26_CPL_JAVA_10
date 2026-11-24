@@ -1,11 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.submission.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
+import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -23,8 +19,10 @@ public class ArtifactAttachment {
     @Column(name = "attachment_id", nullable = false, updatable = false)
     private UUID id;
 
-    @Column(name = "milestone_id", nullable = false, updatable = false)
-    private UUID milestoneId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "milestone_id", nullable = false, updatable = false,
+            foreignKey = @ForeignKey(name = "fk_artifact_attachment_milestone"))
+    private Milestone milestone;
 
     @Column(name = "project_id", updatable = false)
     private Long projectId;
@@ -56,11 +54,11 @@ public class ArtifactAttachment {
     @Column(name = "uploaded_at", nullable = false, updatable = false)
     private Instant uploadedAt;
 
-    public static ArtifactAttachment clean(UUID milestoneId, Long projectId, Long teamId, Long tenantId,
+    public static ArtifactAttachment clean(Milestone milestone, Long projectId, Long teamId, Long tenantId,
             String storageKey, String originalName, String contentType, long sizeBytes,
             UUID actorId, Instant now) {
         ArtifactAttachment attachment = new ArtifactAttachment();
-        attachment.milestoneId = milestoneId;
+        attachment.milestone = milestone;
         attachment.projectId = projectId;
         attachment.teamId = teamId;
         attachment.tenantId = tenantId;
@@ -74,9 +72,14 @@ public class ArtifactAttachment {
         return attachment;
     }
 
-    public static ArtifactAttachment clean(UUID milestoneId, Long projectId, Long tenantId,
+    public static ArtifactAttachment clean(Milestone milestone, Long projectId, Long tenantId,
             String storageKey, String originalName, String contentType, long sizeBytes, UUID actorId, Instant now) {
-        return clean(milestoneId, projectId, null, tenantId, storageKey, originalName,
+        return clean(milestone, projectId, null, tenantId, storageKey, originalName,
                 contentType, sizeBytes, actorId, now);
+    }
+
+    /** Id of the owning milestone; read from the lazy proxy without loading it. */
+    public UUID getMilestoneId() {
+        return milestone.getId();
     }
 }

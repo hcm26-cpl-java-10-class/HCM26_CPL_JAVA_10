@@ -179,7 +179,7 @@ public class SubmissionMockDataInitializer implements CommandLineRunner {
         for (Object[] value : values) {
             RubricCriterion criterion = (RubricCriterion) value[0];
             RubricCriterionRating rating = (RubricCriterionRating) value[1];
-            review.addEvaluation(criterion.getId(), criterion.getCode(), criterion.getName(), rating.getId(),
+            review.addEvaluation(criterion, criterion.getCode(), criterion.getName(), rating,
                     rating.getLevel().name(), rating.getPercentage(), (BigDecimal) value[2], feedback,
                     criterion.getOrderIndex());
         }

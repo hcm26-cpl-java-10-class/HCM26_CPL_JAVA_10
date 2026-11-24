@@ -109,7 +109,7 @@ public class MasterMilestoneService {
         Milestone milestone = milestones.findByIdAndProjectIdAndTenantId(milestoneId, master.getId(), master.getTenantId())
                 .filter(value -> value.isActive() && Objects.equals(value.getTeamId(), master.getTeamId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Master milestone was not found"));
-        if (waivers.findByTenantIdAndMilestoneIdAndTeamId(master.getTenantId(), milestoneId, master.getTeamId()).isPresent())
+        if (waivers.findByTenantIdAndMilestone_IdAndTeamId(master.getTenantId(), milestoneId, master.getTeamId()).isPresent())
             throw new MilestoneConflictException("This master milestone has already been waived");
         var existing = submissions.findByMilestoneIdAndTeamId(milestoneId, master.getTeamId());
         if (existing.isPresent() && existing.get().getStatus() != SubmissionStatus.DRAFT

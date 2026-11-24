@@ -51,6 +51,15 @@ public class MasterMilestoneController {
         return completion.get(projectId, null);
     }
 
+    @PostMapping("/api/projects/{projectId}/finalize")
+    @PreAuthorize("hasAnyAuthority('MILESTONE_WRITE', 'PRJ_WORKSPACE_MANAGE')")
+    public SubmissionDtos.ProjectCompletionResult finalizeProject(@PathVariable Long projectId,
+            @Valid @RequestBody SubmissionDtos.FinalizeProjectRequest request) {
+        return commands.finalizeProject(projectId, null, request);
+    }
+
+    /** @deprecated use {@code POST /api/projects/{projectId}/finalize}; it applies the same readiness rules. */
+    @Deprecated
     @PostMapping("/api/projects/{projectId}/final-grade/lock")
     @PreAuthorize("hasAnyAuthority('MILESTONE_WRITE', 'PRJ_WORKSPACE_MANAGE')")
     public SubmissionDtos.ProjectCompletionResult lock(@PathVariable Long projectId,

@@ -41,7 +41,7 @@ class MilestoneStartScheduleBackfillTest {
     }
 
     private Milestone milestone(Instant deadline) {
-        return Milestone.create(1L, 1L, 1L, "Legacy", null, deadline, true, UUID.randomUUID(), null,
+        return Milestone.create(1L, 1L, 1L, "Legacy", null, deadline, true, null, null,
                 LatePolicyType.NO_LATE, null, null, UUID.randomUUID(), deadline.minusSeconds(86400));
     }
 }

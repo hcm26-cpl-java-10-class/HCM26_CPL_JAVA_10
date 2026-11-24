@@ -105,14 +105,34 @@ public class TemplateAssignmentProvisioningService {
     private final TemplateAssignmentResourceWriter assignmentResources;
     private final ObjectMapper objectMapper;
     private final jakarta.persistence.EntityManager entityManager;
+    private final com.example.starter_project_2025.system.project.sprint_backlog.key.BacklogTaskKeyService taskKeys;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void provision(ProjectTeam team, ProjectTemplate template, Long actorId, String correlationId) {
+        provision(team, template, actorId, correlationId, null);
+    }
+
+    /**
+     * @param taskKeyPrefix prefix of the workspace being created (null: keep the default);
+     *                      set before the sample backlog is generated so its Task IDs use it
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void provision(ProjectTeam team, ProjectTemplate template, Long actorId, String correlationId,
+                          String taskKeyPrefix) {
         Long tenantId = Objects.requireNonNull(team.getTrainingClass().getTenantId(),
                 "The training class must belong to a tenant");
-        if (team.getProject() != null) {
-            ensureWorkspace(team, team.getProject(), tenantId, actorId, correlationId);
-            return;
+        Project project = team.getProject();
+        if (project != null) {
+            // A prepared project row is not proof that its template components were copied.
+            // Hierarchy assignments and existing assignment snapshots have already been provisioned.
+            boolean alreadyProvisioned = project.getAssignmentId() != null || project.getTemplateSnapshotId() != null;
+            boolean hasTemplateComponents = !alreadyProvisioned
+                    && (!templateMilestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId()).isEmpty()
+                        || !templateBacklogItems.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId()).isEmpty());
+            if (alreadyProvisioned || !hasTemplateComponents) {
+                ensureWorkspace(team, project, tenantId, actorId, correlationId, taskKeyPrefix);
+                return;
+            }
         }
 
         entityManager.refresh(template, jakarta.persistence.LockModeType.PESSIMISTIC_READ);
@@ -134,19 +154,24 @@ public class TemplateAssignmentProvisioningService {
                 template, team.getId(), team.getProjectTemplateVersionId());
 
         // ---- Step 2: project creation
-        Project project = createProject(team, template, snapshot, tenantId, actorId);
+        if (project == null) {
+            project = createProject(team, template, snapshot, tenantId, actorId);
+        } else {
+            project.setTemplateSnapshotId(snapshot.getId());
+            projects.saveAndFlush(project);
+        }
         briefSnapshots.linkProject(snapshot, project.getId());
 
         team.setProject(project);
         teams.saveAndFlush(team);
 
         // ---- Step 3: workspace + generated components
-        Workspace workspace = ensureWorkspace(team, project, tenantId, actorId, correlationId);
+        Workspace workspace = ensureWorkspace(team, project, tenantId, actorId, correlationId, taskKeyPrefix);
         int inheritedResources = assignmentResources.copy(project, template, snapshot);
 
         int generatedMilestones = generateMilestones(
                 team, project, tenantId, actorId, publishedAt, milestonePlan);
-        int generatedBacklogItems = generateSampleBacklog(project, template);
+        int generatedBacklogItems = generateSampleBacklog(project, template, workspace.getTaskKeyPrefix());
 
         recordActivity(workspace, tenantId, actorId, correlationId, ACTIVITY_WORKSPACE_GENERATED);
 
@@ -225,7 +250,8 @@ public class TemplateAssignmentProvisioningService {
                                       Project project,
                                       Long tenantId,
                                       Long actorId,
-                                      String correlationId) {
+                                      String correlationId,
+                                      String taskKeyPrefix) {
 
         Workspace existing = workspaces.findCurrentByTeamId(team.getId()).orElse(null);
         if (existing != null) {
@@ -251,6 +277,7 @@ public class TemplateAssignmentProvisioningService {
         workspace.setCreatedBy(actorId);
         workspace.setIsActive(true);
         workspace.setSections(new ArrayList<>(Arrays.asList(WorkspaceSection.values())));
+        if (taskKeyPrefix != null) workspace.setTaskKeyPrefix(taskKeyPrefix);
         Workspace saved = workspaces.saveAndFlush(workspace);
 
         workspaceJournal.recordCreation(saved, actor(actorId), response(saved, tenantId, project, team), correlationId);
@@ -328,7 +355,7 @@ public class TemplateAssignmentProvisioningService {
                     planMilestone.getDescription(),
                     deadline,
                     planMilestone.isMandatory(),
-                    planMilestone.getRubricVersion().getId(),
+                    planMilestone.getRubricVersion(),
                     null,
                     allowLate ? LatePolicyType.ALLOW_LATE : LatePolicyType.NO_LATE,
                     lateUntil,
@@ -359,7 +386,7 @@ public class TemplateAssignmentProvisioningService {
         return startsAt.plus(days, ChronoUnit.DAYS);
     }
 
-    private int generateSampleBacklog(Project project, ProjectTemplate template) {
+    private int generateSampleBacklog(Project project, ProjectTemplate template, String taskKeyPrefix) {
         List<TemplateBacklogItem> items =
                 templateBacklogItems.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
         int created = 0;
@@ -368,7 +395,7 @@ public class TemplateAssignmentProvisioningService {
             if (sprintBacklog.findByProjectIdAndSprintIsNullAndTitleIgnoreCase(project.getId(), title).isPresent()) {
                 continue;
             }
-            sprintBacklog.saveAndFlush(SprintBacklog.builder()
+            SprintBacklog sample = SprintBacklog.builder()
                     .projectId(project.getId())
                     .title(title)
                     .description(item.getDescription())
@@ -377,7 +404,9 @@ public class TemplateAssignmentProvisioningService {
                     .priority(SprintBacklogPriority.MEDIUM)
                     .isActive(true)
                     .version(0L)
-                    .build());
+                    .build();
+            taskKeys.assignAll(java.util.List.of(sample), taskKeyPrefix);
+            sprintBacklog.saveAndFlush(sample);
             created++;
         }
         return created;

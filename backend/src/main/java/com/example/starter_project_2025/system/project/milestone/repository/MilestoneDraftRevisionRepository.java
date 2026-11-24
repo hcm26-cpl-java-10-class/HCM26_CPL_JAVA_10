@@ -7,5 +7,5 @@ import java.util.List;
 import java.util.UUID;
 
 public interface MilestoneDraftRevisionRepository extends JpaRepository<MilestoneDraftRevision, UUID> {
-    List<MilestoneDraftRevision> findByMilestoneIdAndTenantIdOrderByRevisionNumberDesc(UUID milestoneId, Long tenantId);
+    List<MilestoneDraftRevision> findByMilestone_IdAndTenantIdOrderByRevisionNumberDesc(UUID milestoneId, Long tenantId);
 }

@@ -25,6 +25,7 @@ import java.util.UUID;
  */
 public record SprintPlanningItemDTO(
         Long id,
+        String taskKey,
         String title,
         String description,
         String priority,
@@ -60,6 +61,7 @@ public record SprintPlanningItemDTO(
 
         return new SprintPlanningItemDTO(
                 backlog.getId(),
+                backlog.getTaskKey(),
                 backlog.getTitle(),
                 backlog.getDescription(),
                 backlog.getPriority() == null ? null : backlog.getPriority().name(),

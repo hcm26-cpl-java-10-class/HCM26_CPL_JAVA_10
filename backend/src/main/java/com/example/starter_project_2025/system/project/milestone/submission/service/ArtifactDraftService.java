@@ -73,7 +73,7 @@ public class ArtifactDraftService {
         var draft = draftRepository.findByMilestoneIdAndProjectIdAndTenantId(milestoneId, projectId, scope.tenantId())
                 .map(this::toResponse).orElse(null);
         var latestSubmission = submissionRepository
-                .findTopByTenantIdAndProjectIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(
+                .findTopByTenantIdAndProjectIdAndMilestone_IdAndSubmitterIdOrderByVersionDesc(
                         scope.tenantId(), projectId, milestoneId, scope.actorId())
                 .map(submissionService::toResponse).orElse(null);
         return new ArtifactSubmissionWorkspaceResponse(
@@ -98,7 +98,7 @@ public class ArtifactDraftService {
                 .findByMilestoneIdAndProjectIdAndTenantId(milestoneId, projectId, scope.tenantId());
         boolean creating = existingDraft.isEmpty();
         MilestoneArtifactDraft draft = existingDraft.orElseGet(() -> MilestoneArtifactDraft.create(
-                milestoneId, projectId, scope.tenantId(), scope.actorId(), now, checklistJson));
+                milestone, projectId, scope.tenantId(), scope.actorId(), now, checklistJson));
         boolean sameContent = sameContent(draft, request, checklistJson);
         if (!creating && request.expectedVersion() == null && !sameContent) {
             throw new MilestoneConflictException("Draft version is required. Reload the draft before saving.");
@@ -206,7 +206,7 @@ public class ArtifactDraftService {
 
     private String blankToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }
     private java.util.List<com.example.starter_project_2025.system.project.milestone.submission.dto.ArtifactAttachmentResponse> attachments(MilestoneArtifactDraft draft) {
-        return attachmentRepository.findByMilestoneIdAndProjectIdAndTenantIdOrderByUploadedAtAsc(
+        return attachmentRepository.findByMilestone_IdAndProjectIdAndTenantIdOrderByUploadedAtAsc(
                         draft.getMilestoneId(), draft.getProjectId(), draft.getTenantId()).stream()
                 .map(row -> new com.example.starter_project_2025.system.project.milestone.submission.dto.ArtifactAttachmentResponse(
                         row.getId(), row.getOriginalName(), row.getContentType(), row.getSizeBytes(),

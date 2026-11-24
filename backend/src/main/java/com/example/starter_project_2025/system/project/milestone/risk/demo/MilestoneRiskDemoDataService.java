@@ -24,6 +24,7 @@ public class MilestoneRiskDemoDataService {
     private final TaskAlertDemoDatasetRepository taskDatasets;
     private final MilestoneRiskDemoDatasetRepository datasets;
     private final MilestoneRepository milestones;
+    private final com.example.starter_project_2025.system.project.rubric.repository.RubricVersionRepository rubricVersions;
     private final TaskRepository tasks;
     private final ProjectTeamRepository projectTeams;
     private final ProjectMemberRepository projectMembers;
@@ -77,7 +78,7 @@ public class MilestoneRiskDemoDataService {
             Instant deadline, boolean open, int done, int total, Instant now, boolean overdueTask) {
         if (milestones.existsByTenantIdAndProjectIdAndTitle(tenant, project, title)) return;
         Milestone milestone = Milestone.create(tenant, project, teamId, title, "Local in-app notification demo: " + title,
-                deadline, true, MockMilestoneData.RUBRIC_ID, null, LatePolicyType.NO_LATE, null, null, actor, now);
+                deadline, true, rubricVersions.referenceOrNull(MockMilestoneData.RUBRIC_ID), null, LatePolicyType.NO_LATE, null, null, actor, now);
         if (open) milestone.openForWork(actor, now);
         milestones.saveAndFlush(milestone);
         UUID legacyProject = UUID.nameUUIDFromBytes(("milestone:project:" + project).getBytes(java.nio.charset.StandardCharsets.UTF_8));

@@ -124,6 +124,11 @@ public final class SubmissionDtos {
             @NotNull @DecimalMin("0.00") @DecimalMax("100.00") @Digits(integer = 3, fraction = 2)
             BigDecimal finalScore) { }
 
+    public record FinalizeProjectRequest(
+            @NotNull @DecimalMin("0.00") @DecimalMax("100.00") @Digits(integer = 3, fraction = 2)
+            BigDecimal finalScore,
+            @Size(max = 500) String note) { }
+
     public record WaiveMilestoneRequest(
             @NotBlank @Size(max = 500) String reason) { }
 

@@ -64,7 +64,7 @@ export function WorkspaceCreateDialog({ candidates, initialSelection, onClose, o
           value={taskPrefix}
           onChange={e => setTaskPrefix(e.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase())}
         />
-        <p className="text-xs text-muted-foreground">Các task và subtask sẽ được đánh số theo tiền tố này (ví dụ: {taskPrefix || "FA"}-01, {taskPrefix || "FA"}-02).</p>
+        <p className="text-xs text-muted-foreground">Mỗi work item được hệ thống tự cấp Task ID theo tiền tố này (ví dụ: {(taskPrefix || "FA").toUpperCase()}-1, {(taskPrefix || "FA").toUpperCase()}-2) để ghi vào commit message. Không đổi được sau khi tạo workspace.</p>
       </div>
       <DialogFooter>
         <Button variant="outline" disabled={create.isPending} onClick={onClose}>Cancel</Button>

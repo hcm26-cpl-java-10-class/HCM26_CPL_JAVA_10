@@ -96,6 +96,8 @@ public class SecurityConfig {
                     auth.requestMatchers(PUBLIC_ENDPOINTS).permitAll();
                     auth.requestMatchers(HttpMethod.GET, "/api/lesson-audio/**").permitAll();
                     auth.requestMatchers(HttpMethod.GET, "/api/lesson-documents/**").permitAll();
+                    // SY-03: GitHub calls this without a JWT; every request is authenticated by its HMAC signature.
+                    auth.requestMatchers(HttpMethod.POST, "/api/webhooks/github").permitAll();
                     auth.anyRequest().authenticated();
                 })
                 .exceptionHandling(ex -> ex

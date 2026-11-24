@@ -102,7 +102,7 @@ class ProjectReportIntegrationTest {
         team.setProject(p);team.setProjectTemplate(em.find(ProjectTemplate.class,templateId));team.setProjectTemplateVersionId(source);team.setAssignedMentorId(mentor);team.setStatus(ProjectTeamStatus.ACTIVE);em.persist(team);em.flush();p.setTeamId(team.getId());return team;
     }
     Milestone milestone(ProjectTeam team,Instant due,boolean accepted) {
-        var m=Milestone.create(team.getTrainingClass().getTenantId(),team.getProjectId(),team.getId(),"Delivery",null,due,true,UUID.randomUUID(),null,LatePolicyType.NO_LATE,null,null,UUID.randomUUID(),now);
+        var m=Milestone.create(team.getTrainingClass().getTenantId(),team.getProjectId(),team.getId(),"Delivery",null,due,true,null,null,LatePolicyType.NO_LATE,null,null,UUID.randomUUID(),now);
         m.configureAssessment(new BigDecimal("100"),LatePenaltyBasis.FIXED);m.openForWork(UUID.randomUUID(),now);m.start(UUID.randomUUID(),now);
         if(accepted){m.setExecutionStatus(MilestoneExecutionStatus.REVIEW,UUID.randomUUID(),now);m.setExecutionStatus(MilestoneExecutionStatus.DONE,UUID.randomUUID(),now);}
         em.persist(m);em.flush();return m;
@@ -192,8 +192,8 @@ class ProjectReportIntegrationTest {
     }
     @Test void onTimeSubmittedIsNotOverdueAndAcceptedLateSubmissionDoesNotChangeProjectState() throws Exception {
         tx.executeWithoutResult(status->{var a=em.find(Milestone.class,milestoneA);a.editActive(null,now.minusSeconds(60),UUID.randomUUID(),now);a.setExecutionStatus(MilestoneExecutionStatus.REVIEW,UUID.randomUUID(),now);
-            em.persist(MilestoneArtifactSubmission.submit(tenantId,projectA,teamA,milestoneA,UUID.randomUUID(),1,null,null,null,"[]","[]",now.minusSeconds(120),false,null));
-            em.persist(MilestoneArtifactSubmission.submit(tenantId,projectB,teamB,milestoneB,UUID.randomUUID(),1,null,null,null,"[]","[]",now.minusSeconds(30),true,null));});
+            em.persist(MilestoneArtifactSubmission.submit(tenantId,projectA,teamA,em.getReference(Milestone.class,milestoneA),UUID.randomUUID(),1,null,null,null,"[]","[]",now.minusSeconds(120),false,null));
+            em.persist(MilestoneArtifactSubmission.submit(tenantId,projectB,teamB,em.getReference(Milestone.class,milestoneB),UUID.randomUUID(),1,null,null,null,"[]","[]",now.minusSeconds(30),true,null));});
         report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.summary.overdueProjects").value(0))
                 .andExpect(jsonPath("$.summary.lateProjects").value(1)).andExpect(jsonPath("$.statuses.ACTIVE").value(2))
                 .andExpect(jsonPath("$.statuses.COMPLETED").value(0));
@@ -321,7 +321,7 @@ class ProjectReportIntegrationTest {
     @Test void backlogRollupAvoidsMultiplyingItemsWhenThereAreSeveralSubmissions() throws Exception {
         tx.executeWithoutResult(status->{var team=em.find(ProjectTeam.class,teamA);milestone(team,null,true);
             var author=UUID.randomUUID();
-            for(long version=1;version<=2;version++)em.persist(MilestoneArtifactSubmission.submit(tenantId,projectA,teamA,milestoneA,author,version,null,null,null,"[]","[]",now.minusSeconds(version),false,null));
+            for(long version=1;version<=2;version++)em.persist(MilestoneArtifactSubmission.submit(tenantId,projectA,teamA,em.getReference(Milestone.class,milestoneA),author,version,null,null,null,"[]","[]",now.minusSeconds(version),false,null));
         });
         var data=body(report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.summary.backlog.total").value(2))
                 .andExpect(jsonPath("$.summary.backlog.todo").value(1)).andExpect(jsonPath("$.summary.backlog.done").value(1)));
@@ -745,7 +745,7 @@ class ProjectReportIntegrationTest {
             kpiSubmission(milestone(team,now.plusSeconds(10000),false),SubmissionStatus.REJECTED);
             var pending=milestone(team,now.plusSeconds(10000),false);
             kpiSubmission(pending,SubmissionStatus.SUBMITTED);
-            for(int version=1;version<=3;version++)em.persist(MilestoneArtifactSubmission.submit(tenantId,projectA,teamA,pending.getId(),
+            for(int version=1;version<=3;version++)em.persist(MilestoneArtifactSubmission.submit(tenantId,projectA,teamA,pending,
                     UUID.randomUUID(),version,"https://example.test",null,null,"{}","[]",now,false,BigDecimal.ZERO));
         });
         report(mentor).andExpect(status().isOk())
@@ -780,9 +780,9 @@ class ProjectReportIntegrationTest {
     @Test void kpiWorkspaceDraftsWithLegacyNullTeamAreCountedAndAnOlderSavedDraftDoesNotOverrideReview() throws Exception {
         tx.executeWithoutResult(status->{
             var team=em.find(ProjectTeam.class,teamA);workspace(team);
-            em.persist(MilestoneArtifactDraft.create(milestoneA,projectA,tenantId,UUID.randomUUID(),now.minusSeconds(30),"{}"));
+            em.persist(MilestoneArtifactDraft.create(em.getReference(Milestone.class,milestoneA),projectA,tenantId,UUID.randomUUID(),now.minusSeconds(30),"{}"));
             var stage=milestone(team,now.plusSeconds(86400),false);
-            em.persist(MilestoneArtifactDraft.create(stage.getId(),projectA,tenantId,UUID.randomUUID(),now.minusSeconds(30),"{}"));
+            em.persist(MilestoneArtifactDraft.create(stage,projectA,tenantId,UUID.randomUUID(),now.minusSeconds(30),"{}"));
             kpiSubmission(stage,SubmissionStatus.CHANGES_REQUESTED);
         });
         report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.overview.artifactStatuses.DRAFT").value(1))
@@ -877,7 +877,7 @@ class ProjectReportIntegrationTest {
             var team=em.find(ProjectTeam.class,teamA);workspace(team);
             var rejected=milestone(team,now.minusSeconds(20),false);kpiSubmission(rejected,SubmissionStatus.REJECTED);
             var waived=milestone(team,now.minusSeconds(20),false);
-            em.persist(MilestoneWaiver.create(tenantId,projectA,waived.getId(),teamA,"Approved exemption",UUID.randomUUID(),now));
+            em.persist(MilestoneWaiver.create(tenantId,projectA,waived,teamA,"Approved exemption",UUID.randomUUID(),now));
             var review=milestone(team,now.minusSeconds(20),false);kpiSubmission(review,SubmissionStatus.SUBMITTED);
             milestone(team,now.minusSeconds(20),true);
             var submitted=milestone(team,now.plusSeconds(20),false);kpiSubmission(submitted,SubmissionStatus.SUBMITTED);
@@ -938,7 +938,7 @@ class ProjectReportIntegrationTest {
                 .andExpect(jsonPath("$.overview.riskCount").value(1));
         tx.executeWithoutResult(status->{
             var user=em.find(User.class,people[1]);
-            em.persist(MilestoneArtifactSubmission.submit(tenantId,projectA,teamA,milestoneA,
+            em.persist(MilestoneArtifactSubmission.submit(tenantId,projectA,teamA,em.getReference(Milestone.class,milestoneA),
                     UUID.nameUUIDFromBytes(user.getEmail().getBytes(StandardCharsets.UTF_8)),1,"https://example.test",null,null,"{}","[]",now,false,BigDecimal.ZERO));
         });
         report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.overview.inactiveMembers").doesNotExist())
@@ -950,7 +950,7 @@ class ProjectReportIntegrationTest {
         tx.executeWithoutResult(status->{
             workspace(em.find(ProjectTeam.class,teamA));workspace(em.find(ProjectTeam.class,teamB));
             var shared=Milestone.create(tenantId,root,null,"Shared delivery",null,now.plusSeconds(86400),true,
-                    UUID.randomUUID(),null,LatePolicyType.NO_LATE,null,null,UUID.randomUUID(),now);
+                    null,null,LatePolicyType.NO_LATE,null,null,UUID.randomUUID(),now);
             shared.configureAssessment(new BigDecimal("100"),LatePenaltyBasis.FIXED);
             shared.openForWork(UUID.randomUUID(),now);shared.start(UUID.randomUUID(),now);em.persist(shared);
         });
@@ -1232,8 +1232,8 @@ class ProjectReportIntegrationTest {
             var version = SubmissionVersion.draft(submission,next,"Revised delivery",null,null,UUID.randomUUID(),now);
             em.persist(version);version.submit(now,false,BigDecimal.ZERO);submission.submitted(next,now);
             em.flush();
-            var copy = MilestoneArtifactSubmission.submit(tenantId,projectA,teamA,milestoneA,submission.getStudentId(),next,null,null,null,"[]","[]",now.minusSeconds(1),false,null);
-            em.persist(copy);em.flush();version.linkArtifactSubmission(copy.getId());
+            var copy = MilestoneArtifactSubmission.submit(tenantId,projectA,teamA,em.getReference(Milestone.class,milestoneA),submission.getStudentId(),next,null,null,null,"[]","[]",now.minusSeconds(1),false,null);
+            em.persist(copy);em.flush();version.linkArtifactSubmission(copy);
             em.persist(SubmissionAuditLog.create(submission.getId(),version.getId(),"SUBMISSION_SUBMITTED",submission.getStudentId(),"revision-submit",now.minusSeconds(1)));
             em.persist(com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditLog.statusEvent(milestoneA,projectA,tenantId,
                     submission.getStudentId(),"MILESTONE_SUBMITTED","revision-submit",null,now.minusSeconds(1)));

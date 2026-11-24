@@ -47,6 +47,7 @@ public class SprintBacklogController
     SprintBacklogService sprintBacklogService;
     SprintBacklogRepository sprintBacklogRepository;
     ImportService importService;
+    com.example.starter_project_2025.system.project.sprint_backlog.key.BacklogTaskKeyService taskKeys;
 
     @Override
     protected BaseCrudService<Long, SprintBacklogDTO, SprintBacklogFilter> getService() {
@@ -57,6 +58,11 @@ public class SprintBacklogController
      * Every backlog item of one sprint (a sprint has one or many backlog
      * items).
      */
+    @GetMapping("/by-key/{taskKey}")
+    public ResponseEntity<SprintBacklogDTO> getByTaskKey(@PathVariable String taskKey) {
+        return ResponseEntity.ok(sprintBacklogService.getByTaskKey(taskKey));
+    }
+
     @GetMapping("/by-sprint/{sprintId}")
     public ResponseEntity<List<SprintBacklogDTO>> getBySprint(@PathVariable Long sprintId) {
         return ResponseEntity.ok(sprintBacklogService.getBySprintId(sprintId));
@@ -112,7 +118,10 @@ public class SprintBacklogController
     @PostMapping(value = "/import", consumes = "multipart/form-data")
     @PreAuthorize("hasAuthority('SPRINT_BACKLOG_CREATE')")
     public ImportResult importFile(@RequestParam("file") MultipartFile file) {
-        return importService.importFileAtomic(file, SprintBacklog.class, sprintBacklogRepository);
+        ImportResult result = importService.importFileAtomic(file, SprintBacklog.class, sprintBacklogRepository);
+        // The generic importer saves the rows itself (committed by now): give them their Task ID.
+        taskKeys.backfillMissing();
+        return result;
     }
 
     // ---------------------------------------------------------------------

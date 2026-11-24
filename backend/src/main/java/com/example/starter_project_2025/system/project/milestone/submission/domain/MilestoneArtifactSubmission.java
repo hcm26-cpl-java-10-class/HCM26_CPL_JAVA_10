@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.project.milestone.submission.domain;
 
+import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -31,8 +32,10 @@ public class MilestoneArtifactSubmission {
     @Column(name = "team_id", updatable = false)
     private Long teamId;
 
-    @Column(name = "milestone_id", nullable = false, updatable = false)
-    private UUID milestoneId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "milestone_id", nullable = false, updatable = false,
+            foreignKey = @ForeignKey(name = "fk_artifact_submission_milestone"))
+    private Milestone milestone;
 
     @Column(name = "submitter_id", nullable = false, updatable = false)
     private UUID submitterId;
@@ -68,7 +71,7 @@ public class MilestoneArtifactSubmission {
     @Column(name = "late_penalty_percent", precision = 5, scale = 2, updatable = false)
     private BigDecimal latePenaltyPercent;
 
-    public static MilestoneArtifactSubmission submit(Long tenantId, Long projectId, Long teamId, UUID milestoneId,
+    public static MilestoneArtifactSubmission submit(Long tenantId, Long projectId, Long teamId, Milestone milestone,
             UUID submitterId, long version, String repositoryUrl, String deploymentUrl, String releaseNotes,
             String checklistJson, String attachmentsJson, Instant submittedAt, boolean submittedLate,
             BigDecimal latePenaltyPercent) {
@@ -76,7 +79,7 @@ public class MilestoneArtifactSubmission {
         row.tenantId = tenantId;
         row.projectId = projectId;
         row.teamId = teamId;
-        row.milestoneId = milestoneId;
+        row.milestone = milestone;
         row.submitterId = submitterId;
         row.version = version;
         row.status = ArtifactSubmissionStatus.SUBMITTED;
@@ -91,12 +94,17 @@ public class MilestoneArtifactSubmission {
         return row;
     }
 
-    public static MilestoneArtifactSubmission submit(Long tenantId, Long projectId, UUID milestoneId,
+    public static MilestoneArtifactSubmission submit(Long tenantId, Long projectId, Milestone milestone,
             UUID submitterId, long version, String repositoryUrl, String deploymentUrl, String releaseNotes,
             String checklistJson, String attachmentsJson, Instant submittedAt, boolean submittedLate,
             BigDecimal latePenaltyPercent) {
-        return submit(tenantId, projectId, null, milestoneId, submitterId, version, repositoryUrl,
+        return submit(tenantId, projectId, null, milestone, submitterId, version, repositoryUrl,
                 deploymentUrl, releaseNotes, checklistJson, attachmentsJson, submittedAt,
                 submittedLate, latePenaltyPercent);
+    }
+
+    /** Id of the owning milestone; read from the lazy proxy without loading it. */
+    public UUID getMilestoneId() {
+        return milestone.getId();
     }
 }

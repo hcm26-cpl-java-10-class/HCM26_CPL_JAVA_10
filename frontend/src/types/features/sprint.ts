@@ -32,6 +32,8 @@ export interface SprintFilter extends BaseFilter {
  */
 export interface SprintPlanningItem {
   id: number;
+  /** Task ID stored by the server (`FA-12`); see `SprintBacklogDTO.taskKey`. */
+  taskKey?: string | null;
   title?: string | null;
   description?: string | null;
   priority?: BacklogPriority | null;

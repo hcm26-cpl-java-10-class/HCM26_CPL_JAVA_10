@@ -34,6 +34,7 @@ public class MilestoneCommandService {
     private static final Object[] IDEMPOTENCY_LOCKS = createLocks();
 
     private final CurrentActorProvider actorProvider;
+    private final com.example.starter_project_2025.system.project.rubric.repository.RubricVersionRepository rubricVersions;
     private final MilestoneTenantProvider tenantProvider;
     private final ProjectMilestonePort projectPort;
     private final RubricCatalogPort rubricPort;
@@ -117,7 +118,7 @@ public class MilestoneCommandService {
                 request.description() == null ? null : request.description().trim(),
                 request.deadline(),
                 request.mandatory(),
-                request.rubricSnapshotId(),
+                rubricVersions.referenceOrNull(request.rubricSnapshotId()),
                 null,
                 request.latePolicy().type(),
                 request.latePolicy().lateUntil(),

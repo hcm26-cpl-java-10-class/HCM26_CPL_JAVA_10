@@ -5,13 +5,15 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { WorkspaceOverviewPanel } from "./WorkspaceOverviewPanel";
 import { WorkspaceSectionState, sectionForbidden } from "./WorkspaceSectionState";
 import type { WorkspaceProjectNode } from "@/types/features/project-assignment";
+import type { GitHubTabTarget } from "@/pages/management/git-integration/github-tab.params";
 
 export function WorkspaceOverviewSection({ workspaceId, projectId, teamId, canViewMembers, onViewMembers, selectedProject, onViewAccess,
-  onAccessChanged }: {
+  onAccessChanged, onOpenGitHub }: {
   workspaceId: number; projectId?: number | null; teamId: number; canViewMembers: boolean; onViewMembers: () => void;
   onViewAccess: () => void;
   onAccessChanged: () => void;
   selectedProject?: WorkspaceProjectNode;
+  onOpenGitHub?: (target: GitHubTabTarget) => void;
 }) {
   const { user, activeRole } = usePermissions();
   const query = useQuery({
@@ -30,5 +32,6 @@ export function WorkspaceOverviewSection({ workspaceId, projectId, teamId, canVi
   if (!workspace || workspace.id !== workspaceId || workspace.teamId !== teamId || workspace.projectId !== projectId)
     return <WorkspaceSectionState error={new Error("Overview context does not match this workspace.")} retry={() => void query.refetch()} />;
   return <WorkspaceOverviewPanel workspace={workspace} selectedProject={selectedProject}
-    canViewMembers={canViewMembers && workspace.can_view_members} onViewMembers={onViewMembers} onViewAccess={onViewAccess} />;
+    canViewMembers={canViewMembers && workspace.can_view_members} onViewMembers={onViewMembers} onViewAccess={onViewAccess}
+    onOpenGitHub={onOpenGitHub} />;
 }

@@ -19,7 +19,6 @@ interface BacklogSectionProps {
   /** Lifecycle status of the sprint box (`null` for the product backlog). */
   status?: SprintStatus | null;
   items: SprintPlanningItem[];
-  itemKeyPrefix: string;
   selectedIds: number[];
   collapsed: boolean;
   canEditTask: boolean;
@@ -66,7 +65,6 @@ export function BacklogSection({
   meta,
   status,
   items,
-  itemKeyPrefix,
   selectedIds,
   collapsed,
   canEditTask,
@@ -215,7 +213,7 @@ export function BacklogSection({
                 <BacklogRow
                   key={item.id}
                   item={item}
-                  itemKey={backlogItemKey(itemKeyPrefix, item)}
+                  itemKey={backlogItemKey(item)}
                   selected={selectedIds.includes(item.id)}
                   canEditTask={canEditTask}
                   busy={busyItemId === item.id}

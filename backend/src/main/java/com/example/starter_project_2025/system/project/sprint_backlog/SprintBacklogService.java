@@ -13,6 +13,9 @@ public interface SprintBacklogService
      */
     List<SprintBacklogDTO> getBySprintId(Long sprintId);
 
+    /** Item by its Task ID (e.g. {@code FA-12}, case-insensitive) in the caller's tenant. */
+    SprintBacklogDTO getByTaskKey(String taskKey);
+
     /**
      * Audit trail of a backlog item, newest first.
      */

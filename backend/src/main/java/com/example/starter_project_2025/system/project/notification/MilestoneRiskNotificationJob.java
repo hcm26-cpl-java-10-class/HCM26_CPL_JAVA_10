@@ -79,7 +79,7 @@ public class MilestoneRiskNotificationJob {
             if (milestone.getDeadline() == null || milestone.getTeamId() == null) continue;
 
             var submission = submissions.findByMilestoneIdAndTeamId(milestone.getId(), milestone.getTeamId());
-            boolean waived = waivers.existsByMilestoneIdAndTeamId(milestone.getId(), milestone.getTeamId());
+            boolean waived = waivers.existsByMilestone_IdAndTeamId(milestone.getId(), milestone.getTeamId());
 
             long overdueTasks = milestone.getProjectId() == null ? 0
                     : tasks.countByProjectIdAndMilestoneIdAndIsActiveTrueAndStatusInAndDeadlineBefore(

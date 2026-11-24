@@ -70,6 +70,7 @@ public class WorkspaceDemoBacklogInitializer implements CommandLineRunner {
     ProjectRepository projects;
     SprintRepository sprints;
     SprintBacklogRepository backlogs;
+    com.example.starter_project_2025.system.project.sprint_backlog.key.BacklogTaskKeyService taskKeys;
 
     @Value("${app.seed.admin.email:admin@example.com}")
     @NonFinal
@@ -139,6 +140,7 @@ public class WorkspaceDemoBacklogInitializer implements CommandLineRunner {
         backlog.setSprint(sprint);
         backlog.setProjectId(projectId);
         applyItem(backlog, item);
+        taskKeys.assign(backlog);
 
         backlogs.save(backlog);
 
@@ -168,6 +170,7 @@ public class WorkspaceDemoBacklogInitializer implements CommandLineRunner {
         backlog.setSprint(null);
         backlog.setProjectId(projectId);
         applyItem(backlog, item);
+        taskKeys.assign(backlog);
 
         backlogs.save(backlog);
 

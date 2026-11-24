@@ -22,6 +22,16 @@ public class ProjectCompletionController {
         return queries.get(projectId, teamId);
     }
 
+    @PostMapping("/finalize")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyAuthority('MILESTONE_WRITE', 'PRJ_WORKSPACE_MANAGE')")
+    public SubmissionDtos.ProjectCompletionResult finalizeProject(
+            @PathVariable Long projectId, @PathVariable Long teamId,
+            @Valid @RequestBody SubmissionDtos.FinalizeProjectRequest request) {
+        return commands.finalizeProject(projectId, teamId, request);
+    }
+
+    /** @deprecated use {@code POST /finalize}; it applies the same readiness rules. */
+    @Deprecated
     @PostMapping("/final-grade/lock")
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyAuthority('MILESTONE_WRITE', 'PRJ_WORKSPACE_MANAGE')")
     public SubmissionDtos.ProjectCompletionResult lockFinalGrade(

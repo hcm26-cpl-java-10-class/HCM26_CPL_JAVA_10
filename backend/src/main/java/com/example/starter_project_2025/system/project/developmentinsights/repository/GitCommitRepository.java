@@ -1,0 +1,213 @@
+package com.example.starter_project_2025.system.project.developmentinsights.repository;
+
+import com.example.starter_project_2025.system.project.developmentinsights.domain.GitCommit;
+import com.example.starter_project_2025.system.project.developmentinsights.domain.GitContributor;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+@org.springframework.stereotype.Repository("activityGitCommitRepository")
+public interface GitCommitRepository extends JpaRepository<GitCommit, Long> {
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from ActivityGitCommit c where c.id = :id")
+    Optional<GitCommit> lockById(@Param("id") Long id);
+    Optional<GitCommit> findFirstByRepository_IdAndSha(Long repositoryId, String sha);
+    long countByRepository_Id(Long repositoryId);
+
+    List<GitCommit> findAllByRepository_IdOrderByCommittedAtAscIdAsc(Long repositoryId);
+    List<GitCommit> findAllByRepository_IdInOrderByCommittedAtAscIdAsc(Collection<Long> repositoryIds);
+
+    @Query("""
+            select distinct author from ActivityGitCommit c
+            join c.repository r
+            join c.authorContributor author
+            left join TaskGitLink link on link.commit.id = c.id
+            left join link.task linkedTask
+            where r.rootProject.id = :rootId
+              and (r.mockData = false or not exists (select sourceRepo.id from ActivityGitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
+              and author.user is not null
+              and (:rootScope = true or linkedTask.projectId in :projectIds
+                   or (link.id is null and author.id in :contributorIds))
+              and (:filterProjectId is null or (:filterProjectId = :rootId and :rootScope = true)
+                   or exists (select selectedLink.id from TaskGitLink selectedLink
+                   where selectedLink.commit.id = c.id and selectedLink.task.projectId = :filterProjectId)
+                   or (not exists (select anyLink.id from TaskGitLink anyLink where anyLink.commit.id = c.id)
+                       and author.id in :projectContributorIds))
+            """)
+    java.util.List<GitContributor> findVisibleContributors(@Param("rootId") Long rootId,
+                                                           @Param("rootScope") boolean rootScope,
+                                                           @Param("projectIds") Collection<Long> projectIds,
+                                                           @Param("contributorIds") Collection<Long> contributorIds,
+                                                           @Param("filterProjectId") Long filterProjectId,
+                                                           @Param("projectContributorIds") Collection<Long> projectContributorIds);
+
+    @Query(value = """
+            select distinct c from ActivityGitCommit c
+            join c.repository r
+            left join c.authorContributor author
+            left join TaskGitLink link on link.commit.id = c.id
+            left join link.task linkedTask
+            where r.rootProject.id = :rootId
+              and (r.mockData = false or not exists (select sourceRepo.id from ActivityGitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
+              and (:rootScope = true or linkedTask.projectId in :projectIds
+                   or (link.id is null and author.id in :contributorIds))
+              and (:search is null or lower(c.sha) like lower(concat('%', :search, '%'))
+                   or lower(c.message) like lower(concat('%', :search, '%'))
+                   or lower(author.login) like lower(concat('%', :search, '%'))
+                   or lower(author.displayName) like lower(concat('%', :search, '%')))
+              and (:fromTime is null or c.committedAt >= :fromTime)
+              and (:untilTime is null or c.committedAt < :untilTime)
+              and (:developerId is null or author.user.id = :developerId)
+              and (:contributorId is null or author.id = :contributorId)
+              and (:branch is null or c.firstSeenBranch = :branch)
+              and (:unmappedOnly is null or (:unmappedOnly = true and
+                   (author.id is null or (author.user is null and author.bot = false))) or
+                   (:unmappedOnly = false and author.user is not null))
+              and (:includeBots is null or :includeBots = true or
+                   (r.sourceRepository is null and c.bot = false and (author.id is null or author.bot = false))
+                   or exists (select source.id from GitCommit source where source.repository = r.sourceRepository
+                       and source.sha = c.sha and source.parentCount is not null and source.bot = false))
+              and (:includeMergeCommits is null or :includeMergeCommits = true
+                   or (r.sourceRepository is null and c.mergeCommit = false)
+                   or exists (select source.id from GitCommit source where source.repository = r.sourceRepository
+                       and source.sha = c.sha and source.parentCount <= 1))
+              and (:taskId is null or exists (select taskLink.id from TaskGitLink taskLink
+                   where taskLink.commit.id = c.id and taskLink.task.id = :taskId))
+              and (:filterProjectId is null or (:filterProjectId = :rootId and :rootScope = true)
+                   or exists (select selectedLink.id from TaskGitLink selectedLink
+                   where selectedLink.commit.id = c.id and selectedLink.task.projectId = :filterProjectId)
+                   or (not exists (select anyLink.id from TaskGitLink anyLink where anyLink.commit.id = c.id)
+                       and author.id in :projectContributorIds))
+            """,
+            countQuery = """
+            select count(distinct c.id) from ActivityGitCommit c
+            join c.repository r
+            left join c.authorContributor author
+            left join TaskGitLink link on link.commit.id = c.id
+            left join link.task linkedTask
+            where r.rootProject.id = :rootId
+              and (r.mockData = false or not exists (select sourceRepo.id from ActivityGitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
+              and (:rootScope = true or linkedTask.projectId in :projectIds
+                   or (link.id is null and author.id in :contributorIds))
+              and (:search is null or lower(c.sha) like lower(concat('%', :search, '%'))
+                   or lower(c.message) like lower(concat('%', :search, '%'))
+                   or lower(author.login) like lower(concat('%', :search, '%'))
+                   or lower(author.displayName) like lower(concat('%', :search, '%')))
+              and (:fromTime is null or c.committedAt >= :fromTime)
+              and (:untilTime is null or c.committedAt < :untilTime)
+              and (:developerId is null or author.user.id = :developerId)
+              and (:contributorId is null or author.id = :contributorId)
+              and (:branch is null or c.firstSeenBranch = :branch)
+              and (:unmappedOnly is null or (:unmappedOnly = true and
+                   (author.id is null or (author.user is null and author.bot = false))) or
+                   (:unmappedOnly = false and author.user is not null))
+              and (:includeBots is null or :includeBots = true or
+                   (r.sourceRepository is null and c.bot = false and (author.id is null or author.bot = false))
+                   or exists (select source.id from GitCommit source where source.repository = r.sourceRepository
+                       and source.sha = c.sha and source.parentCount is not null and source.bot = false))
+              and (:includeMergeCommits is null or :includeMergeCommits = true
+                   or (r.sourceRepository is null and c.mergeCommit = false)
+                   or exists (select source.id from GitCommit source where source.repository = r.sourceRepository
+                       and source.sha = c.sha and source.parentCount <= 1))
+              and (:taskId is null or exists (select taskLink.id from TaskGitLink taskLink
+                   where taskLink.commit.id = c.id and taskLink.task.id = :taskId))
+              and (:filterProjectId is null or (:filterProjectId = :rootId and :rootScope = true)
+                   or exists (select selectedLink.id from TaskGitLink selectedLink
+                   where selectedLink.commit.id = c.id and selectedLink.task.projectId = :filterProjectId)
+                   or (not exists (select anyLink.id from TaskGitLink anyLink where anyLink.commit.id = c.id)
+                       and author.id in :projectContributorIds))
+            """)
+    Page<GitCommit> findVisiblePage(@Param("rootId") Long rootId,
+                                    @Param("rootScope") boolean rootScope,
+                                    @Param("projectIds") Collection<Long> projectIds,
+                                    @Param("contributorIds") Collection<Long> contributorIds,
+                                    @Param("projectContributorIds") Collection<Long> projectContributorIds,
+                                    @Param("search") String search,
+                                    @Param("fromTime") Instant fromTime,
+                                    @Param("untilTime") Instant untilTime,
+                                    @Param("developerId") Long developerId,
+                                    @Param("contributorId") Long contributorId,
+                                    @Param("branch") String branch,
+                                    @Param("unmappedOnly") Boolean unmappedOnly,
+                                    @Param("includeBots") Boolean includeBots,
+                                    @Param("includeMergeCommits") Boolean includeMergeCommits,
+                                    @Param("taskId") Long taskId,
+                                    @Param("filterProjectId") Long filterProjectId,
+                                    Pageable pageable);
+
+    @Query("""
+            select distinct c from ActivityGitCommit c join c.repository r
+            left join c.authorContributor author
+            left join TaskGitLink link on link.commit.id = c.id
+            left join link.task linkedTask
+            where r.rootProject.id = :rootId
+              and (r.mockData = false or not exists (select sourceRepo.id from ActivityGitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
+              and (:rootScope = true or linkedTask.projectId in :projectIds
+                   or (link.id is null and author.id in :contributorIds))
+              and (:filterProjectId is null or (:filterProjectId = :rootId and :rootScope = true)
+                   or exists (select selectedLink.id from TaskGitLink selectedLink
+                   where selectedLink.commit.id = c.id and selectedLink.task.projectId = :filterProjectId)
+                   or (not exists (select anyLink.id from TaskGitLink anyLink where anyLink.commit.id = c.id)
+                       and author.id in :projectContributorIds))
+              and (:taskId is null or exists (select taskLink.id from TaskGitLink taskLink
+                   where taskLink.commit.id = c.id and taskLink.task.id = :taskId))
+            """)
+    List<GitCommit> findVisibleForAnalytics(@Param("rootId") Long rootId,
+                                            @Param("rootScope") boolean rootScope,
+                                            @Param("projectIds") Collection<Long> projectIds,
+                                            @Param("contributorIds") Collection<Long> contributorIds,
+                                            @Param("filterProjectId") Long filterProjectId,
+                                            @Param("projectContributorIds") Collection<Long> projectContributorIds,
+                                            @Param("taskId") Long taskId);
+
+    /** Source metadata wins while the read projection catches up; unknown is not a normal commit. */
+    @Query("""
+            select c.id from ActivityGitCommit c join c.repository r left join c.authorContributor author
+             where c.id in :ids
+               and (:includeBots = true
+                    or (r.sourceRepository is null and c.bot = false and (author.id is null or author.bot = false))
+                    or exists (select source.id from GitCommit source where source.repository = r.sourceRepository
+                        and source.sha = c.sha and source.parentCount is not null and source.bot = false))
+               and (:includeMergeCommits = true
+                    or (r.sourceRepository is null and c.mergeCommit = false)
+                    or exists (select source.id from GitCommit source where source.repository = r.sourceRepository
+                        and source.sha = c.sha and source.parentCount <= 1))
+            """)
+    List<Long> findConfirmedAnalyticsIds(@Param("ids") Collection<Long> ids,
+                                         @Param("includeBots") boolean includeBots,
+                                         @Param("includeMergeCommits") boolean includeMergeCommits);
+
+    @Query("""
+            select case when count(source) > 0 then true else false end from GitCommit source
+             where source.project.id = :rootId and source.parentCount is null
+            """)
+    boolean hasPendingSourceMetadata(@Param("rootId") Long rootId);
+
+    @Query("""
+            select c from ActivityGitCommit c join c.repository r
+            where c.id = :commitId and r.rootProject.id = :rootId
+              and (r.mockData = false or not exists (select sourceRepo.id from ActivityGitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
+            """)
+    Optional<GitCommit> findInRoot(@Param("rootId") Long rootId, @Param("commitId") Long commitId);
+
+    @Query("""
+            select case when count(c) > 0 then true else false end
+            from ActivityGitCommit c join c.repository r
+            left join TaskGitLink link on link.commit.id = c.id
+            left join link.task linkedTask
+            where c.id = :commitId and r.rootProject.id = :rootId
+              and (r.mockData = false or not exists (select sourceRepo.id from ActivityGitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
+              and (:rootScope = true or linkedTask.projectId in :projectIds
+                   or (link.id is null and c.authorContributor.id in :contributorIds))
+            """)
+    boolean isVisible(@Param("rootId") Long rootId, @Param("commitId") Long commitId,
+                      @Param("rootScope") boolean rootScope,
+                      @Param("projectIds") Collection<Long> projectIds,
+                      @Param("contributorIds") Collection<Long> contributorIds);
+}

@@ -159,7 +159,7 @@ public class ProjectReportFeedService {
             }
             // Legacy submissions also carry real submit timestamps; ignore copies already represented by the version audit.
             for (var artifact : activityQuery("select a from MilestoneArtifactSubmission a where a.tenantId=:tenant "
-                            + "and a.milestoneId in :milestones and a.submittedAt<=:end", MilestoneArtifactSubmission.class,
+                            + "and a.milestone.id in :milestones and a.submittedAt<=:end", MilestoneArtifactSubmission.class,
                     "a.submittedAt", from, until, false)
                     .setParameter("tenant", tenant).setParameter("milestones", milestones.keySet()).setParameter("end", asOf).getResultList()) {
                 var stage = milestones.get(artifact.getMilestoneId());
