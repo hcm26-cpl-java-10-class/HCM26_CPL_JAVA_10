@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { LessonContentType, LessonDTO, ValidationErrorResponse } from "@/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -47,6 +48,7 @@ interface FormState {
   textContent: string;
   duration: string;
   orderIndex: string;
+  allowSeeking: boolean;
 }
 
 const LESSON_CONTENT_TYPE_OPTIONS: { value: LessonContentType; label: string }[] = [
@@ -72,6 +74,7 @@ function buildInitialState(lesson?: LessonDTO | null, defaultOrderIndex = 0): Fo
     textContent: lesson?.textContent ?? "",
     duration: lesson?.duration != null ? String(lesson.duration) : "",
     orderIndex: String(lesson?.orderIndex ?? defaultOrderIndex),
+    allowSeeking: lesson?.allowSeeking ?? false,
   };
 }
 
@@ -246,6 +249,7 @@ export function LessonFormModal({
     if (form.duration !== "") payload.duration = Number(form.duration);
 
     // Chỉ gửi field có ý nghĩa với loại nội dung đang chọn
+    if (form.contentType === "VIDEO" || form.contentType === "AUDIO") payload.allowSeeking = form.allowSeeking;
     if (needsUrl(form.contentType)) payload.contentUrl = form.contentUrl.trim();
     else payload.textContent = form.textContent;
 
@@ -529,6 +533,21 @@ export function LessonFormModal({
                 Required · must start with http:// or https:// · max 500 characters
               </p>
               <FieldMessage message={errors.contentUrl} />
+              {(form.contentType === "VIDEO" || form.contentType === "AUDIO") && (
+                <div className="mt-2 flex items-center justify-between gap-4 rounded-md border px-3 py-2">
+                  <div>
+                    <Label htmlFor="lesson-allow-seeking">Allow learners to skip ahead</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Off: learners cannot fast-forward past what they have watched (rewinding is allowed).
+                    </p>
+                  </div>
+                  <Switch
+                    id="lesson-allow-seeking"
+                    checked={form.allowSeeking}
+                    onCheckedChange={(checked) => setField("allowSeeking", checked)}
+                  />
+                </div>
+              )}
               {form.contentType === "AUDIO" && isHttpUrl(form.contentUrl) && (
                 <audio
                   key={form.contentUrl.trim()}

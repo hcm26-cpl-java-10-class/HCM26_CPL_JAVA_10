@@ -13,6 +13,8 @@ export interface LessonDTO extends BaseDTO {
   textContent?: string;
   outlineEditable?: boolean;
   duration?: number;
+  /** true = học viên được tua video; false = khóa tua. */
+  allowSeeking?: boolean;
   orderIndex?: number;
   courseId?: number | string;
   courseName?: string;

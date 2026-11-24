@@ -20,7 +20,7 @@ import {
 import { usePermissions } from "@/hooks/usePermissions";
 import type { LessonDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eye, Pencil, Plus, Trash2 } from "lucide-react";
+import { Eye, Lock, LockOpen, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { LessonFormModal } from "./LessonFormModal";
@@ -84,6 +84,19 @@ export function SectionLessons({ sectionId, deepLink, onDeepLinkConsumed }: Sect
     },
     onError: (error: any) => {
       toast.error(error?.response?.data?.message || "Could not delete the lesson.");
+    },
+  });
+
+  // Bật/tắt cho phép học viên tua video của một lesson (cần quyền LESSON_UPDATE)
+  const seekingMutation = useMutation({
+    mutationFn: ({ id, allowSeeking }: { id: number; allowSeeking: boolean }) =>
+      lessonApi.update(String(id), { allowSeeking }),
+    onSuccess: async (saved) => {
+      await queryClient.invalidateQueries({ queryKey: ["lessons"] });
+      toast.success(saved.allowSeeking ? "Seeking enabled." : "Seeking disabled.");
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || "Could not change seeking.");
     },
   });
 
@@ -161,6 +174,26 @@ export function SectionLessons({ sectionId, deepLink, onDeepLinkConsumed }: Sect
                       >
                         <Eye className="size-4" />
                       </Button>
+                      {canUpdate && (lesson.contentType === "VIDEO" || lesson.contentType === "AUDIO") && lesson.id !== undefined && (
+                        <Button
+                          size="sm"
+                          variant={lesson.allowSeeking ? "outline" : "secondary"}
+                          disabled={seekingMutation.isPending}
+                          aria-pressed={!!lesson.allowSeeking}
+                          aria-label={`${lesson.allowSeeking ? "Disable" : "Enable"} video seeking for ${lesson.title}`}
+                          title={
+                            lesson.allowSeeking
+                              ? "Learners can skip ahead. Click to lock seeking."
+                              : "Seeking is locked. Click to let learners skip ahead."
+                          }
+                          onClick={() =>
+                            seekingMutation.mutate({ id: lesson.id!, allowSeeking: !lesson.allowSeeking })
+                          }
+                        >
+                          {lesson.allowSeeking ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
+                          {lesson.allowSeeking ? "Seek on" : "Seek off"}
+                        </Button>
+                      )}
                       {canUpdate && (
                         <Button
                           size="icon-sm"
