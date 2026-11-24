@@ -403,7 +403,7 @@ export const workspaceGitApi = {
   validateAvailableGitCommits: async (id: number) =>
     (await api.post<Array<{ id: number; commitId: number; type: GitDevelopmentRuleType; ruleVersion: number;
       status: string; reason: string; details: string; evaluatedAt: string }>>(
-      `/workspaces/${id}/git-activity/rules/validate`)).data,
+      `/workspaces/${id}/git-activity/rules/validate`, undefined, { headers: { "Idempotency-Key": crypto.randomUUID() } })).data,
   complianceReport: async (id: number, query: {
     developerId?: number; ruleType?: GitDevelopmentRuleType; status?: GitCommitValidationStatus;
     from?: string; to?: string; search?: string; failedOnly?: boolean; page?: number; size?: number;

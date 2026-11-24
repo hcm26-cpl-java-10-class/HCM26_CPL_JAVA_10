@@ -24,7 +24,7 @@ import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.annotations.UpdateTimestamp;
 
 /** One submitted GitHub review, identified within its Pull Request by source review ID. */
-@Entity
+@Entity(name = "ActivityGitPullRequestReview")
 @Table(name = "pull_request_review", indexes = {
         @Index(name = "idx_pull_request_review_submitted", columnList = "pull_request_id, submitted_at"),
         @Index(name = "idx_pull_request_review_reviewer", columnList = "reviewer_contributor_id, submitted_at")
@@ -56,7 +56,7 @@ public class GitPullRequestReview {
     @Column(nullable = false, length = 24)
     private GitPullRequestReviewState state;
 
-    @Column(name = "submitted_at", nullable = false)
+    @Column(name = "submitted_at")
     private Instant submittedAt;
 
     @Column(name = "source_updated_at")

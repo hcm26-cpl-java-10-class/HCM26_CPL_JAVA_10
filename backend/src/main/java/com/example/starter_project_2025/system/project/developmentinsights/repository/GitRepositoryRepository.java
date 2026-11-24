@@ -6,7 +6,10 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+@org.springframework.stereotype.Repository("activityGitRepositoryRepository")
 public interface GitRepositoryRepository extends JpaRepository<GitRepository, Long> {
+    Optional<GitRepository> findBySourceRepository_Id(Long id);
+    Optional<GitRepository> findFirstByRootProject_IdAndExternalId(Long rootId, Long externalId);
     Optional<GitRepository> findFirstByRootProject_IdAndStatusNotOrderByIdDesc(Long rootProjectId, GitRepositoryStatus excluded);
     Optional<GitRepository> findFirstByRootProject_IdAndStatusNotAndMockDataFalseOrderByIdDesc(
             Long rootProjectId, GitRepositoryStatus excluded);

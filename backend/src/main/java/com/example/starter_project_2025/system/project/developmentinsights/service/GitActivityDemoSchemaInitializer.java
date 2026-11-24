@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 @Component
 @Order(Ordered.LOWEST_PRECEDENCE - 1)
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "app.git-activity.demo.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "app.git-activity.demo.enabled", havingValue = "true")
 public class GitActivityDemoSchemaInitializer implements ApplicationRunner {
     private final DataSource dataSource;
     private final JdbcTemplate jdbc;

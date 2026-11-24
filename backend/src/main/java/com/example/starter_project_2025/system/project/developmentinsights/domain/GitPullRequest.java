@@ -24,7 +24,7 @@ import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.annotations.UpdateTimestamp;
 
 /** A GitHub Pull Request snapshot. Dev A owns ingestion; Dev B reads and reports it. */
-@Entity
+@Entity(name = "ActivityGitPullRequest")
 @Table(name = "pull_request", indexes = {
         @Index(name = "idx_pull_request_created", columnList = "gh_created_at"),
         @Index(name = "idx_pull_request_author", columnList = "author_contributor_id")
@@ -70,10 +70,10 @@ public class GitPullRequest {
     @Column(name = "is_draft", nullable = false)
     private boolean draft;
 
-    @Column(name = "source_branch", nullable = false, length = 200)
+    @Column(name = "source_branch", nullable = false, length = 255)
     private String sourceBranch;
 
-    @Column(name = "target_branch", nullable = false, length = 200)
+    @Column(name = "target_branch", nullable = false, length = 255)
     private String targetBranch;
 
     @Column(name = "html_url", length = 2048)

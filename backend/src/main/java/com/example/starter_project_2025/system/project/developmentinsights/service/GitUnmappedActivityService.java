@@ -49,6 +49,8 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class GitUnmappedActivityService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.example.starter_project_2025.system.project.developmentinsights.integration.GitActivityManualLinkWriter canonicalLinks;
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final GitActivityScopeService scopes;
@@ -212,6 +214,15 @@ public class GitUnmappedActivityService {
             if (!links.findAllByPullRequest_IdOrderByTask_IdAsc(pullRequest.getId()).isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "This activity already has a Task link");
             }
+        }
+        GitRepository activityRepository = commit != null ? commit.getRepository() : pullRequest.getRepository();
+        if (activityRepository != null && activityRepository.getSourceRepository() != null) {
+            canonicalLinks.link(activityRepository, commit == null ? null : commit.getSha(),
+                    pullRequest == null ? null : pullRequest.getExternalId(), task, actor);
+            TaskGitLink saved = (commit != null ? links.findAllByCommit_IdOrderByTask_IdAsc(commit.getId())
+                    : links.findAllByPullRequest_IdOrderByTask_IdAsc(pullRequest.getId())).stream()
+                    .filter(link -> link.getTask().getId().equals(task.getId())).findFirst().orElseThrow();
+            return linkResult(saved, input.type(), input.activityId(), projectId, actor);
         }
         TaskGitLink link = new TaskGitLink();
         link.setTask(task);

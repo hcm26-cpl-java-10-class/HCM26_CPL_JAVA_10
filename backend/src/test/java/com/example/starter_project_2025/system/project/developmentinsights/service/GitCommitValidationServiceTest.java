@@ -60,7 +60,8 @@ class GitCommitValidationServiceTest {
         Project rootReference = rootProjectReference(10L);
         when(projectRepository.getReferenceById(10L)).thenReturn(rootReference);
         service = new GitCommitValidationService(scopes, manager, rules, commits, results, taskReferenceResults,
-                taskReferences, repositories, taskRepository, projectRepository);
+                taskReferences, repositories, taskRepository, projectRepository,
+                mock(com.example.starter_project_2025.system.project.developmentinsights.repository.GitValidationRunRepository.class));
         root = mock(Project.class);
         when(root.getId()).thenReturn(10L);
         when(root.getTenantId()).thenReturn(7L);

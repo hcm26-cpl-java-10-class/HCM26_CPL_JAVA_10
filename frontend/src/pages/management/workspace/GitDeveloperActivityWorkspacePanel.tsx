@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useGitActivityParam } from "./git-activity-url-context";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, RefreshCw, Users } from "lucide-react";
 import { workspaceGitApi } from "@/api/features/workspace-git.api";
@@ -29,10 +30,10 @@ export function GitDeveloperActivityWorkspacePanel({ workspaceId, initialProject
   initialProjectId?: number;
 }) {
   const { user, activeRole } = usePermissions();
-  const [projectId, setProjectId] = useState<number | undefined>(initialProjectId);
-  const [developerId, setDeveloperId] = useState<number | undefined>();
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [projectId, setProjectId] = useGitActivityParam<number | undefined>("gitDeveloperProjectId", initialProjectId, "number");
+  const [developerId, setDeveloperId] = useGitActivityParam<number | undefined>("gitDeveloperDeveloperId", undefined, "number");
+  const [from, setFrom] = useGitActivityParam<string>("gitDeveloperFrom", "");
+  const [to, setTo] = useGitActivityParam<string>("gitDeveloperTo", "");
   const options = useQuery({
     queryKey: ["git-activity", "report-options", workspaceId, user.email, activeRole, projectId],
     queryFn: ({ signal }) => workspaceGitApi.reportOptions(workspaceId, projectId, signal),
@@ -100,8 +101,9 @@ export function GitDeveloperActivityWorkspacePanel({ workspaceId, initialProject
                   <TableCell>{row.activeDays}</TableCell><TableCell className="whitespace-nowrap">{formatDate(row.lastActiveAt)}</TableCell>
                   <TableCell>{row.unmapped ? <Badge variant="outline">Unmapped Contributor</Badge>
                     : row.noActivity ? <Badge variant="secondary">No Activity</Badge> : <Badge variant="outline">Active</Badge>}</TableCell>
-                  <TableCell className="text-right">{row.unmapped ? <Button type="button" size="sm" variant="outline" disabled
-                    title="Contributor mapping is handled by GitHub integration (GI-06), which has not been handed over yet.">Assign to member</Button> : "—"}</TableCell>
+                  <TableCell className="text-right">{row.unmapped ? <Button asChild type="button" size="sm" variant="outline">
+                    <Link to={`/management/workspaces/${workspaceId}?tab=github&view=members${projectId ? `&project=${projectId}` : ""}`}>Assign to member</Link>
+                  </Button> : "—"}</TableCell>
                 </TableRow>)}</TableBody>
               </Table>
             </div>}

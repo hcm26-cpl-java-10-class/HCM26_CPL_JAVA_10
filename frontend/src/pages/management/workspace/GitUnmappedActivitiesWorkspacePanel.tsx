@@ -1,3 +1,4 @@
+import { useGitActivityParam } from "./git-activity-url-context";
 import { useDeferredValue, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowUpRight, GitCommitHorizontal, GitPullRequest, Link2, Search, X } from "lucide-react";
@@ -38,14 +39,14 @@ export function GitUnmappedActivitiesWorkspacePanel({ workspaceId, initialProjec
 }) {
   const { user, activeRole } = usePermissions();
   const client = useQueryClient();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useGitActivityParam<string>("gitUnmappedSearch", "");
   const deferredSearch = useDeferredValue(search.trim());
-  const [type, setType] = useState<GitUnmappedActivityType>(ALL);
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [page, setPage] = useState(0);
+  const [type, setType] = useGitActivityParam<GitUnmappedActivityType>("gitUnmappedType", ALL);
+  const [from, setFrom] = useGitActivityParam<string>("gitUnmappedFrom", "");
+  const [to, setTo] = useGitActivityParam<string>("gitUnmappedTo", "");
+  const [page, setPage] = useGitActivityParam<number>("gitUnmappedPage", 0);
   const [selected, setSelected] = useState<GitUnmappedActivity | null>(null);
-  const [projectId, setProjectId] = useState<number | undefined>(initialProjectId);
+  const [projectId, setProjectId] = useGitActivityParam<number | undefined>("gitUnmappedProjectId", initialProjectId, "number");
   const [taskId, setTaskId] = useState<number | undefined>();
   const [taskSearch, setTaskSearch] = useState("");
   const query = useQuery({
@@ -76,9 +77,10 @@ export function GitUnmappedActivitiesWorkspacePanel({ workspaceId, initialProjec
       toast.success("Git activity linked to the Task.");
       setPage(0);
       setSelected(null); setTaskId(undefined); setTaskSearch("");
-      await client.invalidateQueries({ queryKey: ["git-activity", "unmapped", workspaceId] });
-      await client.invalidateQueries({ queryKey: ["git-activity", "commit", workspaceId] });
-      await client.invalidateQueries({ queryKey: ["git-activity", "pull-request", workspaceId] });
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["git-activity"] }),
+        client.invalidateQueries({ queryKey: ["git-integration"] }),
+      ]);
     },
     onError: error => toast.error(errorText(error)),
   });

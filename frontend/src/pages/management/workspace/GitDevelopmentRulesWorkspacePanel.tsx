@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Check, ChevronDown, GitCommitHorizontal, LoaderCircle, Play, Save, Settings2, Tags } from "lucide-react";
 import { workspaceGitApi, type GitDevelopmentRule, type GitDevelopmentRuleType } from "@/api/features/workspace-git.api";
@@ -65,7 +65,7 @@ export function GitDevelopmentRulesWorkspacePanel({ workspaceId }: { workspaceId
         : query.isError ? <div role="alert" className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 xl:col-span-2">
           <AlertCircle className="mt-0.5 size-4 shrink-0" />{readableError(query.error)}
         </div>
-        : (query.data ?? []).map(rule => <RuleEditor key={rule.type} rule={rule} saving={save.isPending}
+        : (query.data ?? []).map(rule => <RuleEditor key={`${rule.type}:${rule.version}`} rule={rule} saving={save.isPending}
           error={save.variables?.type === rule.type && save.isError ? readableError(save.error) : null}
           saved={save.variables?.type === rule.type && save.isSuccess}
           onSave={payload => save.mutate(payload)} />)}
@@ -91,14 +91,6 @@ function RuleEditor({ rule, saving, error, saved, onSave }: {
   const Icon = conventional ? GitCommitHorizontal : Tags;
   const dirty = enabled !== rule.enabled || scopeRequired !== rule.scopeRequired
     || pattern !== rule.taskKeyPattern || types.join(",") !== rule.allowedCommitTypes.join(",");
-
-  useEffect(() => {
-    setEnabled(rule.enabled);
-    setTypes(rule.allowedCommitTypes);
-    setScopeRequired(rule.scopeRequired);
-    setPattern(rule.taskKeyPattern);
-    setAdvanced(rule.taskKeyPattern !== (rule.defaultTaskKeyPattern ?? rule.taskKeyPattern));
-  }, [rule]);
 
   const toggleType = (type: string) => setTypes(current => current.includes(type)
     ? current.filter(item => item !== type) : [...current, type]);

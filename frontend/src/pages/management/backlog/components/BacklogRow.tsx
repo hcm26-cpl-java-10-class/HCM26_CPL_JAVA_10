@@ -20,6 +20,7 @@ import {
   User,
 } from "lucide-react";
 import type { DragEvent } from "react";
+import { GitLinkBadge } from "./GitLinkBadge";
 import {
   TASK_STATUS_ORDER,
   assigneeInitialsOf,
@@ -141,6 +142,9 @@ export function BacklogRow({
       <span className="min-w-0 flex-1 truncate text-sm text-foreground">
         {item.title ?? "Untitled work item"}
       </span>
+
+      {/* US-SY-05: linked commits / latest pull request. */}
+      <GitLinkBadge itemId={item.id} />
 
       {/* Milestone link (UFR-PRJ-003-02). */}
       {item.milestoneName && (

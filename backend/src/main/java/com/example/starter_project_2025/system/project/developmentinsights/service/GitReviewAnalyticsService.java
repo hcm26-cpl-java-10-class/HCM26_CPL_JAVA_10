@@ -134,7 +134,8 @@ public class GitReviewAnalyticsService {
     private static boolean eligible(GitActivityScope scope, Set<Long> allowedReviewers,
                                     GitPullRequestReview review, Long developerId, Instant from, Instant until) {
         if (review == null || review.isSelfReview() || review.getSubmittedAt() == null
-                || review.getState() == null || review.getState() == GitPullRequestReviewState.DISMISSED) return false;
+                || review.getState() == null || review.getState() == GitPullRequestReviewState.PENDING
+                || review.getState() == GitPullRequestReviewState.DISMISSED) return false;
         GitContributor reviewer = review.getReviewerContributor();
         if (reviewer == null || !scope.rootScope() && !allowedReviewers.contains(reviewer.getId())) return false;
         if (developerId != null && (reviewer.getUser() == null

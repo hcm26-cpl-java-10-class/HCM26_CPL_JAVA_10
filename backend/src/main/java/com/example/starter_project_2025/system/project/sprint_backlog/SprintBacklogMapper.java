@@ -20,6 +20,9 @@ public interface SprintBacklogMapper extends BaseCrudMapper<SprintBacklog, Sprin
     @Mapping(target = "sprint", ignore = true)
     @Mapping(target = "milestone", ignore = true)
     @Mapping(target = "version", ignore = true)
+    @Mapping(target = "taskKey", ignore = true)
+    @Mapping(target = "taskKeyNumber", ignore = true)
+    @Mapping(target = "tenantId", ignore = true)
     SprintBacklog toEntity(SprintBacklogDTO request);
 
     @Override
@@ -34,6 +37,9 @@ public interface SprintBacklogMapper extends BaseCrudMapper<SprintBacklog, Sprin
     @Mapping(target = "sprint", ignore = true)
     @Mapping(target = "milestone", ignore = true)
     @Mapping(target = "version", ignore = true)
+    @Mapping(target = "taskKey", ignore = true)
+    @Mapping(target = "taskKeyNumber", ignore = true)
+    @Mapping(target = "tenantId", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void update(@MappingTarget SprintBacklog entity, SprintBacklogDTO request);
 }

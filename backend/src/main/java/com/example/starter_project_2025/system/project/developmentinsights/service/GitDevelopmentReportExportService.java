@@ -43,9 +43,11 @@ public class GitDevelopmentReportExportService {
     private static final DateTimeFormatter GENERATED = DateTimeFormatter.ofPattern("d MMM yyyy HH:mm z", Locale.ENGLISH)
             .withZone(BUSINESS_ZONE);
     private final GitActivityService activity;
+    private final com.example.starter_project_2025.system.project.workspace.service.WorkspaceAccessService access;
 
     public ExportFile project(Long workspaceId, Long projectId, Long sprintId, Long developerId,
                                LocalDate from, LocalDate to, Format format) throws IOException {
+        requireExport();
         GitActivityDtos.ProjectDevelopmentReport report = activity.projectDevelopmentReport(
                 workspaceId, projectId, sprintId, from, to, developerId);
         String name = safeName(report.projectName() == null ? "project" : report.projectName());
@@ -67,10 +69,17 @@ public class GitDevelopmentReportExportService {
     }
 
     public ExportFile sprint(Long workspaceId, Long sprintId, Format format) throws IOException {
+        requireExport();
         GitActivityDtos.SprintDevelopmentReport report = activity.sprintDevelopmentReport(workspaceId, sprintId);
         List<Metric> metrics = new ArrayList<>(sprintRows(report));
         return export("Sprint Development Report - " + report.sprintOverview().name(),
                 "sprint-" + sprintId, metrics, report.developerActivity(), null, null, null, sprintId, format);
+    }
+
+    private void requireExport() {
+        if (!access.permitted(access.requireUser(false), "PROJECT_REPORT_EXPORT")) {
+            throw new org.springframework.security.access.AccessDeniedException("Project report export permission is required");
+        }
     }
 
     private ExportFile export(String title, String baseName, List<Metric> metrics,

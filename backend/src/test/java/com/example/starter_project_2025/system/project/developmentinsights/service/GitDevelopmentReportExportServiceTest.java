@@ -29,7 +29,11 @@ class GitDevelopmentReportExportServiceTest {
     @BeforeEach
     void setUp() {
         activity = mock(GitActivityService.class);
-        exports = new GitDevelopmentReportExportService(activity);
+        var access = mock(com.example.starter_project_2025.system.project.workspace.service.WorkspaceAccessService.class);
+        var actor = mock(com.example.starter_project_2025.system.rbac.user.User.class);
+        when(access.requireUser(false)).thenReturn(actor);
+        when(access.permitted(actor, "PROJECT_REPORT_EXPORT")).thenReturn(true);
+        exports = new GitDevelopmentReportExportService(activity, access);
         var summary = new GitActivityDtos.GitActivitySummary(3, 2, 1, 1, 0);
         var traceability = new GitActivityDtos.TaskTraceability(1, 1, 1, 2, 1);
         var developer = new GitActivityDtos.DeveloperActivityRow(101L, 201L, "Nguy\u1EC5n An", "nguyen-an",

@@ -20,6 +20,7 @@ class GitTaskReferenceResolverTest {
     private SprintBacklogRepository tasks;
     private ProjectRepository projects;
     private WorkspaceRepository workspaces;
+    private com.example.starter_project_2025.system.git_integration.tasklink.BacklogItemDirectory directory;
     private GitTaskReferenceResolver resolver;
     private Project root;
 
@@ -28,7 +29,24 @@ class GitTaskReferenceResolverTest {
         tasks = mock(SprintBacklogRepository.class);
         projects = mock(ProjectRepository.class);
         workspaces = mock(WorkspaceRepository.class);
-        resolver = new GitTaskReferenceResolver(tasks, projects, workspaces);
+        directory = mock(com.example.starter_project_2025.system.git_integration.tasklink.BacklogItemDirectory.class);
+        when(directory.byKeys(org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.anyCollection()))
+                .thenAnswer(invocation -> {
+                    java.util.Map<String, com.example.starter_project_2025.system.git_integration.repository.GitBacklogLookupRepository.BacklogItemRow> rows = new java.util.HashMap<>();
+                    java.util.Collection<String> keys = invocation.getArgument(1);
+                    for (String key : keys) {
+                        long id;
+                        try { id = Long.parseLong(key.substring(key.lastIndexOf('-') + 1)); }
+                        catch (NumberFormatException ignored) { continue; }
+                        if (tasks.findById(id).isEmpty()) continue;
+                        var row = mock(com.example.starter_project_2025.system.git_integration.repository.GitBacklogLookupRepository.BacklogItemRow.class);
+                        when(row.getId()).thenReturn(id);
+                        rows.put(key, row);
+                    }
+                    return rows;
+                });
+        when(directory.prefixesOf(7L)).thenReturn(java.util.Set.of("FA", "TASK", "OTHER", "OP"));
+        resolver = new GitTaskReferenceResolver(tasks, projects, workspaces, directory);
         root = project(10L, 7L, null);
         when(projects.findById(10L)).thenReturn(Optional.of(root));
         Workspace workspace = workspace("FA");

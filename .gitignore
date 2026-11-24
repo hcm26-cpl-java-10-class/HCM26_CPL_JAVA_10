@@ -39,6 +39,7 @@ frontend/.env.*.local
 
 # === Docker .env (secrets) ===
 docker/.env
+docker/git-integration/.env
 
 # === Logs ===
 *.log
@@ -59,3 +60,8 @@ backend/portability-test.log
 
 # === Runtime uploaded files (khong commit) ===
 uploads/
+
+# === GitHub App private keys ===
+*.pem
+
+tmp_doc/

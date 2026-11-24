@@ -12,20 +12,25 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+@org.springframework.stereotype.Repository("activityGitCommitRepository")
 public interface GitCommitRepository extends JpaRepository<GitCommit, Long> {
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from ActivityGitCommit c where c.id = :id")
+    Optional<GitCommit> lockById(@Param("id") Long id);
+    Optional<GitCommit> findFirstByRepository_IdAndSha(Long repositoryId, String sha);
     long countByRepository_Id(Long repositoryId);
 
     List<GitCommit> findAllByRepository_IdOrderByCommittedAtAscIdAsc(Long repositoryId);
     List<GitCommit> findAllByRepository_IdInOrderByCommittedAtAscIdAsc(Collection<Long> repositoryIds);
 
     @Query("""
-            select distinct author from GitCommit c
+            select distinct author from ActivityGitCommit c
             join c.repository r
             join c.authorContributor author
             left join TaskGitLink link on link.commit.id = c.id
             left join link.task linkedTask
             where r.rootProject.id = :rootId
-              and (r.mockData = false or not exists (select sourceRepo.id from GitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
+              and (r.mockData = false or not exists (select sourceRepo.id from ActivityGitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
               and author.user is not null
               and (:rootScope = true or linkedTask.projectId in :projectIds
                    or (link.id is null and author.id in :contributorIds))
@@ -43,13 +48,13 @@ public interface GitCommitRepository extends JpaRepository<GitCommit, Long> {
                                                            @Param("projectContributorIds") Collection<Long> projectContributorIds);
 
     @Query(value = """
-            select distinct c from GitCommit c
+            select distinct c from ActivityGitCommit c
             join c.repository r
             left join c.authorContributor author
             left join TaskGitLink link on link.commit.id = c.id
             left join link.task linkedTask
             where r.rootProject.id = :rootId
-              and (r.mockData = false or not exists (select sourceRepo.id from GitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
+              and (r.mockData = false or not exists (select sourceRepo.id from ActivityGitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
               and (:rootScope = true or linkedTask.projectId in :projectIds
                    or (link.id is null and author.id in :contributorIds))
               and (:search is null or lower(c.sha) like lower(concat('%', :search, '%'))
@@ -76,13 +81,13 @@ public interface GitCommitRepository extends JpaRepository<GitCommit, Long> {
                        and author.id in :projectContributorIds))
             """,
             countQuery = """
-            select count(distinct c.id) from GitCommit c
+            select count(distinct c.id) from ActivityGitCommit c
             join c.repository r
             left join c.authorContributor author
             left join TaskGitLink link on link.commit.id = c.id
             left join link.task linkedTask
             where r.rootProject.id = :rootId
-              and (r.mockData = false or not exists (select sourceRepo.id from GitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
+              and (r.mockData = false or not exists (select sourceRepo.id from ActivityGitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
               and (:rootScope = true or linkedTask.projectId in :projectIds
                    or (link.id is null and author.id in :contributorIds))
               and (:search is null or lower(c.sha) like lower(concat('%', :search, '%'))
@@ -127,12 +132,12 @@ public interface GitCommitRepository extends JpaRepository<GitCommit, Long> {
                                     Pageable pageable);
 
     @Query("""
-            select distinct c from GitCommit c join c.repository r
+            select distinct c from ActivityGitCommit c join c.repository r
             left join c.authorContributor author
             left join TaskGitLink link on link.commit.id = c.id
             left join link.task linkedTask
             where r.rootProject.id = :rootId
-              and (r.mockData = false or not exists (select sourceRepo.id from GitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
+              and (r.mockData = false or not exists (select sourceRepo.id from ActivityGitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
               and (:rootScope = true or linkedTask.projectId in :projectIds
                    or (link.id is null and author.id in :contributorIds))
               and (:filterProjectId is null or (:filterProjectId = :rootId and :rootScope = true)
@@ -152,19 +157,19 @@ public interface GitCommitRepository extends JpaRepository<GitCommit, Long> {
                                             @Param("taskId") Long taskId);
 
     @Query("""
-            select c from GitCommit c join c.repository r
+            select c from ActivityGitCommit c join c.repository r
             where c.id = :commitId and r.rootProject.id = :rootId
-              and (r.mockData = false or not exists (select sourceRepo.id from GitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
+              and (r.mockData = false or not exists (select sourceRepo.id from ActivityGitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
             """)
     Optional<GitCommit> findInRoot(@Param("rootId") Long rootId, @Param("commitId") Long commitId);
 
     @Query("""
             select case when count(c) > 0 then true else false end
-            from GitCommit c join c.repository r
+            from ActivityGitCommit c join c.repository r
             left join TaskGitLink link on link.commit.id = c.id
             left join link.task linkedTask
             where c.id = :commitId and r.rootProject.id = :rootId
-              and (r.mockData = false or not exists (select sourceRepo.id from GitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
+              and (r.mockData = false or not exists (select sourceRepo.id from ActivityGitRepository sourceRepo where sourceRepo.rootProject.id = r.rootProject.id and sourceRepo.mockData = false))
               and (:rootScope = true or linkedTask.projectId in :projectIds
                    or (link.id is null and c.authorContributor.id in :contributorIds))
             """)

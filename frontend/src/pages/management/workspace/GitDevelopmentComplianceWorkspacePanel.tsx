@@ -1,4 +1,5 @@
-import { useDeferredValue, useState } from "react";
+import { useGitActivityParam } from "./git-activity-url-context";
+import { useDeferredValue } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Search, ShieldAlert } from "lucide-react";
 import { workspaceGitApi, type GitCommitValidationStatus, type GitDevelopmentRuleType } from "@/api/features/workspace-git.api";
@@ -37,15 +38,15 @@ function messageOf(error: unknown) {
 
 export function GitDevelopmentComplianceWorkspacePanel({ workspaceId }: { workspaceId: number }) {
   const { user, activeRole } = usePermissions();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useGitActivityParam<string>("gitComplianceSearch", "");
   const deferredSearch = useDeferredValue(search.trim());
-  const [developerId, setDeveloperId] = useState<number | undefined>();
-  const [ruleType, setRuleType] = useState<GitDevelopmentRuleType | undefined>();
-  const [status, setStatus] = useState<GitCommitValidationStatus | undefined>();
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [failedOnly, setFailedOnly] = useState(false);
-  const [page, setPage] = useState(0);
+  const [developerId, setDeveloperId] = useGitActivityParam<number | undefined>("gitComplianceDeveloperId", undefined, "number");
+  const [ruleType, setRuleType] = useGitActivityParam<GitDevelopmentRuleType | undefined>("gitComplianceRuleType", undefined);
+  const [status, setStatus] = useGitActivityParam<GitCommitValidationStatus | undefined>("gitComplianceStatus", undefined);
+  const [from, setFrom] = useGitActivityParam<string>("gitComplianceFrom", "");
+  const [to, setTo] = useGitActivityParam<string>("gitComplianceTo", "");
+  const [failedOnly, setFailedOnly] = useGitActivityParam<boolean>("gitComplianceFailedOnly", false);
+  const [page, setPage] = useGitActivityParam<number>("gitCompliancePage", 0);
   const rules = useQuery({
     queryKey: ["git-activity", "rules", workspaceId, user.email, activeRole],
     queryFn: ({ signal }) => workspaceGitApi.developmentRules(workspaceId, signal),

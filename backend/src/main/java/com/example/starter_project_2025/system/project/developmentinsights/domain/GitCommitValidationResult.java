@@ -23,7 +23,7 @@ import lombok.Setter;
 @Entity
 @Table(name = "commit_validation_result", indexes = @Index(name = "idx_git_validation_commit_rule_latest",
         columnList = "commit_id, rule_type, evaluated_at"), uniqueConstraints = @UniqueConstraint(
-        name = "uk_git_validation_commit_rule_version", columnNames = {"commit_id", "rule_type", "rule_version"}))
+        name = "uk_git_validation_commit_rule_run", columnNames = {"commit_id", "rule_type", "rule_version", "evaluation_key"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -43,6 +43,12 @@ public class GitCommitValidationResult {
 
     @Column(name = "rule_version", nullable = false)
     private int ruleVersion;
+
+    @Column(name = "evaluation_key", nullable = false, length = 48)
+    private String evaluationKey = "INGESTION";
+
+    @Column(name = "rule_snapshot", columnDefinition = "TEXT")
+    private String ruleSnapshot;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 24)
@@ -67,7 +73,7 @@ public class GitCommitValidationResult {
         result.status = status;
         result.reason = reason;
         result.details = details;
-        result.evaluatedAt = at;
+        result.evaluatedAt = at.truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         return result;
     }
 }

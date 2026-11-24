@@ -6,6 +6,8 @@ import com.example.starter_project_2025.system.project.developmentinsights.domai
 import com.example.starter_project_2025.system.project.developmentinsights.domain.GitCommitValidationStatus;
 import com.example.starter_project_2025.system.project.developmentinsights.domain.GitDevelopmentRule;
 import com.example.starter_project_2025.system.project.developmentinsights.domain.GitDevelopmentRuleType;
+import com.example.starter_project_2025.system.project.developmentinsights.domain.GitValidationRun;
+import com.example.starter_project_2025.system.project.developmentinsights.repository.GitValidationRunRepository;
 import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.project.developmentinsights.repository.GitCommitRepository;
 import com.example.starter_project_2025.system.project.developmentinsights.repository.GitCommitValidationResultRepository;
@@ -42,6 +44,7 @@ public class GitCommitValidationService {
     private final GitRepositoryRepository repositories;
     private final SprintBacklogRepository taskRepository;
     private final ProjectRepository projectRepository;
+    private final GitValidationRunRepository runs;
 
     /** Dev A calls this after an idempotent commit upsert; retries reuse the same (commit, rule version) result. */
     @Transactional
@@ -54,48 +57,96 @@ public class GitCommitValidationService {
 
     @Transactional
     public List<ValidationView> validateWorkspaceCommit(Long workspaceId, Long commitId) {
+        return validateWorkspaceCommit(workspaceId, commitId, null);
+    }
+
+    @Transactional
+    public List<ValidationView> validateWorkspaceCommit(Long workspaceId, Long commitId, String operationKey) {
         GitActivityScope scope = scopes.require(workspaceId);
         if (!manager.canManage(workspaceId)) {
             throw new AccessDeniedException("Only an authorized root Project Manager can run development validation");
         }
-        GitCommit commit = commits.findById(commitId)
+        var root = projectRepository.findForWorkspaceCreation(scope.rootProjectId()).orElseThrow();
+        GitCommit commit = commits.lockById(commitId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commit was not found"));
         if (!Objects.equals(commit.getRepository().getRootProject().getId(), scope.rootProjectId())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Commit was not found in this Workspace");
         }
-        return evaluate(commit, scope.rootProjectId()).stream().map(GitCommitValidationService::view).toList();
+        String key = runKey(operationKey);
+        var previous = runs.findByRootProject_IdAndOperationKey(scope.rootProjectId(), key);
+        if (previous.isPresent()) return replay(previous.get(), commitId);
+        var evaluated = evaluate(commit, scope.rootProjectId(), key);
+        runs.save(GitValidationRun.completed(root, commit, key, evaluated));
+        return evaluated.stream().map(GitCommitValidationService::view).toList();
     }
 
     @Transactional
     public List<ValidationView> validateLatestWorkspaceCommits(Long workspaceId) {
+        return validateLatestWorkspaceCommits(workspaceId, null);
+    }
+
+    @Transactional
+    public List<ValidationView> validateLatestWorkspaceCommits(Long workspaceId, String operationKey) {
         GitActivityScope scope = scopes.require(workspaceId);
         if (!manager.canManage(workspaceId)) {
             throw new AccessDeniedException("Only an authorized root Project Manager can run development validation");
         }
-        // The explicit fixture action simulates an inbound sync for all known commits. The real ingestor calls
-        // validateSyncedCommit only for the commit it has just upserted.
-        List<Long> repositoryIds = repositories.findAllByRootProject_IdOrderByIdAsc(scope.rootProjectId()).stream()
+        var root = projectRepository.findForWorkspaceCreation(scope.rootProjectId()).orElseThrow();
+        String runKey = runKey(operationKey);
+        var previous = runs.findByRootProject_IdAndOperationKey(scope.rootProjectId(), runKey);
+        if (previous.isPresent()) return replay(previous.get(), null);
+        // A batch is fixed at its first successful request; transport retries never pick up new commits or rules.
+        var rootRepositories = repositories.findAllByRootProject_IdOrderByIdAsc(scope.rootProjectId());
+        boolean hasRealRepository = rootRepositories.stream().anyMatch(repository -> !repository.isMockData());
+        List<Long> repositoryIds = rootRepositories.stream()
+                .filter(repository -> !repository.isMockData() || !hasRealRepository)
                 .map(repository -> repository.getId()).toList();
         List<GitCommit> source = repositoryIds.isEmpty() ? List.of()
                 : commits.findAllByRepository_IdInOrderByCommittedAtAscIdAsc(repositoryIds);
-        return source.stream().flatMap(commit -> evaluate(commit, scope.rootProjectId()).stream())
-                .map(GitCommitValidationService::view).toList();
+        var evaluated = source.stream().sorted(java.util.Comparator.comparing(GitCommit::getId))
+                .map(commit -> commits.lockById(commit.getId()).orElseThrow())
+                .flatMap(commit -> evaluate(commit, scope.rootProjectId(), runKey).stream())
+                .toList();
+        runs.save(GitValidationRun.completed(root, null, runKey, evaluated));
+        return evaluated.stream().map(GitCommitValidationService::view).toList();
+    }
+
+    private List<ValidationView> replay(GitValidationRun run, Long commitId) {
+        Long targetId = run.getTargetCommit() == null ? null : run.getTargetCommit().getId();
+        if (!Objects.equals(targetId, commitId)) throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Idempotency-Key was already used for another validation request");
+        return run.getResults().stream().map(GitCommitValidationService::view).toList();
     }
 
     private List<GitCommitValidationResult> evaluate(GitCommit commit, Long rootId) {
+        return evaluate(commit, rootId, "INGESTION");
+    }
+
+    private List<GitCommitValidationResult> evaluate(GitCommit commit, Long rootId, String runKey) {
+        if (!"INGESTION".equals(runKey)) {
+            var replay = results.findAllByCommit_IdAndEvaluationKeyOrderByTypeAsc(commit.getId(), runKey);
+            if (!replay.isEmpty()) return replay;
+        }
         List<GitCommitValidationResult> evaluated = new ArrayList<>();
         java.util.Map<GitDevelopmentRuleType, GitDevelopmentRule> latest = new java.util.EnumMap<>(GitDevelopmentRuleType.class);
         rules.findAllByRootProject_IdOrderByTypeAscVersionDesc(rootId).stream()
+                .filter(rule -> !"INGESTION".equals(runKey) || commit.getSourceIngestedAt() == null
+                        || !rule.getCreatedAt().isAfter(commit.getSourceIngestedAt()))
                 .forEach(rule -> latest.putIfAbsent(rule.getType(), rule));
         for (GitDevelopmentRule rule : latest.values().stream().filter(GitDevelopmentRule::isEnabled).toList()) {
             var previous = results.findFirstByCommit_IdAndTypeAndRuleVersion(commit.getId(), rule.getType(), rule.getVersion());
-            if (previous.isPresent()) {
+            if ("INGESTION".equals(runKey) && previous.isPresent()) {
                 evaluated.add(previous.get());
                 continue;
             }
             Evaluation outcome = evaluate(commit, rule);
-            GitCommitValidationResult result = results.saveAndFlush(GitCommitValidationResult.record(commit,
-                    rule.getType(), rule.getVersion(), outcome.status(), outcome.reason(), outcome.details(), Instant.now()));
+            GitCommitValidationResult draftResult = GitCommitValidationResult.record(commit,
+                    rule.getType(), rule.getVersion(), outcome.status(), outcome.reason(), outcome.details(), Instant.now());
+            draftResult.setEvaluationKey(runKey);
+            draftResult.setRuleSnapshot("type=" + rule.getType() + "; version=" + rule.getVersion()
+                    + "; allowedTypes=" + rule.getAllowedCommitTypes() + "; scopeRequired=" + rule.isScopeRequired()
+                    + "; taskPattern=" + rule.getTaskKeyPattern());
+            GitCommitValidationResult result = results.saveAndFlush(draftResult);
             if (!outcome.taskReferences().isEmpty()) {
                 var resolved = outcome.taskReferences().stream()
                         .filter(reference -> reference.taskId() != null && reference.projectId() != null)
@@ -109,6 +160,12 @@ public class GitCommitValidationService {
             evaluated.add(result);
         }
         return evaluated;
+    }
+
+    private String runKey(String key) {
+        if (key == null || key.isBlank()) return java.util.UUID.randomUUID().toString();
+        if (!key.matches("[A-Za-z0-9_-]{1,40}")) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid Idempotency-Key");
+        return "REQ:" + key;
     }
 
     private Evaluation evaluate(GitCommit commit, GitDevelopmentRule rule) {

@@ -22,7 +22,7 @@ import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
 /** Immutable source identity with the latest known GitHub commit fields. */
-@Entity
+@Entity(name = "ActivityGitCommit")
 @Table(name = "git_commit", indexes = {
         @Index(name = "idx_git_commit_time", columnList = "committed_at"),
         @Index(name = "idx_git_commit_author", columnList = "author_contributor_id")
@@ -55,6 +55,10 @@ public class GitCommit {
 
     @Column(name = "committed_at", nullable = false)
     private Instant committedAt;
+
+    /** First canonical ingestion, used to select the rule version effective at that time. */
+    @Column(name = "source_ingested_at")
+    private Instant sourceIngestedAt;
 
     @Column(name = "html_url", length = 2048)
     private String htmlUrl;

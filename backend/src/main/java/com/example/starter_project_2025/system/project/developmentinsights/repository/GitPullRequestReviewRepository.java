@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+@org.springframework.stereotype.Repository("activityGitPullRequestReviewRepository")
 public interface GitPullRequestReviewRepository extends JpaRepository<GitPullRequestReview, Long> {
     List<GitPullRequestReview> findAllByPullRequest_IdOrderBySubmittedAtAscIdAsc(Long pullRequestId);
     Optional<GitPullRequestReview> findFirstByPullRequest_IdAndExternalId(Long pullRequestId, Long externalId);

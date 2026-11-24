@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/workspaces/{workspaceId}/git-activity/reports")
-@PreAuthorize("hasAnyAuthority('WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
+@PreAuthorize("hasAnyAuthority('WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE') and hasAuthority('PROJECT_REPORT_EXPORT')")
 @RequiredArgsConstructor
 public class GitDevelopmentReportExportController {
     private final GitDevelopmentReportExportService exports;

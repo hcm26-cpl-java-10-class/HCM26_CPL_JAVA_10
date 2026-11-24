@@ -137,36 +137,14 @@ export const canMoveToStatus = (
 
 
 /**
- * Short key prefix of the backlog board, used by the row keys (`SSP-21`)
- * exactly like the Jira project key.
- * <p>
- * The prefix belongs to the <em>project</em> of the workspace, never to the
- * sprint: `Student Support Portal` -> `SSP` (first letter of every word), so
- * every sprint box of the same project numbers its work items with the same
- * key and a work item can not be mistaken for a sprint code.
- * <p>
- * When the project name is unknown (product backlog without a project) the
- * `SB` (sprint backlog) fallback is used.
+ * Task ID shown for a work item: the key stored by the server (`FA-12`), the
+ * same on every screen and the one developers write in commit messages.
+ * `#id` only shows for an item the server has not keyed yet (a few minutes at
+ * most, see `BacklogTaskKeyBackfillJob`).
  */
-export const projectKeyOf = (
-  projectName?: string | null,
-  fallback = "SB",
-) => {
-  const acronym = (projectName ?? "")
-    .split(/[^A-Za-z0-9]+/)
-    .filter((token) => token !== "" && !/^\d+$/.test(token))
-    .map((token) => token.charAt(0))
-    .join("");
-
-  return acronym.length >= 2
-    ? acronym.slice(0, 10).toUpperCase()
-    : fallback;
-};
-
 export const backlogItemKey = (
-  prefix: string,
-  item: SprintPlanningItem,
-) => `${prefix}-${item.id}`;
+  item: Pick<SprintPlanningItem, "id" | "taskKey">,
+) => item.taskKey?.trim() || `#${item.id}`;
 
 /**
  * `Nguyen Van An` -> `NA`, the letters of an assignee avatar bubble (same

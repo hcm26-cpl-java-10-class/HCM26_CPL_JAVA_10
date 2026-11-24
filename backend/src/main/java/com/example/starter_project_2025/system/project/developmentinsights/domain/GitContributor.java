@@ -21,7 +21,7 @@ import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
 /** A Git author/reviewer identity, optionally mapped to a platform user. */
-@Entity
+@Entity(name = "ActivityGitContributor")
 @Table(name = "git_contributor", indexes = {
         @Index(name = "idx_git_contributor_user", columnList = "user_id")
 }, uniqueConstraints = @UniqueConstraint(name = "uk_git_contributor_root_external",
@@ -40,8 +40,15 @@ public class GitContributor {
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Project rootProject;
 
-    @Column(name = "external_id", nullable = false)
+    @Column(name = "external_id")
     private Long externalId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_contributor_id", foreignKey = @ForeignKey(name = "fk_activity_source_contributor"))
+    private com.example.starter_project_2025.system.git_integration.domain.GitContributor sourceContributor;
+
+    @Column(name = "source_identity_key", length = 320)
+    private String sourceIdentityKey;
 
     @Column(nullable = false, length = 100)
     private String login;

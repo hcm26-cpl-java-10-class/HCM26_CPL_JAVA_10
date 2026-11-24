@@ -27,37 +27,24 @@ public class GitTaskReferenceResolver {
     private final SprintBacklogRepository tasks;
     private final ProjectRepository projects;
     private final WorkspaceRepository workspaces;
+    private final com.example.starter_project_2025.system.git_integration.tasklink.BacklogItemDirectory directory;
 
     public Resolution resolve(Long rootProjectId, String message, String taskKeyPattern) {
         String source = message == null ? "" : message;
         LinkedHashSet<String> keys = new LinkedHashSet<>();
         Project root = projects.findById(rootProjectId).orElse(null);
-        LinkedHashSet<String> acceptedPatterns = new LinkedHashSet<>();
-        acceptedPatterns.add(taskKeyPattern);
-        if (root != null && root.getTenantId() != null) {
-            workspaces.findAllByTenant_IdAndStatusAndIsActiveTrue(root.getTenantId(), WorkspaceStatus.ACTIVE).stream()
-                    .map(workspace -> workspace.getTaskKeyPrefix())
-                    .filter(prefix -> prefix != null && !prefix.isBlank())
-                    .map(prefix -> "(?i)\\b" + Pattern.quote(prefix.trim()) + "-\\d+\\b")
-                    .forEach(acceptedPatterns::add);
-            projects.findByTenantIdAndIsActiveTrue(root.getTenantId()).stream()
-                    .map(Project::getName).map(GitTaskReferenceResolver::projectKeyOf)
-                    .map(prefix -> "(?i)\\b" + Pattern.quote(prefix) + "-\\d+\\b")
-                    .forEach(acceptedPatterns::add);
-        }
-        acceptedPatterns.stream().map(pattern -> Pattern.compile(pattern, Pattern.CASE_INSENSITIVE))
-                .forEach(pattern -> {
-                    Matcher matcher = pattern.matcher(source);
-                    while (matcher.find()) keys.add(matcher.group());
-                });
-        Matcher kanban = KANBAN_TASK_KEY.matcher(source);
-        while (kanban.find()) keys.add(kanban.group());
+        if (root != null) com.example.starter_project_2025.system.git_integration.tasklink.TaskKeyParser.parseAll(
+                List.of(new com.example.starter_project_2025.system.git_integration.tasklink.TaskKeyParser.Source(
+                        com.example.starter_project_2025.system.git_integration.domain.BacklogReferenceField.MESSAGE, source)),
+                directory.prefixesOf(root.getTenantId()), taskKeyPattern).forEach(mention -> keys.add(mention.key()));
         if (keys.isEmpty()) return new Resolution(GitCommitValidationStatus.MISSING,
                 "Commit message does not contain a Task Key.", List.of());
 
         List<KeyResolution> references = new ArrayList<>();
         boolean invalid = false;
         boolean outside = false;
+        var itemsByKey = root == null ? java.util.Map.<String, com.example.starter_project_2025.system.git_integration.repository.GitBacklogLookupRepository.BacklogItemRow>of()
+                : directory.byKeys(root.getTenantId(), keys.stream().map(key -> key.toUpperCase(java.util.Locale.ROOT)).toList());
         for (String key : keys) {
             Matcher suffix = TASK_SUFFIX.matcher(key);
             if (!suffix.find()) {
@@ -65,15 +52,14 @@ public class GitTaskReferenceResolver {
                 references.add(new KeyResolution(key, GitCommitValidationStatus.INVALID, null, null, "Invalid Task Key format."));
                 continue;
             }
-            long taskId;
-            try {
-                taskId = Long.parseLong(suffix.group(1));
-            } catch (NumberFormatException ex) {
+            var found = itemsByKey.get(key.toUpperCase(java.util.Locale.ROOT));
+            if (found == null) {
                 invalid = true;
                 references.add(new KeyResolution(key, GitCommitValidationStatus.INVALID, null, null,
-                        "Task ID is outside the supported range."));
+                        "Task does not exist or is inactive in this tenant."));
                 continue;
             }
+            long taskId = found.getId();
             SprintBacklog task = tasks.findById(taskId)
                     .filter(item -> Boolean.TRUE.equals(item.getIsActive())).orElse(null);
             if (task == null) {

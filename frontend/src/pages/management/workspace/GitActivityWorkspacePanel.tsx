@@ -1,7 +1,10 @@
-import { useDeferredValue, useState } from "react";
+import { useGitActivityParam } from "./git-activity-url-context";
+import { useDeferredValue } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
-import { ArrowUpRight, BarChart3, ClipboardCheck, ExternalLink, FileBarChart2, GitBranch, GitCommitHorizontal,
+import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { GitActivityUrlState } from "./git-activity-url-state";
+import { useGitActivityRefresh } from "./useGitActivityRefresh";
+import { ArrowUpRight, ClipboardCheck, ExternalLink, FileBarChart2, GitBranch, GitCommitHorizontal,
   GitPullRequest, ListTodo, Search, Settings2, Users } from "lucide-react";
 import { workspaceGitApi, type GitCommitGranularity } from "@/api/features/workspace-git.api";
 import { Badge } from "@/components/ui/badge";
@@ -23,10 +26,8 @@ import { GitUnmappedActivitiesWorkspacePanel } from "./GitUnmappedActivitiesWork
 import { GitDevelopmentComplianceWorkspacePanel } from "./GitDevelopmentComplianceWorkspacePanel";
 
 const GIT_SECTIONS = [
-  { id: "commit-analytics", label: "Commit analytics", icon: BarChart3, description: "Commit trend, contributors and branches." },
-  { id: "commits", label: "Commits", icon: GitCommitHorizontal, description: "Search, filter and inspect commit history." },
-  { id: "pr-analytics", label: "PR analytics", icon: BarChart3, description: "PR states, merge time and developer activity." },
-  { id: "pull-requests", label: "Pull Requests", icon: GitPullRequest, description: "Browse PRs and inspect submitted reviews." },
+  { id: "commits", label: "Commits", icon: GitCommitHorizontal, description: "Commit overview, trends and searchable history." },
+  { id: "pull-requests", label: "Pull Requests", icon: GitPullRequest, description: "PR overview, merge time and searchable history." },
   { id: "reviews", label: "Code reviews", icon: ClipboardCheck, description: "Review outcomes and first response time." },
   { id: "contributors", label: "Contributors", icon: Users, description: "Member contribution and unmapped accounts." },
   { id: "unmapped", label: "Unmapped", icon: ListTodo, description: "Find Git activity without Task links." },
@@ -37,7 +38,9 @@ const GIT_SECTIONS = [
 type GitSectionId = typeof GIT_SECTIONS[number]["id"];
 
 function validSection(value: string | null): GitSectionId {
-  return GIT_SECTIONS.find(section => section.id === value)?.id ?? "commit-analytics";
+  if (value === "commit-analytics") return "commits";
+  if (value === "pr-analytics") return "pull-requests";
+  return GIT_SECTIONS.find(section => section.id === value)?.id ?? "commits";
 }
 
 function formatDate(value?: string | null) {
@@ -53,26 +56,46 @@ function errorMessage(error: unknown) {
 }
 
 export function GitActivityWorkspacePanel({ workspaceId, projectId: initialProjectId }: { workspaceId: number; projectId?: number }) {
+  return <GitActivityUrlState><GitActivityContent workspaceId={workspaceId} initialProjectId={initialProjectId} /></GitActivityUrlState>;
+}
+
+function GitActivityContent({ workspaceId, initialProjectId }: { workspaceId: number; initialProjectId?: number }) {
   const { user, activeRole } = usePermissions();
-  const [params, setParams] = useSearchParams();
-  const activeSection = validSection(params.get("gitSection"));
+  const [params] = useSearchParams();
+  const location = useLocation();
+  const [section, setSection] = useGitActivityParam<string>("gitSection", "commits");
   const taskIdValue = params.get("taskId");
   const taskId = taskIdValue && /^\d+$/.test(taskIdValue) ? Number(taskIdValue) : undefined;
-  const [search, setSearch] = useState("");
+  const sections = taskId ? GIT_SECTIONS.filter(item => ["commits", "pull-requests"].includes(item.id)) : GIT_SECTIONS;
+  const requestedSection = validSection(section);
+  const activeSection = sections.some(item => item.id === requestedSection) ? requestedSection : "commits";
+  const task = useQuery({
+    queryKey: ["git-activity", "task-context", workspaceId, taskId, user.email, activeRole],
+    queryFn: ({ signal }) => workspaceGitApi.taskContext(workspaceId, taskId!, signal),
+    enabled: taskId != null, retry: false,
+  });
+  const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
+  const returnParams = new URLSearchParams(returnTo?.split("?")[1]);
+  returnParams.set("tab", params.get("gitReturnTab") === "sprints" ? "sprints" : "backlog");
+  if (!returnTo && (params.get("gitReturnProject") || task.data?.projectId)) {
+    returnParams.set("project", params.get("gitReturnProject") ?? String(task.data?.projectId));
+  }
+  if (taskId) returnParams.set("itemId", String(taskId));
+  const taskReturnUrl = `/management/workspaces/${workspaceId}?${returnParams}`;
+  const [search, setSearch] = useGitActivityParam<string>("gitCommitSearch", "");
   const deferredSearch = useDeferredValue(search.trim());
-  const [sort, setSort] = useState<"newest" | "oldest">("newest");
-  const [projectId, setProjectId] = useState<number | undefined>();
-  const [developerId, setDeveloperId] = useState<number | undefined>();
-  const [contributorId, setContributorId] = useState<number | undefined>();
-  const [branch, setBranch] = useState<string | undefined>();
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [granularity, setGranularity] = useState<GitCommitGranularity>("day");
-  const [includeBots, setIncludeBots] = useState(false);
-  const [includeMergeCommits, setIncludeMergeCommits] = useState(false);
-  const [detailInclusion, setDetailInclusion] = useState<{ includeBots: boolean; includeMergeCommits: boolean } | null>(null);
-  const [page, setPage] = useState(0);
-  const [selectedCommitId, setSelectedCommitId] = useState<number | null>(null);
+  const [sort, setSort] = useGitActivityParam<"newest" | "oldest">("gitCommitSort", "newest");
+  const [projectId, setProjectId] = useGitActivityParam<number | undefined>("gitCommitProjectId", initialProjectId, "number");
+  const [developerId, setDeveloperId] = useGitActivityParam<number | undefined>("gitCommitDeveloperId", undefined, "number");
+  const [contributorId, setContributorId] = useGitActivityParam<number | undefined>("gitCommitContributorId", undefined, "number");
+  const [branch, setBranch] = useGitActivityParam<string | undefined>("gitCommitBranch", undefined);
+  const [from, setFrom] = useGitActivityParam<string>("gitCommitFrom", "");
+  const [to, setTo] = useGitActivityParam<string>("gitCommitTo", "");
+  const [granularity, setGranularity] = useGitActivityParam<GitCommitGranularity>("gitCommitGranularity", "day");
+  const [includeBots, setIncludeBots] = useGitActivityParam<boolean>("gitCommitIncludeBots", false);
+  const [includeMergeCommits, setIncludeMergeCommits] = useGitActivityParam<boolean>("gitCommitIncludeMergeCommits", false);
+  const [page, setPage] = useGitActivityParam<number>("gitCommitPage", 0);
+  const [selectedCommitId, setSelectedCommitId] = useGitActivityParam<number | null>("gitCommitDetail", null, "number");
   const status = useQuery({
     queryKey: ["git-activity", "status", workspaceId, user.email, activeRole],
     queryFn: ({ signal }) => workspaceGitApi.activityStatus(workspaceId, signal),
@@ -85,13 +108,14 @@ export function GitActivityWorkspacePanel({ workspaceId, projectId: initialProje
   });
   const history = useQuery({
     queryKey: ["git-activity", "commits", workspaceId, user.email, activeRole, deferredSearch,
-      sort, page, taskId, projectId, developerId, contributorId, branch, from, to, detailInclusion],
+      sort, page, taskId, projectId, developerId, contributorId, branch, from, to, includeBots, includeMergeCommits],
     queryFn: ({ signal }) => workspaceGitApi.commits(workspaceId, {
       search: deferredSearch || undefined, sort, page, size: 20, taskId,
       projectId, developerId, contributorId, branch,
-      includeBots: detailInclusion?.includeBots, includeMergeCommits: detailInclusion?.includeMergeCommits,
+      includeBots, includeMergeCommits,
       from: from || undefined, to: to || undefined,
     }, signal),
+    enabled: activeSection === "commits",
     retry: false,
   });
   const details = useQuery({
@@ -102,17 +126,14 @@ export function GitActivityWorkspacePanel({ workspaceId, projectId: initialProje
   });
 
   const repo = status.data;
+  useGitActivityRefresh(repo != null && !repo.mockData, repo?.syncStatus);
   const rows = history.data?.content ?? [];
   const sectionInfo = GIT_SECTIONS.find(section => section.id === activeSection) ?? GIT_SECTIONS[0];
   const workspaceProjectLabel = initialProjectId == null ? null
     : filters.data?.projects.find(project => project.id === initialProjectId)?.name ?? `Project #${initialProjectId}`;
   const changeSection = (section: string) => {
     setSelectedCommitId(null);
-    setParams(previous => {
-      const next = new URLSearchParams(previous);
-      next.set("gitSection", section);
-      return next;
-    });
+    setSection(section);
   };
   const applyDrilldown = (filters: GitCommitDrilldown) => {
     if ("developerId" in filters || "contributorId" in filters) {
@@ -125,13 +146,13 @@ export function GitActivityWorkspacePanel({ workspaceId, projectId: initialProje
     setPage(0);
   };
   const showHistory = (inclusion: { includeBots: boolean; includeMergeCommits: boolean }) => {
-    setDetailInclusion(inclusion);
+    setIncludeBots(inclusion.includeBots);
+    setIncludeMergeCommits(inclusion.includeMergeCommits);
     setSearch("");
     setPage(0);
-    changeSection("commits");
+    document.getElementById("git-commit-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
-  const pullRequestView = activeSection === "pr-analytics" ? "analytics"
-    : activeSection === "pull-requests" ? "pull-requests" : "reviews";
+  const pullRequestView = activeSection === "pull-requests" ? "pull-requests" : "reviews";
   return <div className="space-y-4">
     <Card className="overflow-hidden border-slate-200 shadow-sm">
       <CardHeader className="flex flex-wrap items-start justify-between gap-3 border-b bg-gradient-to-r from-slate-50 via-white to-blue-50/60 px-4 py-3 sm:px-5">
@@ -174,15 +195,15 @@ export function GitActivityWorkspacePanel({ workspaceId, projectId: initialProje
 
     <div className="min-w-0 overflow-x-auto rounded-xl border bg-white p-1 shadow-sm" role="tablist" aria-label="Git Activity sections">
       <div className="flex w-max min-w-full gap-1">
-        {GIT_SECTIONS.map(({ id, label, icon: Icon }) => <button key={id} type="button" role="tab"
+        {sections.map(({ id, label, icon: Icon }) => <button key={id} type="button" role="tab"
           id={`git-tab-${id}`} aria-controls={`git-panel-${id}`} aria-selected={activeSection === id}
           tabIndex={activeSection === id ? 0 : -1} onClick={() => changeSection(id)}
           onKeyDown={event => {
             if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
             event.preventDefault();
-            const index = GIT_SECTIONS.findIndex(section => section.id === activeSection);
+            const index = sections.findIndex(section => section.id === activeSection);
             const offset = event.key === "ArrowRight" ? 1 : -1;
-            const next = GIT_SECTIONS[(index + offset + GIT_SECTIONS.length) % GIT_SECTIONS.length];
+            const next = sections[(index + offset + sections.length) % sections.length];
             changeSection(next.id);
             window.requestAnimationFrame(() => document.getElementById(`git-tab-${next.id}`)?.focus());
           }}
@@ -194,25 +215,25 @@ export function GitActivityWorkspacePanel({ workspaceId, projectId: initialProje
     </div>
     <div className="flex flex-wrap items-center justify-between gap-2 px-1">
       <div><p className="text-sm font-semibold text-slate-900">{sectionInfo.label}</p><p className="text-xs text-muted-foreground">{sectionInfo.description}</p></div>
-      {taskId && <Badge variant="outline" className="border-blue-200 bg-blue-50 font-mono text-blue-800">Filtered to TASK-{taskId}</Badge>}
+      {taskId && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+        <div><Badge variant="outline" className="border-blue-200 bg-white font-mono text-blue-800">{params.get("taskCode") ?? `TASK-${taskId}`}</Badge>
+          <p className="mt-1 text-sm font-medium text-blue-950">{task.data?.title ?? (task.isPending ? "Loading task…" : "Task unavailable")}</p>
+          <p className="text-xs text-blue-800">Showing only Git activities linked to this task.</p>
+          {task.isError && <p role="alert" className="text-xs text-destructive">{errorMessage(task.error)}</p>}
+        </div>
+        <div className="flex flex-wrap gap-2"><Button asChild size="sm" variant="outline"><Link to={taskReturnUrl}>Back to task</Link></Button>
+          <Button asChild size="sm" variant="ghost"><Link to={`/management/workspaces/${workspaceId}?tab=git-activity${initialProjectId ? `&project=${initialProjectId}` : ""}`}>All Workspace activity</Link></Button>
+        </div>
+      </div>}
     </div>
 
     <section id={`git-panel-${activeSection}`} role="tabpanel" aria-labelledby={`git-tab-${activeSection}`} tabIndex={0} className="min-w-0 space-y-4 outline-none">
-    <div hidden={activeSection !== "commit-analytics"}>
-      <GitCommitAnalyticsWorkspacePanel active={activeSection === "commit-analytics"} workspaceId={workspaceId} projectId={projectId} taskId={taskId}
-        developerId={developerId} contributorId={contributorId} branch={branch}
-        from={from} to={to} granularity={granularity} includeBots={includeBots} includeMergeCommits={includeMergeCommits}
-        onGranularityChange={setGranularity} onIncludeBotsChange={setIncludeBots}
-        onIncludeMergeCommitsChange={setIncludeMergeCommits} onBranchChange={value => { setBranch(value); setPage(0); }}
-        onDrilldown={applyDrilldown} onShowHistory={showHistory} />
-    </div>
-
     <div hidden={activeSection !== "commits"}>
     <Card id="git-commit-history" className="overflow-hidden shadow-sm">
       <CardHeader className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div><CardTitle className="text-base">Commits</CardTitle>
-            <CardDescription>Search covers every commit you can access in this Workspace.</CardDescription></div>
+            <CardDescription>Project, developer, branch and date filters apply to the overview and history. Search filters the list.</CardDescription></div>
           {history.data && <Badge variant="outline">{history.data.totalElements} commits</Badge>}
         </div>
         <div className="flex flex-wrap gap-2">
@@ -250,6 +271,14 @@ export function GitActivityWorkspacePanel({ workspaceId, projectId: initialProje
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        <GitCommitAnalyticsWorkspacePanel active={activeSection === "commits"} workspaceId={workspaceId} projectId={projectId} taskId={taskId}
+          developerId={developerId} contributorId={contributorId} branch={branch}
+          from={from} to={to} granularity={granularity} includeBots={includeBots} includeMergeCommits={includeMergeCommits}
+          onGranularityChange={setGranularity} onIncludeBotsChange={value => { setIncludeBots(value); setPage(0); }}
+          onIncludeMergeCommitsChange={value => { setIncludeMergeCommits(value); setPage(0); }}
+          onBranchChange={value => { setBranch(value); setPage(0); }}
+          onDrilldown={applyDrilldown} onShowHistory={showHistory} />
+        <h3 id="git-commit-list" className="scroll-mt-24 pt-2 text-sm font-semibold text-slate-900">Commit history</h3>
         {contributorId != null && <div className="flex flex-wrap items-center gap-2" aria-label="Active contributor filter">
           <Badge variant="outline">Contributor #{contributorId}</Badge>
           <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs"
@@ -295,8 +324,9 @@ export function GitActivityWorkspacePanel({ workspaceId, projectId: initialProje
     <div hidden={activeSection !== "unmapped"}>
       <GitUnmappedActivitiesWorkspacePanel workspaceId={workspaceId} initialProjectId={initialProjectId} />
     </div>
-    <div hidden={!(["pr-analytics", "pull-requests", "reviews"] as string[]).includes(activeSection)}>
-      <GitPullRequestsWorkspacePanel workspaceId={workspaceId} taskId={taskId} view={pullRequestView} />
+    <div hidden={!(activeSection === "pull-requests" || activeSection === "reviews")}>
+      <GitPullRequestsWorkspacePanel active={activeSection === "pull-requests" || activeSection === "reviews"}
+        workspaceId={workspaceId} taskId={taskId} initialProjectId={initialProjectId} view={pullRequestView} />
     </div>
     <div hidden={activeSection !== "contributors"}>
       <GitDeveloperActivityWorkspacePanel workspaceId={workspaceId} initialProjectId={initialProjectId} />
@@ -317,8 +347,10 @@ export function GitActivityWorkspacePanel({ workspaceId, projectId: initialProje
         <DialogHeader><DialogTitle>Commit details</DialogTitle><DialogDescription>Synced commit metadata and permitted Task links.</DialogDescription></DialogHeader>
         {details.isPending ? <div className="space-y-2"><Skeleton className="h-5 w-56" /><Skeleton className="h-24 w-full" /></div>
           : details.isError ? <p role="alert" className="text-sm text-destructive">{errorMessage(details.error)}</p>
+          : taskId && details.data && !details.data.tasks.some(task => task.taskId === taskId)
+            ? <p role="alert" className="text-sm text-destructive">This commit is not linked to the selected task.</p>
           : details.data && <div className="space-y-4">
-            <div><pre className="whitespace-pre-wrap break-words font-sans text-sm font-medium">{details.data.message || "(no message)"}</pre><p className="mt-1 font-mono text-xs text-muted-foreground">{details.data.sha}</p></div>
+            <div><pre className="whitespace-pre-wrap break-words font-sans text-sm font-medium">{details.data.message || "(no message)"}</pre><p className="mt-1 break-all font-mono text-xs text-muted-foreground">{details.data.sha}</p></div>
             <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
               <dt className="text-muted-foreground">Author</dt><dd>{details.data.authorName}{details.data.authorLogin ? ` (@${details.data.authorLogin})` : ""}</dd>
               <dt className="text-muted-foreground">Committed</dt><dd>{formatDate(details.data.committedAt)}</dd>

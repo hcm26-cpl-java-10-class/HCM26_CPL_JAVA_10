@@ -1,6 +1,7 @@
-import { useDeferredValue, useState } from "react";
+import { useGitActivityParam } from "./git-activity-url-context";
+import { useDeferredValue } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, GitPullRequest, Search } from "lucide-react";
+import { ArrowUpRight, ChevronDown, ChevronUp, GitPullRequest, Search } from "lucide-react";
 import { workspaceGitApi } from "@/api/features/workspace-git.api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,23 +26,26 @@ function stateVariant(state: string) {
   return state === "MERGED" ? "default" : state === "CLOSED" ? "secondary" : "outline";
 }
 
-export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, view = "all" }: {
+export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, initialProjectId, view = "all", active = true }: {
   workspaceId: number;
   taskId?: number;
+  initialProjectId?: number;
   view?: "all" | "analytics" | "pull-requests" | "reviews";
+  active?: boolean;
 }) {
   const { user, activeRole } = usePermissions();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useGitActivityParam<string>("gitPrSearch", "");
   const deferredSearch = useDeferredValue(search.trim());
-  const [sort, setSort] = useState<"newest" | "oldest">("newest");
-  const [projectId, setProjectId] = useState<number | undefined>();
-  const [developerId, setDeveloperId] = useState<number | undefined>();
-  const [reviewerId, setReviewerId] = useState<number | undefined>();
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [page, setPage] = useState(0);
-  const [selectedPullRequestId, setSelectedPullRequestId] = useState<number | null>(null);
-  const showPullRequestAnalytics = view === "all" || view === "analytics";
+  const [sort, setSort] = useGitActivityParam<"newest" | "oldest">("gitPrSort", "newest");
+  const [projectId, setProjectId] = useGitActivityParam<number | undefined>("gitPrProjectId", initialProjectId, "number");
+  const [developerId, setDeveloperId] = useGitActivityParam<number | undefined>("gitPrDeveloperId", undefined, "number");
+  const [reviewerId, setReviewerId] = useGitActivityParam<number | undefined>("gitPrReviewerId", undefined, "number");
+  const [from, setFrom] = useGitActivityParam<string>("gitPrFrom", "");
+  const [to, setTo] = useGitActivityParam<string>("gitPrTo", "");
+  const [page, setPage] = useGitActivityParam<number>("gitPrPage", 0);
+  const [selectedPullRequestId, setSelectedPullRequestId] = useGitActivityParam<number | null>("gitPrDetail", null, "number");
+  const [showAnalyticsDetails, setShowAnalyticsDetails] = useGitActivityParam<boolean>("gitPrAnalyticsDetails", false);
+  const showPullRequestAnalytics = view === "all" || view === "analytics" || view === "pull-requests";
   const showPullRequestHistory = view === "all" || view === "pull-requests";
   const showReviewAnalytics = view === "all" || view === "reviews";
   const activeSelectedPullRequestId = showPullRequestHistory ? selectedPullRequestId : null;
@@ -57,12 +61,13 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, view = "all
       search: deferredSearch || undefined, sort, page, size: 20, taskId,
       projectId, developerId, from: from || undefined, to: to || undefined,
     }, signal),
+    enabled: active && showPullRequestHistory,
     retry: false,
   });
   const details = useQuery({
     queryKey: ["git-activity", "pull-request", workspaceId, user.email, activeRole, activeSelectedPullRequestId],
     queryFn: ({ signal }) => workspaceGitApi.pullRequest(workspaceId, activeSelectedPullRequestId!, signal),
-    enabled: activeSelectedPullRequestId !== null,
+    enabled: active && activeSelectedPullRequestId !== null,
     retry: false,
   });
   const analytics = useQuery({
@@ -71,6 +76,7 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, view = "all
     queryFn: ({ signal }) => workspaceGitApi.pullRequestAnalytics(workspaceId, {
       projectId, taskId, developerId, from: from || undefined, to: to || undefined,
     }, signal),
+    enabled: active && showPullRequestAnalytics,
     retry: false,
   });
   const reviewAnalytics = useQuery({
@@ -79,6 +85,7 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, view = "all
     queryFn: ({ signal }) => workspaceGitApi.codeReviewAnalytics(workspaceId, {
       projectId, developerId: reviewerId, from: from || undefined, to: to || undefined,
     }, signal),
+    enabled: active && showReviewAnalytics,
     retry: false,
   });
   const reviewerOptionsQuery = useQuery({
@@ -86,6 +93,7 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, view = "all
     queryFn: ({ signal }) => workspaceGitApi.codeReviewAnalytics(workspaceId, {
       projectId, from: from || undefined, to: to || undefined,
     }, signal),
+    enabled: active && showReviewAnalytics,
     retry: false,
   });
   const reviewerOptions = reviewerOptionsQuery.data?.reviewers.filter(reviewer => reviewer.developerId != null) ?? [];
@@ -108,7 +116,7 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, view = "all
             {view === "reviews" ? "Code Review Analytics" : view === "analytics" ? "Pull Request Analytics" : "Pull Requests"}</CardTitle>
             <CardDescription>{view === "reviews" ? "Submitted review outcomes and first response time in your permitted scope."
               : view === "analytics" ? "PR status and merge time for the selected project, developer and dates."
-                : "PRs and submitted reviews in the repository scope you can access."}</CardDescription></div>
+                : "Overview and history share project, developer and date filters. Search filters the list."}</CardDescription></div>
           {showReviewAnalytics && reviewAnalytics.data && view === "reviews"
             ? <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-800">{reviewAnalytics.data.totalReviews} valid reviews</Badge>
             : showPullRequestHistory && history.data && <Badge variant="outline">{history.data.totalElements} pull requests</Badge>}
@@ -153,13 +161,17 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, view = "all
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {showPullRequestAnalytics && <section className="space-y-3 rounded-md border bg-muted/10 p-3" aria-label="Pull Request Analytics">
+        {showPullRequestAnalytics && <section className="space-y-3 rounded-xl border border-violet-100 bg-gradient-to-br from-violet-50/70 via-white to-white p-4" aria-label="Pull Request Analytics">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <h3 className="text-sm font-semibold">Pull Request analytics</h3>
+              <h3 className="text-sm font-semibold text-violet-950">Pull Request overview</h3>
               <p className="text-xs text-muted-foreground">Project, developer and creation-date filters apply to these metrics and the PR list.</p>
             </div>
-            {analytics.data && <Badge variant="outline">{analytics.data.total} PRs</Badge>}
+            <Button type="button" size="sm" variant="outline" aria-expanded={showAnalyticsDetails} aria-controls="git-pr-analytics-details"
+              onClick={() => setShowAnalyticsDetails(value => !value)}>
+              {showAnalyticsDetails ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+              {showAnalyticsDetails ? "Hide analytics details" : "Show analytics details"}
+            </Button>
           </div>
           {analytics.isPending ? <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-20" />)}
@@ -175,6 +187,7 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, view = "all
                 <Metric label="Merged" value={analytics.data.merged} />
                 <Metric label="Closed without merge" value={analytics.data.closedWithoutMerge} />
               </div>
+              <div id="git-pr-analytics-details" hidden={!showAnalyticsDetails} className="space-y-3">
               <div className="grid gap-2">
                 <Metric label="Average merge time" value={formatDuration(analytics.data.averageMergeHours)}
                   description="Merged PRs with valid creation and merge timestamps" />
@@ -193,6 +206,7 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, view = "all
                       <span className="ml-1 text-muted-foreground">{developer.total}</span>
                     </Button>)}
                   </div>}
+              </div>
               </div>
             </>}
         </section>}
@@ -248,7 +262,8 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, view = "all
                 </div>
               </>}
         </section>}
-        {showPullRequestHistory && <>{history.isPending ? <div className="space-y-2">{Array.from({ length: 3 }, (_, index) => <Skeleton key={index} className="h-12 w-full" />)}</div>
+        {showPullRequestHistory && <><h3 className="pt-2 text-sm font-semibold text-slate-900">Pull Request history</h3>
+        {history.isPending ? <div className="space-y-2">{Array.from({ length: 3 }, (_, index) => <Skeleton key={index} className="h-12 w-full" />)}</div>
           : history.isError ? <WorkspaceEmptyState icon={GitPullRequest} title="Could not load Pull Requests"
             description={history.error instanceof Error ? history.error.message : "Could not load Pull Requests."}
             action={<Button variant="outline" onClick={() => void history.refetch()}>Retry</Button>} />
@@ -288,6 +303,8 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, view = "all
         {details.isPending ? <div className="space-y-2"><Skeleton className="h-5 w-56" /><Skeleton className="h-24 w-full" /></div>
           : details.isError ? <p role="alert" className="text-sm text-destructive">
             {details.error instanceof Error ? details.error.message : "Could not load Pull Request details."}</p>
+          : taskId && details.data && !details.data.tasks.some(task => task.taskId === taskId)
+            ? <p role="alert" className="text-sm text-destructive">This Pull Request is not linked to the selected task.</p>
           : details.data && <div className="space-y-4">
             <div><h3 className="font-medium">#{details.data.number} · {details.data.title}</h3>
               {details.data.body && <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">{details.data.body}</p>}</div>

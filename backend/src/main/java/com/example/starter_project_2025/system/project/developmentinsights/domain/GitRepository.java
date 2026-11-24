@@ -23,7 +23,7 @@ import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
 /** Shared Git source contract. Dev A owns synchronization; Dev B reads this data. */
-@Entity
+@Entity(name = "ActivityGitRepository")
 @Table(name = "git_repository", indexes = {
         @Index(name = "idx_git_repository_root", columnList = "root_project_id")
 }, uniqueConstraints = {
@@ -47,6 +47,12 @@ public class GitRepository {
 
     @Column(name = "external_id", nullable = false)
     private Long externalId;
+
+    /** Canonical connection; local fixtures have no source connection. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_repository_id", unique = true,
+            foreignKey = @ForeignKey(name = "fk_activity_source_repository"))
+    private com.example.starter_project_2025.system.git_integration.domain.GitRepository sourceRepository;
 
     @Column(nullable = false, length = 100)
     private String owner;

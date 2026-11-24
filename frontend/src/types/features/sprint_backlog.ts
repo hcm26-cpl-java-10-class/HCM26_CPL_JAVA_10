@@ -25,6 +25,12 @@ export interface SprintBacklogDTO extends BaseDTO {
   sprintId?: number | null;
   /** Read-only convenience value so the UI can show the sprint name. */
   sprintName?: string | null;
+  /**
+   * Task ID of the item (`FA-12`), generated and stored by the server when the
+   * item is created; read-only and never changes. Developers write it in commit
+   * messages.
+   */
+  readonly taskKey?: string | null;
   /** Owning project (UFR-PRJ-003-02), derived by the backend when omitted. */
   projectId?: number | null;
   /** Linked milestone (UFR-PRJ-003-02). */

@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useGitActivityRefresh } from "@/pages/management/workspace/useGitActivityRefresh";
 import { Link, useLocation } from "react-router-dom";
 import { ArrowUpRight, GitBranch } from "lucide-react";
 import { workspaceGitApi, type GitCommitItem, type GitPullRequestItem } from "@/api/features/workspace-git.api";
@@ -86,10 +87,14 @@ function PullRequestRow({ pullRequest }: { pullRequest: GitPullRequestItem }) {
 export function BacklogItemGitActivities({
   workspaceId,
   taskId,
+  taskCode,
+  projectId,
   enabled,
 }: {
   workspaceId: number;
   taskId: number;
+  taskCode?: string;
+  projectId?: number | null;
   enabled: boolean;
 }) {
   const { user, activeRole, hasPermission } = usePermissions();
@@ -97,15 +102,6 @@ export function BacklogItemGitActivities({
   const canReadTasks = hasPermission("SPRINT_BACKLOG_READ");
   const [commitPage, setCommitPage] = useState(0);
   const [pullRequestPage, setPullRequestPage] = useState(0);
-  const [pageTaskId, setPageTaskId] = useState(taskId);
-
-  useEffect(() => {
-    if (pageTaskId !== taskId) {
-      setPageTaskId(taskId);
-      setCommitPage(0);
-      setPullRequestPage(0);
-    }
-  }, [pageTaskId, taskId]);
 
   const status = useQuery({
     queryKey: ["git-activity", "status", workspaceId, user.email, activeRole],
@@ -129,6 +125,7 @@ export function BacklogItemGitActivities({
   });
 
   const commitRows = commits.data?.content ?? [];
+  useGitActivityRefresh(enabled && canReadTasks && status.data != null && !status.data.mockData, status.data?.syncStatus);
   const pullRequestRows = pullRequests.data?.content ?? [];
   const noActivity = !commits.isPending && !pullRequests.isPending
     && !commits.isError && !pullRequests.isError
@@ -142,7 +139,13 @@ export function BacklogItemGitActivities({
       <div className="flex items-center gap-2">
         {status.data?.mockData && <Badge variant="secondary">Mock fixture</Badge>}
         <Button asChild type="button" size="sm" variant="outline">
-          <Link to={`/management/workspaces/${workspaceId}/tasks/${taskId}/git-activities`}
+          <Link to={`/management/workspaces/${workspaceId}?${new URLSearchParams({
+            tab: "git-activity", gitSection: "commits",
+            ...(projectId != null ? { project: String(projectId) } : {}),
+            taskId: String(taskId), ...(taskCode ? { taskCode } : {}),
+            gitReturnTab: new URLSearchParams(location.search).get("tab") === "sprints" ? "sprints" : "backlog",
+            ...(new URLSearchParams(location.search).get("project") ? { gitReturnProject: new URLSearchParams(location.search).get("project")! } : {}),
+          })}`}
             state={{ returnTo: location.pathname + location.search }}>View all</Link>
         </Button>
       </div>

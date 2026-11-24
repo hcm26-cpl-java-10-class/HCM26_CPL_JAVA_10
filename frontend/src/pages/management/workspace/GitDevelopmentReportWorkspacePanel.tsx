@@ -1,3 +1,4 @@
+import { useGitActivityParam } from "./git-activity-url-context";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
@@ -33,16 +34,16 @@ export function GitDevelopmentReportWorkspacePanel({ workspaceId, initialProject
   initialProjectId?: number;
   showCompliance?: boolean;
 }) {
-  const { user, activeRole } = usePermissions();
+  const { user, activeRole, hasPermission } = usePermissions();
   const [params, setParams] = useSearchParams();
   const requestedReport = params.get("report");
   const view: ReportView = requestedReport === "sprint" ? "sprint" : "project";
-  const [projectId, setProjectId] = useState<number | undefined>(initialProjectId);
-  const [sprintId, setSprintId] = useState<number | undefined>();
-  const [sprintProjectId, setSprintProjectId] = useState<number | undefined>();
-  const [developerId, setDeveloperId] = useState<number | undefined>();
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [projectId, setProjectId] = useGitActivityParam<number | undefined>("gitReportProjectId", initialProjectId, "number");
+  const [sprintId, setSprintId] = useGitActivityParam<number | undefined>("gitReportSprintId", undefined, "number");
+  const [sprintProjectId, setSprintProjectId] = useGitActivityParam<number | undefined>("gitReportSprintProjectId", undefined, "number");
+  const [developerId, setDeveloperId] = useGitActivityParam<number | undefined>("gitReportDeveloperId", undefined, "number");
+  const [from, setFrom] = useGitActivityParam<string>("gitReportFrom", "");
+  const [to, setTo] = useGitActivityParam<string>("gitReportTo", "");
   const [exporting, setExporting] = useState<"PDF" | "EXCEL" | null>(null);
   const options = useQuery({
     queryKey: ["git-activity", "report-options", workspaceId, user.email, activeRole, projectId],
@@ -158,12 +159,12 @@ export function GitDevelopmentReportWorkspacePanel({ workspaceId, initialProject
     </CardHeader>
     <CardContent className="space-y-4">
       {reportReady && <div className="flex flex-wrap justify-end gap-2">
-        <Button type="button" size="sm" variant="outline" disabled={exporting !== null}
+        <Button type="button" size="sm" variant="outline" disabled={exporting !== null || !hasPermission("PROJECT_REPORT_EXPORT")}
           onClick={() => void exportReport("PDF")}>
           {exporting === "PDF" ? <LoaderCircle className="size-4 animate-spin" /> : <Download className="size-4" />}
           Export PDF
         </Button>
-        <Button type="button" size="sm" variant="outline" disabled={exporting !== null}
+        <Button type="button" size="sm" variant="outline" disabled={exporting !== null || !hasPermission("PROJECT_REPORT_EXPORT")}
           onClick={() => void exportReport("EXCEL")}>
           {exporting === "EXCEL" ? <LoaderCircle className="size-4 animate-spin" /> : <Download className="size-4" />}
           Export Excel

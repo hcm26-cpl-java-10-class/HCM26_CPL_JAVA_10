@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { WorkspaceEmptyState } from "./workspace.shared";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronUp } from "lucide-react";
+import { useGitActivityParam } from "./git-activity-url-context";
 
 const GRANULARITIES: Array<{ value: GitCommitGranularity; label: string }> = [
   { value: "day", label: "Day" },
@@ -66,6 +67,7 @@ export function GitCommitAnalyticsWorkspacePanel({
   onShowHistory: (filters: { includeBots: boolean; includeMergeCommits: boolean }) => void;
 }) {
   const { user, activeRole } = usePermissions();
+  const [showCharts, setShowCharts] = useGitActivityParam<boolean>("gitCommitCharts", false);
   const query = useQuery({
     queryKey: ["git-activity", "commit-analytics", workspaceId, user.email, activeRole,
       granularity, projectId, taskId, developerId, contributorId, branch,
@@ -75,6 +77,7 @@ export function GitCommitAnalyticsWorkspacePanel({
       from: from || undefined, to: to || undefined,
       includeBots, includeMergeCommits,
     }, signal),
+    enabled: active,
     retry: false,
   });
 
@@ -82,23 +85,28 @@ export function GitCommitAnalyticsWorkspacePanel({
   const maxBranch = Math.max(1, ...(data?.branches.map(row => row.commits) ?? []));
   const showAll = () => onShowHistory({ includeBots, includeMergeCommits });
 
-  return <Card>
+  return <Card className="border-blue-100 bg-gradient-to-br from-blue-50/60 via-white to-white shadow-none">
     <CardHeader className="space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <CardTitle className="flex items-center gap-2 text-base"><BarChart3 className="size-4" />Commit analytics</CardTitle>
-          <CardDescription>Branch counts use each commit’s first-seen branch. Date boundaries use Vietnam time.</CardDescription>
+          <CardTitle className="flex items-center gap-2 text-sm text-blue-950"><BarChart3 className="size-4 text-blue-700" />Commit overview</CardTitle>
+          <CardDescription>Unique commits in the selected scope. Date boundaries use Vietnam time.</CardDescription>
         </div>
-        <div className="flex items-center gap-1 rounded-md border bg-muted/40 p-0.5" role="group" aria-label="Commit trend interval">
+        <Button type="button" size="sm" variant="outline" aria-expanded={showCharts} aria-controls="git-commit-charts"
+          onClick={() => setShowCharts(value => !value)}>
+          {showCharts ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+          {showCharts ? "Hide charts" : "Show charts"}
+        </Button>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        {showCharts && <div className="flex items-center gap-1 rounded-md border bg-muted/40 p-0.5" role="group" aria-label="Commit trend interval">
           {GRANULARITIES.map(item => <button key={item.value} type="button" aria-pressed={granularity === item.value}
             onClick={() => onGranularityChange(item.value)}
             className={`rounded px-2 py-1 text-xs font-medium transition-colors ${granularity === item.value
               ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
             {item.label}
           </button>)}
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        </div>}
         <Label className="text-xs font-normal text-muted-foreground">
           <Checkbox checked={includeBots} onCheckedChange={value => onIncludeBotsChange(value === true)} />Include bot commits
         </Label>
@@ -117,7 +125,7 @@ export function GitCommitAnalyticsWorkspacePanel({
       </div>
     </CardHeader>
     <CardContent className="space-y-4">
-      {query.isPending ? <div className="space-y-2"><Skeleton className="h-16 w-full" /><Skeleton className="h-52 w-full" /></div>
+      {query.isPending ? <div className="space-y-2"><Skeleton className="h-16 w-full" />{showCharts && <Skeleton className="h-52 w-full" />}</div>
         : query.isError ? <WorkspaceEmptyState icon={BarChart3} title="Could not load commit analytics"
           description={query.error instanceof Error ? query.error.message : "Commit analytics are unavailable."}
           action={<Button variant="outline" onClick={() => void query.refetch()}>Retry</Button>} />
@@ -131,13 +139,14 @@ export function GitCommitAnalyticsWorkspacePanel({
             <Badge variant="secondary">View matching commits</Badge>
           </Button>
 
+          <div id="git-commit-charts" hidden={!showCharts} className="space-y-4">
           <section className="space-y-2" aria-label="Commit trend">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">Commits by {granularity}</h3>
               <span className="text-xs text-muted-foreground">Select a period to view its commits</span>
             </div>
             <div className="h-56 w-full" role="img" aria-label={`Commit count by ${granularity}`}>
-              {active && <ResponsiveContainer width="100%" height="100%">
+              {active && showCharts && <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={data.trend} margin={{ top: 8, right: 12, bottom: 0, left: -20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e8edf3" vertical={false} />
                   <XAxis dataKey="label" interval="preserveStartEnd" tick={{ fontSize: 10, fill: "#94a3b8" }}
@@ -169,7 +178,7 @@ export function GitCommitAnalyticsWorkspacePanel({
               <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">By developer</h3>
                 {data.unmappedContributorCommits > 0 && <Badge variant="outline">Unmapped: {data.unmappedContributorCommits}</Badge>}</div>
               <div className="h-48 w-full">
-                {active && <ResponsiveContainer width="100%" height="100%">
+                {active && showCharts && <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.developers} layout="vertical" margin={{ top: 4, right: 8, bottom: 0, left: 6 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e8edf3" horizontal={false} />
                     <XAxis type="number" allowDecimals={false} tick={{ fontSize: 9, fill: "#94a3b8" }} />
@@ -215,6 +224,7 @@ export function GitCommitAnalyticsWorkspacePanel({
                 </Button>)}
               </div>
             </section>
+          </div>
           </div>
         </>}
     </CardContent>

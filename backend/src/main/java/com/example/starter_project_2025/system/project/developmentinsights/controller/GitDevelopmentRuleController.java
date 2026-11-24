@@ -37,14 +37,16 @@ public class GitDevelopmentRuleController {
     }
 
     @org.springframework.web.bind.annotation.PostMapping("/validate")
-    public List<GitCommitValidationService.ValidationView> validateAvailable(@PathVariable Long workspaceId) {
-        return validation.validateLatestWorkspaceCommits(workspaceId);
+    public List<GitCommitValidationService.ValidationView> validateAvailable(@PathVariable Long workspaceId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "Idempotency-Key", required = false) String key) {
+        return validation.validateLatestWorkspaceCommits(workspaceId, key);
     }
 
     @org.springframework.web.bind.annotation.PostMapping("/commits/{commitId}/validate")
     public List<GitCommitValidationService.ValidationView> validateCommit(@PathVariable Long workspaceId,
-                                                                           @PathVariable Long commitId) {
-        return validation.validateWorkspaceCommit(workspaceId, commitId);
+            @PathVariable Long commitId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "Idempotency-Key", required = false) String key) {
+        return validation.validateWorkspaceCommit(workspaceId, commitId, key);
     }
 
     @GetMapping("/compliance")

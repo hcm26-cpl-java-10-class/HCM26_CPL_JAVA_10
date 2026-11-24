@@ -50,7 +50,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @Order(Ordered.LOWEST_PRECEDENCE)
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "app.git-activity.demo.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "app.git-activity.demo.enabled", havingValue = "true")
 public class GitActivityMockDataInitializer implements ApplicationRunner {
     private final WorkspaceRepository workspaces;
     private final ProjectRepository projects;

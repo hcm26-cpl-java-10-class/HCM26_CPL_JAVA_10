@@ -47,11 +47,13 @@ public class GitDevelopmentRuleSchemaInitializer implements ApplicationRunner {
                             commit_id BIGINT NOT NULL,
                             rule_type VARCHAR(32) NOT NULL,
                             rule_version INTEGER NOT NULL,
+                            evaluation_key VARCHAR(48) DEFAULT 'INGESTION' NOT NULL,
+                            rule_snapshot CLOB,
                             status VARCHAR(24) NOT NULL,
                             reason VARCHAR(1000),
                             details CLOB,
                             evaluated_at TIMESTAMP WITH TIME ZONE NOT NULL,
-                            CONSTRAINT uk_git_validation_commit_rule_version UNIQUE (commit_id, rule_type, rule_version),
+                            CONSTRAINT uk_git_validation_commit_rule_run UNIQUE (commit_id, rule_type, rule_version, evaluation_key),
                             CONSTRAINT fk_git_validation_commit FOREIGN KEY (commit_id) REFERENCES git_commit(id) ON DELETE CASCADE
                         )
                         """);
