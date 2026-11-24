@@ -12,6 +12,7 @@ import {
   backlogItemKey,
   backlogStatusMeta,
 } from "@/pages/management/backlog/backlog.constants";
+import { WidgetInlineError } from "./analytics-chart-ui";
 
 interface CurrentWindowWorkItemsProps {
   projectId: number;
@@ -84,13 +85,21 @@ export function CurrentWindowWorkItems({
         </Link>
       </header>
 
-      {itemsQuery.isPending ? (
-        <div className="space-y-2 p-4">
+      {itemsQuery.isPending || itemsQuery.isFetching ? (
+        <div className="space-y-2 p-4" role="status" aria-label="Loading work items">
           <Skeleton className="h-5 w-full" />
           <Skeleton className="h-5 w-4/5" />
+          <Skeleton className="h-5 w-3/5" />
         </div>
       ) : itemsQuery.isError ? (
-        <p className="px-4 py-4 text-[11px] text-muted-foreground">Work items could not be loaded for this window.</p>
+        <div className="p-4">
+          <WidgetInlineError
+            message="Work items could not be loaded for this window. Please try again."
+            onRetry={() => void itemsQuery.refetch()}
+            retrying={itemsQuery.isFetching}
+            className="min-h-[120px]"
+          />
+        </div>
       ) : items.length === 0 ? (
         <p className="px-4 py-4 text-[11px] text-muted-foreground">No work items in this window.</p>
       ) : (

@@ -17,6 +17,11 @@ export type StudentSyllabusCatalog = {
     totalPages: number;
 };
 
+export type StudentRelatedCourse = {
+    id: number;
+    name: string;
+};
+
 export type StudentSyllabusDetail = {
     id: number;
     code: string;
@@ -88,6 +93,16 @@ export const studentSyllabusApi = {
 
     downloadFile: async (id: number, key: string): Promise<Blob> =>
         (await api.get(`${base}/${id}/material-files/${encodeURIComponent(key)}`, { responseType: "blob" })).data,
+
+    /** On-demand AI translation. Responses are display-only, not stored in the Syllabus. */
+    translatePage: async (ids: number[]): Promise<StudentSyllabusItem[]> =>
+        (await api.post<StudentSyllabusItem[]>(`${base}/translations`, { ids })).data,
+
+    translateDetail: async (id: number): Promise<StudentSyllabusDetail> =>
+        (await api.post<StudentSyllabusDetail>(`${base}/${id}/translation`)).data,
+
+    relatedCourses: async (id: number): Promise<StudentRelatedCourse[]> =>
+        (await api.get<StudentRelatedCourse[]>(`${base}/${id}/related-courses`)).data,
 
     detail: async (id: number) =>
         (

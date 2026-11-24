@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.submission.mock;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.milestone.integration.mock.MockMilestoneData;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneArtifactSubmission;
@@ -30,6 +32,7 @@ import java.util.stream.Collectors;
 @Profile("milestone-mock")
 @Order(14)
 @RequiredArgsConstructor
+@StartupMutation
 public class TeamArtifactSubmissionDemoInitializer implements CommandLineRunner {
     private static final UUID DEMO_STUDENT_ID = UUID.nameUUIDFromBytes(
             "student@example.com".getBytes(StandardCharsets.UTF_8));

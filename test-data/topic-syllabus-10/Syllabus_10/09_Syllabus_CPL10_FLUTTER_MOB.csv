@@ -1,0 +1,54 @@
+﻿,,,,,,,,
+,,,,,,,,
+,Fresher / OJT Training Program,,,,,,,
+,CROSS-PLATFORM MOBILE APPS WITH FLUTTER & DART SYLLABUS,,,,,,,
+,,,,,,,,
+,,,,,Document Code,,,SYL-CPL10_FLUTTER_MOB
+,,,,,Version,,,1.0
+,,,,,Effective Date,,,11/11/2026
+Cross-Platform Mobile Apps with Flutter & Dart Syllabus,,,,,,,,
+1,Technical Group,Mobile,,,,,,
+2,Topic Name,Cross-Platform Mobile Apps with Flutter & Dart,,,,,,
+3,Topic Code,CPL10_FLUTTER_MOB,,,,,,
+4,Version,1.0,,,,,,
+5,Training Audience,Developers transitioning to cross-platform mobile development,,,,,,
+6,Course Objectives,"Build responsive iOS/Android mobile apps using Flutter widgets, Riverpod state management, GoRouter navigation, and REST API caching.",,,,,,
+7,Topic Outline,"- Unit 1: Dart Language & Declarative Widget Tree
+- Unit 2: State Management, Routing & Networking
+- Unit 3: Native Integrations & Mobile Performance
+- Unit 4: Mobile App Assessment",,,,,,
+8,Time Allocation,Concept/Lecture,0.25,"Theory, architecture concepts",8 Sessions,,,
+,,Assignment/Lab,0.33,Hands-on coding & exercises,,,,
+,,Guides/Review,0.08,Code walkthrough & Q&A,,,,
+,,Seminar/Workshop,0.13,Interactive seminar & debugging,,,,
+,,Exam,0.21,Quizzes & practical defense exam,,,,
+9,Training Materials & Environments,Text book,Official Mobile Documentation & FAMS Guides,,,,,
+,,References,FAMS Internal LMS Knowledge Base,,,,,
+,,Technical requirements,"Modern IDE, Docker, Git, Browser DevTools",,,,,
+10,Assessment Scheme,Quizzes & Knowledge Tests,2,20,Short quizzes checking core theory (>= 6.0 / 10),,,
+,,Practical Lab Test,2,30,Hands-on lab assignments & Git code quality (>= 6.0 / 10),,,
+,,Final Practical Test,1,50,Capstone implementation & live defense (>= 6.0 / 10),,,
+,,Pass Criteria,6,Overall GPA >= 6.0 / 10; Complete 100% quizzes and final practical test,,,,
+11,Training Delivery Principles,Trainees,Completed prerequisite track; Active participation in daily labs,,,,,
+,Training Delivery Principles,Trainer,Senior Mobile Engineer / Technical Mentor,,,,,
+,Training Delivery Principles,Training,"- Concept lectures in morning or online
+- Hands-on lab exercises & reviews in afternoon
+- Max 4h (240 mins) per session",,,,,
+,Training Delivery Principles,Re-Test,2 - Allow up to 2 re-takes with different exam variants,,,,,
+,Training Delivery Principles,Marking,Evaluated by trainer against official FAMS rubric,,,,,
+,Training Delivery Principles,Waiver Criteria,Fast-track entry exam score >= 8.5 / 10,,,,,
+,,,,,,,,
+Cross-Platform Mobile Apps with Flutter & Dart - Training Schedule,,,,,,,,
+Training Unit/Chapter,,Session,Content,Learning Objectives,Delivery Type,Duration (mins),Training Format,Training Materials / Logistics & General Notes
+1,Dart Language & Declarative Widget Tree,1,"Null Safety, Async Streams & Flutter Layout Engine","Master Flex, Slivers, constraints, and responsive mobile layouts",Concept/Lecture,180,Offline - Sáng (Morning),Slide-Dart-Flutter-UI.pdf
+,,2,Interactive Student Schedule UI Lab,"Build adaptive cards, pull-to-refresh lists, and custom themes",Assignment/Lab,240,Offline - Chiều (Afternoon),Lab-01-Flutter-Layouts.zip
+2,"State Management, Routing & Networking",3,Riverpod Providers & GoRouter Deep Linking,Structure clean MVVM/Feature-first Flutter architecture,Concept/Lecture,180,Online - Sáng (Morning),Slide-Riverpod-GoRouter.pdf
+,,4,"Dio HTTP Client, JWT Interceptor & Offline Cache Lab",Persist auth tokens securely and cache API payloads locally,Assignment/Lab,240,Offline - Chiều (Afternoon),Lab-02-Dio-Cache.zip
+3,Native Integrations & Mobile Performance,5,"Push Notifications, Camera & Widget Testing",Write Flutter widget tests and inspect DevTools frame chart,Seminar/Workshop,180,Offline - Sáng (Morning),Workshop-Flutter-Testing.pdf
+,,6,UI Smoothness & Release Build Review,Eliminate jank and verify signed APK/AAB build setup,Guides/Review,120,Online - Chiều (Afternoon),Guide-Flutter-Release.pdf
+4,Mobile App Assessment,7,Flutter & Dart Fundamentals Quiz,"Evaluate widget lifecycle, state providers, and async futures",Test/Quiz,120,Offline - Sáng (Morning),Quiz-Flutter.pdf
+,,8,Mobile Capstone App Demo & Defense,Demo connected FAMS mobile client with offline fallback,Exam,180,Offline - Chiều (Afternoon),Exam-Flutter-Rubric.pdf
+,,,,,,,,
+AUTHORSHIP,,,,,,,,
+,Role,Name,Account,Unit,Notes,,,
+,Course Lead,Le Minh Hoang,hoanglm26,Training Department,HCM26_CPL_JAVA_10,,,

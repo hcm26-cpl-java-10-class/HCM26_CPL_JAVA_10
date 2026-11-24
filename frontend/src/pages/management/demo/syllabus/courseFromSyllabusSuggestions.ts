@@ -35,8 +35,9 @@ export function flattenCategoryTree(tree: CategoryTreeDTO[]): CategoryOption[] {
   const result: CategoryOption[] = [];
   const visit = (nodes: CategoryTreeDTO[], parent = "") => {
     for (const node of nodes) {
+      if (node.isActive === false) continue; // Do not offer an inactive branch in Course creation.
       const path = parent ? `${parent} / ${node.name}` : node.name;
-      if (node.isActive !== false) result.push({ id: node.id, name: node.name, path, code: node.code });
+      result.push({ id: node.id, name: node.name, path, code: node.code });
       if (node.children?.length) visit(node.children, path);
     }
   };

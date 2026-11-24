@@ -21,8 +21,8 @@ import {
 import { EXAM_CATEGORY_LABEL, type ExamCategory, type ExamDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookmarkPlus, BookOpen, CalendarClock, ClipboardCheck, Clock, Download, ListChecks, Plus, Search, Trophy, Upload, User } from "lucide-react";
-import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ExamConfigFields } from "./ExamConfigFields";
 import { ExportExamModal } from "./components/ExportExamModal";
@@ -40,8 +40,6 @@ import {
 /** 3 cards per row x 3 rows. */
 const PAGE_SIZE = 9;
 
-type ExamStatus = "UPCOMING" | "OPEN" | "CLOSED";
-
 /** "Course › Section › Lesson" label of the course an exam belongs to ("—" when it is not linked). */
 const courseLabel = (exam: ExamDTO): string => {
   if (!exam.courseName) return "—";
@@ -51,24 +49,17 @@ const courseLabel = (exam: ExamDTO): string => {
   return parts.join(" › ");
 };
 
-const examStatus = (exam: ExamDTO): ExamStatus => {
-  const now = Date.now();
-  if (exam.endTime && new Date(exam.endTime).getTime() < now) return "CLOSED";
-  if (exam.startTime && new Date(exam.startTime).getTime() > now) return "UPCOMING";
-  return "OPEN";
-};
-
-const STATUS_STYLE: Record<ExamStatus, { label: string; className: string }> = {
-  UPCOMING: { label: "Upcoming", className: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300" },
-  OPEN: { label: "Open", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" },
-  CLOSED: { label: "Closed", className: "bg-muted text-muted-foreground" },
+const STATUS_BADGE: Record<string, { label: string; className: string }> = {
+  PUBLISHED: { label: "Published", className: "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" },
+  DRAFT: { label: "Draft", className: "border border-slate-300 bg-slate-100 text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200" },
+  CLOSED: { label: "Closed", className: "bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200" },
+  ARCHIVED: { label: "Archived", className: "bg-muted text-muted-foreground" },
 };
 
 const SORT_OPTIONS: { value: string; label: string }[] = [
   { value: "createdAt,desc", label: "Newest first" },
   { value: "createdAt,asc", label: "Oldest first" },
   { value: "title,asc", label: "Title A–Z" },
-  { value: "startTime,desc", label: "Exam start time" },
 ];
 
 const formatDateTime = (value?: string | null) =>
@@ -105,12 +96,10 @@ function InfoRow({
 export default function ExamManagementPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [_searchParams] = useSearchParams();
   const [examSearch, setExamSearch] = useState("");
   const [examCategoryFilter, setExamCategoryFilter] = useState<ExamCategory | "ALL">("ALL");
   const [courseFilter, setCourseFilter] = useState<string>("ALL");
   const [examPage, setExamPage] = useState(0);
-  const [statusFilter, setStatusFilter] = useState<ExamStatus | "ALL">("ALL");
   const [sortKey, setSortKey] = useState("createdAt,desc");
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [isExportOpen, setExportOpen] = useState(false);
@@ -127,22 +116,18 @@ export default function ExamManagementPage() {
   });
   const courseOptions = coursesQuery.data ?? [];
 
-  // The status is worked out from the open/close time, so when it is filtered we load all exams
-  // (a teacher has few) and filter / page them here.
-  const clientFiltering = statusFilter !== "ALL";
   const examsQuery = useQuery({
     queryKey: [
       "exam-management",
-      clientFiltering ? 0 : examPage,
+      examPage,
       examSearch,
       examCategoryFilter,
       courseFilter,
       sortKey,
-      clientFiltering,
     ],
     queryFn: () =>
       examApi.getPage(
-        { page: clientFiltering ? 0 : examPage, size: clientFiltering ? 500 : PAGE_SIZE, sort: sortKey },
+        { page: examPage, size: PAGE_SIZE, sort: sortKey },
         examSearch,
         {
           ...(examCategoryFilter === "ALL" ? {} : { category: examCategoryFilter }),
@@ -166,15 +151,12 @@ export default function ExamManagementPage() {
     onError: (error) => toast.error(getErrorMessage(error, "Failed to save exam")),
   });
 
-  const loadedRows = examsQuery.data?.content ?? [];
-  const statusRows = clientFiltering ? loadedRows.filter((exam) => examStatus(exam) === statusFilter) : loadedRows;
-  const examRows = clientFiltering ? statusRows.slice(examPage * PAGE_SIZE, (examPage + 1) * PAGE_SIZE) : statusRows;
-  const examTotalPages = clientFiltering ? Math.ceil(statusRows.length / PAGE_SIZE) : examsQuery.data?.totalPages ?? 0;
-  const examTotal = clientFiltering ? statusRows.length : examsQuery.data?.totalElements ?? 0;
+  const examRows = examsQuery.data?.content ?? [];
+  const examTotalPages = examsQuery.data?.totalPages ?? 0;
+  const examTotal = examsQuery.data?.totalElements ?? 0;
   const hasFilters =
     examSearch !== "" ||
     examCategoryFilter !== "ALL" ||
-    statusFilter !== "ALL" ||
     courseFilter !== "ALL";
 
   const openCreateDialog = () => {
@@ -279,21 +261,6 @@ export default function ExamManagementPage() {
             </SelectContent>
           </Select>
 
-          <Select value={statusFilter} onValueChange={(value) => {
-            setStatusFilter(value as ExamStatus | "ALL");
-            setExamPage(0);
-          }}>
-            <SelectTrigger aria-label="Filter by status" className="w-full max-w-[11rem]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All statuses</SelectItem>
-              <SelectItem value="UPCOMING">Upcoming</SelectItem>
-              <SelectItem value="OPEN">Open</SelectItem>
-              <SelectItem value="CLOSED">Closed</SelectItem>
-            </SelectContent>
-          </Select>
-
           <Select value={sortKey} onValueChange={(value) => {
             setSortKey(value);
             setExamPage(0);
@@ -335,7 +302,6 @@ export default function ExamManagementPage() {
               <Button variant="outline" size="sm" onClick={() => {
                 setExamSearch("");
                 setExamCategoryFilter("ALL");
-                setStatusFilter("ALL");
                 setCourseFilter("ALL");
                 setExamPage(0);
               }}>
@@ -351,14 +317,15 @@ export default function ExamManagementPage() {
         ) : (
           <div className="grid min-w-0 max-w-full gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {examRows.map((exam) => {
-              const status = STATUS_STYLE[examStatus(exam)];
+              const statusKey = exam.status ?? (exam.isActive === false ? "ARCHIVED" : "PUBLISHED");
+              const status = STATUS_BADGE[statusKey] ?? STATUS_BADGE.PUBLISHED;
               return (
                 // A real link that opens the exam in a new browser tab (middle click and Ctrl+click also work).
                 <a
                   key={exam.id}
                   href={`/exams/${exam.id}`}
                   target="_blank"
-                  rel="noopener noreferrer"
+                  rel="opener"
                   aria-label={`Open exam ${exam.title} in a new tab`}
                   className="flex min-w-0 max-w-full cursor-pointer flex-col gap-3 rounded-lg border bg-card p-4 shadow-sm transition hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
@@ -388,6 +355,7 @@ export default function ExamManagementPage() {
                     <InfoRow icon={BookOpen} label="Course" value={courseLabel(exam)} multiline />
                     <InfoRow icon={Clock} label="Duration" value={`${exam.durationMinutes} mins`} />
                     <InfoRow icon={ListChecks} label="Questions" value={exam.questionIds?.length ?? exam.questions?.length ?? 0} />
+                    <InfoRow icon={Trophy} label="Course weight" value={exam.courseWeight != null ? `${exam.courseWeight}%` : "Not set"} />
                     <InfoRow icon={Trophy} label="Max score" value={exam.maxScore ?? 10} />
                   </div>
                 </a>
@@ -422,6 +390,7 @@ export default function ExamManagementPage() {
               <DialogTitle>Create Exam</DialogTitle>
               <DialogDescription>Configure exam title, duration, and rules.</DialogDescription>
             </DialogHeader>
+
             <div className="min-h-0 flex-1 overflow-y-auto py-5 pr-1">
               <ExamConfigFields
                 title={newTitle}

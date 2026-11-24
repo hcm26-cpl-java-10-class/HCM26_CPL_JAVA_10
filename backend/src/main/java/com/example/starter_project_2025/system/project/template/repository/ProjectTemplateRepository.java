@@ -75,4 +75,8 @@ public interface ProjectTemplateRepository
             + "where (t.tenantId = :tenantId or t.tenantId is null) "
             + "and t.isActive = true and t.level is not null order by t.level")
     List<String> findLevels(Long tenantId);
+
+    @Query("select t from ProjectTemplate t where t.id = :id and (t.isActive = true "
+            + "or (t.parentTemplate is not null and t.status = ProjectTemplateStatus.ARCHIVED))")
+    Optional<ProjectTemplate> findReadableByIdForAdmin(Long id);
 }

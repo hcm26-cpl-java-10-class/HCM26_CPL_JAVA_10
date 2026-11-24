@@ -1,15 +1,18 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, type ReactNode } from "react";
 import { useSelector, useDispatch } from "react-redux";
+import { useQueryClient } from "@tanstack/react-query";
 import { type RootState } from "../store/store";
-import { setLogin, setLogout } from "../store/slices/auth/authSlice";
+import { setLogin } from "../store/slices/auth/authSlice";
 import { type AuthContextType, type LoginRequest, type LoginResponse } from "../types/features/auth";
 import { authApi } from "../api/features/auth.api";
+import { performAppLogout } from "../utils/auth-logout";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const dispatch = useDispatch();
+    const queryClient = useQueryClient();
 
     const { token, email, firstName, lastName, role, roles, permissions, rolePermissions, isAuthenticated } = useSelector(
         (state: RootState) => state.auth,
@@ -26,7 +29,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const logout = () => {
-        dispatch(setLogout());
+        void performAppLogout({
+            dispatch,
+            queryClient,
+        });
     };
 
     const hasPermission = (p: string) => permissions.includes(p);

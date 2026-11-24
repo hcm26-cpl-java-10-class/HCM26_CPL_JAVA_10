@@ -65,6 +65,8 @@ export interface QuestionDTO {
   options: QuestionOptionDTO[];
   imageUrl?: string | null;
   code?: CodeSpec | null;
+  source?: string | null;
+  isAiGenerated?: boolean | null;
   createdAt?: string | null;
   updatedAt?: string | null;
   createdBy?: number | null;
@@ -79,6 +81,8 @@ export interface QuestionFilter {
 }
 
 export type LatePolicy = "NOT_ALLOWED" | "ALLOWED_WITH_PENALTY" | "ALLOWED";
+export type ExamStatus = "DRAFT" | "PUBLISHED" | "CLOSED" | "ARCHIVED";
+export type IntegrityReviewStatus = "UNREVIEWED" | "CLEARED" | "CONFIRMED_VIOLATION";
 export type ExamType = "MULTIPLE_CHOICE" | "ESSAY" | "CODING" | "MC_CODING" | "MIXED";
 export type ExamCategory = "ASSIGNMENT" | "QUIZ" | "MIDTERM" | "FINAL_TEST";
 export type ResultVisibility = "IMMEDIATE" | "AFTER_EXAM_CLOSED" | "MANUAL_RELEASE";
@@ -106,16 +110,20 @@ export interface ExamDTO {
   createdByName?: string | null;
   /** Submitted attempts waiting for the teacher to grade. */
   pendingGradingCount?: number;
+  invitationCount?: number;
   hasAttempts?: boolean;
   title: string;
   durationMinutes: number;
+  status?: ExamStatus;
   startTime?: string | null;
   endTime?: string | null;
+  version?: number | null;
   maxAttempts?: number;
   shuffleQuestions?: boolean;
   shuffleOptions?: boolean;
   showAnswersAfterExam?: boolean;
   passScore?: number | null;
+  courseWeight?: number | null;
   maxScore?: number | null;
   latePolicy?: LatePolicy;
   latePenaltyPercent?: number | null;
@@ -123,6 +131,7 @@ export interface ExamDTO {
   resultVisibility?: ResultVisibility;
   category?: ExamCategory;
   examType?: ExamType;
+  allowedQuestionTypes?: QuestionType[];
   questionIds?: number[];
   questions?: QuestionDTO[];
   totalPoints?: number;
@@ -136,6 +145,15 @@ export interface ExamDTO {
   singleSession?: boolean;
   cameraProctoring?: boolean;
   notifyOnViolation?: boolean;
+  headTurnAngleDeg?: number | null;
+  headTurnSeconds?: number | null;
+  fastSubmitPercent?: number | null;
+  // Tu danh gia / danh gia cheo (UFR-EXM-012)
+  selfReviewEnabled?: boolean;
+  peerReviewEnabled?: boolean;
+  peerReviewCount?: number | null;
+  peerReviewAnonymous?: boolean;
+  peerReviewShowReference?: boolean;
   // Optional link to a course / section / lesson (null = not linked)
   courseId?: number | null;
   sectionId?: number | null;
@@ -168,6 +186,7 @@ export interface CourseExam {
   examType: ExamType;
   durationMinutes: number;
   maxAttempts: number | null;
+  courseWeight?: number | null;
   maxScore: number | null;
   passScore: number | null;
   isActive: boolean;
@@ -179,7 +198,7 @@ export interface CourseExam {
   /** Only returned to the course teacher and admin. */
   questionCount: number | null;
   createdByName: string | null;
-  /** Student view: true while blocked by LessonProgress. Staff always get false. */
+  /** Student view: true while blocked by course or lesson progress. Staff always get false. */
   locked: boolean;
   lockReason: string | null;
 }

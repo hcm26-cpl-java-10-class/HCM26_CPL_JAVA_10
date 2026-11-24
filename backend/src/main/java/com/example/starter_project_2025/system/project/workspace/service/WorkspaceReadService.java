@@ -42,6 +42,7 @@ public class WorkspaceReadService {
     private final TrainingClassRepository classes;
     private final UserRepository users;
     private final ObjectMapper json;
+    private final com.example.starter_project_2025.system.project.charter.TeamCharterService charters;
 
     public WorkspaceDetailResponse overview(Long id) {
         User user = access.requireUser(false);
@@ -68,7 +69,7 @@ public class WorkspaceReadService {
                 .teamId(team.getId()).teamCode(team.getCode()).teamName(team.getTeamName())
                 .mentorName(team.getAssignedMentorId() == null ? null :
                         users.findById(team.getAssignedMentorId()).map(User::getFullName).orElse(null))
-                .charter(ProjectHubDtos.Charter.from(team))
+                .charter(charters.publishedCharter(team).map(ProjectHubDtos.PublishedCharter::charter).orElse(null))
                 .cohortId(trainingClass.getCohortId())
                 .cohortName(trainingClass.getCohortName())
                 .createdAt(workspace.getCreatedAt())

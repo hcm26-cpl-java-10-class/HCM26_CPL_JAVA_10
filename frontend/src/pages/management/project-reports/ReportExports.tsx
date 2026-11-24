@@ -1,15 +1,17 @@
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, FileDown, FileSpreadsheet } from "lucide-react";
+import { ChevronDown, Download, FileDown, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { downloadBlob } from "@/components/datatable/util/dataio.utils";
 import { projectReportApi } from "@/api/features/project-report.api";
 import type { ReportExport, ReportFilters } from "@/types/features/project-report";
 import { reportDate, reportError, reportErrorMessage } from "./report-utils";
+import { reportStateStyle } from "./report-ui";
 
-const labels: Record<ReportExport["status"], string> = { QUEUED: "Đang tạo", RUNNING: "Đang tạo", READY: "Sẵn sàng tải", FAILED: "Tạo thất bại", EXPIRED: "Đã hết hạn" };
+const labels: Record<ReportExport["status"], string> = { QUEUED: "Generating", RUNNING: "Generating", READY: "Ready to download", FAILED: "Export failed" };
 export function ReportExports({ owner, filters, timeZone, disabled }: { owner: string; filters: ReportFilters; timeZone: string; disabled: boolean }) {
   const client = useQueryClient(), key = ["project-report-exports", owner];
   const jobs = useQuery({ queryKey: key, queryFn: ({ signal }) => projectReportApi.exports(signal), retry: false, gcTime: 0,
@@ -24,7 +26,7 @@ export function ReportExports({ owner, filters, timeZone, disabled }: { owner: s
     try {
       const job = await projectReportApi.createExport(filters, request.current.id);
       client.setQueryData<ReportExport[]>(key, previous => [job, ...(previous ?? []).filter(old => old.id !== job.id)].slice(0, 20));
-      request.current = undefined; setMessage("Đã tiếp nhận yêu cầu. File sẽ xuất hiện trong danh sách bên dưới khi tạo xong.");
+      request.current = undefined;
     } catch (error) { setMessage(await reportError(error)); } finally { setBusy(false); }
   }
   async function download(job: ReportExport) {
@@ -32,17 +34,36 @@ export function ReportExports({ owner, filters, timeZone, disabled }: { owner: s
     try { downloadBlob(await projectReportApi.download(job.id), job.fileName ?? "project-report.xlsx"); }
     catch (error) { setMessage(await reportError(error)); void jobs.refetch(); } finally { setBusy(false); }
   }
-  return <Card className="gap-3 border-slate-200/80 py-4 shadow-xs dark:border-border"><CardHeader className="gap-2 px-4 sm:px-5"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2.5"><div className="flex size-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"><FileDown className="size-[18px]" /></div><div><CardTitle className="text-sm">Xuất báo cáo</CardTitle><p className="mt-1 text-[11px] text-muted-foreground">Tải dữ liệu theo bộ lọc đang áp dụng.</p></div></div>
-    <Button size="sm" className="bg-emerald-600 text-xs text-white hover:bg-emerald-700" disabled={disabled || busy || jobs.isError} onClick={() => void create()}><FileSpreadsheet className="size-3.5" />Export Excel</Button></div>
-    <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Bao gồm Master và Sub-project trên tất cả các trang, KPI, phân bố công việc, milestone/bài nộp hiện tại, cảnh báo và hoạt động theo bộ lọc. Excel có 6 sheet; file được tạo nền và có thời hạn tải.</p></CardHeader>
-    <CardContent className="space-y-3 px-4 sm:px-5">{message && <p role="status" className="text-xs">{message}</p>}
-      {jobs.isSuccess && <p role="status" aria-live="polite" className="text-xs text-muted-foreground">{jobs.data.filter(job => job.status === "READY").length} file sẵn sàng tải · {jobs.data.filter(job => ["QUEUED", "RUNNING"].includes(job.status)).length} file đang tạo.</p>}
-      {jobs.isPending ? <p role="status">Đang tải danh sách file...</p> : jobs.isError ? <div><p role="alert" className="text-destructive">{reportErrorMessage(jobs.error)}</p><Button variant="outline" onClick={() => void jobs.refetch()}>Thử lại</Button></div>
-        : !jobs.data.length ? <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5 text-center"><p className="text-xs font-medium">Chưa có file báo cáo</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Chọn Export Excel để tạo file đầu tiên.</p></div> : <div className="divide-y rounded-lg border px-3">{jobs.data.map(job => <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-          <div className="flex min-w-0 items-start gap-2.5"><div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><FileSpreadsheet className="size-3.5" /></div><div className="min-w-0 space-y-1 text-xs"><p className="break-all font-medium">{job.fileName ?? `Excel · ${reportDate(job.createdAt, timeZone)}`}</p>
-            <p className="text-xs text-muted-foreground">{job.rowCount !== null ? `${job.rowCount} dòng Project · ` : ""}{job.expiresAt ? `Hạn tải: ${reportDate(job.expiresAt, timeZone)}` : ""}</p>
-            {job.message && <p className="text-xs text-destructive">{job.message}</p>}</div></div>
-          <div className="flex items-center gap-3"><Badge variant="outline" className={job.status === "READY" ? "rounded-full border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300" : "rounded-full"}>{labels[job.status]}</Badge>{job.status === "READY" && <Button size="sm" variant="outline" disabled={busy} onClick={() => void download(job)}><Download className="size-3.5" />Tải file</Button>}</div>
-        </div>)}</div>}
-    </CardContent></Card>;
+  const ready = jobs.data?.filter(job => job.status === "READY").length ?? 0;
+  const pending = jobs.data?.filter(job => ["QUEUED", "RUNNING"].includes(job.status)).length ?? 0;
+  const summary = jobs.isError ? reportErrorMessage(jobs.error) : message || (jobs.isPending
+    ? "Loading exports…" : jobs.data?.length ? `${ready} ready · ${pending} generating` : "No exports yet");
+  return <Card data-report-exports className="gap-0 border-slate-200/80 py-3 shadow-xs dark:border-border">
+    <CardContent className="flex flex-wrap items-center gap-3 px-4 sm:px-5">
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"><FileDown className="size-4" /></div>
+        <h2 className="shrink-0 text-sm font-semibold">Report exports</h2>
+        <p role={jobs.isError ? "alert" : "status"} aria-live="polite" title={summary} className={`min-w-0 truncate text-[11px] ${jobs.isError ? "text-destructive" : "text-muted-foreground"}`}>{summary}</p>
+      </div>
+      <div className="ml-auto flex max-w-full items-center gap-2">
+        {jobs.isError ? <Button size="sm" variant="outline" className="text-xs" onClick={() => void jobs.refetch()}>Retry</Button> : <DropdownMenu onOpenChange={open => { if (open) void jobs.refetch(); }}>
+          <DropdownMenuTrigger asChild><Button size="sm" variant="outline" className="text-xs" disabled={busy || jobs.isPending} aria-label="Choose a report to download"><Download className="size-3.5" />Downloads<ChevronDown className="size-3.5" /></Button></DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="max-h-[min(24rem,var(--radix-dropdown-menu-content-available-height))] w-[min(32rem,calc(100vw-2rem))]">
+            <DropdownMenuLabel className="px-3 py-2"><p className="text-xs">Excel downloads</p><p className="mt-1 text-[11px] font-normal text-muted-foreground">Recent exports, newest first.</p></DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {!jobs.data?.length ? <p className="px-3 py-4 text-xs text-muted-foreground">Choose Export Excel to create your first report.</p> : jobs.data.map(job => <DropdownMenuItem key={job.id} disabled={busy || job.status !== "READY"} onSelect={() => void download(job)} className="items-start gap-2.5 px-3 py-3">
+              <FileSpreadsheet className="mt-0.5 size-4 shrink-0" />
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="truncate text-xs font-medium" title={job.fileName ?? undefined}>{job.fileName ?? `Excel · ${reportDate(job.createdAt, timeZone)}`}</p>
+                <p className="text-[11px] text-muted-foreground">{job.rowCount !== null ? `${job.rowCount} project rows · ` : ""}Created {reportDate(job.createdAt, timeZone)}</p>
+                {job.message && <p className="whitespace-normal text-[11px] text-destructive">{job.message}</p>}
+              </div>
+              <Badge data-report-status={job.status} variant="outline" className={"shrink-0 rounded-full border-transparent text-[10px] " + reportStateStyle(job.status).surface}>{labels[job.status]}</Badge>
+            </DropdownMenuItem>)}
+          </DropdownMenuContent>
+        </DropdownMenu>}
+        <Button size="sm" className="bg-emerald-600 text-xs text-white hover:bg-emerald-700" title="Export six Excel sheets using the applied filters across all pages." disabled={disabled || busy || jobs.isError} onClick={() => void create()}><FileSpreadsheet className="size-3.5" />Export Excel</Button>
+      </div>
+    </CardContent>
+  </Card>;
 }

@@ -32,8 +32,26 @@ public class ValueConverter {
 
         if (type.isEnum()) {
             @SuppressWarnings({ "unchecked", "rawtypes" })
-            Enum enumVal = Enum.valueOf((Class<Enum>) type, val);
-            return enumVal;
+            Class<Enum> enumClass = (Class<Enum>) type;
+            for (Enum constant : enumClass.getEnumConstants()) {
+                if (constant.name().equalsIgnoreCase(val)) {
+                    return constant;
+                }
+            }
+            // Handle common aliases for status enums
+            if (val.equalsIgnoreCase("hoạt động") || val.equalsIgnoreCase("dang hoat dong")
+                    || val.equalsIgnoreCase("true") || val.equalsIgnoreCase("1")) {
+                for (Enum constant : enumClass.getEnumConstants()) {
+                    if (constant.name().equalsIgnoreCase("ACTIVE")) return constant;
+                }
+            }
+            if (val.equalsIgnoreCase("ngừng hoạt động") || val.equalsIgnoreCase("ngung hoat dong")
+                    || val.equalsIgnoreCase("false") || val.equalsIgnoreCase("0")) {
+                for (Enum constant : enumClass.getEnumConstants()) {
+                    if (constant.name().equalsIgnoreCase("INACTIVE")) return constant;
+                }
+            }
+            throw new IllegalArgumentException("Giá trị '" + val + "' không hợp lệ cho trạng thái (Chỉ chấp nhận ACTIVE hoặc INACTIVE)");
         }
 
         if (type == java.time.LocalDateTime.class)

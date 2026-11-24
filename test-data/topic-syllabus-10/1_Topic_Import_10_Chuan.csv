@@ -1,0 +1,11 @@
+﻿Code,Name,Version,Technical Group,Duration (Hours),Description,Status
+CPL10_JAVA_ADV,"Java 21 Concurrency, Virtual Threads & Performance",1.0,Java,24,"Deep dive into Java 21 Virtual Threads (Project Loom), CompletableFuture, ExecutorService, JVM GC tuning, and JMH microbenchmarking.",ACTIVE
+CPL10_SPRING_CLOUD,Microservices & Spring Cloud Architecture,1.0,Backend,32,"Design distributed microservices with Spring Cloud Gateway, Eureka discovery, OpenFeign, Resilience4j circuit breakers, and Kafka events.",ACTIVE
+CPL10_REACT_ADV,React 19 State Management & Performance Optimization,1.0,Frontend,28,"Master React 19 concurrent features, TanStack Query caching, Zustand stores, render profiling, and accessible component design.",ACTIVE
+CPL10_DB_TUNING,"PostgreSQL Query Tuning, Indexing & Partitioning",1.0,Database,20,"Analyze EXPLAIN ANALYZE plans, design composite/GIN/BRIN indexes, implement table partitioning, and prevent MVCC bloat & deadlocks.",ACTIVE
+CPL10_K8S_CICD,Kubernetes Orchestration & GitHub Actions CI/CD,1.0,DevOps,24,"Build multi-stage Docker images, deploy Helm/Kubernetes manifests with probes and autoscaling, and automate CI/CD via GitHub Actions.",ACTIVE
+CPL10_QA_PLAYWRIGHT,E2E Test Automation with Playwright & REST Assured,1.0,Testing,18,"Implement reliable Page Object Model E2E suites with Playwright TypeScript, automated API contract tests in REST Assured, and Allure reports.",ACTIVE
+CPL10_AWS_CLOUD,AWS Cloud Architecture & Serverless Lambda,1.0,Cloud,24,"Architect scalable cloud solutions on AWS using IAM least-privilege, VPC networking, S3, RDS, API Gateway, and Serverless Lambda functions.",ACTIVE
+CPL10_APP_SEC,OWASP Top 10 & Spring OAuth2 / JWT Security,1.0,Security,16,"Mitigate OWASP Top 10 vulnerabilities (SQLi, XSS, CSRF, IDOR), implement OAuth2 PKCE + JWT rotation, and audit Spring Security filters.",ACTIVE
+CPL10_FLUTTER_MOB,Cross-Platform Mobile Apps with Flutter & Dart,1.0,Mobile,24,"Build responsive iOS/Android mobile apps using Flutter widgets, Riverpod state management, GoRouter navigation, and REST API caching.",ACTIVE
+CPL10_RAG_AI,Applied LLM Engineering & RAG Pipelines with Python,1.0,AI_ML,20,"Design production Retrieval-Augmented Generation pipelines: document chunking, embeddings, vector databases, prompt evals, and FastAPI serving.",ACTIVE

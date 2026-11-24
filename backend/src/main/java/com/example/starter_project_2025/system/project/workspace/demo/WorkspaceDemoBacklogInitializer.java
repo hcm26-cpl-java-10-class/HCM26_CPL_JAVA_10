@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.workspace.demo;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.sprint.Sprint;
@@ -52,6 +54,7 @@ import java.util.Objects;
 @ConditionalOnProperty(name = "app.workspace.demo.enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@StartupMutation
 public class WorkspaceDemoBacklogInitializer implements CommandLineRunner {
 
     /** Learning Resource Hub - workspace of Team Nova. */

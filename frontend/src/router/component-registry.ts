@@ -1,6 +1,24 @@
+import NotificationCenterPage from "@/pages/notifications/NotificationCenterPage";
+import RecommendedCoursesPage from "@/pages/student/RecommendedCoursesPage";
+import CourseLearnerGradesPage from "@/pages/management/demo/course/pages/CourseLearnerGradesPage";
+import ScoreManagementPage from "@/pages/management/exam/score-management";
 import ExamCurriculumPage from "@/pages/management/exam/curriculum/ExamCurriculumPage";
+import WeeklyCalendarPage from "@/pages/management/calendar/WeeklyCalendarPage";
+import ScheduleVersionListPage from "@/pages/management/demo/schedule_version";
+import AuditPage from "@/pages/management/training/audit";
+import TraineePage from "@/pages/management/training/trainee";
+import LogWorkPage from "@/pages/management/training/log-work";
+import TopicManagementPage from "@/pages/management/training/topic/TopicManagementPage";
+import ProgramManagementPage from "@/pages/management/training/program/ProgramManagementPage";
+import ReportsPage from "@/pages/management/training/reports";
+import ClassListPage from "@/pages/management/training/class/ClassListPage";
+import ClassDetailPage from "@/pages/management/training/class/ClassDetailPage";
+import ClassSetupPage from "@/pages/management/training/class/ClassSetupPage";
+import SessionDetailPage from "@/pages/management/demo/session/SessionDetailPage";
+import SessionManagementPage from "@/pages/management/demo/session/SessionManagementPage";
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
+import AccountSecurityPage from "@/pages/auth/AccountSecurityPage";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
 import { Login } from "@/pages/auth/Login";
 import RegisterPage from "@/pages/auth/RegisterPage";
@@ -26,11 +44,13 @@ import TeamAllocationSetupPage from "@/pages/management/team-allocation/setup";
 import TeamAllocationClassListPage from "@/pages/management/team-allocation/class-list";
 import ProjectAssignmentPage from "@/pages/management/team-allocation/ProjectAssignmentPage";
 import StudentExamList from "@/pages/student/StudentExamList";
+import StudentExamPreparationPage from "@/pages/student/StudentExamPreparationPage";
 import StudentExamTakingPage from "@/pages/student/StudentExamTakingPage";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import ExploreProjectsPage from "@/pages/student/projects/explore";
 import StudentProjectDetailPage from "@/pages/student/projects/detail";
 import StudentDraftTeamPage from "@/pages/student/draft-team";
+import TeamCharterPage from "@/pages/management/workspace/TeamCharterPage";
 import ProjectTemplateVersionPage from "@/pages/management/project-template-version";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/MilestoneCreatePage";
@@ -59,19 +79,29 @@ import { createElement } from "react";
 import TaskManagementPage from "@/pages/management/task";
 import ProjectAlertsPage from "@/pages/management/alerts";
 import ProjectReportsPage from "@/pages/management/project-reports";
+import AiAssistantPage from "@/pages/management/ai-assistant";
+import AiSuggestionWorkspacePage from "@/pages/management/ai-assistant/pages/AiSuggestionWorkspacePage";
+import AiSuggestionDetailPage from "@/pages/management/ai-assistant/pages/AiSuggestionDetailPage";
 import ProjectTemplateListPage from "@/pages/management/project-template";
+import ExamSupervisorPage from "@/pages/management/exam/supervisor";
 import { ProjectTemplateFormPage } from "@/pages/management/project-template/pages/ProjectTemplateFormPage";
 import { ProjectTemplateDetailPage } from "@/pages/management/project-template/pages/ProjectTemplateDetailPage";
+import ProjectTemplateReviewPage from "@/pages/management/project-template-review/ProjectTemplateReviewPage";
 import ArtifactDraftPage from "@/pages/student/ArtifactDraftPage";
 import StudentTeamMilestoneSubmissionsPage from "@/pages/student/StudentTeamMilestoneSubmissionsPage";
 import MyScoresPage from "@/pages/student/MyScoresPage";
 import MyAppealsPage from "@/pages/student/MyAppealsPage";
 import ExamReviewPage from "@/pages/student/ExamReviewPage";
+import PeerReviewListPage from "@/pages/student/PeerReviewListPage";
+import PeerReviewFormPage from "@/pages/student/PeerReviewFormPage";
+import PeerReviewFeedbackPage from "@/pages/student/PeerReviewFeedbackPage";
+import PeerReviewOverviewPage from "@/pages/management/exam/reviews/PeerReviewOverviewPage";
 import AnonymousAccessPage from "@/pages/exam/AnonymousAccessPage";
 import AnonymousExamTakingPage from "@/pages/exam/AnonymousExamTakingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
+import TrainerManagementPage from "@/pages/management/training/trainer/TrainerManagementPage";
 import { Navigate } from "react-router-dom";
 
 import SyllabusesPage from "@/pages/management/demo/syllabus";
@@ -98,7 +128,7 @@ import CourseGradeDetailPage from "@/pages/student/CourseGradeDetailPage";
 
 export interface RouteConfig {
   path: string;
-  component: ComponentType<any>;
+  component: ComponentType;
   requiredPermission?: string;
   requiredPermissions?: string[];
   isPublic?: boolean;
@@ -112,6 +142,29 @@ export const ROLE_HOME_PATHS = [
 ] as const;
 
 export const routes: RouteConfig[] = [
+  { path: "/trainers", component: TrainerManagementPage, requiredPermission: "TRAINER_READ" },
+  // TRAINING OPERATIONS & LMS
+  { path: "/training/audit", component: AuditPage, isModuleDriven: true },
+  { path: "/training/trainee", component: TraineePage, isModuleDriven: true },
+  { path: "/training/log-work", component: LogWorkPage, isModuleDriven: true },
+  { path: "/training/content", component: TopicManagementPage, isModuleDriven: true },
+  { path: "/subjects", component: TopicManagementPage, requiredPermission: "SUBJECT_READ", isModuleDriven: true },
+  { path: "/topics", component: TopicManagementPage, requiredPermission: "SUBJECT_READ" },
+  { path: "/training/topics", component: TopicManagementPage, requiredPermission: "SUBJECT_READ" },
+  { path: "/programs", component: ProgramManagementPage, requiredPermission: "PROGRAM_READ", isModuleDriven: true },
+  { path: "/training/programs", component: ProgramManagementPage, requiredPermission: "PROGRAM_READ" },
+  { path: "/class-setup", component: ClassSetupPage, requiredPermission: "CLASS_READ", isModuleDriven: true },
+  { path: "/training/reports", component: ReportsPage, isModuleDriven: true },
+  { path: "/classes", component: ClassListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
+  { path: "/classes/:classId", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
+  { path: "/training-operations/class-details/:classCode", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
+  { path: "/class-details/:classId", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
+  { path: "/sessions/:sessionId", component: SessionDetailPage, requiredPermission: "SESSION_READ" },
+  { path: "/sessions", component: SessionManagementPage, requiredPermission: "SESSION_READ" },
+  { path: "/calendar/preview", component: WeeklyCalendarPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
+  { path: "/schedule-versions", component: ScheduleVersionListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
+  { path: "/calendar/adjust", component: ScheduleVersionListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
+  { path: "/courses/:id/grades", component: CourseLearnerGradesPage, requiredPermissions: ["COURSE_REPORT_READ", "EXAM_READ"] },
   { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ" },
   { path: "/management/alerts", component: ProjectAlertsPage, requiredPermission: "PROJECT_ALERT_READ" },
   { path: "/management/reports/projects", component: ProjectReportsPage, requiredPermission: "PROJECT_REPORT_READ" },
@@ -119,10 +172,15 @@ export const routes: RouteConfig[] = [
   { path: "/tasks/:id/edit", component: TaskManagementPage, requiredPermission: "TASK_UPDATE" },
   { path: "/tasks/:id/detail", component: TaskManagementPage, requiredPermission: "TASK_READ" },
   { path: "/project-templates", component: ProjectTemplateListPage, requiredPermission: "PROJECT_TEMPLATE_READ" },
+  { path: "/ai-assistant/suggestions", component: AiSuggestionWorkspacePage, requiredPermission: "PROJECT_TEMPLATE_CREATE" },
+  { path: "/ai-assistant/suggestions/:id", component: AiSuggestionDetailPage, requiredPermission: "PROJECT_TEMPLATE_CREATE" },
+  { path: "/ai-assistant", component: AiAssistantPage, requiredPermission: "PROJECT_TEMPLATE_CREATE" },
   { path: "/project-template-versions", component: ProjectTemplateVersionPage, requiredPermission: "PROJECT_TEMPLATE_READ" },
   { path: "/project-templates/create", component: ProjectTemplateFormPage, requiredPermission: "PROJECT_TEMPLATE_CREATE" },
   { path: "/project-templates/:id/edit", component: ProjectTemplateFormPage, requiredPermission: "PROJECT_TEMPLATE_UPDATE" },
   { path: "/project-templates/:id/detail", component: ProjectTemplateDetailPage, requiredPermission: "PROJECT_TEMPLATE_READ" },
+  { path: "/project-templates/:templateId/reviews", component: ProjectTemplateReviewPage, requiredPermission: "PROJECT_TEMPLATE_REVIEW" },
+  { path: "/project-templates/:templateId/reviews/:reportId", component: ProjectTemplateReviewPage, requiredPermission: "PROJECT_TEMPLATE_REVIEW" },
 
   // FAMS MODULE GROUP MODULE
   {
@@ -166,6 +224,11 @@ export const routes: RouteConfig[] = [
 
   // EXAMS
   {
+    path: "/exams/score-management",
+    component: ScoreManagementPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+  {
     path: "/exams/curriculum",
     component: ExamCurriculumPage,
     requiredPermission: "EXAM_UPDATE",
@@ -174,6 +237,13 @@ export const routes: RouteConfig[] = [
     path: "/exams",
     component: ExamManagementPage,
     isModuleDriven: true,
+    requiredPermission: "EXAM_UPDATE",
+  },
+
+  {
+    path: "/exams/supervisor",
+    component: ExamSupervisorPage,
+    requiredPermission: "EXAM_UPDATE",
   },
 
   {
@@ -226,6 +296,11 @@ export const routes: RouteConfig[] = [
     component: ExamSimilarityPage,
     requiredPermission: "EXAM_UPDATE",
   },
+  {
+    path: "/exams/:examId/grading/similarity",
+    component: ExamSimilarityPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
 
   {
     path: "/exams/:examId/grading/:attemptId",
@@ -265,6 +340,12 @@ export const routes: RouteConfig[] = [
     path: "/backlogs",
     component: BacklogPage,
     requiredPermission: "SPRINT_READ",
+    isModuleDriven: false,
+  },
+  {
+    path: "/topic-marks",
+    component: TopicMarkGradebookDemoPage,
+    requiredPermission: "SESSION_READ",
     isModuleDriven: false,
   },
   {
@@ -351,6 +432,8 @@ export const routes: RouteConfig[] = [
     isModuleDriven: true,
   },
   { path: "/project-board", component: ProjectBoardPage },
+  { path: "/student/team/charter", component: TeamCharterPage, requiredPermissions: ["TEAM_READ", "WORKSPACE_READ", "VIEW_PROJECT_WORKSPACE"] },
+  { path: "/mentor/teams", component: TeamCharterPage, requiredPermissions: ["TEAM_READ", "WORKSPACE_READ", "VIEW_PROJECT_WORKSPACE"] },
   { path: "/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
@@ -439,6 +522,8 @@ export const routes: RouteConfig[] = [
     isModuleDriven: false,
   },
 
+  { path: "/notifications", component: NotificationCenterPage, isModuleDriven: false },
+  { path: "/student/recommendations", component: RecommendedCoursesPage, requiredPermission: "ENROLLMENT_CREATE", isModuleDriven: false },
   // STUDENT
   {
     path: "/student",
@@ -453,6 +538,12 @@ export const routes: RouteConfig[] = [
   },
 
   {
+    path: "/student/exams/:examId/prepare",
+    component: StudentExamPreparationPage,
+    requiredPermission: "EXAM_TAKE",
+  },
+
+  {
     path: "/student/exams/:examId/take",
     component: StudentExamTakingPage,
     requiredPermission: "EXAM_TAKE",
@@ -462,6 +553,35 @@ export const routes: RouteConfig[] = [
     path: "/student/exams/attempts/:attemptId/review",
     component: ExamReviewPage,
     requiredPermission: "EXAM_TAKE",
+  },
+
+  // PEER / SELF REVIEW (UFR-EXM-012)
+  {
+    path: "/student/reviews",
+    component: PeerReviewListPage,
+    requiredPermission: "EXAM_REVIEW_READ",
+    isModuleDriven: false,
+  },
+
+  {
+    path: "/student/reviews/:assignmentId",
+    component: PeerReviewFormPage,
+    requiredPermission: "EXAM_REVIEW_READ",
+    isModuleDriven: false,
+  },
+
+  {
+    path: "/student/feedback",
+    component: PeerReviewFeedbackPage,
+    requiredPermission: "EXAM_REVIEW_READ",
+    isModuleDriven: false,
+  },
+
+  {
+    path: "/exams/:examId/reviews",
+    component: PeerReviewOverviewPage,
+    requiredPermission: "EXAM_REVIEW_VIEW_ALL",
+    isModuleDriven: false,
   },
 
   // MY SCORES / MY APPEALS
@@ -496,6 +616,10 @@ export const routes: RouteConfig[] = [
   ...buildEntityRoutes(),
 
   // AUTHENTICATION
+  {
+    path: "/account/security",
+    component: AccountSecurityPage,
+  },
   {
     path: "/not-found-page",
     component: NotFoundPage,

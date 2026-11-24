@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.workspace.config;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PostConstruct;
@@ -23,6 +25,7 @@ import java.util.*;
  */
 @Slf4j
 @Component
+@StartupMutation
 public class LegacyH2ProjectSchemaMigration {
     private static final String VERSION = "project-team-v1";
     private final JdbcTemplate jdbc;

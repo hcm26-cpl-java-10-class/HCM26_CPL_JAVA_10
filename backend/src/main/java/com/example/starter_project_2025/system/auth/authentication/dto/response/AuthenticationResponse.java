@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.auth.authentication.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -25,4 +26,7 @@ public class AuthenticationResponse {
     Set<String> roles;
     Set<String> permissions;
     Map<String, Set<String>> rolePermissions;
+
+    @JsonIgnore
+    boolean rememberMe;
 }
