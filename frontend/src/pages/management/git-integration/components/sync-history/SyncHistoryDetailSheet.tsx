@@ -15,6 +15,7 @@ import { SYNC_TYPE_LABELS, eventLabel, formatClock, formatCount, formatDuration,
 const PHASES: Record<string, string> = {
   METADATA: "Checking the repository",
   COMMITS: "Importing commits",
+  BRANCHES: "Importing other branches",
   PULL_REQUESTS: "Importing pull requests",
   DONE: "Finished",
 };
@@ -36,6 +37,8 @@ function Breakdown({ detail }: { detail: GitSyncHistoryDetail }) {
   if (!b) return null;
   const rows: Array<{ label: string; values: Array<[string, number | null | undefined]> }> = [
     { label: "Commits", values: [["new", b.commitsInserted], ["already stored", b.commitsExisting]] },
+    { label: "Branch commits", values: [["new", b.branchCommitsInserted], ["already stored", b.branchCommitsExisting]] },
+    { label: "Branches", values: [["read", b.branchesSynced], ["unchanged", b.branchesSkipped], ["partly imported", b.branchesPartial], ["deleted", b.branchesDeleted]] },
     { label: "Pull requests", values: [["new", b.pullRequestsInserted], ["updated", b.pullRequestsUpdated], ["unchanged", b.pullRequestsUnchanged]] },
     { label: "Reviews", values: [["new", b.reviewsInserted], ["updated", b.reviewsUpdated]] },
   ];

@@ -236,6 +236,9 @@ const SYNC_ERRORS: Record<string, string> = {
   // US-GI-02
   INSTALLATION_ERROR: "GitHub refused the connection. Check the GitHub connection again, or reconnect GitHub.",
   PULL_REQUESTS_UNAVAILABLE: "GitHub stopped responding while the pull requests were being imported.",
+  // US-SY-07: the branches other than the default branch.
+  BRANCHES_UNAVAILABLE: "GitHub stopped responding while the commits of the other branches were being imported.",
+  BRANCHES_FORBIDDEN: "The GitHub App is not allowed to read this repository's branches. Grant it \"Contents: Read\" on GitHub, then sync again.",
   PULL_REQUESTS_FORBIDDEN: "The GitHub App is not allowed to read this repository's pull requests. Grant it \"Pull requests: Read\" on GitHub, then sync again.",
   // US-GI-05
   REPOSITORY_UNLINKED: "The repository was unlinked from the project.",

@@ -1,6 +1,8 @@
 package com.example.starter_project_2025.system.git_integration.github;
 
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubBranchPage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommitHistoryPage;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubComparePage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubPullRequestPage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubReviewPage;
 
@@ -34,4 +36,14 @@ public interface GitHubGraphQlClient {
 
     /** SY-02: the submitted reviews of one pull request after {@code after} (GraphQL node id of the pull request). */
     GitHubReviewPage pullRequestReviews(String installationToken, String pullRequestNodeId, String after, int first);
+
+    /** SY-07: one page of the branches ({@code refs/heads/*}) of {@code owner/name} with their head commit, in name order. */
+    GitHubBranchPage branches(String installationToken, String owner, String name, String after, int first);
+
+    /**
+     * SY-07: one page of the commits of branch {@code head} that are not on branch {@code base}
+     * ({@code git log base..head}); both are branch names without {@code refs/heads/}.
+     */
+    GitHubComparePage compare(String installationToken, String owner, String name, String base, String head,
+                              String after, int first);
 }

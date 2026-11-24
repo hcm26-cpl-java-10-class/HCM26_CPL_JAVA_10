@@ -7,9 +7,25 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { formatRelative } from "../../git-integration.format";
 import { useRepositoryBranches } from "../../useGitIntegration";
+import type { GitBranchItem } from "@/types/features/git-integration";
+
+const BADGE = "shrink-0 rounded-full border px-1.5 text-[10px] font-medium";
+const BADGE_SLATE = cn(BADGE, "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300");
+const BADGE_AMBER = cn(BADGE, "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300");
+
+/** US-SY-07: the name, then how far the branch is from the default branch and its state. */
+function branchTitle(branch?: GitBranchItem): string | undefined {
+  if (!branch) return undefined;
+  const parts = [branch.name];
+  if (branch.aheadBy != null && branch.behindBy != null) parts.push(`${branch.aheadBy} ahead · ${branch.behindBy} behind the default branch`);
+  if (branch.deleted) parts.push("Deleted on GitHub; its commits are kept");
+  if (branch.truncated) parts.push("Only its latest commits were imported");
+  return parts.join("\n");
+}
 
 /**
- * WS-GH-02: picks the branch the Commits view is filtered by. Branches load only while the
+ * WS-GH-02: picks the branch the Commits view is filtered by. US-SY-07: also lists the branches the
+ * last sync found on GitHub (marked when deleted or only partly imported). Branches load only while the
  * picker is open; ↑/↓ move, Enter picks, Esc closes. "All branches" clears the filter.
  */
 export function BranchPicker({ projectId, value, onChange }: {
@@ -22,8 +38,8 @@ export function BranchPicker({ projectId, value, onChange }: {
   const [active, setActive] = useState(0);
   const q = useDebounce(search.trim(), 250);
   const query = useRepositoryBranches(projectId, q, open);
-  const options: Array<{ name: string | undefined; commits?: number; lastCommitAt?: string | null }> = [
-    { name: undefined }, ...(query.data ?? []).map(branch => ({ name: branch.name, commits: branch.commits, lastCommitAt: branch.lastCommitAt })),
+  const options: Array<{ name: string | undefined; branch?: GitBranchItem }> = [
+    { name: undefined }, ...(query.data ?? []).map(branch => ({ name: branch.name, branch })),
   ];
   const current = Math.min(active, options.length - 1);
 
@@ -75,9 +91,12 @@ export function BranchPicker({ projectId, value, onChange }: {
             className={cn("flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm", index === current && "bg-muted")}>
             <Check className={cn("size-3.5 shrink-0", selected ? "opacity-100" : "opacity-0")} aria-hidden="true" />
             {option.name === undefined ? <span className="text-muted-foreground">All branches</span> : <>
-              <span className="min-w-0 flex-1 truncate font-mono text-xs" title={option.name}>{option.name}</span>
+              <span className={cn("min-w-0 flex-1 truncate font-mono text-xs", option.branch?.deleted && "text-muted-foreground line-through")}
+                title={branchTitle(option.branch)}>{option.name}</span>
+              {option.branch?.deleted && <span className={BADGE_SLATE}>deleted</span>}
+              {option.branch?.truncated && <span className={BADGE_AMBER} title="Only the latest commits of this branch were imported">partial</span>}
               <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                {option.commits} · {formatRelative(option.lastCommitAt)}
+                {option.branch?.commits} · {formatRelative(option.branch?.lastCommitAt)}
               </span>
             </>}
           </li>;

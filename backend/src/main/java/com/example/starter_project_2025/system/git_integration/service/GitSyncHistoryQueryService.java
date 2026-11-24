@@ -133,7 +133,9 @@ public class GitSyncHistoryQueryService {
         GitSyncHistoryDetail.Breakdown breakdown = stats.isEmpty() ? null : new GitSyncHistoryDetail.Breakdown(
                 value(stats, "commitsInserted"), value(stats, "commitsExisting"), value(stats, "pullRequestsInserted"),
                 value(stats, "pullRequestsUpdated"), value(stats, "pullRequestsUnchanged"), value(stats, "reviewsInserted"),
-                value(stats, "reviewsUpdated"));
+                value(stats, "reviewsUpdated"), value(stats, "branchCommitsInserted"), value(stats, "branchCommitsExisting"),
+                value(stats, "branchesSynced"), value(stats, "branchesSkipped"), value(stats, "branchesPartial"),
+                value(stats, "branchesDeleted"));
         GitSyncHistoryDetail.ErrorInfo error = item.errorCode() == null && job.getErrorMessage() == null
                 || item.status() == GitSyncHistoryStatus.SUCCESS ? null
                 : new GitSyncHistoryDetail.ErrorInfo(job.getErrorCode(), job.getErrorMessage());
@@ -180,6 +182,7 @@ public class GitSyncHistoryQueryService {
     /** Commits, pull requests and reviews a job processed (stored or already there). */
     static long records(Map<String, Object> stats) {
         return number(stats, "commitsInserted") + number(stats, "commitsExisting")
+                + number(stats, "branchCommitsInserted") + number(stats, "branchCommitsExisting")
                 + number(stats, "pullRequestsInserted") + number(stats, "pullRequestsUpdated") + number(stats, "pullRequestsUnchanged")
                 + number(stats, "reviewsInserted") + number(stats, "reviewsUpdated");
     }
