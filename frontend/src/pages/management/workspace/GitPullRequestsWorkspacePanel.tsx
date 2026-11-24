@@ -2,7 +2,7 @@ import { useGitActivityParam } from "./git-activity-url-context";
 import { useDeferredValue } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, ChevronDown, ChevronUp, GitPullRequest, Search } from "lucide-react";
-import { workspaceGitApi } from "@/api/features/workspace-git.api";
+import { workspaceGitApi, type GitCodeReviewAnalytics } from "@/api/features/workspace-git.api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/usePermissions";
 import { WorkspaceEmptyState } from "./workspace.shared";
+import { useGitProjectFilter } from "./git-project-scope";
+import { GitProjectSelect } from "./GitProjectSelect";
+import { GitListPagination } from "./GitListPagination";
+import { GitLinkedTasks, GitSubmittedReviews, GitTaskBadges } from "./GitDetailLists";
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
@@ -26,7 +30,7 @@ function stateVariant(state: string) {
   return state === "MERGED" ? "default" : state === "CLOSED" ? "secondary" : "outline";
 }
 
-export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, initialProjectId, view = "all", active = true }: {
+export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, view = "all", active = true }: {
   workspaceId: number;
   taskId?: number;
   initialProjectId?: number;
@@ -37,7 +41,8 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, initialProj
   const [search, setSearch] = useGitActivityParam<string>("gitPrSearch", "");
   const deferredSearch = useDeferredValue(search.trim());
   const [sort, setSort] = useGitActivityParam<"newest" | "oldest">("gitPrSort", "newest");
-  const [projectId, setProjectId] = useGitActivityParam<number | undefined>("gitPrProjectId", initialProjectId, "number");
+  const projectFilter = useGitProjectFilter(view === "reviews" ? "gitReviewProjectId" : "gitPrProjectId");
+  const { projectId, setProjectId } = projectFilter;
   const [developerId, setDeveloperId] = useGitActivityParam<number | undefined>("gitPrDeveloperId", undefined, "number");
   const [reviewerId, setReviewerId] = useGitActivityParam<number | undefined>("gitPrReviewerId", undefined, "number");
   const [from, setFrom] = useGitActivityParam<string>("gitPrFrom", "");
@@ -48,7 +53,7 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, initialProj
   const showPullRequestAnalytics = view === "all" || view === "analytics" || view === "pull-requests";
   const showPullRequestHistory = view === "all" || view === "pull-requests";
   const showReviewAnalytics = view === "all" || view === "reviews";
-  const activeSelectedPullRequestId = showPullRequestHistory ? selectedPullRequestId : null;
+  const activeSelectedPullRequestId = active ? selectedPullRequestId : null;
   const filters = useQuery({
     queryKey: ["git-activity", "filters", workspaceId, user.email, activeRole, projectId],
     queryFn: ({ signal }) => workspaceGitApi.activityFilters(workspaceId, projectId, signal),
@@ -100,6 +105,7 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, initialProj
   const rows = history.data?.content ?? [];
   const formatDuration = (hours: number | null | undefined) => {
     if (hours == null || !Number.isFinite(hours)) return "No valid merge samples";
+    if (hours < 1) return `${new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 }).format(hours * 60)} minutes`;
     if (hours < 24) return `${new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 }).format(hours)} hours`;
     const days = hours / 24;
     return `${new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 }).format(days)} days`;
@@ -131,14 +137,10 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, initialProj
             <SelectTrigger aria-label="Sort pull requests" className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="newest">Newest first</SelectItem><SelectItem value="oldest">Oldest first</SelectItem></SelectContent>
           </Select>}
-          <Select value={projectId?.toString() ?? "all"} onValueChange={value => {
-            setProjectId(value === "all" ? undefined : Number(value)); setDeveloperId(undefined); setReviewerId(undefined); setPage(0);
-          }}>
-            <SelectTrigger aria-label="Filter pull requests by Project" className="w-48"><SelectValue placeholder="All Projects" /></SelectTrigger>
-            <SelectContent><SelectItem value="all">All Projects</SelectItem>
-              {(filters.data?.projects ?? []).map(project => <SelectItem key={project.id} value={project.id.toString()}>{project.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <GitProjectSelect {...projectFilter} label={view === "reviews" ? "Filter code reviews by Project" : "Filter pull requests by Project"}
+            className="w-48" onChange={value => {
+              setProjectId(value); setDeveloperId(undefined); setReviewerId(undefined); setPage(0);
+            }} />
           {(view === "all" || view === "analytics" || view === "pull-requests") && <Select value={developerId?.toString() ?? "all"} onValueChange={value => {
             setDeveloperId(value === "all" ? undefined : Number(value)); setPage(0);
           }}>
@@ -188,9 +190,11 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, initialProj
                 <Metric label="Closed without merge" value={analytics.data.closedWithoutMerge} />
               </div>
               <div id="git-pr-analytics-details" hidden={!showAnalyticsDetails} className="space-y-3">
-              <div className="grid gap-2">
+              <div className="grid gap-2 sm:grid-cols-2">
                 <Metric label="Average merge time" value={formatDuration(analytics.data.averageMergeHours)}
                   description="Merged PRs with valid creation and merge timestamps" />
+                <Metric label="Median merge time" value={formatDuration(analytics.data.medianMergeHours)}
+                  description="Middle merge duration; uses the same merged PRs as the average" />
               </div>
               <div className="space-y-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">PRs by developer</h4>
@@ -238,27 +242,7 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, initialProj
                 </div>
                 <div className="space-y-2">
                   <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Reviews by developer</h4>
-                  {reviewAnalytics.data.reviewers.length === 0 ? <p className="text-sm text-muted-foreground">No reviewers match this Workspace scope.</p>
-                    : <div className="grid gap-3 lg:grid-cols-2">{reviewAnalytics.data.reviewers.map(reviewer =>
-                      <div key={reviewer.contributorId} className="rounded-lg border border-indigo-100 bg-white/90 p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div><p className="font-medium">{reviewer.name}{reviewer.login ? <span className="ml-1 text-xs text-muted-foreground">@{reviewer.login}</span> : null}</p>
-                            {reviewer.developerId == null && <Badge variant="outline" className="mt-1 border-amber-200 bg-amber-50 text-amber-800">Unmapped reviewer</Badge>}</div>
-                          <Badge variant="secondary">{reviewer.reviews} reviews</Badge>
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-1 text-xs">
-                          <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Approved {reviewer.approved}</Badge>
-                          <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-100">Changes {reviewer.changesRequested}</Badge>
-                          <Badge className="bg-sky-100 text-sky-800 hover:bg-sky-100">Commented {reviewer.commented}</Badge>
-                        </div>
-                        <div className="mt-3 space-y-1.5">{reviewer.pullRequests.map(pr =>
-                          <div key={pr.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-slate-50 px-2.5 py-2 text-xs">
-                            <div className="min-w-0 flex-1"><p className="truncate font-medium">#{pr.number} · {pr.title}</p>
-                              <p className="text-muted-foreground">{pr.state}{pr.firstReviewAt ? " · first review by this member " + formatDate(pr.firstReviewAt) : " · no valid response timestamp"}</p></div>
-                            <span className="whitespace-nowrap font-medium text-indigo-800">{formatReviewDuration(pr.responseHours)}</span>
-                            {pr.htmlUrl && <a className="text-indigo-700 hover:underline" href={pr.htmlUrl} target="_blank" rel="noreferrer">Open</a>}
-                          </div>)}</div>
-                      </div>)}</div>}
+                  <ReviewActivityList reviewers={reviewAnalytics.data.reviewers} onSelect={setSelectedPullRequestId} formatDuration={formatReviewDuration} />
                 </div>
               </>}
         </section>}
@@ -270,8 +254,8 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, initialProj
           : rows.length === 0 ? <WorkspaceEmptyState icon={GitPullRequest} title="No Pull Requests yet"
             description="Synced Pull Requests will appear here when they are available." compact />
           : <div className="overflow-x-auto rounded-md border">
-            <Table>
-              <TableHeader><TableRow><TableHead>Pull Request</TableHead><TableHead>Author</TableHead><TableHead>Status</TableHead><TableHead>Created</TableHead><TableHead>Tasks</TableHead><TableHead className="text-right">Source</TableHead></TableRow></TableHeader>
+            <Table className="min-w-[56rem] table-fixed">
+              <TableHeader><TableRow><TableHead>Pull Request</TableHead><TableHead className="w-36">Author</TableHead><TableHead className="w-28">Status</TableHead><TableHead className="w-40">Created</TableHead><TableHead className="w-36">Tasks</TableHead><TableHead className="w-28 text-right">Source</TableHead></TableRow></TableHeader>
               <TableBody>{rows.map(pr => <TableRow key={pr.id}>
                 <TableCell className="max-w-[30rem]">
                   <button type="button" className="block max-w-full text-left" onClick={() => setSelectedPullRequestId(pr.id)}>
@@ -279,10 +263,10 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, initialProj
                     {pr.draft && <span className="text-xs text-muted-foreground">Draft</span>}
                   </button>
                 </TableCell>
-                <TableCell><span>{pr.authorName}</span>{pr.authorLogin && <span className="block text-xs text-muted-foreground">@{pr.authorLogin}</span>}</TableCell>
+                <TableCell><span className="block truncate" title={pr.authorName}>{pr.authorName}</span>{pr.authorLogin && <span className="block truncate text-xs text-muted-foreground" title={pr.authorLogin}>@{pr.authorLogin}</span>}</TableCell>
                 <TableCell><Badge variant={stateVariant(pr.state)}>{pr.state}</Badge>{pr.draft && <Badge className="ml-1" variant="outline">Draft</Badge>}</TableCell>
-                <TableCell className="whitespace-nowrap">{formatDate(pr.createdAt)}</TableCell>
-                <TableCell>{pr.tasks.length ? pr.tasks.map(task => <Badge key={task.taskId} variant="outline" className="mr-1 max-w-44 truncate">{task.title}</Badge>) : "—"}</TableCell>
+                <TableCell className="whitespace-nowrap text-xs">{formatDate(pr.createdAt)}</TableCell>
+                <TableCell><GitTaskBadges tasks={pr.tasks} /></TableCell>
                 <TableCell className="text-right">{pr.htmlUrl ? <Button asChild variant="ghost" size="sm">
                   <a href={pr.htmlUrl} target="_blank" rel="noreferrer" aria-label={`View pull request ${pr.number} on GitHub`}>GitHub <ArrowUpRight className="ml-1 size-3.5" /></a>
                 </Button> : <span className="text-xs text-muted-foreground">Pending link</span>}</TableCell>
@@ -318,21 +302,60 @@ export function GitPullRequestsWorkspacePanel({ workspaceId, taskId, initialProj
               <dt className="text-muted-foreground">Repository</dt><dd>{details.data.repositoryName}</dd>
             </dl>
             <section className="space-y-2"><h3 className="text-sm font-medium">Linked tasks</h3>
-              {details.data.tasks.length ? details.data.tasks.map(task => <div key={task.taskId} className="rounded-md border px-3 py-2 text-sm">{task.title} <span className="text-muted-foreground">· #{task.taskId} · {task.source}</span></div>)
-                : <p className="text-sm text-muted-foreground">No Task is linked to this Pull Request.</p>}</section>
+              <GitLinkedTasks key={details.data.id} tasks={details.data.tasks} /></section>
             <section className="space-y-2"><h3 className="text-sm font-medium">Submitted reviews</h3>
-              {details.data.reviews.length ? <div className="space-y-2">{details.data.reviews.map(review => <div key={review.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
-                <div>{review.reviewerName}{review.reviewerLogin ? <span className="text-muted-foreground"> (@{review.reviewerLogin})</span> : null}
-                  {review.selfReview && <Badge className="ml-2" variant="outline">Self review</Badge>}</div>
-                <div className="flex items-center gap-2"><Badge variant={review.state === "APPROVED" ? "default" : review.state === "CHANGES_REQUESTED" ? "destructive" : "secondary"}>{review.state.replaceAll("_", " ")}</Badge>
-                  <span className="text-xs text-muted-foreground">{formatDate(review.submittedAt)}</span></div>
-              </div>)}</div> : <p className="text-sm text-muted-foreground">No submitted reviews are available.</p>}</section>
+              <GitSubmittedReviews key={details.data.id} reviews={details.data.reviews} /></section>
             {details.data.htmlUrl ? <Button asChild><a href={details.data.htmlUrl} target="_blank" rel="noreferrer">View on GitHub <ArrowUpRight className="ml-1 size-4" /></a></Button>
               : <p className="text-sm text-muted-foreground">View on GitHub will be available after the repository is connected.</p>}
           </div>}
       </DialogContent>
     </Dialog>
   </>;
+}
+
+function ReviewActivityList({ reviewers, onSelect, formatDuration }: {
+  reviewers: GitCodeReviewAnalytics["reviewers"];
+  onSelect: (id: number) => void;
+  formatDuration: (hours: number | null) => string;
+}) {
+  const [page, setPage] = useGitActivityParam<number>("gitReviewPage", 0);
+  const current = Math.min(page, Math.max(0, Math.ceil(reviewers.length / 6) - 1));
+  if (!reviewers.length) return <p className="text-sm text-muted-foreground">No reviewers match this Workspace scope.</p>;
+  return <div className="space-y-3">
+    <div className="grid gap-3 lg:grid-cols-2">{reviewers.slice(current * 6, current * 6 + 6).map(reviewer =>
+      <ReviewActivityCard key={reviewer.contributorId} reviewer={reviewer} onSelect={onSelect} formatDuration={formatDuration} />)}</div>
+    <GitListPagination page={current} total={reviewers.length} pageSize={6} onChange={setPage} label="reviewers" />
+  </div>;
+}
+
+function ReviewActivityCard({ reviewer, onSelect, formatDuration }: {
+  reviewer: GitCodeReviewAnalytics["reviewers"][number];
+  onSelect: (id: number) => void;
+  formatDuration: (hours: number | null) => string;
+}) {
+  const [page, setPage] = useGitActivityParam<number>(`gitReviewer${reviewer.contributorId}Page`, 0);
+  const current = Math.min(page, Math.max(0, Math.ceil(reviewer.pullRequests.length / 5) - 1));
+  return <section aria-label={`Reviews by ${reviewer.name}`} className="space-y-3 rounded-lg border border-indigo-100 bg-white/90 p-3">
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div><p className="font-medium">{reviewer.name}{reviewer.login && <span className="ml-1 text-xs text-muted-foreground">@{reviewer.login}</span>}</p>
+        {reviewer.developerId == null && <Badge variant="outline" className="mt-1 border-amber-200 bg-amber-50 text-amber-800">Unmapped reviewer</Badge>}</div>
+      <Badge variant="secondary">{reviewer.reviews} reviews</Badge>
+    </div>
+    <div className="flex flex-wrap gap-1 text-xs">
+      <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Approved {reviewer.approved}</Badge>
+      <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-100">Changes {reviewer.changesRequested}</Badge>
+      <Badge className="bg-sky-100 text-sky-800 hover:bg-sky-100">Commented {reviewer.commented}</Badge>
+    </div>
+    <div className="space-y-1.5">{reviewer.pullRequests.slice(current * 5, current * 5 + 5).map(pr =>
+      <div key={pr.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-slate-50 px-2.5 py-2 text-xs">
+        <div className="min-w-0 flex-1"><button type="button" className="block max-w-full truncate text-left font-medium text-primary hover:underline"
+          onClick={() => onSelect(pr.id)}>#{pr.number} · {pr.title}</button>
+          <p className="text-muted-foreground">{pr.state}{pr.firstReviewAt ? " · first review " + formatDate(pr.firstReviewAt) : " · no valid response timestamp"}</p></div>
+        <span className="whitespace-nowrap font-medium text-indigo-800">{formatDuration(pr.responseHours)}</span>
+        {pr.htmlUrl && <a className="text-indigo-700 hover:underline" href={pr.htmlUrl} target="_blank" rel="noreferrer">GitHub</a>}
+      </div>)}</div>
+    <GitListPagination page={current} total={reviewer.pullRequests.length} pageSize={5} onChange={setPage} label={`${reviewer.name} reviewed PRs`} />
+  </section>;
 }
 
 function Metric({ label, value, description }: { label: string; value: number | string; description?: string }) {

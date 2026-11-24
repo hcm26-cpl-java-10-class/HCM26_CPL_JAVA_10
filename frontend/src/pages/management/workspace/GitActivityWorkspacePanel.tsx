@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { GitActivityUrlState } from "./git-activity-url-state";
 import { useGitActivityRefresh } from "./useGitActivityRefresh";
-import { ArrowUpRight, ClipboardCheck, ExternalLink, FileBarChart2, GitBranch, GitCommitHorizontal,
+import { ArrowUpRight, ClipboardCheck, FileBarChart2, GitBranch, GitCommitHorizontal,
   GitPullRequest, ListTodo, Search, Settings2, Users } from "lucide-react";
 import { workspaceGitApi, type GitCommitGranularity } from "@/api/features/workspace-git.api";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,10 @@ import { GitDevelopmentReportWorkspacePanel } from "./GitDevelopmentReportWorksp
 import { GitDevelopmentRulesWorkspacePanel } from "./GitDevelopmentRulesWorkspacePanel";
 import { GitUnmappedActivitiesWorkspacePanel } from "./GitUnmappedActivitiesWorkspacePanel";
 import { GitDevelopmentComplianceWorkspacePanel } from "./GitDevelopmentComplianceWorkspacePanel";
+import type { WorkspaceAssignmentContext } from "@/types/features/project-assignment";
+import { GitProjectScopeContext, gitProjectScope, useGitProjectFilter } from "./git-project-scope";
+import { GitProjectSelect } from "./GitProjectSelect";
+import { GitLinkedTasks, GitTaskBadges } from "./GitDetailLists";
 
 const GIT_SECTIONS = [
   { id: "commits", label: "Commits", icon: GitCommitHorizontal, description: "Commit overview, trends and searchable history." },
@@ -55,8 +59,12 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Could not load Git Activity.";
 }
 
-export function GitActivityWorkspacePanel({ workspaceId, projectId: initialProjectId }: { workspaceId: number; projectId?: number }) {
-  return <GitActivityUrlState><GitActivityContent workspaceId={workspaceId} initialProjectId={initialProjectId} /></GitActivityUrlState>;
+export function GitActivityWorkspacePanel({ workspaceId, projectId: initialProjectId, projectScope }: {
+  workspaceId: number; projectId?: number; projectScope?: WorkspaceAssignmentContext;
+}) {
+  return <GitProjectScopeContext.Provider value={gitProjectScope(projectScope, initialProjectId!)}>
+    <GitActivityUrlState><GitActivityContent workspaceId={workspaceId} initialProjectId={initialProjectId} /></GitActivityUrlState>
+  </GitProjectScopeContext.Provider>;
 }
 
 function GitActivityContent({ workspaceId, initialProjectId }: { workspaceId: number; initialProjectId?: number }) {
@@ -85,14 +93,15 @@ function GitActivityContent({ workspaceId, initialProjectId }: { workspaceId: nu
   const [search, setSearch] = useGitActivityParam<string>("gitCommitSearch", "");
   const deferredSearch = useDeferredValue(search.trim());
   const [sort, setSort] = useGitActivityParam<"newest" | "oldest">("gitCommitSort", "newest");
-  const [projectId, setProjectId] = useGitActivityParam<number | undefined>("gitCommitProjectId", initialProjectId, "number");
+  const projectFilter = useGitProjectFilter("gitCommitProjectId");
+  const { projectId, setProjectId } = projectFilter;
   const [developerId, setDeveloperId] = useGitActivityParam<number | undefined>("gitCommitDeveloperId", undefined, "number");
   const [contributorId, setContributorId] = useGitActivityParam<number | undefined>("gitCommitContributorId", undefined, "number");
   const [branch, setBranch] = useGitActivityParam<string | undefined>("gitCommitBranch", undefined);
   const [from, setFrom] = useGitActivityParam<string>("gitCommitFrom", "");
   const [to, setTo] = useGitActivityParam<string>("gitCommitTo", "");
   const [granularity, setGranularity] = useGitActivityParam<GitCommitGranularity>("gitCommitGranularity", "day");
-  const [includeBots, setIncludeBots] = useGitActivityParam<boolean>("gitCommitIncludeBots", false);
+  const includeBots = true;
   const [includeMergeCommits, setIncludeMergeCommits] = useGitActivityParam<boolean>("gitCommitIncludeMergeCommits", false);
   const [page, setPage] = useGitActivityParam<number>("gitCommitPage", 0);
   const [selectedCommitId, setSelectedCommitId] = useGitActivityParam<number | null>("gitCommitDetail", null, "number");
@@ -129,8 +138,6 @@ function GitActivityContent({ workspaceId, initialProjectId }: { workspaceId: nu
   useGitActivityRefresh(repo != null && !repo.mockData, repo?.syncStatus);
   const rows = history.data?.content ?? [];
   const sectionInfo = GIT_SECTIONS.find(section => section.id === activeSection) ?? GIT_SECTIONS[0];
-  const workspaceProjectLabel = initialProjectId == null ? null
-    : filters.data?.projects.find(project => project.id === initialProjectId)?.name ?? `Project #${initialProjectId}`;
   const changeSection = (section: string) => {
     setSelectedCommitId(null);
     setSection(section);
@@ -145,8 +152,7 @@ function GitActivityContent({ workspaceId, initialProjectId }: { workspaceId: nu
     if ("to" in filters) setTo(filters.to ?? "");
     setPage(0);
   };
-  const showHistory = (inclusion: { includeBots: boolean; includeMergeCommits: boolean }) => {
-    setIncludeBots(inclusion.includeBots);
+  const showHistory = (inclusion: { includeMergeCommits: boolean }) => {
     setIncludeMergeCommits(inclusion.includeMergeCommits);
     setSearch("");
     setPage(0);
@@ -154,45 +160,6 @@ function GitActivityContent({ workspaceId, initialProjectId }: { workspaceId: nu
   };
   const pullRequestView = activeSection === "pull-requests" ? "pull-requests" : "reviews";
   return <div className="space-y-4">
-    <Card className="overflow-hidden border-slate-200 shadow-sm">
-      <CardHeader className="flex flex-wrap items-start justify-between gap-3 border-b bg-gradient-to-r from-slate-50 via-white to-blue-50/60 px-4 py-3 sm:px-5">
-        <div className="min-w-0 space-y-1">
-          <CardTitle className="flex items-center gap-2 text-lg text-slate-900"><span className="grid size-8 place-items-center rounded-lg bg-blue-100 text-blue-700"><GitBranch className="size-4" /></span>Git Activity</CardTitle>
-          <CardDescription>Repository activity shared by this Workspace and its accessible modules.</CardDescription>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {repo?.mockData && <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">Mock data</Badge>}
-          {status.isPending ? <Skeleton className="h-6 w-28" /> : status.isError
-            ? <Badge variant="outline" className="border-rose-200 bg-rose-50 text-rose-800">Status unavailable</Badge>
-            : repo?.connected && <SyncStatusBadge status={repo.syncStatus} repositoryStatus={repo.status} mockData={repo.mockData} />}
-          {status.isError && <Button type="button" size="sm" variant="outline" onClick={() => void status.refetch()}>Retry</Button>}
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 text-xs sm:px-5">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="text-muted-foreground">Repository</span>
-          {repo?.repositoryName ? repo.repositoryUrl
-            ? <a className="inline-flex min-w-0 items-center gap-1 truncate font-medium text-blue-700 hover:underline" href={repo.repositoryUrl} target="_blank" rel="noreferrer">
-              {repo.repositoryName}<ExternalLink className="size-3 shrink-0" /></a>
-            : <span className="truncate font-medium text-slate-800">{repo.repositoryName}</span>
-            : <span className="font-medium text-slate-700">No repository linked</span>}
-        </div>
-        <span className="hidden h-4 w-px bg-border sm:block" />
-        <div className="flex flex-wrap items-center gap-2"><span className="text-muted-foreground">Data scope</span>
-          <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-800">Workspace and accessible modules</Badge>
-          {workspaceProjectLabel && <Badge variant="secondary" className="max-w-52 truncate">Project context: {workspaceProjectLabel}</Badge>}
-        </div>
-        <span className="hidden h-4 w-px bg-border sm:block" />
-        <div className="flex items-center gap-2 text-muted-foreground">
-          Last synced <span className="font-medium text-slate-700">{repo?.lastSyncedAt ? formatDate(repo.lastSyncedAt) : "Not available"}</span>
-        </div>
-        {repo?.status === "INACTIVE" && <p className="w-full text-xs text-amber-800">No repository is linked now. Historical activity is retained.</p>}
-        {(repo?.status === "DISCONNECTED" || repo?.status === "ERROR") && <p className="w-full text-xs text-amber-800">Repository metadata and history are retained while the connection is repaired.</p>}
-        {repo?.mockData && <p className="w-full text-xs text-amber-800">Sample activity is shown; GitHub links will be available after connection.</p>}
-        {!repo?.connected && !repo?.repositoryName && !status.isPending && !status.isError && <p className="w-full text-xs text-muted-foreground">Link a repository to view synchronized commit and Pull Request activity.</p>}
-      </CardContent>
-    </Card>
-
     <div className="min-w-0 overflow-x-auto rounded-xl border bg-white p-1 shadow-sm" role="tablist" aria-label="Git Activity sections">
       <div className="flex w-max min-w-full gap-1">
         {sections.map(({ id, label, icon: Icon }) => <button key={id} type="button" role="tab"
@@ -246,15 +213,10 @@ function GitActivityContent({ workspaceId, initialProjectId }: { workspaceId: nu
             <SelectTrigger aria-label="Sort commits" className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="newest">Newest first</SelectItem><SelectItem value="oldest">Oldest first</SelectItem></SelectContent>
           </Select>
-          <Select value={projectId?.toString() ?? "all"} onValueChange={value => {
-            setProjectId(value === "all" ? undefined : Number(value)); setDeveloperId(undefined);
+          <GitProjectSelect {...projectFilter} onChange={value => {
+            setProjectId(value); setDeveloperId(undefined);
             setContributorId(undefined); setPage(0);
-          }}>
-            <SelectTrigger aria-label="Filter by Project" className="w-48"><SelectValue placeholder="All Projects" /></SelectTrigger>
-            <SelectContent><SelectItem value="all">All Projects</SelectItem>
-              {(filters.data?.projects ?? []).map(project => <SelectItem key={project.id} value={project.id.toString()}>{project.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          }} label="Filter by Project" className="w-48" />
           <Select value={developerId?.toString() ?? "all"} onValueChange={value => {
             setDeveloperId(value === "all" ? undefined : Number(value)); setContributorId(undefined);
             setPage(0);
@@ -273,8 +235,8 @@ function GitActivityContent({ workspaceId, initialProjectId }: { workspaceId: nu
       <CardContent className="space-y-3">
         <GitCommitAnalyticsWorkspacePanel active={activeSection === "commits"} workspaceId={workspaceId} projectId={projectId} taskId={taskId}
           developerId={developerId} contributorId={contributorId} branch={branch}
-          from={from} to={to} granularity={granularity} includeBots={includeBots} includeMergeCommits={includeMergeCommits}
-          onGranularityChange={setGranularity} onIncludeBotsChange={value => { setIncludeBots(value); setPage(0); }}
+          from={from} to={to} granularity={granularity} includeMergeCommits={includeMergeCommits}
+          onGranularityChange={setGranularity}
           onIncludeMergeCommitsChange={value => { setIncludeMergeCommits(value); setPage(0); }}
           onBranchChange={value => { setBranch(value); setPage(0); }}
           onDrilldown={applyDrilldown} onShowHistory={showHistory} />
@@ -293,8 +255,8 @@ function GitActivityContent({ workspaceId, initialProjectId }: { workspaceId: nu
             title={taskId ? "No Git activity for this task" : "No commits yet"}
             description={repo?.mockData ? "The mock repository does not have a matching commit." : "Synced commits will appear here when they are available."} compact />
           : <div className="overflow-x-auto rounded-md border">
-            <Table>
-              <TableHeader><TableRow><TableHead>Commit</TableHead><TableHead>Author</TableHead><TableHead>Committed</TableHead><TableHead>Branch</TableHead><TableHead>Tasks</TableHead><TableHead className="text-right">Source</TableHead></TableRow></TableHeader>
+            <Table className="min-w-[56rem] table-fixed">
+              <TableHeader><TableRow><TableHead>Commit</TableHead><TableHead className="w-36">Author</TableHead><TableHead className="w-40">Committed</TableHead><TableHead className="w-36">Branch</TableHead><TableHead className="w-36">Tasks</TableHead><TableHead className="w-28 text-right">Source</TableHead></TableRow></TableHeader>
               <TableBody>{rows.map(commit => <TableRow key={commit.id}>
                 <TableCell className="max-w-[28rem]">
                   <button type="button" className="block max-w-full text-left" onClick={() => setSelectedCommitId(commit.id)}>
@@ -302,10 +264,10 @@ function GitActivityContent({ workspaceId, initialProjectId }: { workspaceId: nu
                     <span className="font-mono text-xs text-muted-foreground">{commit.shortSha}</span>
                   </button>
                 </TableCell>
-                <TableCell><span>{commit.authorName}</span>{commit.authorLogin && <span className="block text-xs text-muted-foreground">@{commit.authorLogin}</span>}</TableCell>
-                <TableCell className="whitespace-nowrap">{formatDate(commit.committedAt)}</TableCell>
-                <TableCell>{commit.branch ?? "—"}</TableCell>
-                <TableCell>{commit.tasks.length ? commit.tasks.map(task => <Badge key={task.taskId} variant="outline" className="mr-1 max-w-44 truncate">{task.title}</Badge>) : "—"}</TableCell>
+                <TableCell><span className="block truncate" title={commit.authorName}>{commit.authorName}</span>{commit.authorLogin && <span className="block truncate text-xs text-muted-foreground" title={commit.authorLogin}>@{commit.authorLogin}</span>}</TableCell>
+                <TableCell className="whitespace-nowrap text-xs">{formatDate(commit.committedAt)}</TableCell>
+                <TableCell><span className="block truncate" title={commit.branch ?? undefined}>{commit.branch ?? "—"}</span></TableCell>
+                <TableCell><GitTaskBadges tasks={commit.tasks} /></TableCell>
                 <TableCell className="text-right">{commit.htmlUrl ? <Button asChild variant="ghost" size="sm">
                   <a href={commit.htmlUrl} target="_blank" rel="noreferrer" aria-label={`View commit ${commit.shortSha} on GitHub`}>GitHub <ArrowUpRight className="ml-1 size-3.5" /></a>
                 </Button> : <span className="text-xs text-muted-foreground">Pending link</span>}</TableCell>
@@ -358,8 +320,7 @@ function GitActivityContent({ workspaceId, initialProjectId }: { workspaceId: nu
               <dt className="text-muted-foreground">Repository</dt><dd>{details.data.repositoryName}</dd>
             </dl>
             <div className="space-y-2"><p className="text-sm font-medium">Linked tasks</p>
-              {details.data.tasks.length ? details.data.tasks.map(task => <div key={task.taskId} className="rounded-md border px-3 py-2 text-sm">{task.title} <span className="text-muted-foreground">· #{task.taskId} · {task.source}</span></div>)
-                : <p className="text-sm text-muted-foreground">No Task is linked to this commit.</p>}</div>
+              <GitLinkedTasks key={details.data.id} tasks={details.data.tasks} /></div>
             {details.data.htmlUrl ? <Button asChild><a href={details.data.htmlUrl} target="_blank" rel="noreferrer">View on GitHub <ArrowUpRight className="ml-1 size-4" /></a></Button>
               : <p className="text-sm text-muted-foreground">View on GitHub will be available after the repository is connected.</p>}
           </div>}
@@ -369,17 +330,3 @@ function GitActivityContent({ workspaceId, initialProjectId }: { workspaceId: nu
   </div>;
 }
 
-function SyncStatusBadge({ status, repositoryStatus, mockData }: {
-  status: string | null; repositoryStatus: string | null; mockData: boolean;
-}) {
-  const normalized = status?.toUpperCase() ?? "NOT_SYNCED";
-  const presentation: Record<string, { label: string; className: string }> = {
-    READY: { label: mockData ? "Mock data ready" : "Synced", className: "border-emerald-200 bg-emerald-50 text-emerald-800" },
-    SYNCING: { label: "Syncing", className: "border-blue-200 bg-blue-50 text-blue-800" },
-    PARTIAL: { label: "Partially synced", className: "border-amber-200 bg-amber-50 text-amber-800" },
-    ERROR: { label: "Sync error", className: "border-rose-200 bg-rose-50 text-rose-800" },
-    NOT_SYNCED: { label: repositoryStatus === "DISCONNECTED" ? "Disconnected" : "Not synced", className: "border-slate-200 bg-slate-100 text-slate-700" },
-  };
-  const item = presentation[normalized] ?? { label: normalized.replaceAll("_", " "), className: "border-slate-200 bg-slate-100 text-slate-700" };
-  return <Badge variant="outline" className={item.className}>{item.label}</Badge>;
-}

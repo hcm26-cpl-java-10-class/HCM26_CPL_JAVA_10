@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Check, ChevronDown, GitCommitHorizontal, LoaderCircle, Play, Save, Settings2, Tags } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, GitCommitHorizontal, LoaderCircle, Play, Plus, Save, Settings2, Tags, X } from "lucide-react";
 import { workspaceGitApi, type GitDevelopmentRule, type GitDevelopmentRuleType } from "@/api/features/workspace-git.api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { usePermissions } from "@/hooks/usePermissions";
-
-const COMMIT_TYPES = ["feat", "fix", "docs", "refactor", "test", "chore"] as const;
 
 function readableError(error: unknown) {
   const response = (error as { response?: { data?: { message?: string } } })?.response;
@@ -82,6 +80,8 @@ function RuleEditor({ rule, saving, error, saved, onSave }: {
 }) {
   const [enabled, setEnabled] = useState(rule.enabled);
   const [types, setTypes] = useState<string[]>(rule.allowedCommitTypes);
+  const [newType, setNewType] = useState("");
+  const [typeError, setTypeError] = useState<string | null>(null);
   const [scopeRequired, setScopeRequired] = useState(rule.scopeRequired);
   const [pattern, setPattern] = useState(rule.taskKeyPattern);
   const defaultPattern = rule.defaultTaskKeyPattern ?? rule.taskKeyPattern;
@@ -92,8 +92,17 @@ function RuleEditor({ rule, saving, error, saved, onSave }: {
   const dirty = enabled !== rule.enabled || scopeRequired !== rule.scopeRequired
     || pattern !== rule.taskKeyPattern || types.join(",") !== rule.allowedCommitTypes.join(",");
 
-  const toggleType = (type: string) => setTypes(current => current.includes(type)
-    ? current.filter(item => item !== type) : [...current, type]);
+  const addType = () => {
+    const type = newType.trim().toLowerCase();
+    if (!/^[a-z][a-z0-9-]{0,31}$/.test(type)) {
+      setTypeError("Loại commit bắt đầu bằng chữ, tối đa 32 ký tự; dùng chữ, số và dấu gạch ngang.");
+      return;
+    }
+    if (types.includes(type)) { setTypeError("Loại commit này đã có trong danh sách."); return; }
+    if (types.length >= 20) { setTypeError("Mỗi quy tắc có tối đa 20 loại commit."); return; }
+    if ([...types, type].join(",").length > 160) { setTypeError("Danh sách loại commit quá dài; tổng độ dài tối đa 160 ký tự."); return; }
+    setTypes(current => [...current, type]); setNewType(""); setTypeError(null);
+  };
 
   return <section className={`flex flex-col rounded-xl border p-4 sm:p-5 ${conventional ? "border-sky-200 bg-sky-50/40" : "border-emerald-200 bg-emerald-50/35"}`}>
     <div className="flex items-start justify-between gap-3">
@@ -114,11 +123,21 @@ function RuleEditor({ rule, saving, error, saved, onSave }: {
     {conventional ? <div className="mt-5 space-y-4">
       <p className="text-sm text-slate-600">Tên commit bắt đầu bằng loại công việc, ví dụ <code className="rounded bg-white px-1.5 py-0.5 text-sky-800">feat(auth): thêm đăng nhập</code>.</p>
       <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Các loại commit được chấp nhận</p>
-        <div className="flex flex-wrap gap-2">{COMMIT_TYPES.map(type => <label key={type}
-          className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${types.includes(type) ? "border-sky-300 bg-white text-sky-800 shadow-sm" : "border-slate-200 bg-white/60 text-slate-500"}`}>
-          <input type="checkbox" checked={types.includes(type)} disabled={!rule.canManage || saving}
-            onChange={() => toggleType(type)} className="sr-only" />{types.includes(type) && <Check className="size-3" />}{type}
-        </label>)}</div>
+        <div className="flex flex-wrap gap-2">{types.map(type => <Badge key={type} variant="outline" className="gap-2 border-sky-200 bg-white py-1.5 text-sky-800">
+          {type}<button type="button" aria-label={`Xóa loại commit ${type}`} disabled={!rule.canManage || saving}
+            onClick={() => { setTypes(current => current.filter(item => item !== type)); setTypeError(null); }}
+            className="rounded-full p-0.5 hover:bg-sky-100 disabled:opacity-50"><X className="size-3.5" /></button>
+        </Badge>)}</div>
+        <div className="mt-3 flex gap-2">
+          <Input aria-label="Loại commit mới" placeholder="Ví dụ: build, ci, perf…" value={newType} disabled={!rule.canManage || saving}
+            onChange={event => { setNewType(event.target.value); setTypeError(null); }}
+            onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); addType(); } }} className="bg-white" />
+          <Button type="button" variant="outline" disabled={!rule.canManage || saving || !newType.trim()} onClick={addType}>
+            <Plus className="size-4" />Thêm loại
+          </Button>
+        </div>
+        {typeError && <p role="alert" className="mt-2 text-xs text-rose-700">{typeError}</p>}
+        {!types.length && <p className="mt-2 text-xs text-muted-foreground">Thêm ít nhất một loại commit để bật quy tắc.</p>}
       </div>
       <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-white bg-white/80 p-3 text-sm">
         <input type="checkbox" checked={scopeRequired} disabled={!rule.canManage || saving}
@@ -179,7 +198,7 @@ function RuleEditor({ rule, saving, error, saved, onSave }: {
     {saved && !dirty && <p role="status" className="mt-4 flex items-center gap-2 text-sm text-emerald-700"><Check className="size-4" />Đã lưu quy tắc.</p>}
     <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-white/80 pt-5">
       <span className="mt-5 max-w-64 text-xs leading-relaxed text-muted-foreground">Lưu để áp dụng thay đổi cho lần kiểm tra tiếp theo.</span>
-      <Button type="button" size="sm" disabled={!rule.canManage || saving} className={`mt-5 ${conventional ? "bg-sky-700 hover:bg-sky-800" : "bg-emerald-700 hover:bg-emerald-800"}`}
+      <Button type="button" size="sm" disabled={!rule.canManage || saving || (conventional && enabled && !types.length)} className={`mt-5 ${conventional ? "bg-sky-700 hover:bg-sky-800" : "bg-emerald-700 hover:bg-emerald-800"}`}
         onClick={() => onSave({ type: rule.type as GitDevelopmentRuleType, enabled, allowedCommitTypes: types,
           scopeRequired, taskKeyPattern: pattern })}>
         {saving ? <LoaderCircle className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}Lưu quy tắc

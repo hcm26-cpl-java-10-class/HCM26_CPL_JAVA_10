@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { GitRepositoryActivity, GitTaskRef } from "@/types/features/git-integration";
 import {
-  clearGitHubTabParams, openGitHubTabParams, parseGitHubTabParams, patchGitHubTabParams,
+  clearGitHubTabParams, openGitHubTabParams, parseGitHubTabParams, patchGitHubTabParams, periodOf,
   type GitHubTabPatch, type GitHubTabTarget, type GitHubView,
 } from "@/pages/management/git-integration/github-tab.params";
 import { syncInProgress, useGitHubAccounts, useProjectRepository, useRepositoryActivity } from "@/pages/management/git-integration/useGitIntegration";
@@ -188,8 +188,8 @@ export function WorkspaceGitHubPanel({ projectId, assignedProjectIds }: {
       content = <EmptyHistory importing={syncInProgress(repository.data)} branch={repository.data?.repository?.defaultBranch} />;
     } else {
       content = <RepositoryInsights projectId={projectId} activity={data} repositoryName={repositoryName} repositoryId={repo}
-        defaultBranch={repository.data?.repository?.defaultBranch} range={state.range}
-        onRange={range => update({ range })} onNavigate={navigate} onOpenTask={openTask} />;
+        defaultBranch={repository.data?.repository?.defaultBranch} period={periodOf(state)}
+        onPeriod={period => update({ range: period.range, since: period.since, until: period.until })} onNavigate={navigate} onOpenTask={openTask} />;
     }
   }
 
@@ -207,7 +207,7 @@ export function WorkspaceGitHubPanel({ projectId, assignedProjectIds }: {
     {hasData && <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Segmented label="GitHub views" value={state.view} options={views}
-          onChange={view => navigate({ view, range: state.range, repo: view === "history" || inHistory ? undefined : repo })} />
+          onChange={view => navigate({ view, ...periodOf(state), repo: view === "history" || inHistory ? undefined : repo })} />
         <div className="flex flex-wrap items-center gap-2">
           {data && !inMembers && !inHistory && <RepositoryFilter activity={data} value={repo} onChange={next => update({ repo: next, pr: undefined })} />}
           {data && linked && !inHistory && <SyncHealth activity={data}

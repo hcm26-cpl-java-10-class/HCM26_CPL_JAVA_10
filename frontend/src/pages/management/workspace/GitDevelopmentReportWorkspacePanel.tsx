@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { usePermissions } from "@/hooks/usePermissions";
 import { WorkspaceEmptyState } from "./workspace.shared";
 import { GitDevelopmentComplianceWorkspacePanel } from "./GitDevelopmentComplianceWorkspacePanel";
+import { GitListPagination } from "./GitListPagination";
 
 type ReportView = "project" | "sprint";
 
@@ -259,12 +260,14 @@ function Traceability({ trace }: { trace: GitTaskTraceability }) {
 }
 
 function DeveloperTable({ rows }: { rows: GitDeveloperActivityRow[] }) {
+  const [page, setPage] = useGitActivityParam<number>("gitReportDeveloperPage", 0);
+  const current = Math.min(page, Math.max(0, Math.ceil(rows.length / 10) - 1));
   return <section aria-label="Report Developer Activity" className="space-y-2">
     <h4 className="text-sm font-medium">Developer Activity</h4>
     {rows.length === 0 ? <p className="text-sm text-muted-foreground">No member or contributor activity is available for these filters.</p>
       : <div className="overflow-x-auto rounded-md border">
         <Table><TableHeader><TableRow><TableHead>Developer</TableHead><TableHead>Commits</TableHead><TableHead>PRs</TableHead><TableHead>PRs merged</TableHead><TableHead>Active days</TableHead><TableHead>Last activity</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-          <TableBody>{rows.map(row => <TableRow key={`${row.developerId ?? "unmapped"}-${row.contributorId ?? "unknown"}`}>
+          <TableBody>{rows.slice(current * 10, current * 10 + 10).map(row => <TableRow key={`${row.developerId ?? "unmapped"}-${row.contributorId ?? "unknown"}`}>
             <TableCell><span className="font-medium">{row.name}</span>{row.login && <span className="block text-xs text-muted-foreground">@{row.login}</span>}</TableCell>
             <TableCell>{row.commits}</TableCell><TableCell>{row.pullRequests}</TableCell><TableCell>{row.mergedPullRequests}</TableCell>
             <TableCell>{row.activeDays}</TableCell><TableCell>{formatDate(row.lastActiveAt)}</TableCell>
@@ -272,6 +275,7 @@ function DeveloperTable({ rows }: { rows: GitDeveloperActivityRow[] }) {
           </TableRow>)}</TableBody>
         </Table>
       </div>}
+    {rows.length > 0 && <GitListPagination page={current} total={rows.length} onChange={setPage} label="report developers" />}
   </section>;
 }
 

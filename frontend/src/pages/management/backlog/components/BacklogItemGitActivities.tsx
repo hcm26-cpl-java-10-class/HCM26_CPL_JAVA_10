@@ -139,12 +139,10 @@ export function BacklogItemGitActivities({
       <div className="flex items-center gap-2">
         {status.data?.mockData && <Badge variant="secondary">Mock fixture</Badge>}
         <Button asChild type="button" size="sm" variant="outline">
-          <Link to={`/management/workspaces/${workspaceId}?${new URLSearchParams({
-            tab: "git-activity", gitSection: "commits",
-            ...(projectId != null ? { project: String(projectId) } : {}),
-            taskId: String(taskId), ...(taskCode ? { taskCode } : {}),
+          <Link to={`/management/workspaces/${workspaceId}/tasks/${taskId}/git-activities?${new URLSearchParams({
+            gitView: "commits", ...(taskCode ? { taskCode } : {}),
             gitReturnTab: new URLSearchParams(location.search).get("tab") === "sprints" ? "sprints" : "backlog",
-            ...(new URLSearchParams(location.search).get("project") ? { gitReturnProject: new URLSearchParams(location.search).get("project")! } : {}),
+            ...(projectId != null ? { gitReturnProject: String(projectId) } : {}),
           })}`}
             state={{ returnTo: location.pathname + location.search }}>View all</Link>
         </Button>

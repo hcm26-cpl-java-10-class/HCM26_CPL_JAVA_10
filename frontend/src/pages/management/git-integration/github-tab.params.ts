@@ -1,5 +1,5 @@
 import type {
-  GitInsightsRange, GitPullRequestState, GitSyncHistoryStatus, GitSyncHistoryType, GitTaskLinkFilter,
+  GitInsightsPeriod, GitInsightsRange, GitPullRequestState, GitSyncHistoryStatus, GitSyncHistoryType, GitTaskLinkFilter,
 } from "@/types/features/git-integration";
 
 /**
@@ -14,6 +14,9 @@ export interface GitHubTabState {
   view: GitHubView;
   /** WS-GH-02: period of the Insights activity; kept when switching views. */
   range: GitInsightsRange;
+  /** WS-GH-02: first and last day (`YYYY-MM-DD`, both included) of a `custom` range; absent otherwise. */
+  since?: string;
+  until?: string;
   q: string;
   author?: string;
   branch?: string;
@@ -40,7 +43,7 @@ export type GitHubTabTarget = Partial<Omit<GitHubTabState, "view">> & { view: Gi
 export type GitHubTabPatch = Partial<Omit<GitHubTabState, "view">> & { view?: GitHubView };
 
 export const GITHUB_TAB = "github";
-export const GITHUB_TAB_PARAMS = ["view", "range", "q", "author", "branch", "link", "from", "to", "state", "pr", "contributor", "repo",
+export const GITHUB_TAB_PARAMS = ["view", "range", "since", "until", "q", "author", "branch", "link", "from", "to", "state", "pr", "contributor", "repo",
   "type", "status", "entry", "page"] as const;
 export const DEFAULT_INSIGHTS_RANGE: GitInsightsRange = "30d";
 
@@ -50,7 +53,7 @@ const SYNC_STATUSES: readonly GitSyncHistoryStatus[] = ["PENDING", "PROCESSING",
 const ENTRY = /^(job|webhook)-\d{1,12}$/;
 const LINKS: readonly GitHubLinkFilter[] = ["LINKED", "NEEDS_ATTENTION"];
 const STATES: readonly GitPullRequestState[] = ["OPEN", "MERGED", "CLOSED"];
-const RANGES: readonly GitInsightsRange[] = ["7d", "30d", "90d"];
+const RANGES: readonly GitInsightsRange[] = ["7d", "30d", "90d", "6m", "1y", "all", "custom"];
 const MAX_TEXT = 100;
 
 function oneOf<T extends string>(values: readonly T[], raw: string | null): T | undefined {
@@ -75,6 +78,22 @@ function positiveInt(raw: string | null): number | undefined {
   return Number(raw);
 }
 
+/** The Insights period of a tab state. */
+export function periodOf(state: Pick<GitHubTabState, "range" | "since" | "until">): GitInsightsPeriod {
+  return state.range === "custom" ? { range: "custom", since: state.since, until: state.until } : { range: state.range };
+}
+
+/** A `custom` range needs both days (swapped when reversed); otherwise the default range is used. */
+function parsePeriod(params: URLSearchParams): GitInsightsPeriod {
+  const range = oneOf(RANGES, params.get("range")) ?? DEFAULT_INSIGHTS_RANGE;
+  if (range !== "custom") return { range };
+  let since = isoDate(params.get("since"));
+  let until = isoDate(params.get("until"));
+  if (!since || !until) return { range: DEFAULT_INSIGHTS_RANGE };
+  if (until < since) [since, until] = [until, since];
+  return { range, since, until };
+}
+
 /** Reads the tab state; unknown or malformed values fall back to the defaults instead of failing. */
 export function parseGitHubTabParams(params: URLSearchParams): GitHubTabState {
   let from = isoDate(params.get("from"));
@@ -84,7 +103,7 @@ export function parseGitHubTabParams(params: URLSearchParams): GitHubTabState {
   if (from && to && to < from) [from, to] = [to, from];
   return {
     view: oneOf(VIEWS, params.get("view")) ?? "insights",
-    range: oneOf(RANGES, params.get("range")) ?? DEFAULT_INSIGHTS_RANGE,
+    ...parsePeriod(params),
     q: text(params.get("q")) ?? "",
     author: text(params.get("author")),
     branch: text(params.get("branch")),
@@ -113,6 +132,10 @@ function write(next: URLSearchParams, state: GitHubTabState) {
   for (const key of GITHUB_TAB_PARAMS) next.delete(key);
   if (state.view !== "insights") next.set("view", state.view);
   if (state.range !== DEFAULT_INSIGHTS_RANGE) next.set("range", state.range);
+  if (state.range === "custom" && state.since && state.until) {
+    next.set("since", state.since);
+    next.set("until", state.until);
+  }
   if (state.q) next.set("q", state.q);
   if (state.author) next.set("author", state.author);
   if (state.branch) next.set("branch", state.branch);
@@ -140,9 +163,13 @@ export function openGitHubTabParams(params: URLSearchParams, target: GitHubTabTa
 /** Applies a change to the current tab state. */
 export function patchGitHubTabParams(params: URLSearchParams, patch: GitHubTabPatch): URLSearchParams {
   const current = parseGitHubTabParams(params);
-  const keepsPaging = Object.keys(patch).every(key => key === "page" || key === "pr" || key === "range" || key === "entry");
+  const keepsPaging = Object.keys(patch).every(key => ["page", "pr", "range", "since", "until", "entry"].includes(key));
   const merged: GitHubTabState = { ...current, ...patch, q: patch.q ?? ("q" in patch ? "" : current.q),
     range: patch.range ?? current.range, view: patch.view ?? current.view };
+  if (merged.range !== "custom") {
+    merged.since = undefined;
+    merged.until = undefined;
+  }
   if (!keepsPaging && !("page" in patch)) merged.page = 0;
   return write(new URLSearchParams(params), merged);
 }

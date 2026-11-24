@@ -141,7 +141,7 @@ class ProjectAlertIntegrationTest {
             jdbc.update("update sprint_task set created_at=? where task_id=?",java.sql.Timestamp.from(now.minus(Duration.ofDays(8))),pendingBoard.getId());
             upcomingId=item(sprint,ma.getId(),"Upcoming parent item",SprintBacklogStatus.IN_PROGRESS,now.plusSeconds(7200)).getId();
             doneId=item(sprint,ma.getId(),"Finished parent item",SprintBacklogStatus.DONE,now.minusSeconds(3600)).getId();
-            var m=Milestone.create(tenantId,projectId,teamId,"Real milestone",null,now.plus(Duration.ofHours(24)),true,UUID.randomUUID(),null,
+            var m=Milestone.create(tenantId,projectId,teamId,"Real milestone",null,now.plus(Duration.ofHours(24)),true,null,null,
                     LatePolicyType.NO_LATE,null,null,UUID.randomUUID(),now);m.openForWork(UUID.randomUUID(),now);m.start(UUID.randomUUID(),now);milestoneId=milestones.saveAndFlush(m).getId();
         });
         oldBatches=batches.count();oldRecipients=recipients.count();oldAudits=audits.count();oldEvents=outbox.count();
@@ -537,10 +537,10 @@ class ProjectAlertIntegrationTest {
             var sprint=sprints.saveAndFlush(Sprint.builder().teamId(team.getId()).projectId(p.getId()).name("Managed sprint").status(SprintStatus.ACTIVE)
                     .startDate(LocalDateTime.now().minusDays(10)).endDate(LocalDateTime.now().plusDays(3)).build());
             var item=item(sprint,member.getId(),"Managed backlog task",SprintBacklogStatus.TODO,now.minusSeconds(3600));ids[3]=item.getId();ids[4]=item.getVersion();
-            var m=Milestone.create(tenant.getId(),p.getId(),team.getId(),"Managed milestone",null,now.plusSeconds(3600),true,UUID.randomUUID(),null,
+            var m=Milestone.create(tenant.getId(),p.getId(),team.getId(),"Managed milestone",null,now.plusSeconds(3600),true,null,null,
                     LatePolicyType.NO_LATE,null,null,UUID.randomUUID(),now);m.openForWork(UUID.randomUUID(),now);m.start(UUID.randomUUID(),now);m=milestones.saveAndFlush(m);mid[0]=m.getId();
             submissions.saveAndFlush(com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneArtifactSubmission.submit(
-                    tenant.getId(),null,team.getId(),m.getId(),UUID.nameUUIDFromBytes(student.getEmail().getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                    tenant.getId(),null,team.getId(),m,UUID.nameUUIDFromBytes(student.getEmail().getBytes(java.nio.charset.StandardCharsets.UTF_8)),
                     1,"https://example.test/repo",null,null,"{}","[]",now.minusSeconds(10),false,null));
         });
         allowClassAdministration();

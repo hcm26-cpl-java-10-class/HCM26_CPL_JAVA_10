@@ -84,4 +84,7 @@ public interface GitHubApiClient {
 
     /** SY-04: one page (100 commits) of the history reachable from {@code sha}, newest first. */
     List<GitHubCommit> listCommits(String installationToken, String owner, String repository, String sha, int page);
+
+    /** Metadata of one SHA, including parents omitted from push payloads on any branch. */
+    GitHubCommit getCommit(String installationToken, String owner, String repository, String sha);
 }

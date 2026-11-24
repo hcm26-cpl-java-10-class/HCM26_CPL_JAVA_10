@@ -35,7 +35,7 @@ class TeamArtifactSubmissionDemoInitializerTest {
                 "Demo fixture",
                 Instant.now().plusSeconds(86_400),
                 true,
-                UUID.randomUUID(),
+                null,
                 UUID.randomUUID(),
                 LatePolicyType.NO_LATE,
                 null,
@@ -45,7 +45,7 @@ class TeamArtifactSubmissionDemoInitializerTest {
 
         when(milestones.findByTenantIdAndTeamIdAndActiveTrueOrderByDeadlineAscIdAsc(
                 MockMilestoneData.TENANT_ID, 3L)).thenReturn(List.of(milestone));
-        when(submissions.findByTenantIdAndTeamIdAndMilestoneIdOrderBySubmittedAtDesc(
+        when(submissions.findByTenantIdAndTeamIdAndMilestone_IdOrderBySubmittedAtDesc(
                 MockMilestoneData.TENANT_ID, 3L, milestone.getId())).thenReturn(List.of());
 
         TeamArtifactSubmissionDemoInitializer initializer = new TeamArtifactSubmissionDemoInitializer(

@@ -12,6 +12,7 @@ import { WorkspaceEmptyState } from "./workspace.shared";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { BarChart3, ChevronDown, ChevronUp } from "lucide-react";
 import { useGitActivityParam } from "./git-activity-url-context";
+import { GitListPagination } from "./GitListPagination";
 
 const GRANULARITIES: Array<{ value: GitCommitGranularity; label: string }> = [
   { value: "day", label: "Day" },
@@ -38,10 +39,8 @@ export function GitCommitAnalyticsWorkspacePanel({
   from,
   to,
   granularity,
-  includeBots,
   includeMergeCommits,
   onGranularityChange,
-  onIncludeBotsChange,
   onIncludeMergeCommitsChange,
   onBranchChange,
   onDrilldown,
@@ -57,33 +56,38 @@ export function GitCommitAnalyticsWorkspacePanel({
   from: string;
   to: string;
   granularity: GitCommitGranularity;
-  includeBots: boolean;
   includeMergeCommits: boolean;
   onGranularityChange: (value: GitCommitGranularity) => void;
-  onIncludeBotsChange: (value: boolean) => void;
   onIncludeMergeCommitsChange: (value: boolean) => void;
   onBranchChange: (value?: string) => void;
   onDrilldown: (filters: GitCommitDrilldown) => void;
-  onShowHistory: (filters: { includeBots: boolean; includeMergeCommits: boolean }) => void;
+  onShowHistory: (filters: { includeMergeCommits: boolean }) => void;
 }) {
   const { user, activeRole } = usePermissions();
   const [showCharts, setShowCharts] = useGitActivityParam<boolean>("gitCommitCharts", false);
+  const [trendPage, setTrendPage] = useGitActivityParam<number>("gitCommitTrendPage", 0);
+  const [developerPage, setDeveloperPage] = useGitActivityParam<number>("gitCommitDeveloperPage", 0);
+  const [branchPage, setBranchPage] = useGitActivityParam<number>("gitCommitBranchPage", 0);
   const query = useQuery({
     queryKey: ["git-activity", "commit-analytics", workspaceId, user.email, activeRole,
       granularity, projectId, taskId, developerId, contributorId, branch,
-      from, to, includeBots, includeMergeCommits],
+      from, to, includeMergeCommits],
     queryFn: ({ signal }) => workspaceGitApi.commitAnalytics(workspaceId, {
       granularity, projectId, taskId, developerId, contributorId, branch,
       from: from || undefined, to: to || undefined,
-      includeBots, includeMergeCommits,
+      includeBots: true, includeMergeCommits,
     }, signal),
     enabled: active,
     retry: false,
   });
 
   const data = query.data;
+  const currentTrendPage = Math.min(trendPage, Math.max(0, Math.ceil((data?.trend.length ?? 0) / 10) - 1));
+  const currentDeveloperPage = Math.min(developerPage, Math.max(0, Math.ceil((data?.developers.length ?? 0) / 6) - 1));
+  const currentBranchPage = Math.min(branchPage, Math.max(0, Math.ceil((data?.branches.length ?? 0) / 6) - 1));
+  const developers = data?.developers.slice(currentDeveloperPage * 6, currentDeveloperPage * 6 + 6) ?? [];
   const maxBranch = Math.max(1, ...(data?.branches.map(row => row.commits) ?? []));
-  const showAll = () => onShowHistory({ includeBots, includeMergeCommits });
+  const showAll = () => onShowHistory({ includeMergeCommits });
 
   return <Card className="border-blue-100 bg-gradient-to-br from-blue-50/60 via-white to-white shadow-none">
     <CardHeader className="space-y-3">
@@ -107,9 +111,6 @@ export function GitCommitAnalyticsWorkspacePanel({
             {item.label}
           </button>)}
         </div>}
-        <Label className="text-xs font-normal text-muted-foreground">
-          <Checkbox checked={includeBots} onCheckedChange={value => onIncludeBotsChange(value === true)} />Include bot commits
-        </Label>
         <Label className="text-xs font-normal text-muted-foreground">
           <Checkbox checked={includeMergeCommits} onCheckedChange={value => onIncludeMergeCommitsChange(value === true)} />Include merge commits
         </Label>
@@ -160,7 +161,7 @@ export function GitCommitAnalyticsWorkspacePanel({
               </ResponsiveContainer>}
             </div>
             <div className="flex flex-wrap gap-1">
-              {data.trend.map(point => <Button key={point.key} type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs"
+              {data.trend.slice(currentTrendPage * 10, currentTrendPage * 10 + 10).map(point => <Button key={point.key} type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs"
                 onClick={() => {
                   const selectedFrom = from && from > point.startDate ? from : point.startDate;
                   const selectedTo = to && to < point.endDate ? to : point.endDate;
@@ -171,6 +172,7 @@ export function GitCommitAnalyticsWorkspacePanel({
                 {point.label} <span className="ml-1 text-muted-foreground">{point.commits}</span>
               </Button>)}
             </div>
+            <GitListPagination page={currentTrendPage} total={data.trend.length} pageSize={10} onChange={setTrendPage} label="commit periods" />
           </section>
 
           <div className="grid gap-5 lg:grid-cols-2">
@@ -179,7 +181,7 @@ export function GitCommitAnalyticsWorkspacePanel({
                 {data.unmappedContributorCommits > 0 && <Badge variant="outline">Unmapped: {data.unmappedContributorCommits}</Badge>}</div>
               <div className="h-48 w-full">
                 {active && showCharts && <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.developers} layout="vertical" margin={{ top: 4, right: 8, bottom: 0, left: 6 }}>
+                  <BarChart data={developers} layout="vertical" margin={{ top: 4, right: 8, bottom: 0, left: 6 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e8edf3" horizontal={false} />
                     <XAxis type="number" allowDecimals={false} tick={{ fontSize: 9, fill: "#94a3b8" }} />
                     <YAxis type="category" dataKey="name" width={116} tick={{ fontSize: 10, fill: "#64748b" }} />
@@ -189,7 +191,7 @@ export function GitCommitAnalyticsWorkspacePanel({
                 </ResponsiveContainer>}
               </div>
               <div className="flex flex-wrap gap-1">
-                {data.developers.map(row => <Button key={`${row.developerId ?? "none"}-${row.contributorId ?? "unknown"}-${row.name}`}
+                {developers.map(row => <Button key={`${row.developerId ?? "none"}-${row.contributorId ?? "unknown"}-${row.name}`}
                   type="button" size="sm" variant="ghost" className="h-7 max-w-full px-2 text-xs"
                   disabled={row.developerId == null && row.contributorId == null}
                   title={row.developerId == null && row.contributorId == null
@@ -205,12 +207,13 @@ export function GitCommitAnalyticsWorkspacePanel({
                   <span className="ml-1 text-muted-foreground">{row.commits}</span>
                 </Button>)}
               </div>
+              <GitListPagination page={currentDeveloperPage} total={data.developers.length} pageSize={6} onChange={setDeveloperPage} label="commit developers" />
             </section>
 
             <section className="space-y-2" aria-label="Commits by first-seen branch">
               <h3 className="text-sm font-semibold">By first-seen branch</h3>
               <div className="space-y-2">
-                {data.branches.map(row => <Button key={row.branch ?? "unknown-branch"} type="button" variant="ghost"
+                {data.branches.slice(currentBranchPage * 6, currentBranchPage * 6 + 6).map(row => <Button key={row.branch ?? "unknown-branch"} type="button" variant="ghost"
                   className="h-auto w-full justify-start px-2 py-1.5 text-left" disabled={row.branch == null}
                   onClick={() => { if (row.branch) { onDrilldown({ branch: row.branch }); showAll(); } }}
                   aria-label={`View ${row.commits} commits from ${row.label}`}>
@@ -223,6 +226,7 @@ export function GitCommitAnalyticsWorkspacePanel({
                   <span className="ml-2 text-xs tabular-nums text-muted-foreground">{row.commits}</span>
                 </Button>)}
               </div>
+              <GitListPagination page={currentBranchPage} total={data.branches.length} pageSize={6} onChange={setBranchPage} label="commit branches" />
             </section>
           </div>
           </div>

@@ -214,7 +214,7 @@ public class RubricService {
         Rubric rubric = requireRubric(rubricId);
         RubricVersion version = requireVersion(rubricId, versionId);
         requireDraft(version);
-        if (milestoneRepository.existsByRubricSnapshotId(versionId)) {
+        if (milestoneRepository.existsByRubricSnapshot_Id(versionId)) {
             throw new RubricConflictException("This rubric version is already used by a milestone");
         }
         if (rubric.getVersions().size() == 1) {
@@ -324,7 +324,7 @@ public class RubricService {
                 version.getDescriptionSnapshot(), rubric.getVersions().size(), hasDraft,
                 version.getId(), version.getVersionNumber(), version.getStatus(),
                 version.getTotalMaxScore(), version.getCriteria().size(),
-                milestoneRepository.countByRubricSnapshotId(version.getId()), version.getUpdatedAt());
+                milestoneRepository.countByRubricSnapshot_Id(version.getId()), version.getUpdatedAt());
     }
 
     private RubricDetailResponse toDetail(Rubric rubric) {
@@ -343,7 +343,7 @@ public class RubricService {
                                         r.getDescription(), r.getOrderIndex())).toList())).toList();
         return new RubricVersionResponse(version.getId(), version.getVersionNumber(), version.getNameSnapshot(),
                 version.getDescriptionSnapshot(), version.getStatus(), version.getTotalMaxScore(), criteria,
-                milestoneRepository.countByRubricSnapshotId(version.getId()), version.getPublishedAt(),
+                milestoneRepository.countByRubricSnapshot_Id(version.getId()), version.getPublishedAt(),
                 version.getCreatedAt(), version.getUpdatedAt(), version.getLockVersion());
     }
 

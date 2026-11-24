@@ -355,7 +355,7 @@ public class TemplateAssignmentProvisioningService {
                     planMilestone.getDescription(),
                     deadline,
                     planMilestone.isMandatory(),
-                    planMilestone.getRubricVersion().getId(),
+                    planMilestone.getRubricVersion(),
                     null,
                     allowLate ? LatePolicyType.ALLOW_LATE : LatePolicyType.NO_LATE,
                     lateUntil,

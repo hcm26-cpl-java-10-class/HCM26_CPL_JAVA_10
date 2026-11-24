@@ -70,8 +70,13 @@ public interface GitCommitRepository extends JpaRepository<GitCommit, Long> {
                    (author.id is null or (author.user is null and author.bot = false))) or
                    (:unmappedOnly = false and author.user is not null))
               and (:includeBots is null or :includeBots = true or
-                   (c.bot = false and (author.id is null or author.bot = false)))
-              and (:includeMergeCommits is null or :includeMergeCommits = true or c.mergeCommit = false)
+                   (r.sourceRepository is null and c.bot = false and (author.id is null or author.bot = false))
+                   or exists (select source.id from GitCommit source where source.repository = r.sourceRepository
+                       and source.sha = c.sha and source.parentCount is not null and source.bot = false))
+              and (:includeMergeCommits is null or :includeMergeCommits = true
+                   or (r.sourceRepository is null and c.mergeCommit = false)
+                   or exists (select source.id from GitCommit source where source.repository = r.sourceRepository
+                       and source.sha = c.sha and source.parentCount <= 1))
               and (:taskId is null or exists (select taskLink.id from TaskGitLink taskLink
                    where taskLink.commit.id = c.id and taskLink.task.id = :taskId))
               and (:filterProjectId is null or (:filterProjectId = :rootId and :rootScope = true)
@@ -103,8 +108,13 @@ public interface GitCommitRepository extends JpaRepository<GitCommit, Long> {
                    (author.id is null or (author.user is null and author.bot = false))) or
                    (:unmappedOnly = false and author.user is not null))
               and (:includeBots is null or :includeBots = true or
-                   (c.bot = false and (author.id is null or author.bot = false)))
-              and (:includeMergeCommits is null or :includeMergeCommits = true or c.mergeCommit = false)
+                   (r.sourceRepository is null and c.bot = false and (author.id is null or author.bot = false))
+                   or exists (select source.id from GitCommit source where source.repository = r.sourceRepository
+                       and source.sha = c.sha and source.parentCount is not null and source.bot = false))
+              and (:includeMergeCommits is null or :includeMergeCommits = true
+                   or (r.sourceRepository is null and c.mergeCommit = false)
+                   or exists (select source.id from GitCommit source where source.repository = r.sourceRepository
+                       and source.sha = c.sha and source.parentCount <= 1))
               and (:taskId is null or exists (select taskLink.id from TaskGitLink taskLink
                    where taskLink.commit.id = c.id and taskLink.task.id = :taskId))
               and (:filterProjectId is null or (:filterProjectId = :rootId and :rootScope = true)
@@ -155,6 +165,29 @@ public interface GitCommitRepository extends JpaRepository<GitCommit, Long> {
                                             @Param("filterProjectId") Long filterProjectId,
                                             @Param("projectContributorIds") Collection<Long> projectContributorIds,
                                             @Param("taskId") Long taskId);
+
+    /** Source metadata wins while the read projection catches up; unknown is not a normal commit. */
+    @Query("""
+            select c.id from ActivityGitCommit c join c.repository r left join c.authorContributor author
+             where c.id in :ids
+               and (:includeBots = true
+                    or (r.sourceRepository is null and c.bot = false and (author.id is null or author.bot = false))
+                    or exists (select source.id from GitCommit source where source.repository = r.sourceRepository
+                        and source.sha = c.sha and source.parentCount is not null and source.bot = false))
+               and (:includeMergeCommits = true
+                    or (r.sourceRepository is null and c.mergeCommit = false)
+                    or exists (select source.id from GitCommit source where source.repository = r.sourceRepository
+                        and source.sha = c.sha and source.parentCount <= 1))
+            """)
+    List<Long> findConfirmedAnalyticsIds(@Param("ids") Collection<Long> ids,
+                                         @Param("includeBots") boolean includeBots,
+                                         @Param("includeMergeCommits") boolean includeMergeCommits);
+
+    @Query("""
+            select case when count(source) > 0 then true else false end from GitCommit source
+             where source.project.id = :rootId and source.parentCount is null
+            """)
+    boolean hasPendingSourceMetadata(@Param("rootId") Long rootId);
 
     @Query("""
             select c from ActivityGitCommit c join c.repository r

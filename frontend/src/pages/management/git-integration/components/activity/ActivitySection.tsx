@@ -3,21 +3,16 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import type { GitInsightsRange, GitRepositoryInsights } from "@/types/features/git-integration";
+import type { GitInsightsPeriod, GitRepositoryInsights } from "@/types/features/git-integration";
 import type { GitHubTabTarget } from "../../github-tab.params";
-import { formatDuration, spanLabel } from "../../insights.utils";
+import { dailyBuckets, formatDuration, periodLabel } from "../../insights.utils";
 import { CHART_COLORS } from "../git-integration.styles";
-import { Segmented } from "./ActivityControls";
+import { InsightsPeriodPicker } from "./InsightsPeriodPicker";
 import { BranchList } from "./BranchList";
 import { CommitActivityChart } from "./CommitActivityChart";
 import { ContributorList } from "./ContributorList";
 
 const PANEL = "flex min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-card dark:border-border";
-const RANGES: Array<{ id: GitInsightsRange; label: string }> = [
-  { id: "7d", label: "7 days" },
-  { id: "30d", label: "30 days" },
-  { id: "90d", label: "90 days" },
-];
 
 function PanelHeader({ title, aside }: { title: ReactNode; aside?: ReactNode }) {
   return <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-slate-50/40 px-4 py-2.5 dark:bg-muted/20">
@@ -35,10 +30,10 @@ function Figure({ value, label }: { value: ReactNode; label: string }) {
  * picker sits on this section's heading, so it is clear which numbers follow it (the tiles
  * and lists above are the current state and do not change with it).
  */
-export function ActivitySection({ query, range, onRange, defaultBranch, onNavigate, canManageAccounts = false }: {
+export function ActivitySection({ query, period, onPeriod, defaultBranch, onNavigate, canManageAccounts = false }: {
   query: { data?: GitRepositoryInsights; isPending: boolean; isError: boolean; isFetching: boolean; isPlaceholderData: boolean; refetch: () => unknown };
-  range: GitInsightsRange;
-  onRange: (range: GitInsightsRange) => void;
+  period: GitInsightsPeriod;
+  onPeriod: (period: GitInsightsPeriod) => void;
   defaultBranch?: string | null;
   onNavigate: (target: GitHubTabTarget) => void;
   /** US-GI-06: an unmapped contributor opens in the Members view, where the PM can assign them. */
@@ -53,10 +48,10 @@ export function ActivitySection({ query, range, onRange, defaultBranch, onNaviga
       <div className="space-y-0.5">
         <h3 id="gh-activity-heading" className="text-sm font-semibold">Activity</h3>
         <p className="text-[11px] text-muted-foreground">
-          {data ? `${spanLabel(data.from, data.to)} · these numbers follow the selected period` : "Commits, contributors and branches of the selected period"}
+          {data ? `${periodLabel(data.from, data.to)} · these numbers follow the selected period` : "Commits, contributors and branches of the selected period"}
         </p>
       </div>
-      <Segmented label="Activity period" value={range} options={RANGES} onChange={onRange} />
+      <InsightsPeriodPicker period={period} onChange={onPeriod} />
     </div>
 
     {query.isPending ? <div role="status" aria-label="Loading activity" className="space-y-3">
@@ -87,8 +82,8 @@ export function ActivitySection({ query, range, onRange, defaultBranch, onNaviga
               </span>
             </>}
           </p>
-          <CommitActivityChart daily={data.daily} range={data.range}
-            onSelect={(from, to) => onNavigate({ view: "commits", from, to, range })} />
+          <CommitActivityChart buckets={data.buckets ?? dailyBuckets(data.daily)} granularity={data.granularity ?? "DAY"}
+            onSelect={(from, to) => onNavigate({ view: "commits", from, to, ...period })} />
           {data.truncated && <p className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-300">
             <TriangleAlert className="size-3.5" aria-hidden="true" />This period has more commits than can be counted at once; the numbers are a lower bound.
           </p>}
@@ -99,13 +94,13 @@ export function ActivitySection({ query, range, onRange, defaultBranch, onNaviga
         <section aria-label="Contributors" className={PANEL}>
           <PanelHeader title={<>Contributors <span className="font-normal text-muted-foreground">· {summary.contributors}</span></>} />
           <ContributorList contributors={data.contributors} others={data.otherContributors}
-            onSelect={author => onNavigate({ view: "commits", author, range })}
-            onOpenContributor={canManageAccounts ? contributor => onNavigate({ view: "members", contributor, range }) : undefined} />
+            onSelect={author => onNavigate({ view: "commits", author, ...period })}
+            onOpenContributor={canManageAccounts ? contributor => onNavigate({ view: "members", contributor, ...period }) : undefined} />
         </section>
         <section aria-label="Active branches" className={PANEL}>
           <PanelHeader title="Active branches" />
           <BranchList branches={data.branches} defaultBranch={defaultBranch}
-            onSelect={branch => onNavigate({ view: "commits", branch, range })} />
+            onSelect={branch => onNavigate({ view: "commits", branch, ...period })} />
         </section>
       </div>
     </div>}

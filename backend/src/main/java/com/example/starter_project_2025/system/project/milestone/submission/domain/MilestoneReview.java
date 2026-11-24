@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.submission.domain;
 
+import com.example.starter_project_2025.system.project.rubric.domain.RubricCriterion;
+import com.example.starter_project_2025.system.project.rubric.domain.RubricCriterionRating;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -81,10 +83,10 @@ public class MilestoneReview {
                 finalScore, null, now);
     }
 
-    public void addEvaluation(UUID criterionId, String code, String name, UUID ratingId,
+    public void addEvaluation(RubricCriterion criterion, String code, String name, RubricCriterionRating rating,
                               String ratingLevel, BigDecimal ratingPercentage, BigDecimal score,
                               String feedback, int orderIndex) {
-        evaluations.add(ReviewCriterionEvaluation.create(this, criterionId, code, name, ratingId,
+        evaluations.add(ReviewCriterionEvaluation.create(this, criterion, code, name, rating,
                 ratingLevel, ratingPercentage, score, feedback, orderIndex));
     }
 }

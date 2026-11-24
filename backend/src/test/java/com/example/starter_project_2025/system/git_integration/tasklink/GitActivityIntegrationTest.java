@@ -121,6 +121,29 @@ class GitActivityIntegrationTest extends AbstractTaskLinkIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test void botCommitCountsNormallyByDefaultAndExplicitLegacyFilterStillWorks() throws Exception {
+        push(commit("bot-default", "fix: bot dependency update", "2026-11-17T10:00:00Z"));
+        tx.executeWithoutResult(status -> {
+            var source = commits.findFirstByRepository_IdAndSha(connectionId, "bot-default").orElseThrow();
+            source.setBot(true);
+            source.setMergeCommit(false);
+            source.setParentCount(1);
+            commits.saveAndFlush(source);
+        });
+        integration.request(connectionId);
+        refresh();
+
+        mvc.perform(get("/api/workspaces/301/git-activity/analytics/commits")
+                        .header("Authorization", "Bearer " + activityToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalCommits").value(1));
+        mvc.perform(get("/api/workspaces/301/git-activity/commits")
+                        .header("Authorization", "Bearer " + activityToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1));
+        mvc.perform(get("/api/workspaces/301/git-activity/analytics/commits")
+                        .header("Authorization", "Bearer " + activityToken).param("includeBots", "false"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalCommits").value(0));
+    }
+
     @Test void manualLinksFromBReachAAndSurviveAutoReplayAndContributorRemapping() throws Exception {
         push(commit("manual-a", "fix: no task reference", "2026-11-17T10:00:00Z"));
         refresh();
@@ -226,6 +249,87 @@ class GitActivityIntegrationTest extends AbstractTaskLinkIntegrationTest {
         mvc.perform(post("/api/workspaces/399/git-activity/rules/validate")
                         .header("Authorization", "Bearer " + activityToken).header("Idempotency-Key", "batch-replay"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test void malformedPushTimestampDoesNotCreateSourceActivityProjectionOrValidation() throws Exception {
+        int pendingBefore = jdbc.queryForObject("select count(*) from git_activity_change", Integer.class);
+        push(commit("missing-date", "feat: " + moduleTask.getTaskKey(), null));
+        assertThat(events.findAll()).singleElement().satisfies(event ->
+                assertThat(event.getStatus()).isEqualTo(GitWebhookEventStatus.FAILED));
+        assertThat(commits.count()).isZero();
+        assertThat(activityCommits.count()).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from commit_validation_result", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from git_activity_change", Integer.class)).isEqualTo(pendingBefore);
+    }
+
+    @Test void pendingMetadataIsNotCountedAsNormalAndCanonicalFlagsWinBeforeProjectionRefresh() throws Exception {
+        push(commit("metadata-normal", "feat: metadata normal", "2026-11-17T10:00:00Z"),
+                commit("metadata-merge", "merge: metadata pending", "2026-11-17T11:00:00Z"));
+        integration.request(connectionId);
+        refresh();
+        var idsBefore = activityCommits.findAllByRepository_IdOrderByCommittedAtAscIdAsc(activityRepo()).stream()
+                .map(com.example.starter_project_2025.system.project.developmentinsights.domain.GitCommit::getId).toList();
+        tx.executeWithoutResult(status -> {
+            var repo = activityRepositories.findById(activityRepo()).orElseThrow();
+            repo.setSyncStatus(com.example.starter_project_2025.system.project.developmentinsights.domain.GitSyncStatus.READY);
+            activityRepositories.saveAndFlush(repo);
+        });
+        mvc.perform(get("/api/workspaces/301/git-activity/status").header("Authorization", "Bearer " + activityToken))
+                .andExpect(jsonPath("$.syncStatus").value("PARTIAL"));
+        tx.executeWithoutResult(status -> {
+            var source = connections.findById(connectionId).orElseThrow();
+            source.setStatus(GitRepositoryStatus.INACTIVE); connections.saveAndFlush(source);
+            var read = activityRepositories.findById(activityRepo()).orElseThrow();
+            read.markInactive(Instant.now()); activityRepositories.saveAndFlush(read);
+        });
+        mvc.perform(get("/api/workspaces/301/git-activity/status").header("Authorization", "Bearer " + activityToken))
+                .andExpect(jsonPath("$.syncStatus").value("PARTIAL"));
+        tx.executeWithoutResult(status -> {
+            var source = connections.findById(connectionId).orElseThrow();
+            source.setStatus(GitRepositoryStatus.ACTIVE); connections.saveAndFlush(source);
+            var read = activityRepositories.findById(activityRepo()).orElseThrow();
+            read.setStatus(com.example.starter_project_2025.system.project.developmentinsights.domain.GitRepositoryStatus.ACTIVE);
+            activityRepositories.saveAndFlush(read);
+        });
+        mvc.perform(get("/api/workspaces/301/git-activity/analytics/commits").header("Authorization", "Bearer " + activityToken))
+                .andExpect(jsonPath("$.totalCommits").value(0));
+        mvc.perform(get("/api/workspaces/301/git-activity/commits").header("Authorization", "Bearer " + activityToken)
+                        .param("includeBots", "false").param("includeMergeCommits", "false").param("size", "1"))
+                .andExpect(jsonPath("$.totalElements").value(0));
+        var metadataTokens = mock(InstallationTokenProvider.class);
+        when(metadataTokens.contentsToken(anyLong())).thenReturn("fixture-credential");
+        for (String sha : List.of("metadata-normal", "metadata-merge")) {
+            var parents = sha.endsWith("merge")
+                    ? List.of(new com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommit.Parent("one"),
+                              new com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommit.Parent("two"))
+                    : List.of(new com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommit.Parent("one"));
+            when(github.getCommit(anyString(), anyString(), anyString(), eq(sha))).thenReturn(
+                    new com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommit(sha,
+                            "https://github.com/fixture/repo/commit/" + sha,
+                            new com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommit.GitData(
+                                    "fixture metadata", null,
+                                    new com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommit.Person(
+                                            "fixture", "fixture@example.test", "2026-11-17T10:00:00Z")),
+                            null, null, parents));
+        }
+        var metadataProperties = new com.example.starter_project_2025.system.git_integration.config.GitHubAppProperties();
+        metadataProperties.setEnabled(true);
+        new com.example.starter_project_2025.system.git_integration.sync.GitCommitMetadataReconciler(
+                metadataProperties, commits, github, metadataTokens, mapper, ingestion, java.time.Clock.systemUTC()).scheduled();
+        assertThat(commits.findFirstByRepository_IdAndSha(connectionId, "metadata-merge").orElseThrow().getMergeCommit()).isTrue();
+        // B still holds its old false flags: reads must already honor the canonical parent metadata.
+        mvc.perform(get("/api/workspaces/301/git-activity/analytics/commits").header("Authorization", "Bearer " + activityToken))
+                .andExpect(jsonPath("$.totalCommits").value(1));
+        mvc.perform(get("/api/workspaces/301/git-activity/commits").header("Authorization", "Bearer " + activityToken)
+                        .param("includeBots", "false").param("includeMergeCommits", "false").param("size", "1"))
+                .andExpect(jsonPath("$.totalElements").value(1)).andExpect(jsonPath("$.content[0].sha").value("metadata-normal"));
+        mvc.perform(get("/api/workspaces/301/git-activity/analytics/commits").header("Authorization", "Bearer " + activityToken)
+                        .param("includeBots", "true").param("includeMergeCommits", "true"))
+                .andExpect(jsonPath("$.totalCommits").value(2));
+        refresh();
+        assertThat(activityCommits.findAllByRepository_IdOrderByCommittedAtAscIdAsc(activityRepo()).stream()
+                .map(com.example.starter_project_2025.system.project.developmentinsights.domain.GitCommit::getId).toList())
+                .containsExactlyElementsOf(idsBefore);
     }
 
     @Test void liveRepositoryExcludesPreservedMockDataFromListsAndRevalidation() throws Exception {

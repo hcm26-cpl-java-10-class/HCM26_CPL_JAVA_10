@@ -12,6 +12,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/usePermissions";
 import { WorkspaceEmptyState } from "./workspace.shared";
+import { useGitProjectFilter } from "./git-project-scope";
+import { GitProjectSelect } from "./GitProjectSelect";
+import { GitListPagination } from "./GitListPagination";
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
@@ -25,15 +28,17 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Could not load developer activity.";
 }
 
-export function GitDeveloperActivityWorkspacePanel({ workspaceId, initialProjectId }: {
+export function GitDeveloperActivityWorkspacePanel({ workspaceId }: {
   workspaceId: number;
   initialProjectId?: number;
 }) {
   const { user, activeRole } = usePermissions();
-  const [projectId, setProjectId] = useGitActivityParam<number | undefined>("gitDeveloperProjectId", initialProjectId, "number");
+  const projectFilter = useGitProjectFilter("gitDeveloperProjectId");
+  const { projectId, setProjectId } = projectFilter;
   const [developerId, setDeveloperId] = useGitActivityParam<number | undefined>("gitDeveloperDeveloperId", undefined, "number");
   const [from, setFrom] = useGitActivityParam<string>("gitDeveloperFrom", "");
   const [to, setTo] = useGitActivityParam<string>("gitDeveloperTo", "");
+  const [page, setPage] = useGitActivityParam<number>("gitDeveloperPage", 0);
   const options = useQuery({
     queryKey: ["git-activity", "report-options", workspaceId, user.email, activeRole, projectId],
     queryFn: ({ signal }) => workspaceGitApi.reportOptions(workspaceId, projectId, signal),
@@ -47,6 +52,9 @@ export function GitDeveloperActivityWorkspacePanel({ workspaceId, initialProject
     retry: false,
   });
   const data = activity.data;
+  const total = data?.developers.length ?? 0;
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(total / 10) - 1));
+  const rows = data?.developers.slice(currentPage * 10, currentPage * 10 + 10) ?? [];
 
   return <Card>
     <CardHeader className="space-y-3">
@@ -55,15 +63,10 @@ export function GitDeveloperActivityWorkspacePanel({ workspaceId, initialProject
         <CardDescription>Recorded commit and pull request activity by Workspace member. These signals describe participation, not productivity.</CardDescription>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Select value={projectId?.toString() ?? "all"} onValueChange={value => {
-          setProjectId(value === "all" ? undefined : Number(value)); setDeveloperId(undefined);
-        }}>
-          <SelectTrigger aria-label="Filter developer activity by Project" className="w-52"><SelectValue placeholder="All Projects" /></SelectTrigger>
-          <SelectContent><SelectItem value="all">All Projects</SelectItem>
-            {(options.data?.projects ?? []).map(project => <SelectItem key={project.id} value={String(project.id)}>{project.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={developerId?.toString() ?? "all"} onValueChange={value => setDeveloperId(value === "all" ? undefined : Number(value))}>
+        <GitProjectSelect {...projectFilter} label="Filter developer activity by Project" onChange={value => {
+          setProjectId(value); setDeveloperId(undefined); setPage(0);
+        }} />
+        <Select value={developerId?.toString() ?? "all"} onValueChange={value => { setDeveloperId(value === "all" ? undefined : Number(value)); setPage(0); }}>
           <SelectTrigger aria-label="Filter by developer" className="w-56"><SelectValue placeholder="All developers" /></SelectTrigger>
           <SelectContent><SelectItem value="all">All developers</SelectItem>
             {(options.data?.developers ?? []).map(developer => <SelectItem key={developer.id} value={String(developer.id)}>
@@ -71,8 +74,8 @@ export function GitDeveloperActivityWorkspacePanel({ workspaceId, initialProject
             </SelectItem>)}
           </SelectContent>
         </Select>
-        <Input aria-label="Developer activity from date" type="date" value={from} onChange={event => setFrom(event.target.value)} className="w-40" />
-        <Input aria-label="Developer activity to date" type="date" value={to} onChange={event => setTo(event.target.value)} className="w-40" />
+        <Input aria-label="Developer activity from date" type="date" value={from} onChange={event => { setFrom(event.target.value); setPage(0); }} className="w-40" />
+        <Input aria-label="Developer activity to date" type="date" value={to} onChange={event => { setTo(event.target.value); setPage(0); }} className="w-40" />
         <Button type="button" variant="outline" size="sm" onClick={() => {
           void options.refetch(); void activity.refetch();
         }} disabled={options.isFetching || activity.isFetching}>
@@ -95,7 +98,7 @@ export function GitDeveloperActivityWorkspacePanel({ workspaceId, initialProject
             : <div className="overflow-x-auto rounded-md border">
               <Table>
                 <TableHeader><TableRow><TableHead>Developer</TableHead><TableHead>Commits</TableHead><TableHead>PRs created</TableHead><TableHead>PRs merged</TableHead><TableHead>Active days</TableHead><TableHead>Last activity</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Mapping</TableHead></TableRow></TableHeader>
-                <TableBody>{data!.developers.map(row => <TableRow key={`${row.developerId ?? "unmapped"}-${row.contributorId ?? "unknown"}`}>
+                <TableBody>{rows.map(row => <TableRow key={`${row.developerId ?? "unmapped"}-${row.contributorId ?? "unknown"}`}>
                   <TableCell><span className="font-medium">{row.name}</span>{row.login && <span className="block text-xs text-muted-foreground">@{row.login}</span>}</TableCell>
                   <TableCell>{row.commits}</TableCell><TableCell>{row.pullRequests}</TableCell><TableCell>{row.mergedPullRequests}</TableCell>
                   <TableCell>{row.activeDays}</TableCell><TableCell className="whitespace-nowrap">{formatDate(row.lastActiveAt)}</TableCell>
@@ -107,6 +110,7 @@ export function GitDeveloperActivityWorkspacePanel({ workspaceId, initialProject
                 </TableRow>)}</TableBody>
               </Table>
             </div>}
+          {total > 0 && <GitListPagination page={currentPage} total={total} onChange={setPage} label="contributors" loading={activity.isFetching} />}
         </>}
     </CardContent>
   </Card>;

@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/usePermissions";
 import { WorkspaceEmptyState } from "./workspace.shared";
+import { GitSubmittedReviews } from "./GitDetailLists";
 
 const PAGE_SIZE = 20;
 type TaskActivityView = "commits" | "pull-requests";
@@ -125,7 +126,11 @@ function TaskGitActivity({ workspaceId, taskId }: { workspaceId: number; taskId:
 
   const returnTo = (location.state as { returnTo?: unknown } | null)?.returnTo;
   const backTo = typeof returnTo === "string" && returnTo.startsWith("/") && !returnTo.startsWith("//")
-    ? returnTo : `/management/workspaces/${workspaceId}?tab=backlog${task.data ? `&project=${task.data.projectId}` : ""}`;
+    ? returnTo : `/management/workspaces/${workspaceId}?${new URLSearchParams({
+      tab: params.get("gitReturnTab") === "sprints" ? "sprints" : "backlog",
+      ...(params.get("gitReturnProject") || task.data?.projectId
+        ? { project: params.get("gitReturnProject") ?? String(task.data!.projectId) } : {}),
+    })}`;
   const [backPath, backQuery] = backTo.split("?", 2);
   const taskReturnParams = new URLSearchParams(backQuery);
   taskReturnParams.set("itemId", String(taskId));
@@ -305,6 +310,8 @@ function TaskGitActivity({ workspaceId, taskId }: { workspaceId: number; taskId:
           <DialogDescription>Details for activity linked to TASK-{taskId}.</DialogDescription></DialogHeader>
         {selected?.kind === "commit" ? commitDetails.isPending ? <DetailSkeleton />
           : commitDetails.isError ? <LoadError error={commitDetails.error} retry={() => void commitDetails.refetch()} />
+            : commitDetails.data && !commitDetails.data.tasks.some(task => task.taskId === taskId)
+              ? <p role="alert" className="text-sm text-destructive">This commit is not linked to the selected task.</p>
             : commitDetails.data && <div className="space-y-4">
               <p className="whitespace-pre-wrap break-words font-medium">{commitDetails.data.message || "(no message)"}</p>
               <code className="block break-all rounded-md bg-slate-100 p-3 text-xs">{commitDetails.data.sha}</code>
@@ -317,6 +324,8 @@ function TaskGitActivity({ workspaceId, taskId }: { workspaceId: number; taskId:
             </div>
           : selected?.kind === "pr" ? prDetails.isPending ? <DetailSkeleton />
             : prDetails.isError ? <LoadError error={prDetails.error} retry={() => void prDetails.refetch()} />
+              : prDetails.data && !prDetails.data.tasks.some(task => task.taskId === taskId)
+                ? <p role="alert" className="text-sm text-destructive">This Pull Request is not linked to the selected task.</p>
               : prDetails.data && <div className="space-y-4">
                 <div><p className="font-medium">#{prDetails.data.number} · {prDetails.data.title}</p><PullRequestStateBadge state={prDetails.data.state} /></div>
                 <p className="whitespace-pre-wrap break-words text-sm">{prDetails.data.body || "No description."}</p>
@@ -327,10 +336,7 @@ function TaskGitActivity({ workspaceId, taskId }: { workspaceId: number; taskId:
                   <dt className="text-muted-foreground">Merged</dt><dd>{formatDate(prDetails.data.mergedAt)}</dd>
                 </dl>
                 <section className="space-y-2"><h3 className="text-sm font-semibold">Reviews</h3>
-                  {prDetails.data.reviews.length ? prDetails.data.reviews.map(review => <div key={review.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm">
-                    <span>{review.reviewerName}</span><ReviewStateBadge state={review.state} />
-                    <span className="text-xs text-muted-foreground">{formatDate(review.submittedAt)}</span>
-                  </div>) : <p className="text-sm text-muted-foreground">No submitted reviews are available.</p>}
+                  <GitSubmittedReviews key={prDetails.data.id} reviews={prDetails.data.reviews} />
                 </section><SourceLink url={prDetails.data.htmlUrl} label="View pull request on GitHub" primary />
               </div> : null}
       </DialogContent>
@@ -362,13 +368,6 @@ function PullRequestStateBadge({ state }: { state: string }) {
     : state === "CLOSED" ? "border-slate-200 bg-slate-100 text-slate-700"
       : "border-emerald-200 bg-emerald-50 text-emerald-800";
   return <Badge variant="outline" className={palette}>{state === "MERGED" ? "Merged" : state === "CLOSED" ? "Closed" : "Open"}</Badge>;
-}
-
-function ReviewStateBadge({ state }: { state: string }) {
-  const palette = state === "APPROVED" ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-    : state === "CHANGES_REQUESTED" ? "border-rose-200 bg-rose-50 text-rose-800"
-      : "border-sky-200 bg-sky-50 text-sky-800";
-  return <Badge variant="outline" className={palette}>{state.replaceAll("_", " ")}</Badge>;
 }
 
 function SourceLink({ url, label, primary = false }: { url: string | null; label: string; primary?: boolean }) {

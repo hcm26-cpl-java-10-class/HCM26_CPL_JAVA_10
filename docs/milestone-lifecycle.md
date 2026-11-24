@@ -30,7 +30,7 @@ Every planned or active edit appends an immutable JSON snapshot in `milestone_dr
 | Artifact draft, upload, submission and workspace APIs | Submission is allowed only in `IN_PROGRESS`, or in `CHANGES_REQUESTED` for a team with a prior submission. Terminal states are read-only. The workspace returns `canSubmit`. |
 | Reviewer submission list/detail, version and decision APIs | Submission status remains separate from milestone status. V1/V2 history is immutable. Review decisions advance milestone state and expose `milestoneLifecycleStatus`. |
 | Risk, project alerts and backlog milestone options | Display the canonical milestone status. Risk alert eligibility applies to `IN_PROGRESS`; rejection also emits a high severity outbox event. |
-| Project completion | After each acceptance, active milestones for the project/team are checked. When every one is `ACCEPTED`, the project is set to `COMPLETED` through the JPA adapter. Grade lock and waiver no longer count as acceptance. |
+| Project completion | A project becomes `COMPLETED` only through **Finalize** (`POST /api/projects/{p}/teams/{t}/finalize`, or `/api/projects/{p}/finalize` for a shared master). Finalize requires every active mandatory milestone of the project/team to be `ACCEPTED` or waived and every active child project to be `COMPLETED`; it locks the final grade and completes the project in one transaction. A parent is never completed implicitly. `GET .../completion` exposes `readiness`/`canFinalize` for the UI. See `PROJECT_FINALIZE_IMPLEMENTATION_PLAN.md`. |
 
 ## Existing database
 

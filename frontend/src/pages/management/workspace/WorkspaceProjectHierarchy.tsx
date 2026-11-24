@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { WorkspaceAssignmentContext, WorkspaceProjectNode } from "@/types/features/project-assignment";
+import { WorkspaceStatusBadge } from "./workspace.shared";
 
 export function flattenWorkspaceProjects(nodes: WorkspaceProjectNode[]): WorkspaceProjectNode[] {
   return nodes.flatMap(node => [node, ...flattenWorkspaceProjects(node.children)]);
@@ -16,7 +17,7 @@ function ProjectNode({ node, selectedId, onSelect }: { node: WorkspaceProjectNod
   return <Collapsible asChild open={expanded} onOpenChange={setExpanded}><li className="space-y-2"><div className={`flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 ${selectedId === node.id ? "border-primary bg-primary/5" : ""}`}>
     <div className="min-w-0 space-y-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium">{node.name}</p>
       <Badge variant="secondary">{node.parentProjectId == null ? "Master" : "Module"}</Badge></div><p className="text-xs text-muted-foreground">{node.code}</p></div>
-    <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{node.status}</Badge>
+    <div className="flex flex-wrap items-center gap-2"><WorkspaceStatusBadge status={node.status} colored />
       {node.children.length > 0 && <CollapsibleTrigger asChild><Button type="button" size="sm" variant="outline"
         aria-label={`${expanded ? "Hide" : "Show"} modules for ${node.name}`}>
         {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}

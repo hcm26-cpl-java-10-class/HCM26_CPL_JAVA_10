@@ -7,6 +7,7 @@ import com.example.starter_project_2025.system.project.developmentinsights.domai
 import com.example.starter_project_2025.system.project.developmentinsights.domain.GitPullRequestState;
 import com.example.starter_project_2025.system.project.developmentinsights.domain.GitRepository;
 import com.example.starter_project_2025.system.project.developmentinsights.domain.GitRepositoryStatus;
+import com.example.starter_project_2025.system.project.developmentinsights.domain.GitSyncStatus;
 import com.example.starter_project_2025.system.project.developmentinsights.domain.TaskGitLink;
 import com.example.starter_project_2025.system.project.developmentinsights.dto.GitActivityDtos;
 import com.example.starter_project_2025.system.project.developmentinsights.repository.GitCommitRepository;
@@ -75,10 +76,13 @@ public class GitActivityService {
                         .orElseGet(() -> activeRepository(scope.rootProjectId())));
         if (repository == null) return new GitActivityDtos.RepositoryStatus(
                 scope.rootProjectId(), false, null, null, null, null, null, false);
+        GitSyncStatus syncStatus = repository.getSyncStatus();
+        if (syncStatus == GitSyncStatus.READY && repository.getSourceRepository() != null
+                && commits.hasPendingSourceMetadata(scope.rootProjectId())) syncStatus = GitSyncStatus.PARTIAL;
         return new GitActivityDtos.RepositoryStatus(scope.rootProjectId(),
                 repository.getStatus() != GitRepositoryStatus.INACTIVE,
                 repository.getFullName(), repository.getHtmlUrl(), repository.getStatus(),
-                repository.getSyncStatus(), repository.getLastSyncedAt(), repository.isMockData());
+                syncStatus, repository.getLastSyncedAt(), repository.isMockData());
     }
 
     public GitActivityDtos.TaskContext taskContext(Long workspaceId, Long taskId) {
@@ -102,6 +106,8 @@ public class GitActivityService {
                         java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .toList();
         List<Long> projectContributorIds = projectId == null ? List.of(-1L) : scope.contributorsFor(projectId);
+        Map<Long, String> memberNames = new HashMap<>();
+        scope.membersFor(projectId).forEach(member -> memberNames.put(member.userId(), member.name()));
         java.util.Map<Long, GitActivityDtos.FilterDeveloper> developersByUser = new java.util.LinkedHashMap<>();
         java.util.stream.Stream.concat(
                         commits.findVisibleContributors(scope.rootProjectId(), scope.rootScope(), scope.projectList(),
@@ -111,7 +117,7 @@ public class GitActivityService {
                 .sorted(java.util.Comparator.comparing(GitContributor::getId))
                 .forEach(contributor -> developersByUser.putIfAbsent(contributor.getUser().getId(),
                         new GitActivityDtos.FilterDeveloper(contributor.getUser().getId(),
-                                contributor.label(), contributor.getLogin())));
+                                memberNames.getOrDefault(contributor.getUser().getId(), contributor.label()), contributor.getLogin())));
         List<GitActivityDtos.FilterDeveloper> developerOptions = developersByUser.values().stream()
                 .sorted(java.util.Comparator.comparing(GitActivityDtos.FilterDeveloper::name,
                         java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
@@ -173,11 +179,13 @@ public class GitActivityService {
                 .filter(Objects::nonNull).distinct().sorted(String.CASE_INSENSITIVE_ORDER).toList();
         Instant fromTime = from == null ? null : from.atStartOfDay(BUSINESS_ZONE).toInstant();
         Instant untilTime = to == null ? null : to.plusDays(1).atStartOfDay(BUSINESS_ZONE).toInstant();
+        Set<Long> eligibleIds = includeBots && includeMergeCommits || visible.isEmpty() ? null
+                : new HashSet<>(commits.findConfirmedAnalyticsIds(visible.stream().map(GitCommit::getId).toList(),
+                        includeBots, includeMergeCommits));
         Map<CommitKey, GitCommit> unique = new LinkedHashMap<>();
         for (GitCommit commit : visible) {
             GitContributor author = commit.getAuthorContributor();
-            if (!includeBots && (commit.isBot() || author != null && author.isBot())) continue;
-            if (!includeMergeCommits && commit.isMergeCommit()) continue;
+            if (eligibleIds != null && !eligibleIds.contains(commit.getId())) continue;
             if (fromTime != null && commit.getCommittedAt().isBefore(fromTime)) continue;
             if (untilTime != null && !commit.getCommittedAt().isBefore(untilTime)) continue;
             if (developerId != null && (author == null || author.getUser() == null

@@ -402,7 +402,9 @@ class AssignmentCatalogIntegrationTest {
                 .findFirst().orElseThrow();
         UUID manualId = tx.execute(status -> {
             var manual = Milestone.create(tenantId, module.getProjectId(), module.getTeamId(), "Manual milestone",
-                    null, module.getDeadline(), true, rubricVersionId, null, LatePolicyType.NO_LATE,
+                    null, module.getDeadline(), true,
+                    em.getReference(com.example.starter_project_2025.system.project.rubric.domain.RubricVersion.class, rubricVersionId),
+                    null, LatePolicyType.NO_LATE,
                     null, null, UUID.randomUUID(), publishedAt);
             em.persist(manual);
             em.find(TeamAllocationSession.class, sessionId).setStatus(TeamAllocationSessionStatus.OPEN);

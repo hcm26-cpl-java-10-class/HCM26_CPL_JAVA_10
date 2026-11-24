@@ -175,7 +175,7 @@ public class GitCommitValidationService {
 
     private Evaluation conventional(GitCommit commit, GitDevelopmentRule rule) {
         String firstLine = commit.getMessage() == null ? "" : commit.getMessage().lines().findFirst().orElse("").trim();
-        Matcher matcher = Pattern.compile("^([a-z]+)(?:\\(([^()]+)\\))?(!)?:\\s+\\S.*$",
+        Matcher matcher = Pattern.compile("^([a-z][a-z0-9-]{0,31})(?:\\(([^()]+)\\))?(!)?:\\s+\\S.*$",
                 Pattern.CASE_INSENSITIVE).matcher(firstLine);
         if (!matcher.matches()) return new Evaluation(GitCommitValidationStatus.FAILED,
                 "Expected type(scope): description.", firstLine);

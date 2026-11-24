@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.git_integration;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import com.example.starter_project_2025.system.git_integration.config.GitInstallationLegacyMigration;
 import com.example.starter_project_2025.system.git_integration.domain.GitInstallation;
+import com.example.starter_project_2025.system.git_integration.domain.GitInstallationStatus;
 import com.example.starter_project_2025.system.git_integration.domain.GitProvider;
 import com.example.starter_project_2025.system.git_integration.github.GitHubApiClient;
 import com.example.starter_project_2025.system.git_integration.github.GitHubApiException;
@@ -168,6 +169,41 @@ class GitInstallationIntegrationTest {
                 .andExpect(jsonPath("$.installation.status").value("SUSPENDED"));
         mvc.perform(get(BASE + "/installations").header("Authorization", "Bearer " + managerToken))
                 .andExpect(jsonPath("$.status").value("SUSPENDED"));
+    }
+
+    @Test
+    void reconnectedAccountIsListedOnceWithItsNewInstallation() throws Exception {
+        callback(managerToken, Map.of("state", startConnect(managerToken), "code", "good-code", "installationId", INSTALLATION_ID))
+                .andExpect(status().isOk());
+        markDisconnected(INSTALLATION_ID);
+        // Reinstalling the app on the same account gives a new installation id for the same GitHub account.
+        long reinstalled = 555777L;
+        when(github.getInstallation(reinstalled)).thenReturn(Optional.of(new GitHubInstallation(reinstalled,
+                new GitHubAccount(INSTALLATION_ID + 1000, "my-org", "Organization"), 123L, "selected", null)));
+        callback(managerToken, Map.of("state", startConnect(managerToken), "code", "good-code", "installationId", reinstalled))
+                .andExpect(status().isOk());
+
+        mvc.perform(get(BASE + "/installations").header("Authorization", "Bearer " + managerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CONNECTED"))
+                .andExpect(jsonPath("$.installations.length()").value(1))
+                .andExpect(jsonPath("$.installations[0].installationId").value(reinstalled))
+                .andExpect(jsonPath("$.installations[0].status").value("CONNECTED"));
+        assertThat(tenantRows()).hasSize(2);
+    }
+
+    @Test
+    void disconnectedAccountStaysListedUntilItIsReconnected() throws Exception {
+        callback(managerToken, Map.of("state", startConnect(managerToken), "code", "good-code", "installationId", INSTALLATION_ID))
+                .andExpect(status().isOk());
+        callback(managerToken, Map.of("state", startConnect(managerToken), "code", "good-code", "installationId", SECOND_INSTALLATION_ID))
+                .andExpect(status().isOk());
+        markDisconnected(INSTALLATION_ID);
+
+        mvc.perform(get(BASE + "/installations").header("Authorization", "Bearer " + managerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.installations.length()").value(2))
+                .andExpect(jsonPath("$.installations[?(@.installationId == " + INSTALLATION_ID + ")].status").value("DISCONNECTED"));
     }
 
     @Test
@@ -417,6 +453,12 @@ class GitInstallationIntegrationTest {
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(new HashMap<>(body))));
+    }
+
+    private void markDisconnected(long installationId) {
+        GitInstallation row = installations.findByProviderAndInstallationId(GitProvider.GITHUB, installationId).orElseThrow();
+        row.setStatus(GitInstallationStatus.DISCONNECTED);
+        installations.saveAndFlush(row);
     }
 
     private List<GitInstallation> tenantRows() {

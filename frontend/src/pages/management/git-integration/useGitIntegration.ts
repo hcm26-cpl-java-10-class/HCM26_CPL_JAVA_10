@@ -11,7 +11,7 @@ import type {
   GitAccountsOverview,
   BacklogGitLinks,
   GitCommitQuery,
-  GitInsightsRange,
+  GitInsightsPeriod,
   GitPullRequestQuery,
   GitRepositoryQuery,
   GitSyncHistoryPage,
@@ -40,8 +40,8 @@ export const gitIntegrationKeys = {
       query.page ?? 0, query.size ?? 20] as const,
   pullRequest: (projectId: number, number: number, repositoryId?: number) =>
     ["git-integration", "pull-request", projectId, number, repositoryId ?? null] as const,
-  insights: (projectId: number, range: GitInsightsRange, repositoryId?: number) =>
-    ["git-integration", "insights", projectId, range, repositoryId ?? null] as const,
+  insights: (projectId: number, period: GitInsightsPeriod, repositoryId?: number) =>
+    ["git-integration", "insights", projectId, period.range, period.since ?? null, period.until ?? null, repositoryId ?? null] as const,
   branches: (projectId: number, q: string) => ["git-integration", "branches", projectId, q] as const,
   backlogLinks: (itemId: number, page: number, size: number) => ["git-integration", "backlog-links", itemId, page, size] as const,
   backlogLinkSummary: (itemIds: number[]) => ["git-integration", "backlog-link-summary", itemIds] as const,
@@ -216,11 +216,11 @@ export function useRepositoryPullRequests(projectId: number | undefined, query: 
 const INSIGHTS_POLL_MS = 60_000;
 
 /** WS-GH-02: activity insights of the period; keeps the previous range on screen while the next loads. */
-export function useRepositoryInsights(projectId: number | undefined, range: GitInsightsRange, enabled = true,
+export function useRepositoryInsights(projectId: number | undefined, period: GitInsightsPeriod, enabled = true,
                                       repositoryId?: number) {
   return useQuery({
-    queryKey: gitIntegrationKeys.insights(projectId ?? 0, range, repositoryId),
-    queryFn: ({ signal }) => gitIntegrationApi.repositoryInsights(projectId!, range, signal, repositoryId),
+    queryKey: gitIntegrationKeys.insights(projectId ?? 0, period, repositoryId),
+    queryFn: ({ signal }) => gitIntegrationApi.repositoryInsights(projectId!, period, signal, repositoryId),
     enabled: enabled && projectId !== undefined,
     placeholderData: keepPreviousData,
     staleTime: INSIGHTS_POLL_MS,

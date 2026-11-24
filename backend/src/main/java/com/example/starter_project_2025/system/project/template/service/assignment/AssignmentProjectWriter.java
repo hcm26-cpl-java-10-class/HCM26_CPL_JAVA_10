@@ -175,7 +175,7 @@ public class AssignmentProjectWriter {
             UUID rubricId = rubric(item, assignment.getTenantId());
             Milestone milestone = Milestone.create(assignment.getTenantId(), project.getId(), project.getTeamId(),
                     item.path("title").asText(), nullableText(item, "description"), deadline,
-                    item.path("mandatory").asBoolean(true), rubricId, null,
+                    item.path("mandatory").asBoolean(true), rubrics.referenceOrNull(rubricId), null,
                     allowLate ? LatePolicyType.ALLOW_LATE : LatePolicyType.NO_LATE,
                     allowLate ? deadline.plus(late.path("maxLateDays").asLong(), ChronoUnit.DAYS) : null,
                     allowLate ? late.path("penaltyPerDayPercent").decimalValue() : null, actor, publishedAt);

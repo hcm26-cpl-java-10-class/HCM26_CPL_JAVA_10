@@ -1,6 +1,7 @@
 import { useGitActivityParam } from "./git-activity-url-context";
 import { useDeferredValue } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Search, ShieldAlert } from "lucide-react";
 import { workspaceGitApi, type GitCommitValidationStatus, type GitDevelopmentRuleType } from "@/api/features/workspace-git.api";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/usePermissions";
 import { WorkspaceEmptyState } from "./workspace.shared";
+import { GitComplianceCommitDialog } from "./GitComplianceCommitDialog";
 
 const RULE_ALL = "all";
 const STATUS_ALL = "all";
@@ -38,11 +40,14 @@ function messageOf(error: unknown) {
 
 export function GitDevelopmentComplianceWorkspacePanel({ workspaceId }: { workspaceId: number }) {
   const { user, activeRole } = usePermissions();
+  const location = useLocation();
+  const [params] = useSearchParams();
   const [search, setSearch] = useGitActivityParam<string>("gitComplianceSearch", "");
   const deferredSearch = useDeferredValue(search.trim());
   const [developerId, setDeveloperId] = useGitActivityParam<number | undefined>("gitComplianceDeveloperId", undefined, "number");
   const [ruleType, setRuleType] = useGitActivityParam<GitDevelopmentRuleType | undefined>("gitComplianceRuleType", undefined);
   const [status, setStatus] = useGitActivityParam<GitCommitValidationStatus | undefined>("gitComplianceStatus", undefined);
+  const [selected, setSelected] = useGitActivityParam<string | undefined>("gitComplianceDetail", undefined);
   const [from, setFrom] = useGitActivityParam<string>("gitComplianceFrom", "");
   const [to, setTo] = useGitActivityParam<string>("gitComplianceTo", "");
   const [failedOnly, setFailedOnly] = useGitActivityParam<boolean>("gitComplianceFailedOnly", false);
@@ -69,7 +74,17 @@ export function GitDevelopmentComplianceWorkspacePanel({ workspaceId }: { worksp
   });
   if (rules.isPending) return <Card className="border-amber-200"><CardContent className="space-y-3 p-5"><Skeleton className="h-6 w-48" /><Skeleton className="h-24 w-full" /></CardContent></Card>;
   if (rules.isError) return <Card className="border-rose-200"><CardContent className="p-5 text-sm text-rose-800">{messageOf(rules.error)}</CardContent></Card>;
-  if (!rules.data?.some(rule => rule.enabled)) return null;
+  if (!rules.data?.some(rule => rule.enabled)) {
+    const next = new URLSearchParams(params);
+    next.set("tab", "git-activity");
+    next.set("gitSection", "rules");
+    next.delete("gitCommitDetail");
+    return <Card className="border-amber-200"><CardContent className="p-5">
+      <WorkspaceEmptyState icon={ClipboardCheck} title="No active development rules"
+        description="Enable a development rule to start validation. Saved history is retained; disabled rules are not counted as passed."
+        action={<Button asChild variant="outline"><Link to={`/management/workspaces/${workspaceId}?${next}`} state={location.state}>Configure rules</Link></Button>} />
+    </CardContent></Card>;
+  }
 
   const report = query.data;
   const conventional = report?.byRule.CONVENTIONAL_COMMIT;
@@ -125,7 +140,9 @@ export function GitDevelopmentComplianceWorkspacePanel({ workspaceId }: { worksp
         : <div className="overflow-x-auto rounded-lg border"><Table>
           <TableHeader className="bg-slate-50"><TableRow><TableHead>Commit</TableHead><TableHead>Developer</TableHead><TableHead>Rule</TableHead><TableHead>Result</TableHead><TableHead>Reason</TableHead><TableHead>Evaluated</TableHead></TableRow></TableHeader>
           <TableBody>{rows.map((row, index) => <TableRow key={`${row.commitId}-${row.ruleType}-${index}`}>
-            <TableCell className="max-w-[24rem]"><p className="truncate font-medium">{row.message.split("\n")[0] || "(no message)"}</p>
+            <TableCell className="max-w-[24rem]"><button type="button" onClick={() => setSelected(`${row.commitId}:${row.ruleType}`)}
+              className="block max-w-full truncate text-left font-medium text-primary hover:underline"
+              aria-label={`View commit ${row.sha.slice(0, 10)} details`}>{row.message.split("\n")[0] || "(no message)"}</button>
               <p className="mt-0.5 font-mono text-xs text-muted-foreground">{row.sha.slice(0, 10)}</p></TableCell>
             <TableCell>{row.developerName}</TableCell>
             <TableCell><Badge variant="outline" className={row.ruleType === "CONVENTIONAL_COMMIT" ? "border-sky-200 bg-sky-50 text-sky-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}>
@@ -140,6 +157,8 @@ export function GitDevelopmentComplianceWorkspacePanel({ workspaceId }: { worksp
         <div className="flex gap-2"><Button size="sm" variant="outline" disabled={page === 0 || query.isFetching} onClick={() => setPage(value => Math.max(0, value - 1))}>Previous</Button>
           <Button size="sm" variant="outline" disabled={page + 1 >= query.data.results.totalPages || query.isFetching} onClick={() => setPage(value => value + 1)}>Next</Button></div>
       </div>}
+      <GitComplianceCommitDialog workspaceId={workspaceId}
+        row={rows.find(row => `${row.commitId}:${row.ruleType}` === selected)} onClose={() => setSelected(undefined)} />
     </CardContent>
   </Card>;
 }

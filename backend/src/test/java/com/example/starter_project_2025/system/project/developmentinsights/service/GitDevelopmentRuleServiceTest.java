@@ -118,6 +118,63 @@ class GitDevelopmentRuleServiceTest {
     }
 
     @Test
+    void savesCustomCommitTypesAndReloadsOnlyTheConfiguredTypes() {
+        when(projects.findForWorkspaceCreation(10L)).thenReturn(Optional.of(root));
+        when(rules.saveAndFlush(any())).thenAnswer(invocation -> {
+            GitDevelopmentRule saved = invocation.getArgument(0);
+            when(rules.findAllByRootProject_IdOrderByTypeAscVersionDesc(10L)).thenReturn(List.of(saved));
+            return saved;
+        });
+
+        var saved = service.save(4L, new GitDevelopmentRuleService.RuleInput(
+                GitDevelopmentRuleType.CONVENTIONAL_COMMIT, true,
+                List.of(" CI ", "release-2", "ci", "build"), false, null));
+
+        assertThat(saved.allowedCommitTypes()).containsExactly("ci", "release-2", "build");
+        assertThat(service.list(4L).get(0).allowedCommitTypes()).containsExactly("ci", "release-2", "build");
+    }
+
+    @Test
+    void disabledRuleCanRemoveAllTypesWithoutRestoringDefaultsOnReload() {
+        when(projects.findForWorkspaceCreation(10L)).thenReturn(Optional.of(root));
+        when(rules.saveAndFlush(any())).thenAnswer(invocation -> {
+            GitDevelopmentRule saved = invocation.getArgument(0);
+            when(rules.findAllByRootProject_IdOrderByTypeAscVersionDesc(10L)).thenReturn(List.of(saved));
+            return saved;
+        });
+
+        var saved = service.save(4L, new GitDevelopmentRuleService.RuleInput(
+                GitDevelopmentRuleType.CONVENTIONAL_COMMIT, false, List.of(), false, null));
+
+        assertThat(saved.allowedCommitTypes()).isEmpty();
+        assertThat(service.list(4L).get(0).allowedCommitTypes()).isEmpty();
+    }
+
+    @Test
+    void enabledRuleNeedsAtLeastOneTypeAndInvalidTypesAreRejectedBeforeSaving() {
+        assertThatThrownBy(() -> service.save(4L, new GitDevelopmentRuleService.RuleInput(
+                GitDevelopmentRuleType.CONVENTIONAL_COMMIT, true, List.of(), false, null)))
+                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("at least one commit type");
+        assertThatThrownBy(() -> service.save(4L, new GitDevelopmentRuleService.RuleInput(
+                GitDevelopmentRuleType.CONVENTIONAL_COMMIT, true, List.of("build!"), false, null)))
+                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("starting with a letter");
+
+        org.mockito.Mockito.verifyNoInteractions(projects, rules);
+    }
+
+    @Test
+    void rejectsCustomTypeListsThatWouldOverflowTheExistingStorageColumn() {
+        List<String> tooLong = java.util.stream.IntStream.range(0, 6)
+                .mapToObj(index -> "a".repeat(30) + index).toList();
+
+        assertThatThrownBy(() -> service.save(4L, new GitDevelopmentRuleService.RuleInput(
+                GitDevelopmentRuleType.CONVENTIONAL_COMMIT, true, tooLong, false, null)))
+                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("160 characters");
+
+        org.mockito.Mockito.verifyNoInteractions(projects, rules);
+    }
+
+    @Test
     void rejectsInvalidTaskPatternBeforeCreatingANewVersion() {
         assertThatThrownBy(() -> service.save(4L, new GitDevelopmentRuleService.RuleInput(
                 GitDevelopmentRuleType.TASK_ID, true, List.of(), false, "[")))

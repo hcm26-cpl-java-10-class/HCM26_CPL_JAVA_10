@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.git_integration.ingestion;
 
+import com.example.starter_project_2025.system.git_integration.github.GitHubApiException;
+
 import com.example.starter_project_2025.system.git_integration.domain.GitCommitSource;
 import com.example.starter_project_2025.system.git_integration.domain.GitPullRequestState;
 import com.example.starter_project_2025.system.git_integration.domain.GitReviewState;
@@ -47,6 +49,7 @@ public class GitHubPayloadMapper {
     /** One element of a push payload's {@code commits} array. */
     public IncomingCommit pushCommit(JsonNode commit) {
         LocalDateTime timestamp = time(text(commit, "timestamp"));
+        if (timestamp == null) throw GitWebhookFailure.permanent("Push commit timestamp is missing or invalid");
         return new IncomingCommit(
                 text(commit, "id"),
                 limit(text(commit, "message"), 4000),
@@ -58,7 +61,7 @@ public class GitHubPayloadMapper {
                 limit(text(commit, "committer", "email"), 255),
                 limit(text(commit, "committer", "username"), 100),
                 timestamp,
-                timestamp == null ? now() : timestamp,
+                timestamp,
                 limit(text(commit, "url"), 500),
                 countFiles(commit),
                 null,
@@ -70,6 +73,8 @@ public class GitHubPayloadMapper {
         GitHubCommit.Person author = data == null ? null : data.author();
         GitHubCommit.Person committer = data == null ? null : data.committer();
         LocalDateTime committedAt = committer == null ? null : time(committer.date());
+        if (committedAt == null) throw new GitHubApiException(GitHubApiException.Kind.UNAVAILABLE,
+                "read commit timestamp", 200);
         return new IncomingCommit(
                 commit.sha(),
                 limit(data == null ? null : data.message(), 4000),
@@ -81,7 +86,7 @@ public class GitHubPayloadMapper {
                 limit(committer == null ? null : committer.email(), 255),
                 limit(commit.committer() == null ? null : commit.committer().login(), 100),
                 author == null ? null : time(author.date()),
-                committedAt == null ? now() : committedAt,
+                committedAt,
                 limit(commit.htmlUrl(), 500),
                 null,
                 commit.parents() == null ? null : commit.parents().size(),
@@ -94,6 +99,8 @@ public class GitHubPayloadMapper {
         GitHubHistoryCommit.Person committer = commit.committer();
         LocalDateTime authoredAt = time(commit.authoredDate());
         LocalDateTime committedAt = time(commit.committedDate());
+        if (committedAt == null) throw new GitHubApiException(GitHubApiException.Kind.UNAVAILABLE,
+                "read commit timestamp", 200);
         return new IncomingCommit(
                 commit.oid(),
                 limit(commit.message(), 4000),
@@ -105,7 +112,7 @@ public class GitHubPayloadMapper {
                 limit(committer == null ? null : committer.email(), 255),
                 limit(committer == null ? null : committer.login(), 100),
                 authoredAt,
-                committedAt != null ? committedAt : authoredAt != null ? authoredAt : now(),
+                committedAt,
                 limit(commit.url(), 500),
                 null,
                 commit.parentCount(),

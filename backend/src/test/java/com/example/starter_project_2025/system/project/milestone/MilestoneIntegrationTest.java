@@ -222,9 +222,6 @@ class MilestoneIntegrationTest {
         outboxRepository.deleteAll();
         auditRepository.deleteAll();
         artifactAttachmentRepository.deleteAll();
-        artifactSubmissionRepository.deleteAll();
-        artifactDraftRepository.deleteAll();
-        checklistRepository.deleteAll();
         jdbcTemplate.execute("DELETE FROM milestone_review_criteria");
         jdbcTemplate.execute("DELETE FROM milestone_submission_reviews");
         jdbcTemplate.execute("DELETE FROM milestone_submission_artifacts");
@@ -235,7 +232,12 @@ class MilestoneIntegrationTest {
         jdbcTemplate.execute("DELETE FROM final_project_grades");
         jdbcTemplate.execute("DELETE FROM milestone_waivers");
         jdbcTemplate.execute("DELETE FROM milestone_submissions");
+        // Delete children before their parents: these tables now reference each other through real foreign keys.
+        artifactSubmissionRepository.deleteAll();
+        artifactDraftRepository.deleteAll();
+        checklistRepository.deleteAll();
         jdbcTemplate.execute("UPDATE sprint_backlog SET milestone_id = NULL WHERE milestone_id IS NOT NULL");
+        jdbcTemplate.execute("DELETE FROM milestone_draft_revisions");
         milestoneRepository.deleteAll();
         ensureActualTeamFixture();
         var teacher = userDetailsService.loadUserByUsername("teacher@example.com");

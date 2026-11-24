@@ -31,6 +31,7 @@ import ProjectAnalyticsPage from "@/pages/management/analytics/project/ProjectAn
 import { GitActivityWorkspacePanel } from "./GitActivityWorkspacePanel";
 import { clearGitHubTabParams, GITHUB_TAB, openGitHubTabParams, type GitHubTabTarget } from "@/pages/management/git-integration/github-tab.params";
 import { WorkspaceGitHubPanel } from "./WorkspaceGitHubPanel";
+import { ProjectFinalizeAction } from "./ProjectFinalizeAction";
 
 const TAB_TRIGGER = "h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none";
 
@@ -96,7 +97,9 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   const invalidProject = requestedProject !== null && hierarchy.isSuccess && !project;
   const projectId = project?.id ?? context?.projectId;
   const workspaceReadOnly = !!hierarchy.data?.readOnly;
-  const projectReadOnly = workspaceReadOnly || ["COMPLETED", "CANCELLED"].includes(project?.status ?? context?.projectStatus ?? "");
+  // The heading, read-only state and finalize action follow the project selected in the hierarchy.
+  const selectedStatus = project?.status ?? context?.projectStatus ?? undefined;
+  const projectReadOnly = workspaceReadOnly || ["COMPLETED", "CANCELLED"].includes(selectedStatus ?? "");
   const projectScoped = hierarchy.data?.assignmentId != null || workspaceReadOnly;
   const isMaster = hierarchy.data?.assignmentId != null && project?.parentProjectId == null;
   const sharedMasterSelected = isMaster && hierarchy.data?.mode === "SPLIT";
@@ -148,7 +151,11 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
               </div>
               <h1 className="break-words text-xl font-bold leading-8 tracking-tight sm:text-2xl">{context.projectName ?? "Team workspace"}</h1>
             </div>
-            {context.projectStatus && <div className="pt-1 sm:pt-6"><WorkspaceStatusBadge status={context.projectStatus} colored /></div>}
+            {(selectedStatus || hasProject) && <div className="flex flex-wrap items-center justify-end gap-2 pt-1 sm:pt-6">
+              {selectedStatus && <WorkspaceStatusBadge status={selectedStatus} colored />}
+              {hasProject && !workspaceReadOnly && <ProjectFinalizeAction key={projectId} projectId={projectId!}
+                teamId={project ? project.teamId : context.teamId} hierarchical={hierarchy.data?.assignmentId != null} />}
+            </div>}
           </section>
           {hierarchy.data && <WorkspaceProjectHierarchy data={hierarchy.data} selectedId={projectId} onSelect={selectProject} />}
           <Tabs value={activeTab} onValueChange={changeTab} className="min-w-0 gap-5">
@@ -176,7 +183,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                 hasProject ? <WorkspaceGitHubPanel key={projectId} projectId={projectId!} assignedProjectIds={projects.map(item => item.id)} />
                   : <WorkspaceSectionState denied retry={reloadAccess} />
               ) : isGitActivityTab ? (hasProject && canViewGitActivity
-                  ? <GitActivityWorkspacePanel key={projectId} workspaceId={workspaceId} projectId={projectId!} />
+                  ? <GitActivityWorkspacePanel key={projectId} workspaceId={workspaceId} projectId={projectId!} projectScope={hierarchy.data} />
                   : <WorkspaceSectionState denied retry={reloadAccess} />)
                 : denied || !current ? <WorkspaceSectionState denied retry={reloadAccess} />
                 : tab === "overview" ? <WorkspaceOverviewSection workspaceId={workspaceId} projectId={context.projectId} selectedProject={projectScoped ? project : undefined}

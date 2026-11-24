@@ -157,14 +157,29 @@ public class GitInstallationService {
     public GitInstallationListResponse listInstallations() {
         User user = access.requireUser();
         access.requireRead(user);
-        List<GitInstallation> rows = installations
-                .findByTenant_IdAndProviderAndIsActiveTrueOrderByConnectedAtDesc(user.getTenant().getId(), GitProvider.GITHUB);
+        List<GitInstallation> rows = latestPerAccount(installations
+                .findByTenant_IdAndProviderAndIsActiveTrueOrderByConnectedAtDesc(user.getTenant().getId(), GitProvider.GITHUB));
 
         Map<Long, User> people = people(rows);
         Map<Long, List<GitInstallationResponse.LinkedProject>> linked = linkedProjects(rows.stream().map(GitInstallation::getId).toList());
         return new GitInstallationListResponse(summarize(rows), access.canManage(user),
                 rows.stream().map(row -> toResponse(row, people, linked.getOrDefault(row.getId(), List.of()),
                         canDisconnect(user, row))).toList());
+    }
+
+    /**
+     * Reconnecting an account after a disconnection creates a new GitHub installation (new {@code installation_id}),
+     * so the old, DISCONNECTED row stays in the table. Show one card per GitHub account: its most recent installation
+     * ({@code rows} are ordered by {@code connectedAt} desc). A DISCONNECTED row is still listed while it is the
+     * account's latest one, so the account can be reconnected from the page.
+     */
+    private static List<GitInstallation> latestPerAccount(List<GitInstallation> rows) {
+        Map<Object, GitInstallation> latest = new java.util.LinkedHashMap<>();
+        for (GitInstallation row : rows) {
+            Object account = row.getAccountId() != null ? row.getAccountId() : "installation:" + row.getId();
+            latest.putIfAbsent(account, row);
+        }
+        return List.copyOf(latest.values());
     }
 
     private static String summarize(List<GitInstallation> rows) {

@@ -124,7 +124,7 @@ public class ArtifactSubmissionService {
         }
 
         var previousSubmission = submissionRepository
-                .findTopByTenantIdAndProjectIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(
+                .findTopByTenantIdAndProjectIdAndMilestone_IdAndSubmitterIdOrderByVersionDesc(
                         scope.tenantId(), projectId, milestoneId, scope.actorId());
         long version = previousSubmission.map(row -> row.getVersion() + 1).orElse(1L);
         String checklistJson = writeJson(checklist);
@@ -132,7 +132,7 @@ public class ArtifactSubmissionService {
                 .map(this::attachmentResponse).toList();
         String attachmentsJson = writeJson(attachmentSnapshots);
         MilestoneArtifactSubmission submission = submissionRepository.saveAndFlush(MilestoneArtifactSubmission.submit(
-                scope.tenantId(), projectId, milestone.getTeamId(), milestoneId, scope.actorId(), version,
+                scope.tenantId(), projectId, milestone.getTeamId(), milestone, scope.actorId(), version,
                 normalize(request.repositoryUrl()), normalize(request.deploymentUrl()),
                 normalize(request.releaseNotes()), checklistJson, attachmentsJson, now, late,
                 milestone.latePenaltyAt(now)));
@@ -178,7 +178,7 @@ public class ArtifactSubmissionService {
             throw validation("attachmentIds", "Attachment list contains an invalid or duplicate file");
         }
         List<ArtifactAttachment> rows = attachmentRepository
-                .findByIdInAndMilestoneIdAndProjectIdAndTenantIdAndUploadedByAndScanStatus(
+                .findByIdInAndMilestone_IdAndProjectIdAndTenantIdAndUploadedByAndScanStatus(
                         ids, milestoneId, projectId, scope.tenantId(), scope.actorId(), "CLEAN");
         if (rows.size() != ids.size()) {
             throw validation("attachments", "One or more files are unavailable, rejected, or outside your submission scope");
@@ -246,7 +246,7 @@ public class ArtifactSubmissionService {
                         throw new IllegalStateException("Stored draft checklist is invalid", ex);
                     }
                     snapshot.put("attachments", attachmentRepository
-                            .findByMilestoneIdAndProjectIdAndTenantIdOrderByUploadedAtAsc(
+                            .findByMilestone_IdAndProjectIdAndTenantIdOrderByUploadedAtAsc(
                                     milestoneId, projectId, tenantId).stream().map(ArtifactAttachment::getId).toList());
                     return snapshot;
                 }).orElseGet(() -> Map.of("status", "NO_DRAFT", "version", 0));

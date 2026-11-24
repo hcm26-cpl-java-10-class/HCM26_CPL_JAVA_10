@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -75,13 +76,16 @@ public class RepositoryActivityController {
         return queryService.pullRequest(projectId, number, repositoryId);
     }
 
-    @Operation(summary = "WS-GH-02: activity of the period (7d, 30d, 90d; today included) — commits per day, contributors, "
-            + "branches — and the current state of the open pull requests")
+    @Operation(summary = "WS-GH-02: activity of the period (7d, 30d, 90d, 6m, 1y ending today; all = since the first synchronized "
+            + "activity; custom = since..until) — commits per day/week/month, contributors, branches — and the current state "
+            + "of the open pull requests")
     @GetMapping("/insights")
     public RepositoryInsightsView insights(@PathVariable Long projectId,
                                            @RequestParam(required = false) String range,
+                                           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate since,
+                                           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate until,
                                            @RequestParam(required = false) Long repositoryId) {
-        return insightsService.insights(projectId, range, repositoryId);
+        return insightsService.insights(projectId, range, since, until, repositoryId);
     }
 
     @Operation(summary = "WS-GH-02: branches the commits were first pushed to, latest activity first; q matches the name")

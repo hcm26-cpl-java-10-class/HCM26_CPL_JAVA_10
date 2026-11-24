@@ -49,8 +49,11 @@ public class SubmissionVersion {
     @Column(name = "submitted_by", nullable = false, updatable = false)
     private UUID submittedBy;
 
-    @Column(name = "artifact_submission_id", unique = true)
-    private UUID artifactSubmissionId;
+    /** Artifact snapshot this official version was created from (team artifact workflow), if any. */
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "artifact_submission_id", unique = true,
+            foreignKey = @ForeignKey(name = "fk_submission_version_artifact_submission"))
+    private MilestoneArtifactSubmission artifactSubmission;
 
     @Column(name = "is_late", nullable = false)
     private boolean late;
@@ -135,11 +138,17 @@ public class SubmissionVersion {
         return result;
     }
 
-    public void linkArtifactSubmission(UUID artifactSubmissionId) {
-        if (this.artifactSubmissionId != null && !this.artifactSubmissionId.equals(artifactSubmissionId)) {
+    public void linkArtifactSubmission(MilestoneArtifactSubmission artifactSubmission) {
+        UUID current = getArtifactSubmissionId();
+        if (current != null && !current.equals(artifactSubmission.getId())) {
             throw new IllegalStateException("Submission version is already linked to another artifact submission");
         }
-        this.artifactSubmissionId = artifactSubmissionId;
+        this.artifactSubmission = artifactSubmission;
+    }
+
+    /** Id of the linked artifact submission; read from the lazy proxy without loading it. */
+    public UUID getArtifactSubmissionId() {
+        return artifactSubmission == null ? null : artifactSubmission.getId();
     }
 
     private void applyArtifactValues(List<ArtifactValue> values) {

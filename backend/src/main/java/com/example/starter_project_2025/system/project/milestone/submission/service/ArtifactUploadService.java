@@ -95,7 +95,7 @@ public class ArtifactUploadService {
         Instant now = Instant.now();
         var existingDraft = draftRepository.findByMilestoneIdAndProjectIdAndTenantId(milestoneId, projectId, tenantId);
         MilestoneArtifactDraft draft = existingDraft.orElseGet(() -> MilestoneArtifactDraft.create(
-                milestoneId, projectId, tenantId, actorId, now, "{}"));
+                milestone, projectId, tenantId, actorId, now, "{}"));
         if (existingDraft.isEmpty()) draftRepository.saveAndFlush(draft);
 
         UUID storageKey = UUID.randomUUID();
@@ -121,7 +121,7 @@ public class ArtifactUploadService {
 
         String name = safeFileName(file.getOriginalFilename());
         ArtifactAttachment attachment = attachmentRepository.saveAndFlush(ArtifactAttachment.clean(
-                milestoneId, projectId, tenantId, storageKey.toString(), name, detectedType,
+                milestone, projectId, tenantId, storageKey.toString(), name, detectedType,
                 bytes.length, actorId, now));
         try {
             Map<String, Object> details = new LinkedHashMap<>();

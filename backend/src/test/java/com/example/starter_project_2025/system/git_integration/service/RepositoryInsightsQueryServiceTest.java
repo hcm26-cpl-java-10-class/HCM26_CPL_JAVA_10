@@ -25,11 +25,14 @@ class RepositoryInsightsQueryServiceTest {
     }
 
     @Test
-    void rangeParsesTheThreePresetsAndDefaultsToThirtyDays() {
+    void rangeParsesThePresetsAndDefaultsToThirtyDays() {
         assertThat(InsightsRange.parse(null)).isEqualTo(InsightsRange.D30);
         assertThat(InsightsRange.parse(" ")).isEqualTo(InsightsRange.D30);
-        assertThat(InsightsRange.parse("7D").days()).isEqualTo(7);
+        assertThat(InsightsRange.parse("7D")).isEqualTo(InsightsRange.D7);
         assertThat(InsightsRange.parse("90d").key()).isEqualTo("90d");
+        assertThat(InsightsRange.parse("6M")).isEqualTo(InsightsRange.M6);
+        assertThat(InsightsRange.parse("1y")).isEqualTo(InsightsRange.Y1);
+        assertThat(InsightsRange.parse("all")).isEqualTo(InsightsRange.ALL);
         assertThatThrownBy(() -> InsightsRange.parse("365d"))
                 .isInstanceOf(GitIntegrationException.class)
                 .hasFieldOrPropertyWithValue("code", "GIT_INSIGHTS_RANGE_INVALID");

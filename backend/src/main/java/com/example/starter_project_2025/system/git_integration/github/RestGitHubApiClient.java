@@ -286,6 +286,18 @@ public class RestGitHubApiClient implements GitHubApiClient {
         return commits == null ? List.of() : commits;
     }
 
+    @Override
+    public GitHubCommit getCommit(String token, String owner, String repository, String sha) {
+        GitHubCommit commit = call("get commit metadata", () -> restClient.get()
+                .uri("/repos/{owner}/{repository}/commits/{sha}", owner, repository, sha)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .retrieve().body(GitHubCommit.class));
+        if (commit == null || !sha.equals(commit.sha()) || commit.parents() == null) {
+            throw new GitHubApiException(GitHubApiException.Kind.UNAVAILABLE, "get commit metadata", 200);
+        }
+        return commit;
+    }
+
     /**
      * Runs a GitHub call and maps every failure to {@link GitHubApiException}
      * without copying response bodies or URLs into the message.

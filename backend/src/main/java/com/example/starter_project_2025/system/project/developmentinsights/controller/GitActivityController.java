@@ -73,7 +73,7 @@ public class GitActivityController {
             @RequestParam(required = false) String branch,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(defaultValue = "false") boolean includeBots,
+            @RequestParam(defaultValue = "true") boolean includeBots,
             @RequestParam(defaultValue = "false") boolean includeMergeCommits) {
         return service.commitAnalytics(workspaceId, granularity, projectId, taskId, developerId,
                 contributorId, unmappedOnly, branch, from, to, includeBots, includeMergeCommits);

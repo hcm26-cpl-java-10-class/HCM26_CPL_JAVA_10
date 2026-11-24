@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import com.example.starter_project_2025.system.project.rubric.domain.RubricVersion;
 import org.hibernate.annotations.ColumnDefault;
 
 import java.math.BigDecimal;
@@ -82,8 +83,10 @@ public class Milestone {
     @Column(name = "is_active", nullable = false, columnDefinition = "boolean default true")
     private boolean active = true;
 
-    @Column(name = "rubric_snapshot_id")
-    private UUID rubricSnapshotId;
+    /** Published rubric version this milestone is assessed with; immutable once published. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "rubric_snapshot_id", foreignKey = @ForeignKey(name = "fk_milestone_rubric_version"))
+    private RubricVersion rubricSnapshot;
 
     // Reviewer assignment belongs to a submission, not to the milestone itself.
     // Keep the nullable legacy column so existing milestones can still be read.
@@ -135,6 +138,11 @@ public class Milestone {
     @OrderBy("orderIndex ASC")
     private List<MilestoneChecklistItem> checklistItems = new ArrayList<>();
 
+    /** Id of the rubric version; read from the lazy proxy without loading it. */
+    public UUID getRubricSnapshotId() {
+        return rubricSnapshot == null ? null : rubricSnapshot.getId();
+    }
+
     public static Milestone create(
             Long tenantId,
             Long projectId,
@@ -143,7 +151,7 @@ public class Milestone {
             String description,
             Instant deadline,
             boolean mandatory,
-            UUID rubricSnapshotId,
+            RubricVersion rubricSnapshot,
             UUID reviewerId,
             LatePolicyType latePolicyType,
             Instant lateUntil,
@@ -161,7 +169,7 @@ public class Milestone {
         milestone.mandatory = mandatory;
         milestone.status = MilestoneStatus.PLANNED;
         milestone.lifecycleState = MilestoneLifecycleStatus.PLANNED;
-        milestone.rubricSnapshotId = rubricSnapshotId;
+        milestone.rubricSnapshot = rubricSnapshot;
         milestone.reviewerId = reviewerId;
         milestone.latePolicyType = latePolicyType;
         milestone.lateUntil = lateUntil;
@@ -345,11 +353,11 @@ public class Milestone {
     }
 
     public void editDraft(String title, String description, Instant deadline, boolean mandatory,
-                          UUID rubricSnapshotId, LatePolicyType latePolicyType, Instant lateUntil,
+                          RubricVersion rubricSnapshot, LatePolicyType latePolicyType, Instant lateUntil,
                           BigDecimal latePenaltyPercent, BigDecimal weight, UUID actorId, Instant now) {
         if (status != MilestoneStatus.PLANNED || !active) throw new IllegalStateException("Only an active draft can be edited");
         this.title = title; this.description = description; this.deadline = deadline;
-        this.mandatory = mandatory; this.rubricSnapshotId = rubricSnapshotId;
+        this.mandatory = mandatory; this.rubricSnapshot = rubricSnapshot;
         this.latePolicyType = latePolicyType; this.lateUntil = lateUntil;
         this.latePenaltyPercent = latePenaltyPercent; this.weight = weight;
         this.updatedBy = actorId; this.updatedAt = now;

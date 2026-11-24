@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.git_integration.repository;
 
 import com.example.starter_project_2025.system.git_integration.domain.GitCommit;
 import jakarta.persistence.LockModeType;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -18,6 +19,18 @@ public interface GitCommitRepository extends JpaRepository<GitCommit, Long>, Jpa
     @Query("select c from GitCommit c where c.id = :id")
     Optional<GitCommit> lockById(@Param("id") Long id);
     List<GitCommit> findByRepository_IdOrderByIdAsc(Long repositoryId);
+
+    @Query("""
+            select c from GitCommit c join fetch c.repository r join fetch r.installation
+             where c.parentCount is null and c.id > :afterId and r.status in ('ACTIVE', 'ERROR')
+             order by c.id""")
+    List<GitCommit> findMissingMetadata(@Param("afterId") long afterId, Pageable page);
+
+    @Query("""
+            select c from GitCommit c join fetch c.repository r join fetch r.installation
+             where c.parentCount is null and c.id in :ids and r.status in ('ACTIVE', 'ERROR')
+             order by c.id""")
+    List<GitCommit> findMissingMetadataByIds(@Param("ids") Collection<Long> ids, Pageable page);
 
     /** SHAs among {@code shas} already stored for the repository connection. */
     @Query("select c.sha from GitCommit c where c.repository.id = :repositoryId and c.sha in :shas")
@@ -42,26 +55,49 @@ public interface GitCommitRepository extends JpaRepository<GitCommit, Long>, Jpa
     /** GI-05: the latest commit among the connections of a project. */
     Optional<GitCommit> findFirstByRepository_IdInOrderByCommittedAtDescIdDesc(Collection<Long> repositoryIds);
 
-    /** WS-GH-02: the columns insights need of one commit. */
-    interface CommitStatRow {
-        LocalDateTime getCommittedAt();
-        String getAuthorLogin();
-        String getAuthorName();
-        String getFirstSeenRef();
-        /** GI-06: resolves the commit to a project member. */
-        Long getAuthorGithubId();
-        String getAuthorEmail();
+    /** WS-GH-02: commits of one calendar day. */
+    interface DayCountRow {
+        LocalDate getDay();
+        Long getCount();
     }
 
-    /** WS-GH-02: commits of {@code [from, to)}, newest first (the page caps how many are read). */
+    /** WS-GH-02: commits of {@code [from, to)} per calendar day (days without commits are absent). */
     @Query("""
-            select c.committedAt as committedAt, c.authorLogin as authorLogin, c.authorName as authorName,
-                   c.firstSeenRef as firstSeenRef, c.authorGithubId as authorGithubId, c.authorEmail as authorEmail
+            select cast(c.committedAt as LocalDate) as day, count(c) as count
               from GitCommit c
              where c.repository.id in :repositoryIds and c.committedAt >= :from and c.committedAt < :to
-             order by c.committedAt desc, c.id desc""")
-    List<CommitStatRow> statsBetween(@Param("repositoryIds") Collection<Long> repositoryIds, @Param("from") LocalDateTime from,
-                                     @Param("to") LocalDateTime to, Pageable page);
+             group by cast(c.committedAt as LocalDate)""")
+    List<DayCountRow> commitsPerDay(@Param("repositoryIds") Collection<Long> repositoryIds, @Param("from") LocalDateTime from,
+                                    @Param("to") LocalDateTime to);
+
+    /**
+     * WS-GH-02: commits of {@code [from, to)} per author identity, most recently active first (several rows of
+     * one person are merged in Java, like {@link #authorActivity}).
+     */
+    @Query("""
+            select c.authorGithubId as githubId, c.authorEmail as email, c.authorLogin as login, c.authorName as name,
+                   count(c) as count, min(c.committedAt) as firstAt, max(c.committedAt) as lastAt
+              from GitCommit c
+             where c.repository.id in :repositoryIds and c.committedAt >= :from and c.committedAt < :to
+             group by c.authorGithubId, c.authorEmail, c.authorLogin, c.authorName
+             order by max(c.committedAt) desc""")
+    List<AuthorActivityRow> authorsBetween(@Param("repositoryIds") Collection<Long> repositoryIds,
+                                           @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /** WS-GH-02: branches the commits of {@code [from, to)} were first pushed to, latest activity first. */
+    @Query("""
+            select c.firstSeenRef as ref, count(c) as commits, max(c.committedAt) as lastCommitAt
+              from GitCommit c
+             where c.repository.id in :repositoryIds and c.committedAt >= :from and c.committedAt < :to
+               and c.firstSeenRef like 'refs/heads/%'
+             group by c.firstSeenRef
+             order by max(c.committedAt) desc, c.firstSeenRef""")
+    List<BranchRow> branchesBetween(@Param("repositoryIds") Collection<Long> repositoryIds,
+                                    @Param("from") LocalDateTime from, @Param("to") LocalDateTime to, Pageable page);
+
+    /** WS-GH-02: when the first synchronized commit of the repositories was made (start of "all time"). */
+    @Query("select min(c.committedAt) from GitCommit c where c.repository.id in :repositoryIds")
+    LocalDateTime earliestCommittedAt(@Param("repositoryIds") Collection<Long> repositoryIds);
 
     /** GI-06: all-time commits of a master project per author identity (several rows per person are merged in Java). */
     interface AuthorActivityRow {

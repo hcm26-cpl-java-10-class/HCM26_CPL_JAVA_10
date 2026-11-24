@@ -7,11 +7,11 @@ import java.util.List;
 import java.util.UUID;
 
 public interface ArtifactAttachmentRepository extends JpaRepository<ArtifactAttachment, UUID> {
-    List<ArtifactAttachment> findByMilestoneIdAndProjectIdAndTenantIdOrderByUploadedAtAsc(
+    List<ArtifactAttachment> findByMilestone_IdAndProjectIdAndTenantIdOrderByUploadedAtAsc(
             UUID milestoneId, Long projectId, Long tenantId);
-    List<ArtifactAttachment> findByMilestoneIdAndTeamIdAndTenantIdOrderByUploadedAtAsc(UUID milestoneId, Long teamId, Long tenantId);
+    List<ArtifactAttachment> findByMilestone_IdAndTeamIdAndTenantIdOrderByUploadedAtAsc(UUID milestoneId, Long teamId, Long tenantId);
 
-    List<ArtifactAttachment> findByIdInAndMilestoneIdAndProjectIdAndTenantIdAndUploadedByAndScanStatus(
+    List<ArtifactAttachment> findByIdInAndMilestone_IdAndProjectIdAndTenantIdAndUploadedByAndScanStatus(
             java.util.Collection<UUID> ids, UUID milestoneId, Long projectId, Long tenantId,
             UUID uploadedBy, String scanStatus);
 }

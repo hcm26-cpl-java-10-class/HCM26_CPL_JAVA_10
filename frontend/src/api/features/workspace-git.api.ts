@@ -45,7 +45,7 @@ export interface GitPullRequestReview {
   reviewerName: string;
   reviewerLogin: string | null;
   state: GitPullRequestReviewState;
-  submittedAt: string;
+  submittedAt: string | null;
   selfReview: boolean;
 }
 

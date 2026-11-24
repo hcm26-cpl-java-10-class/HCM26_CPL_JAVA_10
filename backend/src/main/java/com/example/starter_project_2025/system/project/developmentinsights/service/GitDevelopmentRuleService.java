@@ -60,8 +60,8 @@ public class GitDevelopmentRuleService {
                 ? defaultTaskPattern(scope.workspace().getTaskKeyPrefix()) : input.taskKeyPattern().trim();
         validatePattern(pattern);
         List<String> allowedTypes = normalizeTypes(input.allowedCommitTypes());
-        if (input.type() == GitDevelopmentRuleType.CONVENTIONAL_COMMIT && allowedTypes.isEmpty()) {
-            throw badRequest("Choose at least one supported commit type.");
+        if (input.type() == GitDevelopmentRuleType.CONVENTIONAL_COMMIT && input.enabled() && allowedTypes.isEmpty()) {
+            throw badRequest("Add at least one commit type before enabling this rule.");
         }
         Project root = projects.findForWorkspaceCreation(scope.rootProjectId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project was not found"));
@@ -112,14 +112,15 @@ public class GitDevelopmentRuleService {
         if (values == null) return DEFAULT_COMMIT_TYPES;
         List<String> allowed = values.stream().filter(Objects::nonNull)
                 .map(value -> value.trim().toLowerCase(Locale.ROOT)).filter(value -> !value.isBlank()).distinct().toList();
-        if (allowed.stream().anyMatch(value -> !DEFAULT_COMMIT_TYPES.contains(value))) {
-            throw badRequest("Supported Conventional Commit types are feat, fix, docs, refactor, test and chore.");
+        if (allowed.size() > 20 || allowed.stream().anyMatch(value -> !value.matches("[a-z][a-z0-9-]{0,31}"))) {
+            throw badRequest("Use up to 20 commit types, each starting with a letter and containing at most 32 letters, digits or hyphens.");
         }
+        if (String.join(",", allowed).length() > 160) throw badRequest("The combined commit type list must be 160 characters or fewer.");
         return allowed;
     }
 
     private List<String> parseTypes(String value) {
-        return value == null || value.isBlank() ? DEFAULT_COMMIT_TYPES : List.of(value.split(","));
+        return value == null ? DEFAULT_COMMIT_TYPES : value.isBlank() ? List.of() : List.of(value.split(","));
     }
 
     private String defaultTaskPattern(String rawPrefix) {

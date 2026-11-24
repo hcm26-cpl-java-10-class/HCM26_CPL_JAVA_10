@@ -111,6 +111,29 @@ class GitCommitValidationServiceTest {
     }
 
     @Test
+    void customCommitTypePassesUntilRemovedAndKeepsThePreviousValidation() {
+        var enabled = rule(GitDevelopmentRuleType.CONVENTIONAL_COMMIT, 1, true,
+                "feat,release-2", false, "(?i)\\bFA-\\d+\\b");
+        var removed = rule(GitDevelopmentRuleType.CONVENTIONAL_COMMIT, 2, true,
+                "feat", false, "(?i)\\bFA-\\d+\\b");
+        when(commit.getMessage()).thenReturn("release-2(build): package the next release");
+        when(rules.findAllByRootProject_IdOrderByTypeAscVersionDesc(10L)).thenReturn(List.of(enabled));
+
+        var first = service.validateSyncedCommit(commit).get(0);
+        assertThat(first.getStatus()).isEqualTo(GitCommitValidationStatus.PASSED);
+
+        when(rules.findAllByRootProject_IdOrderByTypeAscVersionDesc(10L)).thenReturn(List.of(removed));
+        var second = service.validateSyncedCommit(commit).get(0);
+
+        assertThat(second.getStatus()).isEqualTo(GitCommitValidationStatus.FAILED);
+        assertThat(second.getReason()).contains("not enabled");
+        assertThat(second.getRuleVersion()).isEqualTo(2);
+        assertThat(first.getStatus()).isEqualTo(GitCommitValidationStatus.PASSED);
+        assertThat(first.getRuleVersion()).isEqualTo(1);
+        verify(commit, never()).setMessage(any());
+    }
+
+    @Test
     void changedConfigurationVersionCreatesANewResultAndRetainsPreviousVersion() {
         GitDevelopmentRule versionOne = rule(GitDevelopmentRuleType.CONVENTIONAL_COMMIT, 1, true, "feat", false,
                 "(?i)\\bFA-\\d+\\b");

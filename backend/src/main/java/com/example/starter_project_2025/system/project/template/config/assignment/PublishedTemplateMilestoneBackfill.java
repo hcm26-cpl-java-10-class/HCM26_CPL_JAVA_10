@@ -92,7 +92,7 @@ public class PublishedTemplateMilestoneBackfill implements ApplicationRunner {
                        select 1 from MilestoneSubmission submission where submission.milestone.id = m.id
                          and (submission.status <> :draftSubmission or submission.submissionAttempts > 0)
                    )
-                   and not exists (select 1 from MilestoneWaiver waiver where waiver.milestoneId = m.id)
+                   and not exists (select 1 from MilestoneWaiver waiver where waiver.milestone.id = m.id)
                  order by m.id
                 """, Tuple.class)
                 .setParameter("activeProject", ProjectStatus.ACTIVE)

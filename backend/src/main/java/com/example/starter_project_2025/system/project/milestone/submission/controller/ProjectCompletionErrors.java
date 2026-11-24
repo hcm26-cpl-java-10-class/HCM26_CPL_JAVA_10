@@ -15,6 +15,12 @@ import java.util.Map;
 @RestControllerAdvice(assignableTypes = ProjectCompletionController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class ProjectCompletionErrors {
+    @ExceptionHandler(com.example.starter_project_2025.system.project.milestone.submission.service.ProjectNotReadyException.class)
+    public ResponseEntity<?> notReady(MilestoneConflictException exception) {
+        return error(409, com.example.starter_project_2025.system.project.milestone.submission.service.ProjectNotReadyException.CODE,
+                exception.getMessage());
+    }
+
     @ExceptionHandler(MilestoneConflictException.class)
     public ResponseEntity<?> conflict(MilestoneConflictException exception) {
         return error(409, "PROJECT_COMPLETION_CONFLICT", exception.getMessage());
@@ -27,7 +33,7 @@ public class ProjectCompletionErrors {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<?> invalid(MethodArgumentNotValidException exception) {
-        return error(422, "PROJECT_COMPLETION_INVALID", "Enter a score from 0 to 100 or a waiver reason of up to 500 characters");
+        return error(422, "PROJECT_COMPLETION_INVALID", "Enter a score from 0 to 100 with up to 2 decimals, and a note or waiver reason of up to 500 characters");
     }
 
     private ResponseEntity<?> error(int status, String code, String message) {

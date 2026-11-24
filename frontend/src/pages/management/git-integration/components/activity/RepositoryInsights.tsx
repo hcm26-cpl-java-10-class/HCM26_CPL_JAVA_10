@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import type { GitInsightsRange, GitPullRequestAttention, GitRepositoryActivity, GitTaskRef } from "@/types/features/git-integration";
+import type { GitInsightsPeriod, GitPullRequestAttention, GitRepositoryActivity, GitTaskRef } from "@/types/features/git-integration";
 import type { GitHubTabTarget } from "../../github-tab.params";
 import { formatDateTime, formatRelative } from "../../git-integration.format";
 import { useGitHubAccounts, useRepositoryCommits, useRepositoryInsights, useRepositoryPullRequests } from "../../useGitIntegration";
@@ -76,7 +76,7 @@ function PanelError({ retrying, onRetry }: { retrying: boolean; onRetry: () => v
  * act on, latest commits). Below: the activity of the chosen period. Every tile and row is
  * a shortcut into the Commits or Pull requests view with the matching filter.
  */
-export function RepositoryInsights({ projectId, activity, repositoryName, defaultBranch, range, onRange, onNavigate, onOpenTask,
+export function RepositoryInsights({ projectId, activity, repositoryName, defaultBranch, period, onPeriod, onNavigate, onOpenTask,
   repositoryId }: {
   projectId: number;
   /** US-GI-05: one repository of the project; all of them (unlinked ones included) when absent. */
@@ -84,12 +84,12 @@ export function RepositoryInsights({ projectId, activity, repositoryName, defaul
   activity: GitRepositoryActivity;
   repositoryName: string;
   defaultBranch?: string | null;
-  range: GitInsightsRange;
-  onRange: (range: GitInsightsRange) => void;
+  period: GitInsightsPeriod;
+  onPeriod: (period: GitInsightsPeriod) => void;
   onNavigate: (target: GitHubTabTarget) => void;
   onOpenTask: (ref: GitTaskRef) => void;
 }) {
-  const insights = useRepositoryInsights(projectId, range, true, repositoryId);
+  const insights = useRepositoryInsights(projectId, period, true, repositoryId);
   const accounts = useGitHubAccounts(projectId);
   const commitsQuery = useRepositoryCommits(projectId, { page: 0, size: 5, repositoryId });
   const health = insights.data?.pullRequests;
@@ -99,7 +99,7 @@ export function RepositoryInsights({ projectId, activity, repositoryName, defaul
   const merged = useRepositoryPullRequests(projectId, { state: "MERGED", page: 0, size: RECENT_MERGED, repositoryId }, showRecent);
   const { commitCount, linkedCommitCount, pullRequests } = activity;
   const empty = commitCount === 0 && pullRequests.open + pullRequests.merged + pullRequests.closed === 0;
-  const go = (target: GitHubTabTarget) => onNavigate({ repo: repositoryId, ...target, range });
+  const go = (target: GitHubTabTarget) => onNavigate({ repo: repositoryId, ...target, ...period });
 
   return <div className="min-w-0 space-y-4">
     <div className={cn("grid grid-cols-2 gap-2.5 sm:grid-cols-3", SHOW_AWAITING_REVIEW_TILE ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
@@ -195,7 +195,7 @@ export function RepositoryInsights({ projectId, activity, repositoryName, defaul
         </section>
       </div>
 
-      <ActivitySection query={insights} range={range} onRange={onRange} defaultBranch={defaultBranch} onNavigate={onNavigate}
+      <ActivitySection query={insights} period={period} onPeriod={onPeriod} defaultBranch={defaultBranch} onNavigate={onNavigate}
         canManageAccounts={accounts.data?.viewer.canManage ?? false} />
     </>}
   </div>;
