@@ -66,6 +66,7 @@ public class ClassGradebookService {
         List<ClassItem> out = new ArrayList<>();
         List<TrainingClass> classes = classRepository.findAll().stream()
                 .filter(c -> Boolean.TRUE.equals(c.getIsActive()))
+                .filter(c -> !isDemoSeedClass(c))
                 .sorted(Comparator.comparing(TrainingClass::getName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
         for (TrainingClass c : classes) {
@@ -205,6 +206,13 @@ public class ClassGradebookService {
                     (x, y) -> x.score().compareTo(y.score()) >= 0 ? x : y);
         }
         return new ArrayList<>(best.values());
+    }
+
+    private static boolean isDemoSeedClass(TrainingClass c) {
+        String code = c.getCode();
+        if (code == null)
+            return false;
+        return code.startsWith("DEMO-") || code.startsWith("HIER-DEMO-") || "WS-DEMO-CLASS".equals(code);
     }
 
     private static BigDecimal mean(Collection<BigDecimal> values) {

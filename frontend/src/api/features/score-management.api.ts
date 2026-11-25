@@ -25,6 +25,8 @@ export interface SmColumn {
   examTitle: string | null;
   /** False when the linked assessment's scores are not published to students yet. */
   published: boolean;
+  /** NO_ATTEMPTS / PENDING_GRADING / GRADED for the linked assessment (null without one). */
+  gradingState?: "NO_ATTEMPTS" | "PENDING_GRADING" | "GRADED" | null;
 }
 
 export type SmReleasePolicy =
