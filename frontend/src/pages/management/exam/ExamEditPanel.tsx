@@ -1,11 +1,11 @@
 import { assessmentReturnPath } from "@/utils/assessment-navigation";
-import { examApi } from "@/api";
+import { examApi, examTemplateApi } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { ExamDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Save, ShieldAlert, Trash2 } from "lucide-react";
+import { BookmarkPlus, Save, ShieldAlert, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -39,6 +39,9 @@ export function ExamEditPanel({ examId }: { examId: number }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version]);
 
+  const [examToSaveAsTemplate, setExamToSaveAsTemplate] = useState<ExamDTO | null>(null);
+  const [templateName, setTemplateName] = useState("");
+  const [templateDescription, setTemplateDescription] = useState("");
   const [examToDelete, setExamToDelete] = useState<ExamDTO | null>(null);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
 
@@ -65,6 +68,36 @@ export function ExamEditPanel({ examId }: { examId: number }) {
     },
     onError: (error) => toast.error(getErrorMessage(error, "Failed to delete exam")),
   });
+
+  const saveExamAsTemplateMutation = useMutation({
+    mutationFn: () => {
+      if (!examToSaveAsTemplate?.id) {
+        throw new Error("Select an exam before saving it as a template.");
+      }
+      const name = templateName.trim();
+      if (!name) {
+        throw new Error("Template name is required.");
+      }
+      return examTemplateApi.saveFromExam(examToSaveAsTemplate.id, {
+        name,
+        description: templateDescription.trim() || undefined,
+      });
+    },
+    onSuccess: () => {
+      setExamToSaveAsTemplate(null);
+      setTemplateName("");
+      setTemplateDescription("");
+      toast.success("Exam saved as template successfully");
+    },
+    onError: (error) =>
+      toast.error(getErrorMessage(error, "Failed to save exam as template")),
+  });
+
+  const openSaveAsTemplate = (target: ExamDTO) => {
+    setExamToSaveAsTemplate(target);
+    setTemplateName(`${target.title} - Template`);
+    setTemplateDescription("");
+  };
 
   const openDeleteConfirm = (target: ExamDTO) => {
     setExamToDelete(target);
@@ -132,11 +165,15 @@ export function ExamEditPanel({ examId }: { examId: number }) {
           showErrors={showErrors}
         />
 
-        <div className="sticky bottom-0 z-10 -mx-6 -mb-4 flex flex-wrap items-center justify-between gap-3 border-t bg-background/95 px-6 py-3 backdrop-blur-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" className="text-destructive hover:text-destructive" onClick={() => openDeleteConfirm(exam)}>
               <Trash2 className="mr-2 size-4" />
               Delete
+            </Button>
+            <Button type="button" variant="outline" onClick={() => openSaveAsTemplate(exam)}>
+              <BookmarkPlus className="mr-2 size-4" />
+              Save as Template
             </Button>
             <Button
               type="button"
@@ -157,6 +194,80 @@ export function ExamEditPanel({ examId }: { examId: number }) {
           </div>
         </div>
       </form>
+
+      <Dialog
+        open={Boolean(examToSaveAsTemplate)}
+        onOpenChange={(open) => {
+          if (!open && !saveExamAsTemplateMutation.isPending) {
+            setExamToSaveAsTemplate(null);
+            setTemplateName("");
+            setTemplateDescription("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!templateName.trim()) {
+                toast.error("Template name is required.");
+              }
+              saveExamAsTemplateMutation.mutate();
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Save Exam as Template</DialogTitle>
+              <DialogDescription>
+                Save the configuration, questions, and answer options from
+                <strong className="text-foreground"> {examToSaveAsTemplate?.title}</strong>
+                {" "}as a reusable template. The original exam will not be changed.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-5">
+              <label className="grid gap-2 text-sm font-medium">
+                Template Name
+                <Input
+                  required
+                  maxLength={200}
+                  value={templateName}
+                  onChange={(event) => setTemplateName(event.target.value)}
+                  placeholder="Enter template name"
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-medium">
+                Description (optional)
+                <textarea
+                  className="min-h-24 rounded-md border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  maxLength={1000}
+                  value={templateDescription}
+                  onChange={(event) => setTemplateDescription(event.target.value)}
+                  placeholder="Describe when this template should be reused"
+                />
+              </label>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={saveExamAsTemplateMutation.isPending}
+                onClick={() => {
+                  setExamToSaveAsTemplate(null);
+                  setTemplateName("");
+                  setTemplateDescription("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={saveExamAsTemplateMutation.isPending || !templateName.trim()}
+              >
+                {saveExamAsTemplateMutation.isPending ? "Saving..." : "Save Template"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(examToDelete)} onOpenChange={(open: boolean) => { if (!open) closeDeleteConfirm(); }}>
         <DialogContent className="sm:max-w-md">

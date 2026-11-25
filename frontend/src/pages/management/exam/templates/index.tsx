@@ -11,7 +11,7 @@ import {
     Eye,
     HelpCircle,
     Layers,
-    Pencil,
+    MoreVertical,
     Search,
     ShieldCheck,
     Trash2,
@@ -21,7 +21,6 @@ import { examTemplateApi } from "@/api";
 import type { ExamTemplateDTO } from "@/api/features/exam-template.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirmdialog";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -84,12 +83,6 @@ export default function ExamTemplatesPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [activeFilter, setActiveFilter] = useState("all");
     const [examTitle, setExamTitle] = useState("");
-    const [deleteTarget, setDeleteTarget] = useState<ExamTemplateDTO | null>(null);
-    const [editingTemplate, setEditingTemplate] = useState<ExamTemplateDTO | null>(null);
-    const [editName, setEditName] = useState("");
-    const [editDescription, setEditDescription] = useState("");
-    const [editDuration, setEditDuration] = useState("");
-    const [editMaxAttempts, setEditMaxAttempts] = useState("");
 
     const {
         data: templates = [],
@@ -189,7 +182,6 @@ export default function ExamTemplatesPage() {
         },
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: ["exams"] });
-            await queryClient.invalidateQueries({ queryKey: ["exam-management"] });
             toast.success("New assessment created from template successfully");
             closeCreateDialog();
             navigate("/exams");
@@ -206,7 +198,6 @@ export default function ExamTemplatesPage() {
     const deleteTemplateMutation = useMutation({
         mutationFn: (templateId: number) => examTemplateApi.delete(templateId),
         onSuccess: async () => {
-            setDeleteTarget(null);
             await queryClient.invalidateQueries({ queryKey: ["exam-templates"] });
             toast.success("Template deleted successfully");
         },
@@ -214,50 +205,6 @@ export default function ExamTemplatesPage() {
             toast.error("Failed to delete template");
         },
     });
-
-    const updateTemplateMutation = useMutation({
-        mutationFn: () => {
-            if (!editingTemplate) {
-                throw new Error("No template selected");
-            }
-            const name = editName.trim();
-            if (!name) {
-                throw new Error("Template name is required");
-            }
-            const duration = Number(editDuration);
-            if (!Number.isInteger(duration) || duration < 1) {
-                throw new Error("Duration must be at least 1 minute");
-            }
-            const maxAttemptsTrimmed = editMaxAttempts.trim();
-            const maxAttempts = maxAttemptsTrimmed === "" ? undefined : Number(maxAttemptsTrimmed);
-            if (maxAttempts !== undefined && (!Number.isInteger(maxAttempts) || maxAttempts < 1)) {
-                throw new Error("Max attempts must be a positive integer");
-            }
-            return examTemplateApi.update(editingTemplate.id, {
-                name,
-                description: editDescription.trim() || undefined,
-                durationMinutes: duration,
-                maxAttempts,
-            });
-        },
-        onSuccess: async (updated) => {
-            await queryClient.invalidateQueries({ queryKey: ["exam-templates"] });
-            await queryClient.invalidateQueries({ queryKey: ["exam-template-preview", updated.id] });
-            setEditingTemplate(null);
-            toast.success("Template updated successfully");
-        },
-        onError: (error) => {
-            toast.error(error instanceof Error ? error.message : "Failed to update template");
-        },
-    });
-
-    const openEditDialog = (template: ExamTemplateDTO) => {
-        setEditingTemplate(template);
-        setEditName(template.name);
-        setEditDescription(template.description ?? "");
-        setEditDuration(String(template.durationMinutes ?? 60));
-        setEditMaxAttempts(template.maxAttempts != null ? String(template.maxAttempts) : "");
-    };
 
     const openCreateDialog = (template: ExamTemplateDTO) => {
         setSelectedTemplate(template);
@@ -271,7 +218,9 @@ export default function ExamTemplatesPage() {
     };
 
     const handleDeleteTemplate = (template: ExamTemplateDTO) => {
-        setDeleteTarget(template);
+        if (window.confirm(`Delete template "${template.name}"?`)) {
+            deleteTemplateMutation.mutate(template.id);
+        }
     };
 
     const filters = [
@@ -283,7 +232,7 @@ export default function ExamTemplatesPage() {
     ];
 
     return (
-        <MainLayout pathName={{ exams: "Assessment Management", templates: "Templates" }}>
+        <MainLayout pathName={{ exams: "Assessment Management" }}>
             <section className="flex flex-col gap-5">
                 {/* Match the existing Assessment Management page header */}
                 <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
@@ -410,6 +359,15 @@ export default function ExamTemplatesPage() {
                                                             >
                                                                 {category.tag}
                                                             </Badge>
+                                                            <span
+                                                                className={`text-xs ${
+                                                                    isReady
+                                                                        ? "text-emerald-500"
+                                                                        : "text-amber-500"
+                                                                }`}
+                                                            >
+                                                                {isReady ? "Ready" : "Draft"}
+                                                            </span>
                                                         </div>
 
                                                         <button
@@ -475,7 +433,7 @@ export default function ExamTemplatesPage() {
                                                         Use Template
                                                     </Button>
 
-                                                    {/* Preview */}
+                                                    {/* Nút Xem trước (Preview) ở bên trái thùng rác */}
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
@@ -487,19 +445,7 @@ export default function ExamTemplatesPage() {
                                                         <Eye className="size-4 text-muted-foreground hover:text-foreground" />
                                                     </Button>
 
-                                                    {/* Edit */}
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        aria-label={`Edit ${template.name}`}
-                                                        title="Edit template"
-                                                        onClick={() => openEditDialog(template)}
-                                                    >
-                                                        <Pencil className="size-4 text-muted-foreground hover:text-foreground" />
-                                                    </Button>
-
-                                                    {/* Delete */}
+                                                    {/* Nút Thùng rác (Xóa) */}
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
@@ -510,6 +456,21 @@ export default function ExamTemplatesPage() {
                                                         onClick={() => handleDeleteTemplate(template)}
                                                     >
                                                         <Trash2 className="size-4 text-muted-foreground hover:text-destructive" />
+                                                    </Button>
+
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        aria-label={`More options for ${template.name}`}
+                                                        title="More options"
+                                                        onClick={() =>
+                                                            toast.info(
+                                                                "Use the available actions to manage this template.",
+                                                            )
+                                                        }
+                                                    >
+                                                        <MoreVertical className="size-4" />
                                                     </Button>
                                                 </div>
                                             </TableCell>
@@ -636,7 +597,7 @@ export default function ExamTemplatesPage() {
                             <div>
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                        Topics
+                                        Chủ đề (Topics)
                                     </span>
                                     <span className="text-xs text-muted-foreground">
                                         {topicStats.length} topics
@@ -653,7 +614,7 @@ export default function ExamTemplatesPage() {
                                                 : "hover:bg-muted text-foreground"
                                         }`}
                                     >
-                                        <span className="truncate">All Questions</span>
+                                        <span className="truncate">Tất cả câu hỏi</span>
                                         <Badge
                                             variant={selectedTopicFilter === "all" ? "outline" : "secondary"}
                                             className={`ml-2 text-xs shrink-0 ${
@@ -696,33 +657,33 @@ export default function ExamTemplatesPage() {
                                 </div>
                             </div>
 
-                            {/* Difficulty stats */}
+                            {/* Thống kê độ khó */}
                             <div className="border-t pt-4">
                                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-2.5">
-                                    Difficulty Distribution
+                                    Phân bố độ khó
                                 </span>
                                 <div className="space-y-1.5">
                                     <div className="flex items-center justify-between text-xs p-2 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-medium">
-                                        <span>Easy</span>
-                                        <span className="font-semibold">{difficultyStats.easy}</span>
+                                        <span>Dễ (Easy)</span>
+                                        <span className="font-semibold">{difficultyStats.easy} câu</span>
                                     </div>
                                     <div className="flex items-center justify-between text-xs p-2 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 font-medium">
-                                        <span>Medium</span>
-                                        <span className="font-semibold">{difficultyStats.medium}</span>
+                                        <span>Trung bình (Medium)</span>
+                                        <span className="font-semibold">{difficultyStats.medium} câu</span>
                                     </div>
                                     <div className="flex items-center justify-between text-xs p-2 rounded-md bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 font-medium">
-                                        <span>Hard</span>
-                                        <span className="font-semibold">{difficultyStats.hard}</span>
+                                        <span>Khó (Hard)</span>
+                                        <span className="font-semibold">{difficultyStats.hard} câu</span>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Quick jump navigation */}
+                            {/* Bảng điều hướng nhanh số câu hỏi */}
                             {previewTemplate?.questions && previewTemplate.questions.length > 0 && (
                                 <div className="border-t pt-4">
                                     <div className="flex items-center justify-between mb-2">
                                         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                            Quick Jump
+                                            Nhảy nhanh câu hỏi
                                         </span>
                                     </div>
                                     <div className="grid grid-cols-5 gap-1.5 max-h-48 overflow-y-auto pr-1">
@@ -771,9 +732,9 @@ export default function ExamTemplatesPage() {
                             {selectedTopicFilter !== "all" && (
                                 <div className="flex items-center justify-between rounded-lg border bg-muted/40 px-3.5 py-2 text-xs">
                                     <span>
-                                        Filtering by topic:{" "}
+                                        Đang lọc theo chủ đề:{" "}
                                         <strong className="font-mono text-primary">{selectedTopicFilter}</strong> (
-                                        {displayedQuestions.length} question{displayedQuestions.length === 1 ? "" : "s"})
+                                        {displayedQuestions.length} câu)
                                     </span>
                                     <Button
                                         type="button"
@@ -782,7 +743,7 @@ export default function ExamTemplatesPage() {
                                         className="h-6 text-xs text-muted-foreground hover:text-foreground"
                                         onClick={() => setSelectedTopicFilter("all")}
                                     >
-                                        Show all
+                                        Hiện tất cả
                                     </Button>
                                 </div>
                             )}
@@ -793,7 +754,7 @@ export default function ExamTemplatesPage() {
                                 </div>
                             ) : displayedQuestions.length === 0 ? (
                                 <div className="py-12 text-center text-muted-foreground">
-                                    No questions found for this topic.
+                                    Không tìm thấy câu hỏi nào thuộc chủ đề này.
                                 </div>
                             ) : (
                                 displayedQuestions.map((question, qIdx) => {
@@ -879,7 +840,7 @@ export default function ExamTemplatesPage() {
                                                                 </span>
                                                                 {isCorrect && (
                                                                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                                                                        ✓ Correct answer
+                                                                        ✓ Đáp án đúng
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -894,7 +855,7 @@ export default function ExamTemplatesPage() {
                         </main>
                     </div>
 
-                    <DialogFooter className="m-0 flex shrink-0 items-center justify-between border-t bg-muted/20 px-6 py-4 sm:justify-between">
+                    <DialogFooter className="flex shrink-0 items-center justify-between border-t bg-muted/20 p-4 sm:justify-between">
                         <Button
                             type="button"
                             variant="outline"
@@ -922,111 +883,6 @@ export default function ExamTemplatesPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-
-            {/* Edit Template Dialog */}
-            <Dialog
-                open={editingTemplate !== null}
-                onOpenChange={(open) => {
-                    if (!open && !updateTemplateMutation.isPending) {
-                        setEditingTemplate(null);
-                    }
-                }}
-            >
-                <DialogContent className="sm:max-w-md">
-                    <form
-                        onSubmit={(event) => {
-                            event.preventDefault();
-                            updateTemplateMutation.mutate();
-                        }}
-                    >
-                        <DialogHeader>
-                            <DialogTitle>Edit Template</DialogTitle>
-                            <DialogDescription>
-                                Update template details and default assessment settings.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                            <label className="grid gap-1.5 text-sm font-medium">
-                                Template Name
-                                <Input
-                                    required
-                                    maxLength={200}
-                                    value={editName}
-                                    onChange={(e) => setEditName(e.target.value)}
-                                    placeholder="Enter template name"
-                                />
-                            </label>
-                            <label className="grid gap-1.5 text-sm font-medium">
-                                Description (optional)
-                                <textarea
-                                    className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                    maxLength={1000}
-                                    value={editDescription}
-                                    onChange={(e) => setEditDescription(e.target.value)}
-                                    placeholder="Describe when this template should be reused"
-                                />
-                            </label>
-                            <div className="grid grid-cols-2 gap-3">
-                                <label className="grid gap-1.5 text-sm font-medium">
-                                    Duration (mins)
-                                    <Input
-                                        type="number"
-                                        min={1}
-                                        required
-                                        value={editDuration}
-                                        onChange={(e) => setEditDuration(e.target.value)}
-                                    />
-                                </label>
-                                <label className="grid gap-1.5 text-sm font-medium">
-                                    Max Attempts
-                                    <Input
-                                        type="number"
-                                        min={1}
-                                        value={editMaxAttempts}
-                                        onChange={(e) => setEditMaxAttempts(e.target.value)}
-                                        placeholder="Unlimited"
-                                    />
-                                </label>
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                disabled={updateTemplateMutation.isPending}
-                                onClick={() => setEditingTemplate(null)}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                type="submit"
-                                disabled={updateTemplateMutation.isPending || !editName.trim()}
-                            >
-                                {updateTemplateMutation.isPending ? "Saving..." : "Save Changes"}
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
-
-            {/* Delete Template Confirm Dialog */}
-            <ConfirmDialog
-                open={deleteTarget !== null}
-                title="Delete Template"
-                description={`Are you sure you want to delete template "${deleteTarget?.name ?? ""}"? This action cannot be undone.`}
-                confirmLabel={deleteTemplateMutation.isPending ? "Deleting..." : "Delete"}
-                cancelLabel="Cancel"
-                onConfirm={() => {
-                    if (deleteTarget) {
-                        deleteTemplateMutation.mutate(deleteTarget.id);
-                    }
-                }}
-                onCancel={() => {
-                    if (!deleteTemplateMutation.isPending) {
-                        setDeleteTarget(null);
-                    }
-                }}
-            />
         </MainLayout>
     );
 }

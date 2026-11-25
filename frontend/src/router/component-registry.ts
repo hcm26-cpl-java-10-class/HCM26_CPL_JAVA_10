@@ -244,7 +244,7 @@ export const routes: RouteConfig[] = [
   },
 
   {
-    path: "/exams/templates",
+    path: "/management/exam/templates",
     component: ExamTemplatesPage,
     requiredPermission: "EXAM_UPDATE",
   },

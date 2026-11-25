@@ -203,7 +203,7 @@ export default function ExamManagementPage() {
 
             <Button
               variant="outline"
-              onClick={() => navigate("/exams/templates")}
+              onClick={() => navigate("/management/exam/templates")}
             >
               <BookmarkPlus className="mr-2 size-4" />
               Use Template
