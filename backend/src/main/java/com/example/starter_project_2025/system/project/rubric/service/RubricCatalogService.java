@@ -52,4 +52,18 @@ public class RubricCatalogService {
                                 rating.getLevel().name(), rating.getPercentage(), rating.getDescription(),
                                 rating.getOrderIndex())).toList())).toList());
     }
+
+    public Optional<RubricVersion> findByIdForTenant(
+            UUID versionId,
+            Long tenantId
+    ) {
+        return versions.findByIdAndRubricTenantId(
+                        versionId,
+                        RubricTenantIdentity.from(tenantId)
+                )
+                .or(() -> versions.findByIdAndRubricTenantId(
+                        versionId,
+                        legacyTenantId(tenantId)
+                ));
+    }
 }

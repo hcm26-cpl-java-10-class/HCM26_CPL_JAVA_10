@@ -13,6 +13,9 @@ export interface NotificationDTO {
 export interface NotificationListDTO {
   items: NotificationDTO[];
   unreadCount: number;
+  page: number;
+  totalPages: number;
+  totalItems: number;
 }
 
 

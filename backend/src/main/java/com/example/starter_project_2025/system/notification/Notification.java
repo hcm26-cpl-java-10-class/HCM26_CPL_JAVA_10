@@ -11,6 +11,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -31,7 +32,11 @@ import static lombok.AccessLevel.PRIVATE;
 @FieldDefaults(level = PRIVATE)
 @Table(
         name = "user_notifications",
-        indexes = @Index(name = "idx_notification_user_created", columnList = "user_id, created_at")
+        indexes = @Index(name = "idx_notification_user_created", columnList = "user_id, created_at"),
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_notification_user_event",
+                columnNames = {"user_id", "event_key"}
+        )
 )
 public class Notification extends BaseEntity {
 
@@ -39,7 +44,7 @@ public class Notification extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false)
     User user;
 
-    @Column(name = "event_key", nullable = false, unique = true, updatable = false, length = 180)
+    @Column(name = "event_key", nullable = false, updatable = false, length = 180)
     String eventKey;
 
     @Column(nullable = false, length = 120)

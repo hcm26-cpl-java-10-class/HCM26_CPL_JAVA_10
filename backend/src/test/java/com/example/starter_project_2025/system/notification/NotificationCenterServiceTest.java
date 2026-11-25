@@ -29,12 +29,14 @@ class NotificationCenterServiceTest {
     private final NotificationRepository notifications = mock(NotificationRepository.class);
     private final NotificationPreferenceRepository preferences = mock(NotificationPreferenceRepository.class);
     private final UserRepository users = mock(UserRepository.class);
+    private final NotificationWriter writer = new NotificationWriter(notifications, users);
     private NotificationService service;
 
     @BeforeEach
     void setUp() {
-        service = new NotificationService(notifications, users);
+        service = new NotificationService(notifications, writer);
         ReflectionTestUtils.setField(service, "preferenceRepository", preferences);
+        ReflectionTestUtils.setField(service, "userRepository", users);
         when(users.getReferenceById(7L)).thenReturn(User.builder().id(7L).build());
     }
 
@@ -43,7 +45,7 @@ class NotificationCenterServiceTest {
         service.createOnce(7L, "exam.review.assigned.5", "Review", "Please review", "/exams/5");
 
         ArgumentCaptor<Notification> saved = ArgumentCaptor.forClass(Notification.class);
-        verify(notifications).save(saved.capture());
+        verify(notifications).saveAndFlush(saved.capture());
         assertEquals(NotificationCategory.EXAM, saved.getValue().getCategory());
     }
 
@@ -54,7 +56,7 @@ class NotificationCenterServiceTest {
 
         service.createOnce(7L, "exam.review.assigned.5", "Review", "Please review", "/exams/5");
 
-        verify(notifications, never()).save(any());
+        verify(notifications, never()).saveAndFlush(any());
     }
 
     @Test
@@ -64,7 +66,7 @@ class NotificationCenterServiceTest {
 
         service.createOnce(7L, "course-completed:1", "Done", "Well done", "/courses/1");
 
-        verify(notifications).save(any(Notification.class));
+        verify(notifications).saveAndFlush(any(Notification.class));
     }
 
     @Test

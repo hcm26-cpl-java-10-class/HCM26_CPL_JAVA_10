@@ -119,7 +119,7 @@ public class AiTextClient {
             } catch (HttpClientErrorException.NotFound e) {
                 throw new BadRequestException("Gemini model not found. Check AI_MODEL in backend/.env.");
             } catch (HttpClientErrorException e) {
-                log.error("Gemini returned {}: {}", e.getStatusCode(), e.getResponseBodyAsString());
+                log.warn("Gemini returned HTTP {}", e.getStatusCode().value());
                 throw new BadRequestException("AI provider request failed (HTTP " + e.getStatusCode().value() + ").");
             } catch (HttpServerErrorException e) {
                 log.warn("Gemini returned {} (attempt {}/{})", e.getStatusCode(), attempt, maxAttempts);

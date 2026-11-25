@@ -220,7 +220,8 @@ export function SidebarMenu({
                                             !location.pathname.startsWith("/exams/supervisor")))));
 
                         return {
-                            title: module.title ?? "Untitled",
+                            title: ["/management/workspaces", "/management/workspaces/candidates"].includes(module.url?.replace(/\/+$/, "") ?? "")
+                                ? "Workspaces" : module.title ?? "Untitled",
                             url: module.url ?? "#",
                             icon: resolveIcon(module.icon),
                             isActive: isMatch,

@@ -36,6 +36,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ProjectHubService {
+    private final com.example.starter_project_2025.system.project.charter.TeamCharterService charterService;
     private final TenantRepository tenants;
     private final ProjectTeamRepository teams;
     private final ProjectMemberRepository members;
@@ -102,18 +103,7 @@ public class ProjectHubService {
 
     @Transactional
     public ProjectHubDtos.TeamView saveCharter(Long id, ProjectHubDtos.Charter charter) {
-        ProjectTeam team = scopedTeam(id);
-        team.setMission(charter.mission());
-        team.setDefinitionOfDone(charter.definitionOfDone());
-        String channel = charter.primaryChannel();
-        if (channel != null && !channel.isBlank() && !Set.of("Microsoft Teams", "Teams", "Slack", "Discord", "Google Chat", "Email").contains(channel)
-                && !channel.equals(team.getPrimaryChannel())) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Select a supported primary channel");
-        }
-        team.setPrimaryChannel("Teams".equals(channel) ? "Microsoft Teams" : channel);
-        team.setCoreHours(charter.coreHours());
-        team.setConflictResolution(charter.conflictResolution());
-        return teamView(teams.saveAndFlush(team));
+        return teamView(charterService.save(id, charter));
     }
 
     private ProjectHubDtos.TeamView teamView(ProjectTeam team) {

@@ -12,7 +12,7 @@ vi.mock("@/hooks/usePermissions",()=>({usePermissions:()=>({activeRole:"STUDENT"
 vi.mock("../hooks/useCourseEnrollment",()=>({useCourseEnrollment:()=>({canEnroll:true,enrollmentByCourseId:state.enrolled,enrollMutation:{isPending:false,mutate:(id:number, options:{onSuccess:()=>void})=>{state.enrolled.set(id,{});options.onSuccess();}}})}));
 vi.mock("./CourseCard",()=>({CourseCard:({course,onEnroll}:{course:{id:number,name:string},onEnroll:(id:number)=>void})=><div data-testid="course-card">{course.name}<button onClick={()=>onEnroll(course.id)}>Enroll {course.id}</button></div>,CourseCardSkeleton:()=>null}));
 vi.mock("@/api/features/recommendations.api",()=>({recommendationsApi:{get:vi.fn(),ask:vi.fn(),save:vi.fn(),dismiss:vi.fn(),reset:vi.fn()}}));
-const items=Array.from({length:13},(_,i)=>({course:{id:i+1,name:`Course ${i+1}`,description:"Java",instructor:"Teacher"},reason:"Matches your goals"}));
+const items=Array.from({length:13},(_,i)=>({course:{id:i+1,name:`Course ${i+1}`,description:"Java",instructor:"Teacher",categoryName:i%2===0?"Development":"Data",level:i%2===0?"BEGINNER":"ADVANCED",totalDuration:(i+1)*3600,averageRating:4+(i%5)/10,totalReviews:i+1,lessonCount:1,isFree:true,enrolled:false},reason:"Matches your goals"}));
 const result={recommendations:items,preferences:{goals:"Java",interests:["Java"]},state:"READY"};
 function mount(search="") {const client=new QueryClient({defaultOptions:{queries:{retry:false}}});return render(<QueryClientProvider client={client}><CourseRecommendations search={search}/></QueryClientProvider>);}
 beforeEach(()=>{vi.clearAllMocks();sessionStorage.clear();state.enrolled.clear();vi.mocked(recommendationsApi.get).mockResolvedValue(result as never);});
@@ -41,6 +41,13 @@ it("search changes reset to the first page and empty searches show a state",asyn
  // A fresh render of the same account receives the catalog search from its parent.
  const client=new QueryClient();view.rerender(<QueryClientProvider client={client}><CourseRecommendations search="missing"/></QueryClientProvider>);
  await waitFor(()=>expect(screen.queryAllByTestId("course-card")).toHaveLength(0));expect(await screen.findByText(/No recommended courses match your search/)).toBeInTheDocument();
+});
+it("shows accurate filter counts and resets pagination when filters change",async()=>{
+ const user=userEvent.setup();mount();await screen.findAllByTestId("course-card");await user.click(screen.getByRole("button",{name:"Next"}));
+ expect(screen.getAllByLabelText("Beginner (7)")).toHaveLength(2);
+ await user.click(screen.getAllByLabelText("Beginner (7)")[0]);
+ await waitFor(()=>expect(screen.getByText("Page 1 / 2")).toBeInTheDocument());
+ expect(screen.getAllByTestId("course-card")).toHaveLength(6);
 });
 
 it("saving preferences resets recommendation pages and applies the refreshed matches",async()=>{

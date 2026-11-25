@@ -2,7 +2,7 @@ package com.example.starter_project_2025.system.project.project_template_version
 
 import com.example.starter_project_2025.system.project.project_template_version.audit.ProjectTemplateSnapshotAuditService;
 import com.example.starter_project_2025.system.project.project_template_version.event.ProjectTemplateSnapshotOutboxService;
-import com.example.starter_project_2025.system.project.template.assignment.TemplateBriefSnapshotWriter;
+import com.example.starter_project_2025.system.project.template.service.assignment.TemplateBriefSnapshotWriter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;

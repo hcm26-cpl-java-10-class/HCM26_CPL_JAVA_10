@@ -104,6 +104,9 @@ public class LessonServiceImpl
         if (lesson.getIsActive() == null) {
             lesson.setIsActive(true);
         }
+        if (lesson.getAllowSeeking() == null) {
+            lesson.setAllowSeeking(false); // mặc định: khóa tua video
+        }
         validateContent(request.getContentType(), request.getContentUrl(),
                 request.getTextContent(), allowsOutlineEditing(lesson), ctx);
         if (sectionId != null) {

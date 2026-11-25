@@ -10,7 +10,7 @@ import com.example.starter_project_2025.system.project.workspace.service.Workspa
 import com.example.starter_project_2025.system.project.workspace.service.WorkspaceProjectSelection;
 import com.example.starter_project_2025.system.project.workspace.service.WorkspaceRelationshipException;
 import com.example.starter_project_2025.system.project.workspace.service.WorkspaceService;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateException;
+import com.example.starter_project_2025.system.project.template.exception.ProjectTemplateException;
 import com.example.starter_project_2025.exception.error.ValidationErrorResponse;
 
 import jakarta.validation.Valid;

@@ -15,19 +15,27 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import org.springframework.validation.annotation.Validated;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/notifications")
 @RequiredArgsConstructor
+@Validated
 public class NotificationController {
 
     private final NotificationService notificationService;
 
     @GetMapping
-    public NotificationListDTO getMine(@AuthenticationPrincipal UserPrincipal principal) {
-        return notificationService.getForUser(userId(principal));
+    public NotificationListDTO getMine(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(50) int size
+    ) {
+        return notificationService.getForUser(userId(principal), page, size);
     }
 
     @PatchMapping("/{notificationId}/read")
@@ -86,7 +94,8 @@ public class NotificationController {
     }
 
     private Long userId(UserPrincipal principal) {
-        if (principal == null || principal.getUser() == null) {
+        if (principal == null || principal.getUser() == null
+                || !Boolean.TRUE.equals(principal.getUser().getIsActive())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Please log in first");
         }
         return principal.getUser().getId();
