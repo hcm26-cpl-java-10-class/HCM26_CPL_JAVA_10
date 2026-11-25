@@ -43,6 +43,7 @@ public class ClassOperationDataInitializer implements CommandLineRunner {
             }
             databaseService.initializeOperationFromH2(classId);
             databaseService.initializeTopicAssessmentsFromH2(classId);
+            databaseService.initializeTopicMarksFromH2(classId);
             databaseService.initializeActivitiesFromH2(classId);
             databaseService.initializeAttendanceFromH2(classId);
             log.info("ClassOperationDataInitializer: Initialized operation, topic assessments, activities, and attendances from H2 entities for class {} (id={}).",

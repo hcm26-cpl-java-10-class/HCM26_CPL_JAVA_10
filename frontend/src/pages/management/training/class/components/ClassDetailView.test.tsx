@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as XLSX from "xlsx";
 import type { TraineeBatchPayload } from "@/api/features/trainee.api";
-import { fakeHttp, type RecordedCall } from "@/test/fake-http";
+import { fakeHttp, httpError, type RecordedCall } from "@/test/fake-http";
 import { grant } from "@/test/mocks";
 import { renderRoutes } from "@/test/render";
 import type { Trainee } from "@/types";
@@ -712,7 +712,7 @@ describe("ClassDetailView & TraineeListTab", () => {
         expect(await screen.findByRole("table", { name: "Trainee List" })).toBeInTheDocument();
     }, 30000);
 
-    it("switches to Topic Mark view with 7 columns, Account handle generation, Topic GPA Failure highlighting, inline Detail & Edit mode, Excel export, and live Trainee List sync", async () => {
+    it("switches to Topic Mark view with dynamic H2 assessment columns, inline editing & validation, live GPA calculation, Account handle generation, dynamic Excel template, and live Trainee List sync", async () => {
         expect(
             resolveTraineeAccount(
                 { id: 1, fullName: "Vũ Mai Trang", fptAccount: "AI237193" } as Trainee,
@@ -725,6 +725,118 @@ describe("ClassDetailView & TraineeListTab", () => {
                 1,
             ),
         ).toBe("dungpp2");
+
+        let dynamicTopicMarksDb: {
+            classId: number;
+            passThreshold: number;
+            topics: Array<{
+                code: string;
+                name: string;
+                title: string;
+                totalWeight: number;
+                weightValid: boolean;
+                columns: Array<{ key: string; name: string; weight: number }>;
+                recordsByTraineeId: Record<
+                    string,
+                    {
+                        traineeId: number;
+                        componentScores: Record<string, number>;
+                        totalGpa: number;
+                        passed: boolean;
+                    }
+                >;
+            }>;
+        } = {
+            classId: 2,
+            passThreshold: 6.0,
+            topics: [
+                {
+                    code: "JAVA_CORE",
+                    name: "Java Core & OOP",
+                    title: "1. [JAVA_CORE] Java Core & OOP",
+                    totalWeight: 100,
+                    weightValid: true,
+                    columns: [
+                        { key: "assessment_101", name: "Quiz", weight: 20 },
+                        { key: "assessment_102", name: "Lab Practice", weight: 30 },
+                        { key: "assessment_103", name: "Final Practical", weight: 50 },
+                    ],
+                    recordsByTraineeId: {
+                        "101": {
+                            traineeId: 101,
+                            componentScores: { assessment_101: 8.5, assessment_102: 8.0, assessment_103: 8.2 },
+                            totalGpa: 8.2,
+                            passed: true,
+                        },
+                        "102": {
+                            traineeId: 102,
+                            componentScores: { assessment_101: 5.0, assessment_102: 5.5, assessment_103: 5.0 },
+                            totalGpa: 5.2,
+                            passed: false,
+                        },
+                    },
+                },
+                {
+                    code: "SPRING_BOOT",
+                    name: "Spring Boot Enterprise",
+                    title: "2. [SPRING_BOOT] Spring Boot Enterprise",
+                    totalWeight: 100,
+                    weightValid: true,
+                    columns: [
+                        { key: "assessment_201", name: "Mini Quiz", weight: 10 },
+                        { key: "assessment_202", name: "REST API Lab", weight: 25 },
+                        { key: "assessment_203", name: "Midterm Review", weight: 25 },
+                        { key: "assessment_204", name: "Capstone Defense", weight: 40 },
+                    ],
+                    recordsByTraineeId: {
+                        "101": {
+                            traineeId: 101,
+                            componentScores: {
+                                assessment_201: 8.0,
+                                assessment_202: 8.0,
+                                assessment_203: 8.0,
+                                assessment_204: 8.0,
+                            },
+                            totalGpa: 8.0,
+                            passed: true,
+                        },
+                    },
+                },
+            ],
+        };
+
+        fakeHttp.on("get", "/external/classes/2/topic-marks", () => dynamicTopicMarksDb);
+        fakeHttp.on("put", "/external/classes/2/topic-marks", (call: RecordedCall) => {
+            const payload = call.data as {
+                topicCode: string;
+                recordsByTraineeId: Record<string, { componentScores: Record<string, number> }>;
+            };
+            dynamicTopicMarksDb = {
+                ...dynamicTopicMarksDb,
+                topics: dynamicTopicMarksDb.topics.map((t) => {
+                    if (t.code !== payload.topicCode) return t;
+                    const updatedRecs: Record<
+                        string,
+                        {
+                            traineeId: number;
+                            componentScores: Record<string, number>;
+                            totalGpa: number;
+                            passed: boolean;
+                        }
+                    > = { ...t.recordsByTraineeId };
+                    for (const [tid, rec] of Object.entries(payload.recordsByTraineeId)) {
+                        updatedRecs[tid] = {
+                            traineeId: Number(tid),
+                            componentScores: rec.componentScores,
+                            totalGpa: 9.0,
+                            passed: true,
+                        };
+                    }
+                    return { ...t, recordsByTraineeId: updatedRecs };
+                }),
+            };
+            return dynamicTopicMarksDb;
+        });
 
         const { user } = renderClassFlow("/classes/2");
         await screen.findByText("Hoàng Phương Bình");
@@ -739,66 +851,96 @@ describe("ClassDetailView & TraineeListTab", () => {
         const view = await screen.findByTestId("topic-mark-view");
         expect(within(view).getByRole("heading", { name: "Topic Mark HCM26_FR_JAVA_03" })).toBeInTheDocument();
 
-        // 3. Only 3 action buttons on top right; CoderByte Mark strictly removed
+        // 3. Verify 3 action buttons on top right & Topic Code selector hydrated with JAVA_CORE
         expect(within(view).getByRole("button", { name: /download template/i })).toBeInTheDocument();
         expect(within(view).getByRole("button", { name: /import mark/i })).toBeInTheDocument();
         expect(within(view).getByRole("button", { name: /export mark/i })).toBeInTheDocument();
-        expect(within(view).queryByText(/coderbyte mark/i)).not.toBeInTheDocument();
 
-        // 4. Topic Code selector & Topic GPA Failure legend
         const topicSelect = within(view).getByLabelText("Topic Code") as HTMLSelectElement;
-        expect(topicSelect.value).toBe("L1_AL_PSE");
-        expect(within(view).getByText("Topic GPA Failure")).toBeInTheDocument();
+        await waitFor(() => expect(topicSelect.value).toBe("JAVA_CORE"));
 
-        // 5. Exact 7 columns with "Account" (renamed from "FPT Account")
         const topicTable = within(view).getByRole("table", { name: "Topic Mark Table" });
-        const headers = within(topicTable).getAllByRole("columnheader").map((h) => h.textContent?.trim());
-        expect(headers).toEqual([
+        const javaHeaders = within(topicTable).getAllByRole("columnheader").map((h) => h.textContent?.trim());
+        expect(javaHeaders).toEqual([
             "No",
             "Full Name",
             "Personal Email",
             "Account",
             "Status",
+            "Quiz (20%)",
+            "Lab Practice (30%)",
+            "Final Practical (50%)",
             "Total Topic GPA",
-            "Action",
         ]);
-        expect(within(topicTable).queryByRole("columnheader", { name: "FPT Account" })).not.toBeInTheDocument();
 
-        // 6. Verify live Trainee List sync & Account generation in row 1 & row 2
+        // Verify live Trainee List sync, Account generation & GPA failure highlighting
         const rows = within(topicTable).getAllByRole("row").slice(1);
         expect(rows).toHaveLength(10);
         const row1Cells = within(rows[0]).getAllByRole("cell");
-        expect(row1Cells[0]).toHaveTextContent("1");
         expect(row1Cells[1]).toHaveTextContent("Hoàng Phương Bình");
-        expect(row1Cells[2]).toHaveTextContent("phuongbinh.conan@gmail.com");
         expect(row1Cells[3]).toHaveTextContent("binhhp1");
         expect(row1Cells[4]).toHaveTextContent("Inactive"); // Synced from Trainee List!
-        expect(row1Cells[5]).toHaveTextContent("8.2");
+        expect(within(view).getByTestId("gpa-cell-101")).toHaveTextContent("8.2");
 
-        const row2Cells = within(rows[1]).getAllByRole("cell");
-        expect(row2Cells[1]).toHaveTextContent("Trần Việt Anh");
-        expect(row2Cells[3]).toHaveTextContent("anhtv2");
-        expect(row2Cells[5]).toHaveTextContent("5.2");
-        expect(row2Cells[5]).toHaveClass("bg-red-50", "text-red-700", "font-semibold");
+        expect(within(view).getByTestId("gpa-cell-102")).toHaveTextContent("5.2");
+        expect(within(view).getByTestId("gpa-cell-102")).toHaveClass("bg-red-50", "text-red-700", "font-semibold");
 
-        // 7. Expand Detail row -> strictly read-only (no Edit/Save/Cancel buttons or number inputs in table)
-        expect(within(view).queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
-        expect(within(view).queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
-        expect(within(view).queryByRole("button", { name: /^cancel$/i })).not.toBeInTheDocument();
+        // 4. Switch Topic Code to SPRING_BOOT -> columns morph dynamically to 4 assessments
+        await user.selectOptions(topicSelect, "SPRING_BOOT");
+        const springHeaders = within(topicTable).getAllByRole("columnheader").map((h) => h.textContent?.trim());
+        expect(springHeaders).toEqual([
+            "No",
+            "Full Name",
+            "Personal Email",
+            "Account",
+            "Status",
+            "Mini Quiz (10%)",
+            "REST API Lab (25%)",
+            "Midterm Review (25%)",
+            "Capstone Defense (40%)",
+            "Total Topic GPA",
+        ]);
 
-        await user.click(within(topicTable).getByRole("button", { name: "Detail for Trần Việt Anh" }));
-        const detailRow = await within(topicTable).findByTestId("detail-row-102");
-        expect(detailRow).toBeInTheDocument();
-        expect(within(detailRow).getByText("Quiz (20%):")).toBeInTheDocument();
-        expect(within(detailRow).getByText("Assignment (30%):")).toBeInTheDocument();
-        expect(within(detailRow).getByText("Practice / Final (50%):")).toBeInTheDocument();
-        expect(within(topicTable).queryAllByRole("spinbutton")).toHaveLength(0);
+        // 5. Inline edit validation: entering 12 disables Save Marks & shows validation alert
+        const capstoneInput = within(topicTable).getByLabelText("Capstone Defense score for Hoàng Phương Bình");
+        fireEvent.change(capstoneInput, { target: { value: "12" } });
+        expect(await within(view).findByRole("alert")).toHaveTextContent(/between 0 and 10/i);
+        const saveMarksBtn = within(view).getByRole("button", { name: /save marks/i });
+        expect(saveMarksBtn).toBeDisabled();
 
-        // 8. Export Mark & Download Template auto-fit columns
-        await user.click(within(view).getByRole("button", { name: /export mark/i }));
+        // Enter valid 9.5 -> live GPA recalculates (8*0.1 + 8*0.25 + 8*0.25 + 9.5*0.4 = 8.6) and Save Marks enables
+        fireEvent.change(capstoneInput, { target: { value: "9.5" } });
+        expect(within(view).getByTestId("gpa-cell-101")).toHaveTextContent("8.6");
+        expect(saveMarksBtn).toBeEnabled();
+
+        await user.click(saveMarksBtn);
+        await waitFor(() => {
+            expect(fakeHttp.callsTo("put", "/external/classes/2/topic-marks")).toHaveLength(1);
+        });
+
+        // 6. Download dynamic Template on SPRING_BOOT -> includes all 4 dynamic columns
+        await user.click(within(view).getByRole("button", { name: /download template/i }));
         expect(XLSX.writeFile).toHaveBeenCalled();
+        const templateBook = vi.mocked(XLSX.writeFile).mock.calls[
+            vi.mocked(XLSX.writeFile).mock.calls.length - 1
+        ][0];
+        const templateRows = XLSX.utils.sheet_to_json<string[]>(templateBook.Sheets["Topic Mark Template"], {
+            header: 1,
+        });
+        expect(templateRows[0]).toEqual([
+            "No",
+            "Full Name",
+            "Personal Email",
+            "Account",
+            "Topic Code",
+            "Mini Quiz (10%)",
+            "REST API Lab (25%)",
+            "Midterm Review (25%)",
+            "Capstone Defense (40%)",
+            "Total Topic GPA",
+        ]);
 
-        // 9. Return to Trainee List
+        // 7. Return to Trainee List
         await user.click(within(view).getByRole("button", { name: /back to trainee list/i }));
         expect(await screen.findByRole("table", { name: "Trainee List" })).toBeInTheDocument();
     }, 20000);
@@ -873,5 +1015,214 @@ describe("ClassDetailView & TraineeListTab", () => {
         await user.click(within(profileDialog).getByRole("button", { name: /open topic marks/i }));
         expect(await screen.findByTestId("topic-mark-view")).toBeInTheDocument();
         expect(screen.queryByRole("dialog", { name: "Trainee Profile" })).not.toBeInTheDocument();
+    }, 20000);
+
+    it("supports locking Topic Marks with a 4-digit PIN, disables editing/importing while locked, enforces 3-attempt progressive cooldown, and unlocks with valid PIN", async () => {
+        let lockedTopic1 = false;
+        let lockedTopic2 = true;
+        let failedAttempts1 = 0;
+        let lockoutTier1 = 0;
+        const issuedPin1 = "4829";
+        const issuedPin2 = "7315";
+
+        const buildGradebook = () => ({
+            classId: 2,
+            passThreshold: 6.0,
+            topics: [
+                {
+                    code: "JAVA_CORE",
+                    name: "Java Core",
+                    totalWeight: 100,
+                    weightValid: true,
+                    columns: [
+                        { key: "assessment_101", name: "Quiz", weight: 40 },
+                        { key: "assessment_102", name: "Final", weight: 60 },
+                    ],
+                    recordsByTraineeId: {
+                        "101": {
+                            traineeId: 101,
+                            componentScores: { assessment_101: 8.5, assessment_102: 8.5 },
+                            totalGpa: 8.5,
+                            passed: true,
+                        },
+                    },
+                    lock: {
+                        locked: lockedTopic1,
+                        lockedBy: lockedTopic1 ? "admin@example.com" : "",
+                        lockedAt: lockedTopic1 ? "25-Nov-2026 15:00:00" : "",
+                        failedAttempts: failedAttempts1,
+                        remainingAttempts: 3 - failedAttempts1,
+                        maxAttempts: 3,
+                        lockoutTier: lockoutTier1,
+                        cooldownUntilEpochMs: lockoutTier1 > 0 ? Date.now() + 60_000 : null,
+                        cooldownSecondsRemaining: lockoutTier1 > 0 ? 60 : 0,
+                    },
+                },
+                {
+                    code: "SPRING_BOOT",
+                    name: "Spring Boot",
+                    totalWeight: 100,
+                    weightValid: true,
+                    columns: [{ key: "assessment_201", name: "Capstone", weight: 100 }],
+                    recordsByTraineeId: {
+                        "101": {
+                            traineeId: 101,
+                            componentScores: { assessment_201: 9.0 },
+                            totalGpa: 9.0,
+                            passed: true,
+                        },
+                    },
+                    lock: {
+                        locked: lockedTopic2,
+                        lockedBy: "admin@example.com",
+                        lockedAt: "25-Nov-2026 14:55:00",
+                        failedAttempts: 0,
+                        remainingAttempts: 3,
+                        maxAttempts: 3,
+                        lockoutTier: 0,
+                        cooldownUntilEpochMs: null,
+                        cooldownSecondsRemaining: 0,
+                    },
+                },
+            ],
+        });
+
+        fakeHttp.on("get", "/external/classes/2/topic-marks", () => buildGradebook());
+        fakeHttp.on("post", "/external/classes/2/topic-marks/lock", (call: RecordedCall) => {
+            const body = call.data as { topicCode: string };
+            if (body.topicCode === "JAVA_CORE") {
+                lockedTopic1 = true;
+                failedAttempts1 = 0;
+                lockoutTier1 = 0;
+            }
+            const gradebook = buildGradebook();
+            return {
+                locked: true,
+                topicCode: body.topicCode,
+                pin: issuedPin1,
+                lock: gradebook.topics[0].lock,
+                gradebook,
+            };
+        });
+        fakeHttp.on("post", "/external/classes/2/topic-marks/unlock", (call: RecordedCall) => {
+            const body = call.data as { topicCode: string; pin: string };
+            if (body.topicCode === "JAVA_CORE") {
+                if (body.pin !== issuedPin1) {
+                    failedAttempts1 += 1;
+                    if (failedAttempts1 >= 3) {
+                        lockoutTier1 += 1;
+                        failedAttempts1 = 0;
+                        const lock = {
+                            locked: true,
+                            lockedBy: "admin@example.com",
+                            lockedAt: "25-Nov-2026 15:00:00",
+                            failedAttempts: 0,
+                            remainingAttempts: 0,
+                            maxAttempts: 3,
+                            lockoutTier: lockoutTier1,
+                            cooldownUntilEpochMs: Date.now() + 60_000,
+                            cooldownSecondsRemaining: 60,
+                        };
+                        throw httpError(429, {
+                            unlocked: false,
+                            httpStatus: 429,
+                            cooldownActive: true,
+                            penaltyMinutes: 1,
+                            topicCode: body.topicCode,
+                            message: "Incorrect PIN entered 3 times. Locked for 1 minute(s).",
+                            lock,
+                        });
+                    }
+                    const remaining = 3 - failedAttempts1;
+                    throw httpError(400, {
+                        unlocked: false,
+                        httpStatus: 400,
+                        cooldownActive: false,
+                        topicCode: body.topicCode,
+                        message: `Incorrect 4-digit PIN. ${remaining} attempt(s) remaining before temporary lockout.`,
+                        lock: {
+                            locked: true,
+                            lockedBy: "admin@example.com",
+                            lockedAt: "25-Nov-2026 15:00:00",
+                            failedAttempts: failedAttempts1,
+                            remainingAttempts: remaining,
+                            maxAttempts: 3,
+                            lockoutTier: lockoutTier1,
+                            cooldownUntilEpochMs: null,
+                            cooldownSecondsRemaining: 0,
+                        },
+                    });
+                }
+            } else if (body.topicCode === "SPRING_BOOT" && body.pin === issuedPin2) {
+                lockedTopic2 = false;
+                const gradebook = buildGradebook();
+                return {
+                    unlocked: true,
+                    httpStatus: 200,
+                    topicCode: "SPRING_BOOT",
+                    message: "Unlocked Topic Marks for SPRING_BOOT.",
+                    lock: gradebook.topics[1].lock,
+                    gradebook,
+                };
+            }
+            throw httpError(400, { message: "Incorrect PIN." });
+        });
+
+        const { user } = renderClassFlow("/classes/2");
+        await screen.findByText("Hoàng Phương Bình");
+
+        await user.click(screen.getByRole("button", { name: "Topic Mark" }));
+        const view = await screen.findByTestId("topic-mark-view");
+        const topicSelect = within(view).getByLabelText("Topic Code") as HTMLSelectElement;
+        await waitFor(() => expect(topicSelect.value).toBe("JAVA_CORE"));
+
+        // 1. Lock JAVA_CORE -> Confirm & verify issued 4-digit PIN dialog
+        await user.click(within(view).getByRole("button", { name: /^lock marks$/i }));
+        const confirmDialog = await screen.findByRole("dialog", { name: /Lock Topic Marks \(JAVA_CORE\)/i });
+        await user.click(within(confirmDialog).getByRole("button", { name: /confirm & generate pin/i }));
+
+        const issuedPinDialog = await screen.findByRole("dialog", { name: /Security PIN Generated \(JAVA_CORE\)/i });
+        expect(within(issuedPinDialog).getByTestId("issued-pin-code")).toHaveTextContent("4829");
+        await user.click(within(issuedPinDialog).getByRole("button", { name: /^done$/i }));
+
+        // 2. While locked: Lock badge + locked banner appear, score inputs & Import Mark are disabled
+        expect(within(view).getByTestId("topic-lock-badge")).toHaveTextContent("Marks Locked");
+        expect(within(view).getByTestId("topic-locked-banner")).toBeInTheDocument();
+        expect(within(view).getByRole("button", { name: /import mark/i })).toBeDisabled();
+        expect(
+            within(view).getByLabelText("Quiz score for Hoàng Phương Bình"),
+        ).toBeDisabled();
+
+        // 3. Try unlocking JAVA_CORE with wrong PIN 3 times -> triggers 1m cooldown banner
+        await user.click(within(view).getAllByRole("button", { name: /^unlock marks$/i })[0]);
+        const unlockDialog = await screen.findByRole("dialog", { name: /Unlock Topic Marks \(JAVA_CORE\)/i });
+        const pinField = within(unlockDialog).getByLabelText("4-Digit Security PIN");
+
+        await user.type(pinField, "0000");
+        await user.click(within(unlockDialog).getByRole("button", { name: /^unlock$/i }));
+        expect(await within(unlockDialog).findByTestId("pin-remaining-attempts")).toHaveTextContent("2 / 3");
+
+        await user.type(pinField, "1111");
+        await user.click(within(unlockDialog).getByRole("button", { name: /^unlock$/i }));
+        expect(await within(unlockDialog).findByTestId("pin-remaining-attempts")).toHaveTextContent("1 / 3");
+
+        await user.type(pinField, "2222");
+        await user.click(within(unlockDialog).getByRole("button", { name: /^unlock$/i }));
+        expect(await within(unlockDialog).findByTestId("pin-lockout-banner")).toHaveTextContent(/Temporarily Locked \(Tier 1\)/i);
+        expect(within(unlockDialog).getByRole("button", { name: /^unlock$/i })).toBeDisabled();
+        await user.click(within(unlockDialog).getByRole("button", { name: /^cancel$/i }));
+
+        // 4. Switch to locked SPRING_BOOT & unlock cleanly with valid PIN "7315"
+        await user.selectOptions(topicSelect, "SPRING_BOOT");
+        expect(within(view).getByLabelText("Capstone score for Hoàng Phương Bình")).toBeDisabled();
+        await user.click(within(view).getAllByRole("button", { name: /^unlock marks$/i })[0]);
+        const unlockSpringDialog = await screen.findByRole("dialog", { name: /Unlock Topic Marks \(SPRING_BOOT\)/i });
+        await user.type(within(unlockSpringDialog).getByLabelText("4-Digit Security PIN"), issuedPin2);
+        await user.click(within(unlockSpringDialog).getByRole("button", { name: /^unlock$/i }));
+
+        await waitFor(() =>
+            expect(within(view).getByTestId("topic-lock-badge")).toHaveTextContent("Editable"),
+        );
+        expect(within(view).getByLabelText("Capstone score for Hoàng Phương Bình")).toBeEnabled();
     }, 20000);
 });
