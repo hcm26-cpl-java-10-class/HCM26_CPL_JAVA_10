@@ -68,10 +68,8 @@ public class GradebookBonusService {
         if (!column.getCourse().getId().equals(courseId)) {
             throw new BadRequestException("Column does not belong to this course");
         }
-        if (enrollmentRepository.findActiveStudentsByCourse(courseId).stream()
-                .noneMatch(e -> e.getUser().getId().equals(req.studentId()))) {
-            throw new BadRequestException("Student is not enrolled in this course");
-        }
+        // enrolled students and extra students (not enrolled, but with an imported score) may get bonus;
+        // the "has a score in this column" check below keeps arbitrary users out.
         if (scoreRepository.findByColumn_IdAndStudent_Id(column.getId(), req.studentId())
                 .map(GradebookScore::getScore).isEmpty()) {
             throw new BadRequestException("This student has no score in the selected column yet");

@@ -49,16 +49,27 @@ public class CourseMyScoresService {
 
         Map<Long, ExamAttempt> bestAttempts = selectBestAttempts(studentAttempts);
 
-        return enrollments.stream()
-                .filter(enrollment -> enrollment.getCourse() != null)
-                .map(enrollment -> publishedScores(enrollment.getCourse(),
-                                withTemplate(enrollment.getCourse().getId(), publishedRepository.findByCourse_IdAndStudent_IdOrderByPositionAsc(
-                                        enrollment.getCourse().getId(), studentId)))
-                        .orElseGet(() -> buildCourseScores(enrollment.getCourse(), bestAttempts)))
+        // enrolled courses first, then courses where the student only appears as an "extra student"
+        // (took the assessment, e.g. via link, without being enrolled) and the instructor has saved the scores
+        List<Course> courses = new ArrayList<>();
+        Set<Long> seen = new java.util.HashSet<>();
+        for (var enrollment : enrollments) {
+            if (enrollment.getCourse() != null && seen.add(enrollment.getCourse().getId()))
+                courses.add(enrollment.getCourse());
+        }
+        for (Course extra : publishedRepository.findCoursesOfStudent(studentId)) {
+            if (seen.add(extra.getId())) courses.add(extra);
+        }
+        return courses.stream()
+                .map(course -> publishedScores(course,
+                                withTemplate(course.getId(), publishedRepository.findByCourse_IdAndStudent_IdOrderByPositionAsc(
+                                        course.getId(), studentId)))
+                        .orElseGet(() -> buildCourseScores(course, bestAttempts)))
                 .collect(Collectors.toMap(
                         CourseMyScoresDTO::courseId,
                         dto -> dto,
-                        (first, second) -> first
+                        (first, second) -> first,
+                        java.util.LinkedHashMap::new
                 ))
                 .values()
                 .stream()
