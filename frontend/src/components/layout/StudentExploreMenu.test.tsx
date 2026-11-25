@@ -38,8 +38,8 @@ it("opens from the keyboard, links real categories, and restores focus on Escape
   expect(await screen.findByRole("menu")).toBeInTheDocument();
   expect(screen.getByRole("menuitem", { name: "Browse courses" })).toHaveAttribute("href", "/courses");
   expect(screen.getByRole("menuitem", { name: "For you" })).toHaveAttribute("href", "/student/recommendations");
-  expect(screen.getByRole("menuitem", { name: "Java" })).toHaveAttribute("href", "/courses?category=9");
-  expect(screen.queryByRole("menuitem", { name: "Empty" })).not.toBeInTheDocument();
+  expect(screen.getByRole("menuitem", { name: "Java (1)" })).toHaveAttribute("href", "/courses?category=9");
+  expect(screen.getByRole("menuitem", { name: "Empty (0)" })).toHaveAttribute("href", "/courses?category=12");
   await user.keyboard("{Escape}");
   await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
   expect(trigger).toHaveFocus();

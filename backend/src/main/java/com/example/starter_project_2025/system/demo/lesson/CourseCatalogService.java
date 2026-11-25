@@ -107,7 +107,8 @@ public class CourseCatalogService {
                     Boolean.TRUE.equals(course.getIsFree()),
                     enrolledIds.contains(course.getId()),
                     averageRating,
-                    totalReviews
+                    totalReviews,
+                    list.stream().map(Category::getName).toList()
             );
         });
     }
