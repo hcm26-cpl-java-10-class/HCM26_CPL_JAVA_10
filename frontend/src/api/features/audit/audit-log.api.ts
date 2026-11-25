@@ -43,6 +43,12 @@ export interface AuditStatsDay {
     failures: number;
 }
 
+export interface AuditStatsEntityAction {
+    entityType: string;
+    action: string;
+    count: number;
+}
+
 export interface AuditStats {
     fromDate: string;
     toDate: string;
@@ -53,6 +59,7 @@ export interface AuditStats {
     byEntityType: AuditStatsBucket[];
     byResult: AuditStatsBucket[];
     topActors: AuditStatsBucket[];
+    byEntityAction: AuditStatsEntityAction[];
 }
 
 export interface AuditLogPage {

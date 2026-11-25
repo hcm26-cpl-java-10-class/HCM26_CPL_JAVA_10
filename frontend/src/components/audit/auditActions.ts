@@ -85,3 +85,22 @@ export function getActionBadgeClass(action: string) {
 export function getActionDotClass(action: string) {
   return toneOf(action).dot;
 }
+
+const TONE_HEX: Record<Tone, string> = {
+  emerald: "#10b981",
+  blue: "#3b82f6",
+  red: "#ef4444",
+  violet: "#8b5cf6",
+  slate: "#64748b",
+  teal: "#14b8a6",
+  amber: "#f59e0b",
+  indigo: "#6366f1",
+  sky: "#0ea5e9",
+  orange: "#f97316",
+  gray: "#9ca3af",
+};
+
+/** Hex colour of an action (same tone as its badge), for charts that cannot use Tailwind classes. */
+export function getActionColor(action: string) {
+  return TONE_HEX[ACTION_META[action?.toUpperCase()]?.tone ?? "gray"];
+}

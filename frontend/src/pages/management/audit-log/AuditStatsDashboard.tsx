@@ -1,284 +1,516 @@
-import { useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Activity, AlertTriangle, CalendarDays, CheckCircle2, Info } from "lucide-react";
 import {
-  auditLogApi,
-  type AuditStatsBucket,
-  type AuditStatsDay,
+    Bar,
+    BarChart,
+    CartesianGrid,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis,
+} from "recharts";
+import {
+    auditLogApi,
+    type AuditStatsBucket,
+    type AuditStatsDay,
+    type AuditStatsEntityAction,
 } from "@/api";
 import { getActionLabel } from "@/components/audit/auditActions";
 
-type RangeKey = "7" | "30" | "90" | "all";
+const PRIMARY = "#6366f1";
+const DANGER = "#ef4444";
+const TOOLTIP_STYLE = {
+    background: "var(--card)",
+    border: "1px solid var(--border)",
+    borderRadius: 8,
+    color: "var(--card-foreground)",
+    fontSize: 12,
+} as const;
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const RANGES: { key: RangeKey; label: string }[] = [
-  { key: "7", label: "Last 7 days" },
-  { key: "30", label: "Last 30 days" },
-  { key: "90", label: "Last 90 days" },
-  { key: "all", label: "All time" },
-];
-
-const RESULT_COLORS: Record<string, string> = {
-  SUCCESS: "#10b981",
-  FAILURE: "#ef4444",
-  PARTIAL: "#f59e0b",
+const RESULT_META: Record<string, { label: string; color: string }> = {
+    SUCCESS: { label: "Passed", color: PRIMARY },
+    FAILURE: { label: "Rejected", color: DANGER },
+    PARTIAL: { label: "Partial", color: "#f59e0b" },
 };
 
-function toIsoDate(date: Date) {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
+/** Actions are grouped so each entity row stays readable; an unlisted action falls into "Update". */
+const GROUPS = [
+    { key: "create", label: "Create", color: PRIMARY, actions: ["CREATE", "REGISTER", "ACCEPT", "ACTIVATE", "CONFIRM", "RESOLVE"] },
+    { key: "update", label: "Update / Add", color: "#38bdf8", actions: [] },
+    { key: "remove", label: "Delete / Reject", color: DANGER, actions: ["DELETE", "REJECT", "REVOKE", "CANCEL", "REMOVE_QUESTION", "UNLINK", "UNPUBLISH"] },
+    { key: "auth", label: "Auth / Session", color: "#64748b", actions: ["LOGIN", "LOGOUT", "VERIFY_EMAIL", "FORGOT_PASSWORD", "RESET_PASSWORD"] },
+    { key: "link", label: "Link / Invite", color: "#14b8a6", actions: ["LINK", "INVITE", "BATCH_INVITE", "RESEND", "ADD_QUESTION"] },
+] as const;
+
+const ACTION_GROUP = new Map<string, string>(
+    GROUPS.flatMap((group) => group.actions.map((action) => [action, group.key] as const)),
+);
+
+const groupOf = (action: string) => ACTION_GROUP.get(action.toUpperCase()) ?? "update";
+
+function formatDay(date: string) {
+    const month = MONTHS[Number(date.slice(5, 7)) - 1] ?? "";
+    return `${date.slice(8, 10)} ${month}`;
 }
 
-function rangeFor(key: RangeKey) {
-  if (key === "all") {
-    return { fromDate: undefined, toDate: undefined };
-  }
-
-  const to = new Date();
-  const from = new Date();
-  from.setDate(to.getDate() - (Number(key) - 1));
-
-  return { fromDate: toIsoDate(from), toDate: toIsoDate(to) };
+function daysBetween(from: string, to: string, fallback: number) {
+    const span = Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000) + 1;
+    return Number.isFinite(span) && span > 0 ? span : fallback;
 }
 
-function KpiCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
-      {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
-    </div>
-  );
+function Badge({ children, tone }: { children: ReactNode; tone: "red" | "indigo" | "slate" }) {
+    const styles = {
+        red: "bg-red-500/10 text-red-600 dark:text-red-400",
+        indigo: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-300",
+        slate: "bg-muted text-muted-foreground",
+    };
+    return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${styles[tone]}`}>{children}</span>;
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h3 className="mb-3 text-sm font-semibold text-slate-800">{title}</h3>
-      {children}
-    </section>
-  );
-}
-
-function DailyChart({ days }: { days: AuditStatsDay[] }) {
-  const width = 640;
-  const height = 220;
-  const margin = { top: 12, right: 8, bottom: 28, left: 32 };
-  const plotWidth = width - margin.left - margin.right;
-  const plotHeight = height - margin.top - margin.bottom;
-  const max = Math.max(1, ...days.map((day) => day.total));
-  const slot = days.length > 0 ? plotWidth / days.length : plotWidth;
-  const barWidth = Math.max(2, slot * 0.7);
-  const labelEvery = Math.max(1, Math.ceil(days.length / 8));
-
-  if (days.length === 0) {
-    return <p className="py-8 text-center text-sm text-slate-400">No data in this period.</p>;
-  }
-
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="h-56 w-full" role="img" aria-label="Events per day">
-      {[0, 0.5, 1].map((fraction) => {
-        const y = margin.top + plotHeight * (1 - fraction);
-        return (
-          <g key={fraction}>
-            <line x1={margin.left} x2={width - margin.right} y1={y} y2={y} stroke="#e2e8f0" />
-            <text x={margin.left - 6} y={y + 3} textAnchor="end" fontSize="10" fill="#94a3b8">
-              {Math.round(max * fraction)}
-            </text>
-          </g>
-        );
-      })}
-
-      {days.map((day, index) => {
-        const x = margin.left + slot * index + (slot - barWidth) / 2;
-        const totalHeight = (day.total / max) * plotHeight;
-        const failureHeight = (day.failures / max) * plotHeight;
-        const baseY = margin.top + plotHeight;
-
-        return (
-          <g key={day.date}>
-            <title>{`${day.date}: ${day.total} events, ${day.failures} failures`}</title>
-            <rect x={x} y={baseY - totalHeight} width={barWidth} height={totalHeight} rx="2" fill="#3b82f6" />
-            {day.failures > 0 && (
-              <rect x={x} y={baseY - failureHeight} width={barWidth} height={failureHeight} rx="2" fill="#ef4444" />
-            )}
-            {index % labelEvery === 0 && (
-              <text x={x + barWidth / 2} y={height - 10} textAnchor="middle" fontSize="10" fill="#64748b">
-                {day.date.slice(8, 10)}/{day.date.slice(5, 7)}
-              </text>
-            )}
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function BarList({
-  items,
-  label = (key: string) => key,
-}: {
-  items: AuditStatsBucket[];
-  label?: (key: string) => string;
+function KpiCard({
+                     label,
+                     value,
+                     hint,
+                     badge,
+                     icon: Icon,
+                     tone,
+                 }: {
+    label: string;
+    value: string;
+    hint?: string;
+    badge?: ReactNode;
+    icon: typeof Activity;
+    tone: string;
 }) {
-  const max = Math.max(1, ...items.map((item) => item.count));
-
-  if (items.length === 0) {
-    return <p className="py-4 text-center text-sm text-slate-400">No data.</p>;
-  }
-
-  return (
-    <ul className="space-y-2">
-      {items.map((item) => (
-        <li key={item.key} className="text-sm">
-          <div className="mb-1 flex justify-between gap-2">
-            <span className="truncate text-slate-700">{label(item.key)}</span>
-            <span className="font-medium text-slate-900">{item.count}</span>
-          </div>
-          <div className="h-2 rounded-full bg-slate-100">
-            <div
-              className="h-2 rounded-full bg-blue-500"
-              style={{ width: `${(item.count / max) * 100}%` }}
-            />
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
+    return (
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+                <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${tone}`}>
+          <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+        </span>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+                <p className="text-3xl font-semibold text-foreground">{value}</p>
+                {badge}
+            </div>
+            {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+        </div>
+    );
 }
 
-function ResultDonut({ items, total }: { items: AuditStatsBucket[]; total: number }) {
-  const radius = 42;
-  const circumference = 2 * Math.PI * radius;
-  let offset = 0;
+function Panel({
+                   title,
+                   subtitle,
+                   action,
+                   children,
+                   footer,
+               }: {
+    title: string;
+    subtitle?: string;
+    action?: ReactNode;
+    children: ReactNode;
+    footer?: ReactNode;
+}) {
+    return (
+        <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+                    {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
+                </div>
+                {action}
+            </div>
+            {children}
+            {footer && <div className="mt-4 border-t border-border pt-3 text-xs text-muted-foreground">{footer}</div>}
+        </section>
+    );
+}
 
-  if (total === 0) {
-    return <p className="py-4 text-center text-sm text-slate-400">No data.</p>;
-  }
+function Empty({ text = "No data in this period." }: { text?: string }) {
+    return <p className="py-8 text-center text-sm text-muted-foreground">{text}</p>;
+}
 
-  return (
-    <div className="flex items-center gap-6">
-      <svg viewBox="0 0 120 120" className="h-32 w-32 shrink-0" role="img" aria-label="Results">
-        <g transform="rotate(-90 60 60)">
-          {items.map((item) => {
-            const length = (item.count / total) * circumference;
-            const segment = (
-              <circle
-                key={item.key}
-                cx="60"
-                cy="60"
-                r={radius}
-                fill="none"
-                stroke={RESULT_COLORS[item.key] ?? "#94a3b8"}
-                strokeWidth="16"
-                strokeDasharray={`${length} ${circumference - length}`}
-                strokeDashoffset={-offset}
-              />
-            );
-            offset += length;
-            return segment;
-          })}
-        </g>
-        <text x="60" y="64" textAnchor="middle" fontSize="16" fontWeight="600" fill="#0f172a">
-          {total}
-        </text>
-      </svg>
+function Timeline({ days, normalized }: { days: AuditStatsDay[]; normalized: boolean }) {
+    const data = useMemo(
+        () =>
+            days.map((day) => ({
+                date: day.date,
+                label: formatDay(day.date),
+                success: Math.max(0, day.total - day.failures),
+                failure: day.failures,
+            })),
+        [days],
+    );
 
-      <ul className="space-y-1.5 text-sm">
-        {items.map((item) => (
-          <li key={item.key} className="flex items-center gap-2">
+    if (data.every((day) => day.success + day.failure === 0)) return <Empty />;
+
+    return (
+        <div className="h-72 w-full text-muted-foreground" role="img" aria-label="Events per day">
+            <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                    data={data}
+                    stackOffset={normalized ? "expand" : "none"}
+                    margin={{ top: 8, right: 8, bottom: 0, left: -12 }}
+                >
+                    <CartesianGrid stroke="currentColor" strokeOpacity={0.12} vertical={false} />
+                    <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 11, fill: "currentColor" }}
+                        tickLine={false}
+                        axisLine={{ stroke: "currentColor", strokeOpacity: 0.2 }}
+                        interval="preserveStartEnd"
+                        minTickGap={24}
+                    />
+                    <YAxis
+                        allowDecimals={false}
+                        tick={{ fontSize: 11, fill: "currentColor" }}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(value: number) => (normalized ? `${Math.round(value * 100)}%` : String(value))}
+                    />
+                    <Tooltip
+                        cursor={{ fill: "currentColor", fillOpacity: 0.06 }}
+                        contentStyle={TOOLTIP_STYLE}
+                        labelFormatter={(_, payload) => payload?.[0]?.payload?.date ?? ""}
+                        formatter={(value, name) => [String(value), name === "success" ? "Success" : "Failure"]}
+                    />
+                    <Bar dataKey="success" stackId="events" fill={PRIMARY} maxBarSize={40} />
+                    <Bar dataKey="failure" stackId="events" fill={DANGER} maxBarSize={40} radius={[3, 3, 0, 0]} />
+                </BarChart>
+            </ResponsiveContainer>
+        </div>
+    );
+}
+
+const MAX_ENTITIES = 8;
+
+function EntityDistribution({ items }: { items: AuditStatsEntityAction[] }) {
+    const { rows, totalEntities } = useMemo(() => {
+        const byEntity = new Map<string, { entityType: string; total: number; groups: Record<string, number>; actions: Record<string, number> }>();
+        let grandTotal = 0;
+
+        for (const item of items) {
+            const row = byEntity.get(item.entityType) ?? { entityType: item.entityType, total: 0, groups: {}, actions: {} };
+            const group = groupOf(item.action);
+            row.groups[group] = (row.groups[group] ?? 0) + item.count;
+            row.actions[item.action] = (row.actions[item.action] ?? 0) + item.count;
+            row.total += item.count;
+            grandTotal += item.count;
+            byEntity.set(item.entityType, row);
+        }
+
+        const sorted = [...byEntity.values()].sort((a, b) => b.total - a.total);
+        return {
+            rows: sorted.slice(0, MAX_ENTITIES).map((row) => ({ ...row, share: grandTotal ? row.total / grandTotal : 0 })),
+            totalEntities: sorted.length,
+        };
+    }, [items]);
+
+    if (rows.length === 0) return <Empty text="No data." />;
+
+    const widest = rows[0].total;
+
+    return (
+        <>
+            <ul className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                {GROUPS.map((group) => (
+                    <li key={group.key} className="flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: group.color }} />
+                        {group.label}
+                    </li>
+                ))}
+            </ul>
+
+            <ul className="space-y-3.5">
+                {rows.map((row) => (
+                    <li key={row.entityType}>
+                        <div className="mb-1 flex items-baseline justify-between gap-3 text-xs">
+                            <span className="truncate font-medium text-foreground">{row.entityType}</span>
+                            <span className="shrink-0 text-muted-foreground">
+                {row.total} events • {(row.share * 100).toFixed(1)}%
+              </span>
+                        </div>
+                        <div
+                            className="flex h-2.5 overflow-hidden rounded-full bg-muted"
+                            style={{ width: `${Math.max(8, (row.total / widest) * 100)}%` }}
+                        >
+                            {GROUPS.map((group) => {
+                                const count = row.groups[group.key];
+                                if (!count) return null;
+                                const detail = Object.entries(row.actions)
+                                    .filter(([action]) => groupOf(action) === group.key)
+                                    .map(([action, n]) => `${getActionLabel(action)}: ${n}`)
+                                    .join(", ");
+                                return (
+                                    <span
+                                        key={group.key}
+                                        title={`${group.label} (${count}) - ${detail}`}
+                                        style={{ width: `${(count / row.total) * 100}%`, backgroundColor: group.color }}
+                                    />
+                                );
+                            })}
+                        </div>
+                    </li>
+                ))}
+            </ul>
+
+            <p className="mt-4 text-xs text-muted-foreground">
+                Showing top {rows.length} of {totalEntities} entity types
+            </p>
+        </>
+    );
+}
+
+function ExecutionSplit({ items, total }: { items: AuditStatsBucket[]; total: number }) {
+    if (total === 0) return <Empty text="No data." />;
+
+    const radius = 42;
+    const circumference = 2 * Math.PI * radius;
+    const segments = items.map((item, index) => ({
+        item,
+        length: (item.count / total) * circumference,
+        start:
+            items.slice(0, index).reduce((sum, previous) => sum + previous.count, 0) /
+            total *
+            circumference,
+    }));
+
+    return (
+        <div className="flex items-center gap-5">
+            <svg viewBox="0 0 120 120" className="h-28 w-28 shrink-0 text-foreground" role="img" aria-label="Execution split">
+                <g transform="rotate(-90 60 60)">
+                    {segments.map(({ item, length, start }) => (
+                        <circle
+                            key={item.key}
+                            cx="60"
+                            cy="60"
+                            r={radius}
+                            fill="none"
+                            stroke={RESULT_META[item.key]?.color ?? "#94a3b8"}
+                            strokeWidth="14"
+                            strokeDasharray={`${length} ${circumference - length}`}
+                            strokeDashoffset={-start}
+                        />
+                    ))}
+                </g>
+                <text x="60" y="58" textAnchor="middle" fontSize="20" fontWeight="600" fill="currentColor">
+                    {total}
+                </text>
+                <text x="60" y="74" textAnchor="middle" fontSize="9" fill="currentColor" opacity={0.6}>
+                    total
+                </text>
+            </svg>
+
+            <ul className="space-y-2 text-sm">
+                {items.map((item) => (
+                    <li key={item.key} className="flex items-center gap-2">
             <span
-              className="h-2.5 w-2.5 rounded-full"
-              style={{ backgroundColor: RESULT_COLORS[item.key] ?? "#94a3b8" }}
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: RESULT_META[item.key]?.color ?? "#94a3b8" }}
             />
-            <span className="text-slate-700">{item.key}</span>
-            <span className="font-medium text-slate-900">{item.count}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
+                        <span className="text-foreground/80">{RESULT_META[item.key]?.label ?? item.key}</span>
+                        <span className="font-medium text-foreground">{item.count}</span>
+                        <span className="text-xs text-muted-foreground">({((item.count / total) * 100).toFixed(1)}%)</span>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+
+function TopActors({ items, total }: { items: AuditStatsBucket[]; total: number }) {
+    if (items.length === 0) return <Empty text="No data." />;
+
+    return (
+        <ul className="space-y-4">
+            {items.slice(0, 5).map((item) => {
+                const share = total > 0 ? (item.count / total) * 100 : 0;
+                return (
+                    <li key={item.key} className="flex items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-500/10 text-xs font-semibold text-indigo-600 dark:text-indigo-300">
+              {item.key.slice(0, 2).toUpperCase()}
+            </span>
+                        <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline justify-between gap-2 text-sm">
+                                <span className="truncate font-medium text-foreground">{item.key}</span>
+                                <span className="shrink-0 text-xs text-muted-foreground">{item.count} ev</span>
+                            </div>
+                            <div className="mt-1.5 h-1.5 rounded-full bg-muted">
+                                <div className="h-1.5 rounded-full" style={{ width: `${share}%`, backgroundColor: PRIMARY }} />
+                            </div>
+                            <p className="mt-1 text-[11px] text-muted-foreground">{share.toFixed(1)}% workload</p>
+                        </div>
+                    </li>
+                );
+            })}
+        </ul>
+    );
 }
 
 /**
- * Statistics of the audit log: volume over time, most used actions, entities, actors and results.
+ * Statistics of the audit log: volume over time, actions per entity, results and most active users.
+ * The date range is owned by the page so the Logs and Statistics tabs always agree.
  */
-export function AuditStatsDashboard() {
-  const [range, setRange] = useState<RangeKey>("30");
+export function AuditStatsDashboard({
+                                        fromDate,
+                                        toDate,
+                                    }: {
+    fromDate?: string;
+    toDate?: string;
+}) {
+    const [normalized, setNormalized] = useState(false);
 
-  const query = useQuery({
-    queryKey: ["audit-stats", range],
-    queryFn: () => auditLogApi.getStats(rangeFor(range)),
-    staleTime: 30_000,
-  });
+    const query = useQuery({
+        queryKey: ["audit-stats", fromDate ?? null, toDate ?? null],
+        queryFn: () => auditLogApi.getStats({ fromDate, toDate }),
+        staleTime: 30_000,
+    });
 
-  const stats = query.data;
-  const successRate =
-    stats && stats.total > 0
-      ? `${Math.round(((stats.total - stats.failures) / stats.total) * 100)}%`
-      : "-";
-  const activeDays = stats ? stats.byDay.filter((day) => day.total > 0).length : 0;
+    const stats = query.data;
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-slate-500">
-          {stats ? `${stats.fromDate} to ${stats.toDate}` : "Loading statistics..."}
-        </p>
-        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
-          {RANGES.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setRange(item.key)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                range === item.key
-                  ? "bg-blue-600 text-white"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
+    const derived = useMemo(() => {
+        if (!stats) return null;
+
+        const successes = stats.total - stats.failures;
+        const rangeDays = daysBetween(stats.fromDate, stats.toDate, stats.byDay.length);
+        const activeDays = stats.byDay.filter((day) => day.total > 0).length;
+        const peak = stats.byDay.reduce<AuditStatsDay | null>(
+            (best, day) => (day.failures > (best?.failures ?? 0) ? day : best),
+            null,
+        );
+        const density = rangeDays > 0 ? activeDays / rangeDays : 0;
+
+        return {
+            successes,
+            rangeDays,
+            activeDays,
+            peak,
+            averagePerDay: rangeDays > 0 ? stats.total / rangeDays : 0,
+            failureShare: stats.total > 0 ? (stats.failures / stats.total) * 100 : 0,
+            successRate: stats.total > 0 ? (successes / stats.total) * 100 : null,
+            activity: density >= 0.6 ? "Dense" : density >= 0.25 ? "Steady" : "Sparse",
+        };
+    }, [stats]);
+
+    return (
+        <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+                {stats ? `${stats.fromDate} to ${stats.toDate}` : query.isError ? "" : "Loading statistics..."}
+            </p>
+
+            {query.isError && (
+                <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-400">Unable to load statistics. Reload the page or try a different date range.</p>
+            )}
+
+            {stats && derived && (
+                <>
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                        <KpiCard
+                            label="Total event volume"
+                            value={String(stats.total)}
+                            hint={`${derived.averagePerDay.toFixed(1)} events per day on average`}
+                            icon={Activity}
+                            tone="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                        />
+                        <KpiCard
+                            label="Denied / failures"
+                            value={String(stats.failures)}
+                            badge={<Badge tone="red">{derived.failureShare.toFixed(1)}% of total</Badge>}
+                            hint={derived.peak ? `Peak on ${formatDay(derived.peak.date)} (${derived.peak.failures} failures)` : "No failures in this period"}
+                            icon={AlertTriangle}
+                            tone="bg-red-500/10 text-red-600 dark:text-red-400"
+                        />
+                        <KpiCard
+                            label="Policy pass rate"
+                            value={derived.successRate === null ? "-" : `${derived.successRate.toFixed(1)}%`}
+                            hint={`${derived.successes} of ${stats.total} events passed`}
+                            icon={CheckCircle2}
+                            tone="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                        />
+                        <KpiCard
+                            label="Activity window"
+                            value={`${derived.activeDays} ${derived.activeDays === 1 ? "day" : "days"}`}
+                            badge={<Badge tone="slate">{derived.activity}</Badge>}
+                            hint={`out of ${derived.rangeDays} days in range`}
+                            icon={CalendarDays}
+                            tone="bg-violet-500/10 text-violet-600 dark:text-violet-400"
+                        />
+                    </div>
+
+                    <Panel
+                        title="Audit events timeline"
+                        subtitle="Successful events compared with denied or failed ones, per day."
+                        action={
+                            <div className="flex flex-wrap items-center gap-4">
+                                <ul className="flex items-center gap-3 text-xs text-muted-foreground">
+                                    <li className="flex items-center gap-1.5">
+                                        <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: PRIMARY }} />
+                                        Success ({derived.successes})
+                                    </li>
+                                    <li className="flex items-center gap-1.5">
+                                        <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: DANGER }} />
+                                        Failure ({stats.failures})
+                                    </li>
+                                </ul>
+                                <div className="flex rounded-lg border border-border p-0.5 text-xs" role="group" aria-label="Chart scale">
+                                    {[
+                                        { label: "Stacked", value: false },
+                                        { label: "Normalized", value: true },
+                                    ].map((option) => (
+                                        <button
+                                            key={option.label}
+                                            type="button"
+                                            aria-pressed={normalized === option.value}
+                                            onClick={() => setNormalized(option.value)}
+                                            className={`rounded-md px-2.5 py-1 font-medium ${
+                                                normalized === option.value ? "bg-indigo-500/10 text-indigo-600 dark:text-indigo-300" : "text-muted-foreground hover:text-foreground/80"
+                                            }`}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        }
+                        footer={
+                            <span className="flex items-center gap-1.5">
+                <Info className="h-3.5 w-3.5" aria-hidden="true" />
+                Success and failure are taken from the result recorded with each audit event.
+              </span>
+                        }
+                    >
+                        <Timeline days={stats.byDay} normalized={normalized} />
+                    </Panel>
+
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                        <Panel title="Actions distributed by entity" subtitle="Audit operations grouped by the kind of change.">
+                            <EntityDistribution items={stats.byEntityAction ?? []} />
+                        </Panel>
+
+                        <div className="space-y-4">
+                            <Panel title="Execution split">
+                                <ExecutionSplit items={stats.byResult} total={stats.total} />
+                            </Panel>
+
+                            <Panel title="Most active actors" subtitle="Top initiators of tracked changes.">
+                                <TopActors items={stats.topActors} total={stats.total} />
+                            </Panel>
+
+                            {derived.peak && (
+                                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">
+                                    <p className="font-medium">Failures peaked on {formatDay(derived.peak.date)}</p>
+                                    <p className="mt-1 text-xs">
+                                        {derived.peak.failures} of {stats.failures} failed events ({Math.round((derived.peak.failures / stats.failures) * 100)}%) happened that day. Filter the Logs tab by Failure to see the cause.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
-      </div>
-
-      {query.isError && (
-        <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
-          Unable to load statistics.
-        </p>
-      )}
-
-      {stats && (
-        <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <KpiCard label="Total events" value={String(stats.total)} />
-            <KpiCard label="Failures" value={String(stats.failures)} />
-            <KpiCard label="Success rate" value={successRate} />
-            <KpiCard label="Active days" value={String(activeDays)} hint="days with at least one event" />
-          </div>
-
-          <Panel title="Events per day (red = failures)">
-            <DailyChart days={stats.byDay} />
-          </Panel>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Panel title="Actions">
-              <BarList items={stats.byAction} label={getActionLabel} />
-            </Panel>
-            <Panel title="Entities">
-              <BarList items={stats.byEntityType} />
-            </Panel>
-            <Panel title="Results">
-              <ResultDonut items={stats.byResult} total={stats.total} />
-            </Panel>
-            <Panel title="Most active users">
-              <BarList items={stats.topActors} />
-            </Panel>
-          </div>
-        </>
-      )}
-    </div>
-  );
+    );
 }
-
-export default AuditStatsDashboard;
