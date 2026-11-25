@@ -1,12 +1,15 @@
 import { ApiErrorState } from "@/components/exam/ApiErrorState";
 import { assessmentReturnPath } from "@/utils/assessment-navigation";
-import { examApi } from "@/api";
+import { examApi, examTemplateApi } from "@/api";
 import HeaderRight from "@/components/layout/HeaderRight";
 import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import type { ExamDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, BookOpen, CheckCircle2, ClipboardCheck, Copy, Lock, Mail, Pencil, BarChart3 } from "lucide-react";
-import { useEffect } from "react";
+import { Archive, BookmarkPlus, BookOpen, CheckCircle2, ClipboardCheck, Copy, Lock, Mail, Pencil, BarChart3 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { getErrorMessage } from "./examConfig";
@@ -84,6 +87,41 @@ export default function ExamDetailPage() {
     },
     onError: (err) => toast.error(getErrorMessage(err, "Action failed")),
   });
+
+  const [examToSaveAsTemplate, setExamToSaveAsTemplate] = useState<ExamDTO | null>(null);
+  const [templateName, setTemplateName] = useState("");
+  const [templateDescription, setTemplateDescription] = useState("");
+
+  const saveExamAsTemplateMutation = useMutation({
+    mutationFn: () => {
+      if (!examToSaveAsTemplate?.id) {
+        throw new Error("Select an exam before saving it as a template.");
+      }
+      const name = templateName.trim();
+      if (!name) {
+        throw new Error("Template name is required.");
+      }
+      return examTemplateApi.saveFromExam(examToSaveAsTemplate.id, {
+        name,
+        description: templateDescription.trim() || undefined,
+      });
+    },
+    onSuccess: () => {
+      setExamToSaveAsTemplate(null);
+      setTemplateName("");
+      setTemplateDescription("");
+      toast.success("Exam saved as template successfully");
+    },
+    onError: (error) =>
+      toast.error(getErrorMessage(error, "Failed to save exam as template")),
+  });
+
+  const openSaveAsTemplate = (target: ExamDTO) => {
+    setExamToSaveAsTemplate(target);
+    setTemplateName(`${target.title} - Template`);
+    setTemplateDescription("");
+  };
+
   const title = examQuery.data?.title;
   const counts: Partial<Record<TabKey, { value: number; warn?: boolean }>> = {
     questions: { value: examQuery.data?.questionIds?.length ?? examQuery.data?.questions?.length ?? 0 },
@@ -167,6 +205,14 @@ export default function ExamDetailPage() {
                     <Copy className="mr-1 size-3.5" />
                     {lifecycleMutation.isPending && lifecycleMutation.variables === "duplicate" ? "Duplicating..." : "Duplicate"}
                   </Button>
+                  <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openSaveAsTemplate(examQuery.data!)}
+                  >
+                    <BookmarkPlus className="mr-1 size-3.5" />
+                    Save as Template
+                  </Button>
                 </div>
             )}
             <HeaderRight />
@@ -218,6 +264,81 @@ export default function ExamDetailPage() {
             </div>
           </>)}
         </main>
+
+        <Dialog
+          open={Boolean(examToSaveAsTemplate)}
+          onOpenChange={(open) => {
+            if (!open && !saveExamAsTemplateMutation.isPending) {
+              setExamToSaveAsTemplate(null);
+              setTemplateName("");
+              setTemplateDescription("");
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!templateName.trim()) {
+                  toast.error("Template name is required.");
+                  return;
+                }
+                saveExamAsTemplateMutation.mutate();
+              }}
+            >
+              <DialogHeader>
+                <DialogTitle>Save Exam as Template</DialogTitle>
+                <DialogDescription>
+                  Save the configuration, questions, and answer options from
+                  <strong className="text-foreground"> {examToSaveAsTemplate?.title}</strong>
+                  {" "}as a reusable template. The original exam will not be changed.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-5">
+                <label className="grid gap-2 text-sm font-medium">
+                  Template Name
+                  <Input
+                    required
+                    maxLength={200}
+                    value={templateName}
+                    onChange={(event) => setTemplateName(event.target.value)}
+                    placeholder="Enter template name"
+                  />
+                </label>
+                <label className="grid gap-2 text-sm font-medium">
+                  Description (optional)
+                  <textarea
+                    className="min-h-24 rounded-md border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    maxLength={1000}
+                    value={templateDescription}
+                    onChange={(event) => setTemplateDescription(event.target.value)}
+                    placeholder="Describe when this template should be reused"
+                  />
+                </label>
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={saveExamAsTemplateMutation.isPending}
+                  onClick={() => {
+                    setExamToSaveAsTemplate(null);
+                    setTemplateName("");
+                    setTemplateDescription("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={saveExamAsTemplateMutation.isPending || !templateName.trim()}
+                >
+                  {saveExamAsTemplateMutation.isPending ? "Saving..." : "Save Template"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
   );
 }
