@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 850" width="1100" height="850" style="background:#ffffff; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <!-- Parameters Table Header -->
+  <rect x="0" y="0" width="1100" height="35" fill="#fafafa" stroke="#e0e0e0"/>
+  <text x="20" y="23" fill="#3b4151" font-size="13" font-weight="bold">Parameters</text>
+  <text x="500" y="23" fill="#3b4151" font-size="13" font-weight="bold">Description</text>
+
+  <!-- Request Body Row -->
+  <text x="20" y="65" fill="#3b4151" font-size="13" font-weight="bold">body</text>
+  <text x="55" y="65" fill="#ff4d4f" font-size="12">* required</text>
+  <text x="20" y="85" fill="#888888" font-size="11">SubjectDTO</text>
+
+  <!-- Request Body Input Box -->
+  <rect x="500" y="48" width="570" height="150" rx="4" fill="#ffffff" stroke="#3b4151" stroke-width="1.5"/>
+  <text x="515" y="70" fill="#333333" font-size="12" font-family="Consolas, monospace">{</text>
+  <text x="530" y="90" fill="#333333" font-size="12" font-family="Consolas, monospace">"code": "JAVA_CORE_26",</text>
+  <text x="530" y="110" fill="#333333" font-size="12" font-family="Consolas, monospace">"name": "Lập trình Java Core &amp; OOP nâng cao",</text>
+  <text x="530" y="130" fill="#333333" font-size="12" font-family="Consolas, monospace">"technicalGroup": "Java Backend", "durationHours": 40,</text>
+  <text x="530" y="150" fill="#333333" font-size="12" font-family="Consolas, monospace">"version": "v1.0", "status": "ACTIVE", "passScore": "6.0"</text>
+  <text x="515" y="170" fill="#333333" font-size="12" font-family="Consolas, monospace">}</text>
+
+  <!-- Execute & Clear Buttons -->
+  <rect x="20" y="215" width="530" height="34" rx="4" fill="#4990e2"/>
+  <text x="250" y="237" fill="#ffffff" font-size="13" font-weight="bold">Execute</text>
+  <rect x="560" y="215" width="510" height="34" rx="4" fill="#f7f7f7" stroke="#cccccc"/>
+  <text x="800" y="237" fill="#555555" font-size="13">Clear</text>
+
+  <!-- Responses Header -->
+  <text x="20" y="280" fill="#3b4151" font-size="14" font-weight="bold">Responses</text>
+
+  <!-- Curl Section -->
+  <text x="20" y="305" fill="#666666" font-size="12" font-weight="bold">Curl</text>
+  <rect x="20" y="315" width="1050" height="42" rx="4" fill="#292d3e"/>
+  <text x="32" y="340" fill="#00ff66" font-size="11.5" font-family="Consolas, monospace">curl -X 'POST' 'http://localhost:8080/api/subjects' -H 'accept: */*' -H 'Content-Type: application/json' -d '{"code":"JAVA_CORE_26","name":"Lập trình Java Core &amp; OOP nâng cao","durationHours":40}'</text>
+
+  <!-- Request URL Section -->
+  <text x="20" y="380" fill="#666666" font-size="12" font-weight="bold">Request URL</text>
+  <rect x="20" y="390" width="1050" height="30" rx="4" fill="#292d3e"/>
+  <text x="32" y="410" fill="#ffffff" font-size="12" font-family="Consolas, monospace">http://localhost:8080/api/subjects</text>
+
+  <!-- Server Response Section -->
+  <text x="20" y="445" fill="#3b4151" font-size="13" font-weight="bold">Server response</text>
+  <text x="20" y="470" fill="#666666" font-size="12">Code</text>
+  <text x="120" y="470" fill="#666666" font-size="12">Details</text>
+
+  <!-- Response Code: 201 -->
+  <text x="20" y="500" fill="#3b4151" font-size="13" font-weight="bold">201</text>
+
+  <!-- Response Body Box with Copy & Download -->
+  <text x="120" y="495" fill="#888888" font-size="11">Response body</text>
+  <rect x="120" y="505" width="950" height="195" rx="4" fill="#292d3e"/>
+
+  <!-- Buttons Copy & Download -->
+  <rect x="940" y="515" width="55" height="22" rx="3" fill="#3f445b"/>
+  <text x="952" y="530" fill="#ffffff" font-size="11">Copy</text>
+  <rect x="1002" y="515" width="58" height="22" rx="3" fill="#3f445b"/>
+  <text x="1008" y="530" fill="#ffffff" font-size="11">Download</text>
+
+  <!-- JSON Content in Response Body -->
+  <text x="135" y="530" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">{</text>
+  <text x="150" y="548" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  <tspan fill="#80cbc4">"id"</tspan>: <tspan fill="#f78c6c">15</tspan>,</text>
+  <text x="150" y="566" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  <tspan fill="#80cbc4">"code"</tspan>: <tspan fill="#c3e88d">"JAVA_CORE_26"</tspan>,</text>
+  <text x="150" y="584" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  <tspan fill="#80cbc4">"name"</tspan>: <tspan fill="#c3e88d">"Lập trình Java Core &amp; OOP nâng cao"</tspan>,</text>
+  <text x="150" y="602" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  <tspan fill="#80cbc4">"version"</tspan>: <tspan fill="#c3e88d">"v1.0"</tspan>,</text>
+  <text x="150" y="620" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  <tspan fill="#80cbc4">"technicalGroup"</tspan>: <tspan fill="#c3e88d">"Java Backend"</tspan>,</text>
+  <text x="150" y="638" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  <tspan fill="#80cbc4">"durationHours"</tspan>: <tspan fill="#f78c6c">40</tspan>,</text>
+  <text x="150" y="656" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  <tspan fill="#80cbc4">"status"</tspan>: <tspan fill="#c3e88d">"ACTIVE"</tspan>,</text>
+  <text x="150" y="674" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  <tspan fill="#80cbc4">"createdAt"</tspan>: <tspan fill="#c3e88d">"2026-11-23T10:45:10.124Z"</tspan></text>
+  <text x="135" y="692" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">}</text>
+
+  <!-- Response Headers -->
+  <text x="120" y="720" fill="#888888" font-size="11">Response headers</text>
+  <rect x="120" y="730" width="950" height="95" rx="4" fill="#292d3e"/>
+  <text x="135" y="750" fill="#d1d5db" font-size="11" font-family="Consolas, monospace">cache-control: no-cache, no-store, max-age=0, must-revalidate</text>
+  <text x="135" y="768" fill="#d1d5db" font-size="11" font-family="Consolas, monospace">content-type: application/json;charset=UTF-8</text>
+  <text x="135" y="786" fill="#d1d5db" font-size="11" font-family="Consolas, monospace">location: /api/subjects/15</text>
+  <text x="135" y="804" fill="#d1d5db" font-size="11" font-family="Consolas, monospace">date: Mon, 23 Nov 2026 10:45:10 GMT</text>
+</svg>

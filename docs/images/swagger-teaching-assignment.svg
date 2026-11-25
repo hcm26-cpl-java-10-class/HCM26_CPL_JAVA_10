@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 820" width="1100" height="820" style="background:#ffffff; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <rect x="0" y="0" width="1100" height="35" fill="#fafafa" stroke="#e0e0e0"/>
+  <text x="20" y="23" fill="#3b4151" font-size="13" font-weight="bold">Parameters</text>
+  <text x="500" y="23" fill="#3b4151" font-size="13" font-weight="bold">Description</text>
+
+  <text x="20" y="65" fill="#3b4151" font-size="13" font-weight="bold">classId</text>
+  <text x="75" y="65" fill="#ff4d4f" font-size="12">* required</text>
+  <text x="20" y="85" fill="#888888" font-size="11">integer (path)</text>
+  <rect x="500" y="50" width="570" height="30" rx="4" fill="#ffffff" stroke="#cccccc"/>
+  <text x="515" y="70" fill="#333333" font-size="12">1</text>
+
+  <text x="20" y="115" fill="#3b4151" font-size="13" font-weight="bold">body</text>
+  <text x="55" y="115" fill="#ff4d4f" font-size="12">* required</text>
+  <text x="20" y="135" fill="#888888" font-size="11">TeachingAssignmentRequest</text>
+  <rect x="500" y="95" width="570" height="110" rx="4" fill="#ffffff" stroke="#3b4151" stroke-width="1.5"/>
+  <text x="515" y="115" fill="#333333" font-size="12" font-family="Consolas, monospace">{</text>
+  <text x="530" y="135" fill="#333333" font-size="12" font-family="Consolas, monospace">"topicId": 12, "topicCode": "TOP_SPRING_BOOT",</text>
+  <text x="530" y="155" fill="#333333" font-size="12" font-family="Consolas, monospace">"trainerId": 5, "trainerName": "Lê Minh Hoàng",</text>
+  <text x="530" y="175" fill="#333333" font-size="12" font-family="Consolas, monospace">"role": "MAIN_TRAINER", "status": "ASSIGNED"</text>
+  <text x="515" y="195" fill="#333333" font-size="12" font-family="Consolas, monospace">}</text>
+
+  <rect x="20" y="220" width="530" height="34" rx="4" fill="#4990e2"/>
+  <text x="250" y="242" fill="#ffffff" font-size="13" font-weight="bold">Execute</text>
+  <rect x="560" y="220" width="510" height="34" rx="4" fill="#f7f7f7" stroke="#cccccc"/>
+  <text x="800" y="242" fill="#555555" font-size="13">Clear</text>
+
+  <text x="20" y="280" fill="#3b4151" font-size="14" font-weight="bold">Responses</text>
+  <text x="20" y="305" fill="#666666" font-size="12" font-weight="bold">Curl</text>
+  <rect x="20" y="315" width="1050" height="38" rx="4" fill="#292d3e"/>
+  <text x="32" y="339" fill="#00ff66" font-size="11.5" font-family="Consolas, monospace">curl -X 'POST' 'http://localhost:8080/api/v1/classes/1/teaching-assignments' -H 'accept: */*' -H 'Content-Type: application/json' -d '{"topicId":12,"trainerId":5,"role":"MAIN_TRAINER"}'</text>
+
+  <text x="20" y="375" fill="#666666" font-size="12" font-weight="bold">Request URL</text>
+  <rect x="20" y="385" width="1050" height="28" rx="4" fill="#292d3e"/>
+  <text x="32" y="404" fill="#ffffff" font-size="12" font-family="Consolas, monospace">http://localhost:8080/api/v1/classes/1/teaching-assignments</text>
+
+  <text x="20" y="440" fill="#3b4151" font-size="13" font-weight="bold">Server response</text>
+  <text x="20" y="465" fill="#666666" font-size="12">Code</text>
+  <text x="120" y="465" fill="#666666" font-size="12">Details</text>
+  <text x="20" y="495" fill="#3b4151" font-size="13" font-weight="bold">200</text>
+
+  <text x="120" y="490" fill="#888888" font-size="11">Response body</text>
+  <rect x="120" y="500" width="950" height="190" rx="4" fill="#292d3e"/>
+  <rect x="940" y="510" width="55" height="22" rx="3" fill="#3f445b"/>
+  <text x="952" y="525" fill="#ffffff" font-size="11">Copy</text>
+  <rect x="1002" y="510" width="58" height="22" rx="3" fill="#3f445b"/>
+  <text x="1008" y="525" fill="#ffffff" font-size="11">Download</text>
+
+  <text x="135" y="525" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">{</text>
+  <text x="150" y="543" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  <tspan fill="#80cbc4">"assignmentId"</tspan>: <tspan fill="#f78c6c">101</tspan>, <tspan fill="#80cbc4">"classId"</tspan>: <tspan fill="#f78c6c">1</tspan>,</text>
+  <text x="150" y="561" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  <tspan fill="#80cbc4">"topicId"</tspan>: <tspan fill="#f78c6c">12</tspan>, <tspan fill="#80cbc4">"topicName"</tspan>: <tspan fill="#c3e88d">"Spring Boot &amp; Microservices"</tspan>,</text>
+  <text x="150" y="579" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  <tspan fill="#80cbc4">"trainerId"</tspan>: <tspan fill="#f78c6c">5</tspan>, <tspan fill="#80cbc4">"trainerName"</tspan>: <tspan fill="#c3e88d">"Lê Minh Hoàng"</tspan>,</text>
+  <text x="150" y="597" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  <tspan fill="#80cbc4">"role"</tspan>: <tspan fill="#c3e88d">"MAIN_TRAINER"</tspan>, <tspan fill="#80cbc4">"status"</tspan>: <tspan fill="#c3e88d">"ASSIGNED"</tspan>,</text>
+  <text x="150" y="615" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  <tspan fill="#80cbc4">"assignedBy"</tspan>: <tspan fill="#c3e88d">"admin.hcm@fams.edu.vn"</tspan>, <tspan fill="#80cbc4">"assignedAt"</tspan>: <tspan fill="#c3e88d">"2026-11-23T13:49:00.000Z"</tspan></text>
+  <text x="135" y="633" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">}</text>
+
+  <text x="120" y="710" fill="#888888" font-size="11">Response headers</text>
+  <rect x="120" y="720" width="950" height="70" rx="4" fill="#292d3e"/>
+  <text x="135" y="740" fill="#d1d5db" font-size="11" font-family="Consolas, monospace">content-type: application/json;charset=UTF-8</text>
+  <text x="135" y="760" fill="#d1d5db" font-size="11" font-family="Consolas, monospace">date: Mon, 23 Nov 2026 13:49:00 GMT</text>
+</svg>

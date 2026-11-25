@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 680" width="1200" height="680" style="background:#f8fafc; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <rect x="0" y="0" width="1200" height="56" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="24" y="34" fill="#0f172a" font-size="16" font-weight="bold">FAMS Training Platform</text>
+  <text x="240" y="34" fill="#64748b" font-size="13">Class / HCM26_CA_JAVA_01 / <tspan fill="#0f172a" font-weight="bold">Teaching Assignments</tspan></text>
+
+  <g transform="translate(60, 75)">
+    <text x="0" y="25" fill="#0f172a" font-size="20" font-weight="bold">Teaching Assignment Matrix (Ma trận phân công giảng dạy)</text>
+    <text x="0" y="48" fill="#64748b" font-size="13">Chương trình: Java Professional Bootcamp v2.0 | Tổng số Topic: 6</text>
+
+    <rect x="0" y="70" width="1080" height="480" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="0" y="70" width="1080" height="42" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="20" y="96" fill="#64748b" font-size="12" font-weight="bold">TOPIC CODE</text>
+    <text x="160" y="96" fill="#64748b" font-size="12" font-weight="bold">TOPIC NAME</text>
+    <text x="440" y="96" fill="#64748b" font-size="12" font-weight="bold">ASSIGNED TRAINER</text>
+    <text x="680" y="96" fill="#64748b" font-size="12" font-weight="bold">ROLE</text>
+    <text x="820" y="96" fill="#64748b" font-size="12" font-weight="bold">STATUS</text>
+    <text x="960" y="96" fill="#64748b" font-size="12" font-weight="bold">ACTION</text>
+
+    <!-- Row 1 -->
+    <rect x="0" y="112" width="1080" height="52" fill="#ffffff" stroke="#f1f5f9"/>
+    <text x="20" y="144" fill="#0f172a" font-size="13" font-family="monospace" font-weight="bold">TOP_JAVA_CORE</text>
+    <text x="160" y="144" fill="#0f172a" font-size="13">Java Core Foundations</text>
+    <text x="440" y="144" fill="#2563eb" font-size="13" font-weight="600">Lê Minh Hoàng (ID: 5)</text>
+    <text x="680" y="144" fill="#334155" font-size="13">Main Trainer</text>
+    <rect x="815" y="130" width="70" height="22" rx="4" fill="#dcfce7"/>
+    <text x="826" y="145" fill="#15803d" font-size="11" font-weight="bold">ASSIGNED</text>
+    <text x="960" y="144" fill="#2563eb" font-size="13" cursor="pointer">Change ▾</text>
+
+    <!-- Row 2 -->
+    <rect x="0" y="164" width="1080" height="52" fill="#f8fafc" stroke="#f1f5f9"/>
+    <text x="20" y="196" fill="#0f172a" font-size="13" font-family="monospace" font-weight="bold">TOP_SPRING_BOOT</text>
+    <text x="160" y="196" fill="#0f172a" font-size="13">Spring Boot &amp; Microservices</text>
+    <text x="440" y="196" fill="#2563eb" font-size="13" font-weight="600">Lê Minh Hoàng (ID: 5)</text>
+    <text x="680" y="196" fill="#334155" font-size="13">Main Trainer</text>
+    <rect x="815" y="182" width="70" height="22" rx="4" fill="#dcfce7"/>
+    <text x="826" y="197" fill="#15803d" font-size="11" font-weight="bold">ASSIGNED</text>
+    <text x="960" y="196" fill="#2563eb" font-size="13" cursor="pointer">Change ▾</text>
+
+    <!-- Row 3 -->
+    <rect x="0" y="216" width="1080" height="52" fill="#ffffff" stroke="#f1f5f9"/>
+    <text x="20" y="248" fill="#0f172a" font-size="13" font-family="monospace" font-weight="bold">TOP_DATABASE_DEV</text>
+    <text x="160" y="248" fill="#0f172a" font-size="13">PostgreSQL &amp; Query Optimization</text>
+    <text x="440" y="248" fill="#64748b" font-size="13" font-style="italic">-- Not assigned yet --</text>
+    <text x="680" y="248" fill="#94a3b8" font-size="13">-</text>
+    <rect x="815" y="234" width="85" height="22" rx="4" fill="#fee2e2"/>
+    <text x="824" y="249" fill="#b91c1c" font-size="11" font-weight="bold">UNASSIGNED</text>
+    <text x="960" y="248" fill="#2563eb" font-size="13" font-weight="bold" cursor="pointer">+ Assign</text>
+
+    <rect x="20" y="300" width="1040" height="60" rx="6" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text x="35" y="325" fill="#1e40af" font-size="12" font-weight="bold">ℹ Điều kiện sẵn sàng phân công giảng viên (Pillar 2 - Teaching Assignment Readiness):</text>
+    <text x="35" y="345" fill="#1e3a8a" font-size="12">Lớp học chỉ đạt trạng thái READY khi 100% Topic trong chương trình đều đã có Main Trainer được phân công hợp lệ.</text>
+  </g>
+</svg>

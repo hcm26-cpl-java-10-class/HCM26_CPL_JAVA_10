@@ -19,6 +19,17 @@ interface ClassModalProps {
     existingClasses?: ExternalClass[];
 }
 
+// Mirrors TrainingClassService.TRANSITIONS. Closing remains a backend-only action.
+const EDIT_TRANSITIONS: Record<string, string[]> = {
+    planning: ["assigned", "cancelled"], assigned: ["active", "cancelled", "planning"],
+    active: ["completed", "cancelled"], completed: [], closed: [], cancelled: [],
+};
+const STATUS_LABELS: Record<string, string> = {
+    planning: "Planning (Kế hoạch)", assigned: "Assigned (Đã phân công)",
+    active: "In progress (Đang học)", completed: "Training completed (Hoàn thành)",
+    closed: "Closed (Đã đóng)", cancelled: "Cancelled (Đã hủy)",
+};
+
 export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingClasses = [] }: ClassModalProps) {
     const queryClient = useQueryClient();
     const isEdit = Boolean(classItem);
@@ -103,21 +114,24 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
             ? "Không có dữ liệu User/Admin trong hệ thống."
             : "";
 
+    const isTrainerDirectoryLoading = trainersQuery.isPending || trainersQuery.isFetching;
     const isMasterTrainerBlocked = Boolean(
-        trainersQuery.isError || (!trainersQuery.isLoading && trainersQuery.data?.length === 0)
+        trainersQuery.isError || (!isTrainerDirectoryLoading && trainerCandidates.length === 0)
     );
-    const trainerErrorMessage = trainersQuery.isError
+    const trainerErrorMessage = isTrainerDirectoryLoading ? "" : trainersQuery.isError
         ? (trainersQuery.error as any)?.message?.includes("BLOCKED")
             ? (trainersQuery.error as any).message
             : ((trainersQuery.error as any)?.response?.status === 403 || (trainersQuery.error as any)?.status === 403)
                 ? "BLOCKED: Thiếu quyền truy cập danh mục Trainer."
                 : "BLOCKED: Lỗi kết nối API danh mục Trainer hoặc danh mục chưa được kết nối."
-        : (!trainersQuery.isLoading && trainersQuery.data?.length === 0)
-            ? "BLOCKED: Không tìm thấy giảng viên (Trainer) nào đang hoạt động trong hệ thống."
+        : trainerCandidates.length === 0
+            ? "BLOCKED: Danh mục Trainer nội bộ chưa có giảng viên ACTIVE hợp lệ. Người có quyền TRAINER_CREATE cần bổ sung hồ sơ giảng viên thực tế tại Trainer Management (/trainers), hoặc người có quyền TRAINER_UPDATE kiểm tra trạng thái hồ sơ hiện có. Tên đã lưu trên lớp không xác nhận giảng viên tồn tại trong danh mục này."
             : "";
 
-    // Is code locked in Edit mode? Rule: if status is active/completed, cannot change code
-    const isCodeLocked = isEdit && (classItem?.status === "active" || classItem?.status === "completed");
+    const isCodeLocked = isEdit && ["active", "completed", "closed"].includes(classItem?.status ?? "");
+    const allowedStatuses = isEdit
+        ? [classItem?.status ?? "planning", ...(EDIT_TRANSITIONS[classItem?.status ?? "planning"] ?? [])]
+        : ["planning"];
 
     useEffect(() => {
         if (open) {
@@ -166,6 +180,11 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setErrorMsg("");
+
+        if (!allowedStatuses.includes(status)) {
+            setErrorMsg("Trạng thái không hợp lệ cho thao tác hiện tại.");
+            return;
+        }
 
         // ==================== BUSINESS RULES VALIDATION ====================
         // Rule 1: Code validation
@@ -220,6 +239,10 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
             return;
         }
         const trainerChanged = !isEdit || masterTrainerId !== (classItem?.masterTrainerId ?? null) || masterTrainer !== classItem?.masterTrainer;
+        if (trainerChanged && isTrainerDirectoryLoading) {
+            setErrorMsg("Đang kiểm tra danh mục Trainer. Vui lòng chờ trước khi lưu giảng viên mới.");
+            return;
+        }
         if (trainerChanged && (trainersQuery.isError || !masterTrainerId || !trainerCandidates.some(t => t.id === masterTrainerId))) {
             setErrorMsg("BLOCKED: Vui lòng chọn giảng viên ACTIVE đã được xác minh từ danh mục nội bộ.");
             return;
@@ -427,11 +450,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                                 value={status}
                                 onChange={(e) => setStatus(e.target.value)}
                             >
-                                <option value="planning">Planning (Kế hoạch)</option>
-                                <option value="assigned">Assigned (Đã phân công)</option>
-                                <option value="active">In progress (Đang học)</option>
-                                <option value="completed">Training completed (Hoàn thành)</option>
-                                <option value="cancelled">Cancelled (Đã hủy)</option>
+                                {allowedStatuses.map(value => <option key={value} value={value}>{STATUS_LABELS[value] ?? value}</option>)}
                             </NativeSelect>
                         </div>
 
@@ -505,7 +524,9 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                                     const trainer = trainerCandidates.find(t => String(t.id) === e.target.value);
                                     if (trainer) { setMasterTrainerId(trainer.id ?? null); setMasterTrainer(trainer.name ?? ""); }
                                 }}
-                                disabled={trainersQuery.isLoading || isMasterTrainerBlocked}
+                                disabled={isTrainerDirectoryLoading || isMasterTrainerBlocked}
+                                aria-busy={isTrainerDirectoryLoading}
+                                aria-describedby={isTrainerDirectoryLoading || trainerErrorMessage ? "class-trainer-status" : undefined}
                             >
                                 {masterTrainer && (masterTrainerId == null || !trainerCandidates.some(t => t.id === masterTrainerId)) && (
                                     <option value={masterTrainerId != null ? String(masterTrainerId) : "legacy"}>{masterTrainer} (Đã lưu{masterTrainerId == null ? "; chưa có ID nội bộ" : ""})</option>
@@ -515,7 +536,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                                         {isMasterTrainerBlocked ? "BLOCKED: Không có giảng viên khả dụng" : "-- Chọn Master Trainer --"}
                                     </option>
                                 )}
-                                {trainersQuery.isLoading && <option value="">Đang kiểm tra danh mục Trainer...</option>}
+                                {isTrainerDirectoryLoading && !masterTrainer && <option value="" disabled>Đang kiểm tra danh mục Trainer...</option>}
                                 {trainerCandidates.map((t) => {
                                     const val = getTrainerValue(t);
                                     return (
@@ -525,10 +546,20 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                                     );
                                 })}
                             </NativeSelect>
-                            {trainerErrorMessage && (
-                                <p role="alert" className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-                                    {trainerErrorMessage}
+                            {isTrainerDirectoryLoading && (
+                                <p id="class-trainer-status" role="status" className="text-xs text-muted-foreground">
+                                    Đang kiểm tra danh mục Trainer...
                                 </p>
+                            )}
+                            {trainerErrorMessage && (
+                                <div className="space-y-2">
+                                    <p id="class-trainer-status" role="alert" className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                                        {trainerErrorMessage}
+                                    </p>
+                                    <Button type="button" variant="outline" size="sm" onClick={() => void trainersQuery.refetch()}>
+                                        Tải lại danh mục Trainer
+                                    </Button>
+                                </div>
                             )}
                         </div>
 

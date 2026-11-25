@@ -45,7 +45,8 @@ function renderApp(path = "/classes/42?tab=info&source=readiness#checks", grante
         reducer: { auth: authReducer },
         preloadedState: { auth: {
             ...authReducer(undefined, { type: "init" }), isAuthenticated: true, token: "test-token",
-            role: "ADMIN", roles: ["ADMIN"], permissions: granted, rolePermissions: { ADMIN: granted },
+            // ADMIN intentionally owns all UI permissions; use a limited operator to test denials.
+            role: "STAFF", roles: ["STAFF"], permissions: granted, rolePermissions: { STAFF: granted },
         } },
     });
     const user = userEvent.setup();

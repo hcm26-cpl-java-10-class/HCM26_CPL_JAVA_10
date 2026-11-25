@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 800" width="1100" height="800" style="background:#ffffff; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <rect x="0" y="0" width="1100" height="35" fill="#fafafa" stroke="#e0e0e0"/>
+  <text x="20" y="23" fill="#3b4151" font-size="13" font-weight="bold">Parameters</text>
+  <text x="500" y="23" fill="#3b4151" font-size="13" font-weight="bold">Description</text>
+
+  <text x="20" y="65" fill="#3b4151" font-size="13" font-weight="bold">classId</text>
+  <text x="75" y="65" fill="#ff4d4f" font-size="12">* required</text>
+  <text x="20" y="85" fill="#888888" font-size="11">integer (path)</text>
+  <rect x="500" y="50" width="570" height="30" rx="4" fill="#ffffff" stroke="#cccccc"/>
+  <text x="515" y="70" fill="#333333" font-size="12">1</text>
+
+  <rect x="20" y="110" width="530" height="34" rx="4" fill="#4990e2"/>
+  <text x="250" y="132" fill="#ffffff" font-size="13" font-weight="bold">Execute</text>
+  <rect x="560" y="110" width="510" height="34" rx="4" fill="#f7f7f7" stroke="#cccccc"/>
+  <text x="800" y="132" fill="#555555" font-size="13">Clear</text>
+
+  <text x="20" y="175" fill="#3b4151" font-size="14" font-weight="bold">Responses</text>
+  <text x="20" y="200" fill="#666666" font-size="12" font-weight="bold">Curl</text>
+  <rect x="20" y="210" width="1050" height="38" rx="4" fill="#292d3e"/>
+  <text x="32" y="234" fill="#00ff66" font-size="11.5" font-family="Consolas, monospace">curl -X 'GET' 'http://localhost:8080/api/v1/classes/1/schedules' -H 'accept: */*'</text>
+
+  <text x="20" y="270" fill="#666666" font-size="12" font-weight="bold">Request URL</text>
+  <rect x="20" y="280" width="1050" height="28" rx="4" fill="#292d3e"/>
+  <text x="32" y="299" fill="#ffffff" font-size="12" font-family="Consolas, monospace">http://localhost:8080/api/v1/classes/1/schedules</text>
+
+  <text x="20" y="335" fill="#3b4151" font-size="13" font-weight="bold">Server response</text>
+  <text x="20" y="360" fill="#666666" font-size="12">Code</text>
+  <text x="120" y="360" fill="#666666" font-size="12">Details</text>
+  <text x="20" y="390" fill="#3b4151" font-size="13" font-weight="bold">200</text>
+
+  <text x="120" y="385" fill="#888888" font-size="11">Response body</text>
+  <rect x="120" y="395" width="950" height="250" rx="4" fill="#292d3e"/>
+  <rect x="940" y="405" width="55" height="22" rx="3" fill="#3f445b"/>
+  <text x="952" y="420" fill="#ffffff" font-size="11">Copy</text>
+  <rect x="1002" y="405" width="58" height="22" rx="3" fill="#3f445b"/>
+  <text x="1008" y="420" fill="#ffffff" font-size="11">Download</text>
+
+  <text x="135" y="420" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">[</text>
+  <text x="150" y="438" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  {</text>
+  <text x="165" y="456" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">    <tspan fill="#80cbc4">"sessionId"</tspan>: <tspan fill="#f78c6c">501</tspan>, <tspan fill="#80cbc4">"date"</tspan>: <tspan fill="#c3e88d">"2026-10-05"</tspan>, <tspan fill="#80cbc4">"slot"</tspan>: <tspan fill="#c3e88d">"08:30 - 11:45"</tspan>,</text>
+  <text x="165" y="474" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">    <tspan fill="#80cbc4">"topic"</tspan>: <tspan fill="#c3e88d">"Java Core Foundations - Day 1"</tspan>, <tspan fill="#80cbc4">"trainer"</tspan>: <tspan fill="#c3e88d">"Lê Minh Hoàng"</tspan>, <tspan fill="#80cbc4">"room"</tspan>: <tspan fill="#c3e88d">"Lab 204"</tspan></text>
+  <text x="150" y="492" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  },</text>
+  <text x="150" y="510" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  {</text>
+  <text x="165" y="528" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">    <tspan fill="#80cbc4">"sessionId"</tspan>: <tspan fill="#f78c6c">502</tspan>, <tspan fill="#80cbc4">"date"</tspan>: <tspan fill="#c3e88d">"2026-10-07"</tspan>, <tspan fill="#80cbc4">"slot"</tspan>: <tspan fill="#c3e88d">"08:30 - 11:45"</tspan>,</text>
+  <text x="165" y="546" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">    <tspan fill="#80cbc4">"topic"</tspan>: <tspan fill="#c3e88d">"Java Core Foundations - Day 2"</tspan>, <tspan fill="#80cbc4">"trainer"</tspan>: <tspan fill="#c3e88d">"Lê Minh Hoàng"</tspan>, <tspan fill="#80cbc4">"room"</tspan>: <tspan fill="#c3e88d">"Lab 204"</tspan></text>
+  <text x="150" y="564" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">  }</text>
+  <text x="135" y="582" fill="#ffffff" font-size="11.5" font-family="Consolas, monospace">]</text>
+
+  <text x="120" y="665" fill="#888888" font-size="11">Response headers</text>
+  <rect x="120" y="675" width="950" height="70" rx="4" fill="#292d3e"/>
+  <text x="135" y="695" fill="#d1d5db" font-size="11" font-family="Consolas, monospace">content-type: application/json;charset=UTF-8</text>
+  <text x="135" y="715" fill="#d1d5db" font-size="11" font-family="Consolas, monospace">date: Mon, 23 Nov 2026 13:51:00 GMT</text>
+</svg>

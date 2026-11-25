@@ -67,10 +67,51 @@ it("hides write actions for read-only users and avoids requests without read per
     const view = renderAt(<TrainerManagementPage />, { route: "/trainers" });
     await screen.findByText("Trainer Twelve");
     expect(screen.queryByRole("button", { name: "Add Trainer" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Edit TR_12" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View TR_12" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Edit|Activate|Deactivate|Archive/ })).not.toBeInTheDocument();
     view.unmount(); fakeHttp.reset(); grant();
     renderAt(<TrainerManagementPage />, { route: "/trainers" });
     expect(screen.getByRole("alert")).toHaveTextContent("Access denied"); expect(fakeHttp.calls).toHaveLength(0);
+});
+
+it.each([
+    ["TRAINER_UPDATE", ["View TR_12", "Edit TR_12", "Deactivate TR_12"]],
+    ["TRAINER_DELETE", ["View TR_12", "Archive TR_12"]],
+])("checks each action permission independently (%s)", async (permission, labels) => {
+    grant("TRAINER_READ", permission as "TRAINER_UPDATE" | "TRAINER_DELETE");
+    renderAt(<TrainerManagementPage />, { route: "/trainers" });
+    await screen.findByRole("button", { name: "View TR_12" });
+    const rowActionLabels = ["View TR_12", "Edit TR_12", "Deactivate TR_12", "Archive TR_12"]
+        .filter(label => screen.queryByRole("button", { name: label }) !== null);
+    expect(rowActionLabels).toEqual(labels);
+});
+
+it("activates an inactive trainer and invalidates Master Trainer options", async () => {
+    fakeHttp.on("get", "/trainers", pageOf([{ ...trainer, status: "INACTIVE" }]));
+    fakeHttp.on("patch", "/trainers/12/status", trainer);
+    const { user, client } = renderAt(<TrainerManagementPage />, { route: "/trainers" });
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    await user.click(await screen.findByRole("button", { name: "Activate TR_12" }));
+    await screen.findByText("Trainer status updated.");
+    expect(fakeHttp.callsTo("patch", "/trainers/12/status")[0].data).toEqual({ status: "ACTIVE" });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["class-setup", "verified-trainers"] });
+});
+
+it("archives after confirmation and retains pagination and full emails", async () => {
+    const email = "a.very.long.trainer.email.address@example.test";
+    fakeHttp.on("get", "/trainers", { content: [{ ...trainer, email }], totalElements: 21, totalPages: 2 });
+    fakeHttp.on("delete", "/trainers/12", undefined);
+    const { user } = renderAt(<TrainerManagementPage />, { route: "/trainers" });
+    expect(await screen.findByText(email)).toHaveAttribute("title", email);
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() => expect(fakeHttp.callsTo("get", "/trainers").at(-1)?.params).toMatchObject({ page: 1 }));
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+    await waitFor(() => expect(fakeHttp.callsTo("get", "/trainers").at(-1)?.params).toMatchObject({ page: 0 }));
+    await user.click(screen.getByRole("button", { name: "Archive TR_12" }));
+    expect(fakeHttp.callsTo("delete", "/trainers/12")).toHaveLength(0);
+    await user.click(screen.getByRole("button", { name: "Confirm Archive" }));
+    await screen.findByText("Trainer archived.");
+    expect(fakeHttp.callsTo("delete", "/trainers/12")).toHaveLength(1);
 });
 
 it.each([401, 403, 404, 500])("reports HTTP %s instead of pretending the trainer list is empty", async status => {

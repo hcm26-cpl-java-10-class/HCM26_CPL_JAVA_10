@@ -167,21 +167,18 @@ export const clsApi = {
         const isNumericId = /^[1-9]\d*$/.test(raw);
 
         if (!isNumericId) {
-            const allRes = await clsApi.getClasses("all");
-            const items = Array.isArray(allRes.data)
-                ? allRes.data
-                : (allRes.data as ClassPage)?.content ?? [];
-            const matched = items.find(
-                (item) =>
+            for (let page = 0; ; page++) {
+                const response = await clsApi.getClasses({ status: "all", search: raw, size: 100, page });
+                const items = Array.isArray(response.data) ? response.data : response.data.content;
+                const matched = items.find(item =>
                     (item.code ?? "").toLowerCase() === raw.toLowerCase() ||
-                    (item.name ?? "").toLowerCase() === raw.toLowerCase()
-            );
-            if (matched) {
-                return { ...allRes, data: matched };
+                    (item.name ?? "").toLowerCase() === raw.toLowerCase());
+                if (matched) return axiosInstance.get<TrainingClass>(`/classes/${matched.id}`);
+                if (Array.isArray(response.data) || page + 1 >= response.data.totalPages) break;
             }
         }
 
-        return axiosInstance.get<TrainingClass>(`/classes/${id}`);
+        return axiosInstance.get<TrainingClass>(`/classes/${encodeURIComponent(raw)}`);
     },
 
     /**

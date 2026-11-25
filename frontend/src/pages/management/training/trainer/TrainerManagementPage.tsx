@@ -101,7 +101,6 @@ export default function TrainerManagementPage() {
             setBusy(false);
         }
     };
-
     return (
         <MainLayout dense mainClassName="overflow-y-hidden">
             <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-3 pt-1 pb-2">
@@ -193,7 +192,7 @@ export default function TrainerManagementPage() {
                         ) : (
                             <>
                                 <div className="flex-1 min-h-0 w-full min-w-0 rounded-xl border bg-card shadow-xs overflow-auto">
-                                    <table data-slot="table" className="w-full caption-bottom text-sm">
+                                    <table data-slot="table" aria-label="Trainer directory" className="w-full caption-bottom text-sm">
                                         <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur-xs">
                                             <TableRow className="bg-muted/40 hover:bg-muted/40">
                                                 <TableHead className="w-24 px-3">Code</TableHead>
@@ -311,7 +310,7 @@ export default function TrainerManagementPage() {
                                 </div>
 
                                 <div className="flex shrink-0 flex-wrap items-center justify-start gap-4 text-sm text-muted-foreground">
-                                    <div className="flex items-center gap-2">
+                                    <nav aria-label="Trainer pagination" className="flex items-center gap-2">
                                         <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
                                             Previous
                                         </Button>
@@ -323,7 +322,7 @@ export default function TrainerManagementPage() {
                                         >
                                             Next
                                         </Button>
-                                    </div>
+                                    </nav>
                                     <span>
                                         {list.data.totalElements} trainers · Page {page + 1} / {Math.max(1, list.data.totalPages)}
                                     </span>

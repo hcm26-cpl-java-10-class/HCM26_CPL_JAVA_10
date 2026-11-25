@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750" width="1200" height="750" style="background:#f1f5f9; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <rect x="0" y="0" width="1200" height="750" fill="#0f172a" opacity="0.6"/>
+  <g transform="translate(240, 45)">
+    <rect x="0" y="0" width="720" height="660" rx="10" fill="#ffffff"/>
+    <text x="30" y="40" fill="#0f172a" font-size="18" font-weight="bold">Create / Edit Class Info</text>
+    <text x="30" y="62" fill="#64748b" font-size="13">Nhập thông tin quản lý lớp học. Chọn Class Admin và Master Trainer từ danh mục xác minh.</text>
+    <line x1="0" y1="78" x2="720" y2="78" stroke="#e2e8f0"/>
+
+    <!-- Row 1 -->
+    <text x="30" y="105" fill="#334155" font-size="12" font-weight="bold">Class Code <tspan fill="#ef4444">*</tspan></text>
+    <rect x="30" y="115" width="310" height="38" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="42" y="139" fill="#0f172a" font-size="13" font-family="monospace" font-weight="bold">HCM26_CA_JAVA_01</text>
+
+    <text x="370" y="105" fill="#334155" font-size="12" font-weight="bold">Class Name <tspan fill="#ef4444">*</tspan></text>
+    <rect x="370" y="115" width="320" height="38" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="382" y="139" fill="#0f172a" font-size="13">Lớp Chuyên sâu Java Backend K26</text>
+
+    <!-- Row 2: Select Class Admin & Select Master Trainer (YÊU CẦU 3 & 4) -->
+    <text x="30" y="180" fill="#334155" font-size="12" font-weight="bold">Class Admin (Select Dropdown) <tspan fill="#ef4444">*</tspan></text>
+    <rect x="30" y="190" width="310" height="38" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="42" y="214" fill="#0f172a" font-size="13">Nguyễn Văn Admin (admin.hcm@fams.edu.vn) ▾</text>
+    <text x="30" y="242" fill="#059669" font-size="11">✓ Đã xác minh từ danh mục User/Admin hệ thống</text>
+
+    <!-- LABEL: "Master Trainer" (BỎ CHỮ "GIÁO VIÊN CHÍNH" THEO YÊU CẦU 4) -->
+    <text x="370" y="180" fill="#334155" font-size="12" font-weight="bold">Master Trainer <tspan fill="#ef4444">*</tspan></text>
+    <rect x="370" y="190" width="320" height="38" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="382" y="214" fill="#0f172a" font-size="13">Lê Minh Hoàng (ID: 5) ▾</text>
+    <text x="370" y="242" fill="#059669" font-size="11">✓ Giảng viên ACTIVE hợp lệ từ Trainer Directory</text>
+
+    <!-- Row 3 -->
+    <text x="30" y="275" fill="#334155" font-size="12" font-weight="bold">Site &amp; Location</text>
+    <rect x="30" y="285" width="310" height="38" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="42" y="309" fill="#0f172a" font-size="13">HCM - F-Town 3, Phòng Lab 204</text>
+
+    <text x="370" y="275" fill="#334155" font-size="12" font-weight="bold">Planned Trainees</text>
+    <rect x="370" y="285" width="320" height="38" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="382" y="309" fill="#0f172a" font-size="13">25 học viên</text>
+
+    <!-- Row 4 -->
+    <text x="30" y="350" fill="#334155" font-size="12" font-weight="bold">Class Schedule Dates</text>
+    <rect x="30" y="360" width="310" height="38" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="42" y="384" fill="#0f172a" font-size="13">01/10/2026 - 31/12/2026</text>
+
+    <text x="370" y="350" fill="#334155" font-size="12" font-weight="bold">Status</text>
+    <rect x="370" y="360" width="120" height="38" rx="6" fill="#fef3c7" stroke="#fde68a"/>
+    <text x="390" y="384" fill="#92400e" font-size="12" font-weight="bold">Planning ▾</text>
+
+    <!-- Verification Info Box -->
+    <rect x="30" y="425" width="660" height="85" rx="6" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text x="45" y="450" fill="#1e40af" font-size="12" font-weight="bold">🛡 Tiêu chuẩn nghiệp vụ RBAC &amp; Validation:</text>
+    <text x="45" y="472" fill="#1e3a8a" font-size="12">• Class Admin và Master Trainer được chọn từ Select Menu, ngăn chặn hoàn toàn việc nhập tự do.</text>
+    <text x="45" y="494" fill="#1e3a8a" font-size="12">• Nhãn chỉ hiển thị "Master Trainer" (theo đúng Yêu cầu 4). Bảo toàn giá trị khi Edit.</text>
+
+    <!-- Modal Footer Actions -->
+    <line x1="0" y1="590" x2="720" y2="590" stroke="#e2e8f0"/>
+    <rect x="470" y="605" width="90" height="36" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="495" y="628" fill="#475569" font-size="13">Cancel</text>
+
+    <rect x="575" y="605" width="115" height="36" rx="6" fill="#2563eb"/>
+    <text x="592" y="628" fill="#ffffff" font-size="13" font-weight="bold">Save Class</text>
+  </g>
+</svg>

@@ -1,0 +1,181 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 820" width="1200" height="820" style="background:#f1f5f9; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <defs>
+    <filter id="modalShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Top App Navigation Bar -->
+  <rect x="0" y="0" width="1200" height="56" fill="#ffffff" stroke="#e2e8f0"/>
+  <rect x="20" y="12" width="32" height="32" rx="6" fill="#2563eb"/>
+  <text x="27" y="34" fill="#ffffff" font-size="18" font-weight="bold">F</text>
+  <text x="62" y="34" fill="#0f172a" font-size="16" font-weight="bold">FAMS Training Platform</text>
+  <text x="260" y="34" fill="#64748b" font-size="13">Training Operations / <tspan fill="#0f172a" font-weight="600">Topics &amp; Syllabus Management</tspan></text>
+
+  <!-- User Profile in Top Bar -->
+  <circle cx="1140" cy="28" r="16" fill="#e2e8f0"/>
+  <text x="1132" y="33" fill="#475569" font-size="12" font-weight="bold">MH</text>
+  <text x="1035" y="33" fill="#334155" font-size="13" font-weight="500">Minh Hoàng</text>
+
+  <!-- Left Sidebar (Training Operations) -->
+  <rect x="0" y="56" width="230" height="764" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="24" y="90" fill="#94a3b8" font-size="11" font-weight="700" letter-spacing="0.5">TRAINING OPERATIONS</text>
+
+  <rect x="12" y="105" width="206" height="36" rx="6" fill="transparent"/>
+  <text x="44" y="128" fill="#475569" font-size="13">Class</text>
+
+  <rect x="12" y="145" width="206" height="36" rx="6" fill="transparent"/>
+  <text x="44" y="168" fill="#475569" font-size="13">Weekly Timetable</text>
+
+  <!-- Active Sidebar Item: Topics & Syllabus -->
+  <rect x="12" y="185" width="206" height="36" rx="6" fill="#eff6ff"/>
+  <text x="44" y="208" fill="#2563eb" font-size="13" font-weight="bold">Topics &amp; Syllabus</text>
+  <circle cx="28" cy="203" r="4" fill="#2563eb"/>
+
+  <rect x="12" y="225" width="206" height="36" rx="6" fill="transparent"/>
+  <text x="44" y="248" fill="#475569" font-size="13">Training Programs</text>
+
+  <!-- Background Dim Overlay -->
+  <rect x="230" y="56" width="970" height="764" fill="#0f172a" opacity="0.45"/>
+
+  <!-- Main Modal Dialog (TopicSyllabusEditorDialog) -->
+  <g transform="translate(260, 80)" filter="url(#modalShadow)">
+    <rect x="0" y="0" width="910" height="710" rx="10" fill="#ffffff"/>
+
+    <!-- Modal Header -->
+    <rect x="0" y="0" width="910" height="64" rx="10" fill="#ffffff"/>
+    <line x1="0" y1="64" x2="910" y2="64" stroke="#e2e8f0"/>
+    <text x="28" y="38" fill="#0f172a" font-size="18" font-weight="bold">Create New Topic &amp; Syllabus</text>
+    <rect x="280" y="21" width="55" height="22" rx="4" fill="#e0f2fe"/>
+    <text x="288" y="36" fill="#0284c7" font-size="11" font-weight="bold">v1.0 DRAFT</text>
+    <text x="865" y="38" fill="#94a3b8" font-size="20" cursor="pointer">✕</text>
+
+    <!-- General Info Grid (Row 1) -->
+    <!-- Field: Topic Code -->
+    <text x="28" y="94" fill="#334155" font-size="12" font-weight="bold">Topic Code <tspan fill="#ef4444">*</tspan></text>
+    <rect x="28" y="104" width="260" height="38" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="40" y="128" fill="#0f172a" font-size="13" font-family="monospace" font-weight="bold">JAVA_CORE_26</text>
+
+    <!-- Field: Topic Name -->
+    <text x="310" y="94" fill="#334155" font-size="12" font-weight="bold">Topic Name <tspan fill="#ef4444">*</tspan></text>
+    <rect x="310" y="104" width="370" height="38" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="322" y="128" fill="#0f172a" font-size="13">Lập trình Java Core &amp; OOP nâng cao</text>
+
+    <!-- Field: Technical Group -->
+    <text x="700" y="94" fill="#334155" font-size="12" font-weight="bold">Technical Group</text>
+    <rect x="700" y="104" width="180" height="38" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="712" y="128" fill="#0f172a" font-size="13">Java Backend ▾</text>
+
+    <!-- General Info Grid (Row 2) -->
+    <!-- Field: Duration (Hours) -->
+    <text x="28" y="166" fill="#334155" font-size="12" font-weight="bold">Duration (Hours) <tspan fill="#ef4444">*</tspan></text>
+    <rect x="28" y="176" width="170" height="38" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="40" y="200" fill="#0f172a" font-size="13">40</text>
+    <text x="140" y="200" fill="#94a3b8" font-size="12">hours</text>
+
+    <!-- Field: Sessions Count -->
+    <text x="220" y="166" fill="#334155" font-size="12" font-weight="bold">Calculated Sessions</text>
+    <rect x="220" y="176" width="170" height="38" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="232" y="200" fill="#0284c7" font-size="13" font-weight="600">16 sessions (2.5h)</text>
+
+    <!-- Field: Pass Score -->
+    <text x="410" y="166" fill="#334155" font-size="12" font-weight="bold">Passing Score</text>
+    <rect x="410" y="176" width="170" height="38" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="422" y="200" fill="#0f172a" font-size="13">6.0 / 10.0</text>
+
+    <!-- Field: Status Badge -->
+    <text x="600" y="166" fill="#334155" font-size="12" font-weight="bold">Status</text>
+    <rect x="600" y="176" width="120" height="38" rx="6" fill="#dcfce7" stroke="#86efac"/>
+    <circle cx="620" cy="195" r="4" fill="#16a34a"/>
+    <text x="632" y="200" fill="#15803d" font-size="12" font-weight="bold">ACTIVE</text>
+
+    <!-- Action button to open Assessment Scheme -->
+    <rect x="735" y="176" width="145" height="38" rx="6" fill="#f5f3ff" stroke="#c4b5fd"/>
+    <text x="748" y="200" fill="#7c3aed" font-size="12" font-weight="bold">📊 Scheme (100%)</text>
+
+    <!-- Tabs Header: Syllabus Lessons & Outline -->
+    <rect x="28" y="235" width="852" height="38" rx="6" fill="#f1f5f9"/>
+    <rect x="32" y="239" width="170" height="30" rx="4" fill="#ffffff" filter="url(#shadow)"/>
+    <text x="48" y="259" fill="#0f172a" font-size="12" font-weight="bold">1. Lesson Outline (16)</text>
+    <text x="220" y="259" fill="#64748b" font-size="12">2. Assessment Scheme</text>
+    <text x="375" y="259" fill="#64748b" font-size="12">3. Course Learning Objectives (CLO)</text>
+
+    <!-- Lessons Table Container -->
+    <rect x="28" y="285" width="852" height="330" rx="6" fill="#ffffff" stroke="#e2e8f0"/>
+
+    <!-- Table Header -->
+    <rect x="28" y="285" width="852" height="36" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="44" y="308" fill="#64748b" font-size="11" font-weight="bold">NO.</text>
+    <text x="90" y="308" fill="#64748b" font-size="11" font-weight="bold">LESSON / SESSION TITLE</text>
+    <text x="490" y="308" fill="#64748b" font-size="11" font-weight="bold">TYPE</text>
+    <text x="590" y="308" fill="#64748b" font-size="11" font-weight="bold">DURATION</text>
+    <text x="700" y="308" fill="#64748b" font-size="11" font-weight="bold">DELIVERY</text>
+    <text x="810" y="308" fill="#64748b" font-size="11" font-weight="bold">ACTION</text>
+
+    <!-- Table Row 1 -->
+    <rect x="28" y="321" width="852" height="48" fill="#ffffff" stroke="#f1f5f9"/>
+    <text x="48" y="350" fill="#64748b" font-size="12">1</text>
+    <text x="90" y="350" fill="#0f172a" font-size="13" font-weight="500">Java Environment Setup, JDK, JVM &amp; OOP Foundations</text>
+    <rect x="488" y="336" width="65" height="22" rx="4" fill="#e0f2fe"/>
+    <text x="496" y="351" fill="#0369a1" font-size="11" font-weight="bold">Theory</text>
+    <text x="592" y="350" fill="#334155" font-size="12">2.5 hrs</text>
+    <text x="702" y="350" fill="#64748b" font-size="12">Offline Lab</text>
+    <text x="820" y="350" fill="#ef4444" font-size="14" cursor="pointer">🗑</text>
+
+    <!-- Table Row 2 -->
+    <rect x="28" y="369" width="852" height="48" fill="#f8fafc" stroke="#f1f5f9"/>
+    <text x="48" y="398" fill="#64748b" font-size="12">2</text>
+    <text x="90" y="398" fill="#0f172a" font-size="13" font-weight="500">Encapsulation, Inheritance &amp; Polymorphism</text>
+    <rect x="488" y="384" width="75" height="22" rx="4" fill="#fef3c7"/>
+    <text x="496" y="399" fill="#92400e" font-size="11" font-weight="bold">Practice</text>
+    <text x="592" y="398" fill="#334155" font-size="12">2.5 hrs</text>
+    <text x="702" y="398" fill="#64748b" font-size="12">Offline Lab</text>
+    <text x="820" y="398" fill="#ef4444" font-size="14" cursor="pointer">🗑</text>
+
+    <!-- Table Row 3 -->
+    <rect x="28" y="417" width="852" height="48" fill="#ffffff" stroke="#f1f5f9"/>
+    <text x="48" y="446" fill="#64748b" font-size="12">3</text>
+    <text x="90" y="446" fill="#0f172a" font-size="13" font-weight="500">Abstract Classes, Interfaces &amp; Java 8 Default Methods</text>
+    <rect x="488" y="432" width="65" height="22" rx="4" fill="#e0f2fe"/>
+    <text x="496" y="447" fill="#0369a1" font-size="11" font-weight="bold">Theory</text>
+    <text x="592" y="446" fill="#334155" font-size="12">2.5 hrs</text>
+    <text x="702" y="446" fill="#64748b" font-size="12">Offline Lab</text>
+    <text x="820" y="446" fill="#ef4444" font-size="14" cursor="pointer">🗑</text>
+
+    <!-- Table Row 4 -->
+    <rect x="28" y="465" width="852" height="48" fill="#f8fafc" stroke="#f1f5f9"/>
+    <text x="48" y="494" fill="#64748b" font-size="12">4</text>
+    <text x="90" y="494" fill="#0f172a" font-size="13" font-weight="500">Java Collections Framework: List, Set, Map Deep Dive</text>
+    <rect x="488" y="480" width="75" height="22" rx="4" fill="#fef3c7"/>
+    <text x="496" y="495" fill="#92400e" font-size="11" font-weight="bold">Practice</text>
+    <text x="592" y="494" fill="#334155" font-size="12">2.5 hrs</text>
+    <text x="702" y="494" fill="#64748b" font-size="12">Offline Lab</text>
+    <text x="820" y="494" fill="#ef4444" font-size="14" cursor="pointer">🗑</text>
+
+    <!-- Table Row 5 -->
+    <rect x="28" y="513" width="852" height="48" fill="#ffffff" stroke="#f1f5f9"/>
+    <text x="48" y="542" fill="#64748b" font-size="12">5</text>
+    <text x="90" y="542" fill="#0f172a" font-size="13" font-weight="500">Generics, Lambda Expressions &amp; Stream API Basics</text>
+    <rect x="488" y="528" width="65" height="22" rx="4" fill="#e0f2fe"/>
+    <text x="496" y="543" fill="#0369a1" font-size="11" font-weight="bold">Theory</text>
+    <text x="592" y="542" fill="#334155" font-size="12">2.5 hrs</text>
+    <text x="702" y="542" fill="#64748b" font-size="12">Offline Lab</text>
+    <text x="820" y="542" fill="#ef4444" font-size="14" cursor="pointer">🗑</text>
+
+    <!-- Add Lesson Quick Row -->
+    <rect x="28" y="561" width="852" height="54" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="360" y="594" fill="#2563eb" font-size="13" font-weight="bold">+ Add New Session / Lesson</text>
+
+    <!-- Modal Footer Actions -->
+    <line x1="0" y1="635" x2="910" y2="635" stroke="#e2e8f0"/>
+
+    <rect x="28" y="652" width="130" height="38" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="46" y="676" fill="#475569" font-size="13" font-weight="500">Reset to Default</text>
+
+    <rect x="615" y="652" width="90" height="38" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="640" y="676" fill="#475569" font-size="13" font-weight="500">Cancel</text>
+
+    <rect x="715" y="652" width="165" height="38" rx="6" fill="#2563eb"/>
+    <text x="735" y="676" fill="#ffffff" font-size="13" font-weight="bold">Save Topic &amp; Syllabus</text>
+  </g>
+</svg>
