@@ -1,3 +1,4 @@
+import { getCurrentLocale } from "@/i18n/format";
 import { Badge } from "@/components/ui/badge";
 import type { MilestoneRubricDetail } from "@/types";
 import { ChevronDown, ClipboardCheck, Info, ListChecks } from "lucide-react";
@@ -7,7 +8,7 @@ type Props = {
   rubric?: MilestoneRubricDetail | null;
 };
 
-const number = (value: number) => new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 }).format(value);
+const number = (value: number) => new Intl.NumberFormat(getCurrentLocale(), { maximumFractionDigits: 2 }).format(value);
 
 export function ArtifactSubmissionReference({ checklist, rubric }: Props) {
   const totalWeight = rubric?.criteria.reduce((total, criterion) => total + criterion.weight, 0) ?? 0;

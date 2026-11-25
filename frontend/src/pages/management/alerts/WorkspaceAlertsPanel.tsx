@@ -1,3 +1,4 @@
+import { getCurrentLocale } from "@/i18n/format";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
@@ -29,7 +30,7 @@ const statusLabels: Record<string, string> = {
   DRAFT: "Bản nháp / Draft", PLANNED: "Đã lên kế hoạch / Planned", OPEN: "Đã mở / Open",
   NOT_STARTED: "Chưa bắt đầu / Not started", CANCELLED: "Đã hủy / Cancelled",
 };
-const dateFormatter = new Intl.DateTimeFormat("vi-VN", {
+const dateFormatter = new Intl.DateTimeFormat(getCurrentLocale(), {
   day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false,
 });
 function date(value?: string | null) {

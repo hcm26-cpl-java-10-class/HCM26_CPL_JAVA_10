@@ -1,4 +1,7 @@
 import axios from "axios";
+import { createLocaleFormatter } from "@/i18n/format";
+import { toLanguage } from "@/i18n/languages";
+import i18n from "@/i18n";
 import type { ProjectTemplateDTO, ProjectTemplateOptions, TemplateMilestone } from "@/types/features/project-template";
 
 export const templateStatusOptions = [
@@ -23,7 +26,8 @@ export const maxTemplateCodeNameLength = 100;
 
 export function templateDescriptionCount(description = "") {
   const words = description.match(/\S+/g)?.length ?? 0;
-  return `${words.toLocaleString("en-US")} ${words === 1 ? "word" : "words"} · ${description.length.toLocaleString("en-US")} / ${maxDescriptionLength.toLocaleString("en-US")} characters`;
+  const { formatNumber } = createLocaleFormatter(toLanguage(i18n.language));
+  return `${formatNumber(words)} ${words === 1 ? i18n.t("word") : i18n.t("words")} · ${formatNumber(description.length)} / ${formatNumber(maxDescriptionLength)} ${i18n.t("characters")}`;
 }
 
 export function toTemplateFormValues(template?: ProjectTemplateDTO): TemplateFormValues {

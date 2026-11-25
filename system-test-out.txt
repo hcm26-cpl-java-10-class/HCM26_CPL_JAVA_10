@@ -1,0 +1,22 @@
+﻿=== D4.2 Cache hit lan 2 (en->vi) ===
+{
+    "translations":  {
+                         "Create a new quiz":  "Táº¡o má»t bÃ i kiá»m tra má»i",
+                         "Save changes":  "LÆ°u thay Äá»i"
+                     },
+    "cached":  2,
+    "translated":  0
+}
+
+=== D4.3 Chieu nguoc vi->en (source=vi) ===
+{
+    "translations":  {
+                         "Quáº£n lÃ½ khÃ³a há»c":  "Course management"
+                     },
+    "cached":  0,
+    "translated":  1
+}
+
+=== D4.4 Ngon ngu khong ho tro (de) -> mong doi 400 ===
+STATUS=400
+

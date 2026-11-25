@@ -1,3 +1,4 @@
+import { formatDateCustomNow } from "@/i18n/format";
 import { useMemo } from "react";
 import { CalendarDays, Download, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ function dateValue(value: string) {
 }
 
 function dateLabel(value: number, year = false) {
-    return new Date(value).toLocaleDateString("en-GB", {
+    return formatDateCustomNow(new Date(value), {
         day: "2-digit", month: "short", ...(year ? { year: "numeric" } : {}), timeZone: "UTC",
     }).replace(/ /g, "-");
 }

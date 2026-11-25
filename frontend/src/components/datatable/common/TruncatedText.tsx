@@ -17,6 +17,7 @@ export function TruncatedText({
   return (
     <TooltipWrapper content={content}>
       <span
+        data-no-translate
         className={`block truncate${bold ? " font-medium" : ""}${className ? ` ${className}` : ""}`}
       >
         {content}
