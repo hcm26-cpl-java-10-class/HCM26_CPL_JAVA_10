@@ -64,6 +64,8 @@ public class SyllabusCourseLinkService {
             throw new ConflictException("Unpublish the Course before removing its Syllabus");
         }
         course.setSyllabus(null);
+        course.setSourceTopicScopeKey(null);
+        course.setSourceTopicIds(null);
         courses.save(course);
     }
 }

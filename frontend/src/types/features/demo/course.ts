@@ -99,6 +99,8 @@ export interface CourseDetailLesson {
   locked: boolean;
   contentUrl?: string | null;
   textContent?: string | null;
+  /** Stable source Topic ID for Lessons created from Syllabus. */
+  sourceTopicId?: number | null;
 }
 
 export interface CourseDetailSection {

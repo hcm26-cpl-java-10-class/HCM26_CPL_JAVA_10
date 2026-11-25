@@ -1,3 +1,4 @@
+import type { LessonContentType } from "@/types/features/demo/lesson";
 import axiosInstance from "@/api/axios";
 import { createBaseApiService } from "@/api/base-service.api";
 import type {
@@ -8,6 +9,7 @@ import type {
   CourseDetail,
   CourseDTO,
   CourseFilter,
+  ExamDTO,
 } from "@/types";
 import type { CourseMyScoresDTO } from "@/types/features/course-my-scores";
 
@@ -34,10 +36,49 @@ export interface CourseNameAvailability { available: boolean }
 export interface CourseDraftOutlineSection {
   title: string;
   lessons: string[];
+  sourceTopicIds?: (number | null)[];
+  /** Actual lesson teaching material, persisted into Lesson.textContent. */
+  lessonMaterials?: string[];
+  /** Same Lesson types as the Course Manager editor. */
+  lessonTypes?: LessonContentType[];
+  lessonUrls?: string[];
+  lessonDurations?: number[];
+  /** Optional assessment shells, aligned by Lesson index. */
+  lessonAssessments?: (ExamDTO | null)[];
 }
+export interface CourseSourceScopeCheck {
+  duplicate: boolean;
+  existingCourseId: number | null;
+  existingCourseName: string | null;
+  legacyUnverifiedCourseCount: number;
+  sameScopeCourseCount: number;
+}
+export interface CourseAiResource { title: string; url: string }
+export interface CourseAiSuggestion {
+  name: string;
+  description: string;
+  level: "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+  categoryIds: number[];
+  sections: CourseDraftOutlineSection[];
+  resources: CourseAiResource[];
+  researchStatus: "DISABLED" | "GROUNDED_SOURCES_FOUND" | "NO_GROUNDED_SOURCES";
+}
+/** One-click Course generation runs on the Backend; this is UNSAVED preview state. */
+export interface CourseAiJob {
+  jobId: string;
+  status: "QUEUED" | "RUNNING" | "COMPLETED" | "PARTIAL" | "FAILED";
+  done: number;
+  total: number;
+  stage: string;
+  error: string | null;
+  suggestion: CourseAiSuggestion | null;
+}
+
 export interface CustomizedCourseFromSyllabusRequest {
   course: CourseDTO;
   sections: CourseDraftOutlineSection[];
+  selectedTopicIds: number[];
+  resources?: CourseAiResource[];
 }
 
 const path = "/courses";
@@ -62,6 +103,32 @@ export const courseApi = Object.assign({}, base, {
     const response = await axiosInstance.get<CourseSyllabusPreview>(
       `${path}/from-syllabus/${syllabusId}/preview`,
     );
+    return response.data;
+  },
+
+  checkFromSyllabusScope: async (syllabusId: number, selectedTopicIds: number[]): Promise<CourseSourceScopeCheck> => {
+    const response = await axiosInstance.post<CourseSourceScopeCheck>(`${path}/from-syllabus/${syllabusId}/scope-check`, { selectedTopicIds });
+    return response.data;
+  },
+
+  generateFromSyllabusAi: async (syllabusId: number, selectedTopicIds: number[], instruction: string,
+      researchExternal: boolean): Promise<CourseAiSuggestion> => {
+    const response = await axiosInstance.post<CourseAiSuggestion>(`${path}/from-syllabus/${syllabusId}/ai-suggestion`, { selectedTopicIds, instruction, researchExternal });
+    return response.data;
+  },
+
+  startFromSyllabusAiJob: async (syllabusId: number, selectedTopicIds: number[],
+      instruction: string): Promise<CourseAiJob> => {
+    const response = await axiosInstance.post<CourseAiJob>(`${path}/from-syllabus/${syllabusId}/ai-jobs`,
+      { selectedTopicIds, instruction, researchExternal: false });
+    return response.data;
+  },
+  getFromSyllabusAiJob: async (syllabusId: number, jobId: string): Promise<CourseAiJob> => {
+    const response = await axiosInstance.get<CourseAiJob>(`${path}/from-syllabus/${syllabusId}/ai-jobs/${encodeURIComponent(jobId)}`);
+    return response.data;
+  },
+  resumeFromSyllabusAiJob: async (syllabusId: number, jobId: string): Promise<CourseAiJob> => {
+    const response = await axiosInstance.post<CourseAiJob>(`${path}/from-syllabus/${syllabusId}/ai-jobs/${encodeURIComponent(jobId)}/resume`);
     return response.data;
   },
 

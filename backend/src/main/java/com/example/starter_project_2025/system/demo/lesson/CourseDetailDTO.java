@@ -52,7 +52,8 @@ public record CourseDetailDTO(
             Integer orderIndex,
             boolean locked,
             String contentUrl,
-            String textContent
+            String textContent,
+            Long sourceTopicId
     ) {
     }
 }

@@ -220,19 +220,25 @@ public class CourseServiceImpl
 
     private void resolveSyllabus(Course course, CourseDTO request, ValidationContext ctx) {
         if (Boolean.TRUE.equals(request.getClearSyllabus())) {
+            if (course.getStatus() == CourseStatus.PUBLISHED) {
+                ctx.add("syllabusId", "Published Courses cannot be unlinked from their Syllabus");
+                return;
+            }
             if (request.getSyllabusId() != null) {
                 ctx.add("syllabusId", "Cannot select and clear a syllabus together");
             } else {
                 course.setSyllabus(null);
+                course.setSourceTopicScopeKey(null);
+                course.setSourceTopicIds(null);
             }
             return;
         }
         if (request.getSyllabusId() == null) {
             return; // No change on update; optional on create.
         }
-        if (course.getCourseType() == CourseType.FROM_SYLLABUS
-                && course.getSyllabus() != null
-                && request.getSyllabusId().equals(course.getSyllabus().getId())) {
+        if (course.getCourseType() == CourseType.FROM_SYLLABUS && course.getSyllabus() != null) {
+            if (request.getSyllabusId().equals(course.getSyllabus().getId())) return;
+            ctx.add("syllabusId", "A Course generated from Syllabus cannot be reassigned to another Syllabus");
             return;
         }
         syllabusRepository.findById(request.getSyllabusId()).ifPresentOrElse(

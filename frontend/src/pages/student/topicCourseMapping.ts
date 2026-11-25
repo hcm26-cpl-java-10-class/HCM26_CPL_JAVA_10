@@ -3,7 +3,8 @@ import type { StudentRelatedCourse } from "@/api/features/demo/student-syllabus.
 
 /**
  * Syllabus topics are academic outline nodes, not lesson/material records.
- * Without a persisted Topic ↔ Lesson relation, a link is safe ONLY when BOTH
+ * Prefer stable sourceTopicId mapping for new Courses. For legacy Courses only,
+ * fall back to matching BOTH
  * its Syllabus Section ↔ Course Section AND Topic ↔ Lesson names match.
  * Never infer that all topics in a Syllabus are covered by a linked Course.
  * Return ONLY verified matches; all other topics show Online.
@@ -31,6 +32,7 @@ export function resolveTopicCourseReferences(
     sectionTitle: string,
     courses: StudentRelatedCourse[],
     outlines: CourseDetail[],
+    topicId?: number,
 ): TopicCourseReference[] {
     const normalizedTopic = normalizeLearningTitle(topicTitle);
     const normalizedSection = normalizeLearningTitle(sectionTitle);
@@ -43,16 +45,22 @@ export function resolveTopicCourseReferences(
         // Course-from-Syllabus preserves selected Section and Topic titles.
         // Enforce BOTH titles to avoid linking a topic from an unselected Section,
         // including when a same-named Lesson exists elsewhere in the Course.
-        const matches = (outline?.sections ?? [])
-            .filter((section) => normalizeLearningTitle(section.title) === normalizedSection)
-            .flatMap((section) => section.lessons.filter((lesson) =>
-                normalizeLearningTitle(lesson.title) === normalizedTopic));
-        if (matches.length !== 1) return []; // Missing/ambiguous => Online, never View course.
-        return [{
+        const allLessons = (outline?.sections ?? []).flatMap((section) => section.lessons);
+        const idMappingsExist = allLessons.some((lesson) => lesson.sourceTopicId != null);
+        const matches = idMappingsExist
+            ? (topicId == null ? [] : allLessons.filter((lesson) => lesson.sourceTopicId === topicId))
+            : (outline?.sections ?? [])
+                .filter((section) => normalizeLearningTitle(section.title) === normalizedSection)
+                .flatMap((section) => section.lessons.filter((lesson) =>
+                    normalizeLearningTitle(lesson.title) === normalizedTopic));
+        // ID mapping can intentionally point to several Lessons for one Topic.
+        // Legacy title-only matches remain ambiguous unless exactly one exists.
+        if (!matches.length || (!idMappingsExist && matches.length !== 1)) return [];
+        return matches.map((lesson) => ({
             courseId: course.id,
             courseName: course.name,
-            lessonId: matches[0].id,
-            lessonTitle: matches[0].title,
-        }];
+            lessonId: lesson.id,
+            lessonTitle: lesson.title,
+        }));
     });
 }

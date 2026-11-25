@@ -26,6 +26,10 @@ public class Lesson extends BaseEntity {
     @Column(nullable = false, length = 200)
     String title;
 
+    /** Source Topic from which this Lesson was created. Independent of the editable Lesson title. */
+    @Column(name = "source_syllabus_topic_id")
+    Long sourceSyllabusTopicId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "content_type", nullable = false, length = 20)
     LessonContentType contentType;

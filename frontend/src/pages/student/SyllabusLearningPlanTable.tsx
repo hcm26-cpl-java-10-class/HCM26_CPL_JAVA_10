@@ -86,6 +86,7 @@ export default function SyllabusLearningPlanTable({
                                     )}
                                     <td className="min-w-[230px] p-3">
                                         <StudentTopicCourseMaterials
+                                            topicId={topic.id}
                                             topicTitle={sourceSectionMap.get(section.id)?.topics.find(original => original.id === topic.id)?.title ?? topic.title}
                                             sectionTitle={sourceSectionMap.get(section.id)?.title ?? section.title}
                                             courses={courses} outlines={outlines} loading={loadingCourses}
