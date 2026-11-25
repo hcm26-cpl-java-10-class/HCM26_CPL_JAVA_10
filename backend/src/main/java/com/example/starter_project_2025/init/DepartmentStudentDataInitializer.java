@@ -19,8 +19,28 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Random;
 
+/**
+ * Seed phòng ban mẫu + gán học viên vào các phòng ban.
+ *
+ * <p>Hành vi:
+ * <ul>
+ *   <li><b>Giữ nguyên</b> toàn bộ các phòng ban đã tồn tại trong hệ thống.</li>
+ *   <li><b>Bổ sung</b> các phòng ban mẫu còn thiếu (kiểm tra theo {@code code}
+ *       trước khi thêm, nên chạy lại nhiều lần không tạo trùng).</li>
+ *   <li>Gán học viên vào phòng ban theo tỷ lệ phân bổ <b>không đồng đều</b>
+ *       (dùng {@link Random} với fixed seed) để biểu đồ thống kê nhân sự / sinh viên
+ *       theo từng phòng ban có sự chênh lệch thực tế.</li>
+ * </ul>
+ *
+ * <p>Phòng ban của học viên đã được gán thì <b>không bị gán lại</b> (idempotent):
+ * initializer chỉ gán cho học viên chưa có phòng ban nào.
+ */
 @Slf4j
 @Component
 @Order(20)
@@ -35,6 +55,46 @@ public class DepartmentStudentDataInitializer
 
     /** Tổng số học viên mẫu (01..100). */
     private static final int STUDENT_TOTAL = 100;
+
+    /**
+     * Tỉ trọng số học viên của từng phòng ban (không đồng đều, cố tình).
+     *
+     * <p>Tổng = 100. Giá trị càng lệch nhau thì biểu đồ "nhân sự theo phòng ban"
+     * càng trông giống dữ liệu thật (không phải chia đều).
+     */
+    private static final Map<String, Integer> DEPARTMENT_WEIGHTS = new LinkedHashMap<>();
+
+    static {
+        // 4 phòng ban mới được bổ sung theo yêu cầu.
+        DEPARTMENT_WEIGHTS.put("ENG", 6);    // Engineering
+        DEPARTMENT_WEIGHTS.put("DEV", 14);   // Development
+        DEPARTMENT_WEIGHTS.put("OPS", 9);    // Operations
+        DEPARTMENT_WEIGHTS.put("MKT", 11);   // Marketing
+        // Phòng ban có sẵn từ trước (được tạo ở các initializer khác).
+        DEPARTMENT_WEIGHTS.put("FPT", 24);
+        DEPARTMENT_WEIGHTS.put("IT", 16);
+        DEPARTMENT_WEIGHTS.put("HR", 8);
+        DEPARTMENT_WEIGHTS.put("SALES", 7);
+        DEPARTMENT_WEIGHTS.put("QA", 5);
+    }
+
+    /**
+     * Mô tả phòng ban mẫu (code -> tên hiển thị). Phòng ban có sẵn vẫn được giữ
+     * nguyên tên gốc trong hệ thống; bảng này chỉ dùng khi phòng ban chưa tồn tại.
+     */
+    private static final Map<String, String> DEPARTMENT_NAMES = new LinkedHashMap<>();
+
+    static {
+        DEPARTMENT_NAMES.put("ENG", "Engineering");
+        DEPARTMENT_NAMES.put("DEV", "Development");
+        DEPARTMENT_NAMES.put("OPS", "Operations");
+        DEPARTMENT_NAMES.put("MKT", "Marketing");
+        DEPARTMENT_NAMES.put("FPT", "Phòng Phát triển FPT");
+        DEPARTMENT_NAMES.put("IT", "Trung tâm Công nghệ Thông tin");
+        DEPARTMENT_NAMES.put("HR", "Nhân sự và Đào tạo");
+        DEPARTMENT_NAMES.put("SALES", "Khối Kinh doanh");
+        DEPARTMENT_NAMES.put("QA", "Bộ phận Kiểm thử");
+    }
 
     /**
      * Tên học viên mẫu. Dùng để bảng "Study time per learner" / "At risk" trông
@@ -112,36 +172,36 @@ public class DepartmentStudentDataInitializer
             {"Hoang", "Bao Chau"},
             {"Cao", "Thanh Ha"},
             {"Dinh", "Quoc Bao"},
-            {"Ngo", "Minh Duc"},
+            {"Ngo", "Thanh Ha"},
             {"Vuong", "Anh Tuan"},
             {"Thanh", "Thi Kim"},
-            {"Kieu", "Hoang Nam"},
+            {"Kieu", "Thanh Ha"},
             {"Ha", "Quoc Bao"},
             {"Dao", "Thi Mai"},
             {"Do", "Ngoc Lan"},
-            {"Ho", "Minh Quan"},
+            {"Ho", "Quoc Bao"},
             {"Le", "Huy Thanh"},
             {"Pham", "Thi Lan"},
             {"Vu", "Bao Chau"},
-            {"Tran", "Minh Duc"},
+            {"Tran", "Hoang Nam"},
             {"Nguyen", "Thi Trang"},
             {"Lo", "Quoc Bao"},
             {"Tao", "Hoang Nam"},
             {"Mai", "Ngoc Lan"},
             {"Cao", "Anh Tuan"},
-            {"Bui", "Thanh Ha"},
-            {"Dinh", "Minh Quan"},
-            {"Ly", "Hoang Nam"},
+            {"Bui", "Bao Chau"},
+            {"Dinh", "Thanh Ha"},
+            {"Ly", "Thanh Ha"},
             {"Thanh", "Thi Mai"},
             {"Truong", "Quoc Bao"},
             {"Do", "Hoang Nam"},
-            {"Ho", "Thi Trang"},
-            {"Le", "Anh Tuan"},
+            {"Ho", "Thanh Ha"},
+            {"Le", "Thi Trang"},
             {"Pham", "Bao Chau"},
-            {"Vu", "Minh Quan"},
+            {"Vu", "Huy Thanh"},
             {"Tran", "Hoang Nam"},
             {"Nguyen", "Thi Mai"},
-            {"Mai", "Minh Duc"},
+            {"Mai", "Quoc Bao"},
             {"Dang", "Thi Trang"},
             {"Kieu", "Quoc Bao"},
             {"Hoang", "Thi Mai"},
@@ -173,10 +233,13 @@ public class DepartmentStudentDataInitializer
             ensureStudent(i, department, studentRole);
         }
 
+        List<Department> departments = ensureSampleDepartments();
+        assignStudentsToDepartments(departments);
+
         log.info(
-                "Seeded {} test students for Department FPT. " +
-                        "Login: student01@example.com ... student{}@example.com",
-                STUDENT_TOTAL, STUDENT_TOTAL
+                "Seeded {} test students for Department FPT and distributed learners across {} departments. "
+                        + "Login: student01@example.com ... student{}@example.com",
+                STUDENT_TOTAL, departments.size(), STUDENT_TOTAL
         );
     }
 
@@ -192,6 +255,141 @@ public class DepartmentStudentDataInitializer
         department.setIsActive(true);
 
         return departmentRepository.save(department);
+    }
+
+    /**
+     * Bảo đảm các phòng ban mẫu tồn tại.
+     *
+     * <p>Phòng ban đã có sẵn trong hệ thống được giữ nguyên (kể cả tên khác);
+     * phòng ban thiếu mới được tạo. Không bao giờ xoá phòng ban.
+     */
+    private List<Department> ensureSampleDepartments() {
+        List<Department> departments = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : DEPARTMENT_WEIGHTS.entrySet()) {
+            String code = entry.getKey();
+            Department department = departmentRepository.findByCodeIgnoreCase(code).orElse(null);
+            if (department == null) {
+                department = new Department();
+                department.setCode(code);
+                department.setName(DEPARTMENT_NAMES.getOrDefault(code, code));
+                department.setDescription("Phòng ban mẫu " + code);
+                department.setIsActive(true);
+                department = departmentRepository.save(department);
+            }
+            departments.add(department);
+        }
+        return departments;
+    }
+
+    /**
+     * Gán học viên vào phòng ban theo tỷ lệ không đồng đều.
+     *
+     * <p>Học viên đã có phòng ban thì <b>không bị gán lại</b> (giữ dữ liệu đã có).
+     * Phần còn lại được chia theo trọng số của từng phòng ban; học viên không
+     * xếp được vào phòng ban nào sẽ để trống (tạo nhóm "Chưa phân phòng ban"
+     * trong báo cáo).
+     *
+     * <p>Phạm vi: nhóm {@code student01..student100} (seed ở đây) và nhóm
+     * {@code student001..student180} (seed ở {@link BulkStudentDataInitializer}).
+     */
+    private void assignStudentsToDepartments(List<Department> departments) {
+        if (departments.isEmpty()) {
+            return;
+        }
+
+        // Chỉ xét học viên chưa có phòng ban.
+        List<User> students = new ArrayList<>();
+        for (int i = 1; i <= STUDENT_TOTAL; i++) {
+            userRepository.findByEmail(String.format("student%02d@example.com", i))
+                    .ifPresent(students::add);
+        }
+        for (int i = 1; i <= BulkStudentDataInitializer.DEFAULT_STUDENT_TOTAL; i++) {
+            userRepository.findByEmail(String.format("student%03d@example.com", i))
+                    .ifPresent(students::add);
+        }
+        if (students.isEmpty()) {
+            return;
+        }
+
+        // Sắp xếp theo email để thứ tự gán ổn định giữa các lần chạy.
+        students.sort((a, b) -> {
+            String an = a.getEmail() == null ? "" : a.getEmail();
+            String bn = b.getEmail() == null ? "" : b.getEmail();
+            return an.compareToIgnoreCase(bn);
+        });
+
+        Random random = SeededRandom.forScope("department-assignment");
+
+        // Chuẩn bị "số ghế" cho từng phòng ban theo trọng số -> chia theo kiểu
+        // "rải đều có kiểm soát" để mỗi phòng ban có số lượng khác nhau rõ rệt.
+        List<Integer> seatPool = buildSeatPool(random, students.size(), departments);
+
+        int seatIndex = 0;
+        for (User student : students) {
+            if (student.getDepartments() != null && !student.getDepartments().isEmpty()) {
+                continue;
+            }
+            if (seatIndex >= seatPool.size()) {
+                // Hết "ghế" -> học viên này để trống phòng ban.
+                break;
+            }
+            Department target = departments.get(seatPool.get(seatIndex++));
+            student.getDepartments().add(target);
+            userRepository.save(student);
+        }
+    }
+
+    /**
+     * Dựng danh sách chỉ số phòng ban theo trọng số.
+     *
+     * <p>Mỗi phòng ban nhận số ghế tỉ lệ với trọng số của nó (làm tròn, phần dư
+     * phân bổ cho các phòng ban còn thiếu nhiều nhất). Sau đó thứ tự các ghế
+     * được xáo trộn bằng {@link Random} có seed cố định để học viên không bị
+     * "dồn" vào một phòng ban.
+     *
+     * @param studentCount số học viên cần gán
+     * @param departments  danh sách phòng ban (thứ tự khớp {@link #DEPARTMENT_WEIGHTS})
+     */
+    private List<Integer> buildSeatPool(Random random, int studentCount, List<Department> departments) {
+        int totalWeight = 0;
+        for (int weight : DEPARTMENT_WEIGHTS.values()) {
+            totalWeight += weight;
+        }
+
+        // Số ghế của từng phòng ban = làm tròn(studentCount * trọng số / tổng trọng số).
+        int[] seats = new int[departments.size()];
+        int assigned = 0;
+        for (int i = 0; i < departments.size(); i++) {
+            int weight = DEPARTMENT_WEIGHTS.getOrDefault(departments.get(i).getCode(), 1);
+            seats[i] = (int) Math.floor(studentCount * (double) weight / totalWeight);
+            assigned += seats[i];
+        }
+
+        // Phần dư: chia cho phòng ban còn thiếu nhiều nhất (giữ tổng = studentCount).
+        int remaining = studentCount - assigned;
+        while (remaining > 0) {
+            int best = -1;
+            for (int i = 0; i < seats.length; i++) {
+                int weight = DEPARTMENT_WEIGHTS.getOrDefault(departments.get(i).getCode(), 1);
+                if (best < 0 || weight > DEPARTMENT_WEIGHTS.getOrDefault(departments.get(best).getCode(), 1)) {
+                    best = i;
+                }
+            }
+            if (best < 0) {
+                break;
+            }
+            seats[best]++;
+            remaining--;
+        }
+
+        List<Integer> pool = new ArrayList<>(studentCount);
+        for (int i = 0; i < seats.length; i++) {
+            for (int k = 0; k < seats[i]; k++) {
+                pool.add(i);
+            }
+        }
+        // Xáo trộn để học viên không bị dồn vào các phòng ban đầu tiên.
+        return SeededRandom.shuffled(pool, random);
     }
 
     private Course ensureCourse() {
