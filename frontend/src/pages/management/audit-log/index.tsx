@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { Activity, AlertTriangle, CalendarDays, CheckCircle2 } from "lucide-react";
 import ExcelJS from "exceljs";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { AnimatePresence, motion } from "framer-motion";
@@ -195,24 +196,63 @@ function computeChanges(
     return rows;
 }
 
+function formatShortDay(date: string) {
+    const months = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    const month = months[Number(date.slice(5, 7)) - 1];
+
+    return month ? `${date.slice(8, 10)} ${month}` : date;
+}
+
 function LogKpi({
                     label,
                     value,
+                    badge,
                     hint,
-                    tone = "text-foreground",
+                    icon: Icon,
+                    tone,
+                    badgeTone = "bg-muted text-muted-foreground",
                 }: {
     label: string;
     value: string;
+    badge?: string;
     hint?: string;
-    tone?: string;
+    icon: typeof Activity;
+    tone: string;
+    badgeTone?: string;
 }) {
     return (
-        <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {label}
-            </p>
-            <p className={`mt-1 text-2xl font-semibold ${tone}`}>{value}</p>
-            {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
+            <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {label}
+                </p>
+
+                <div className="mt-2 flex items-baseline gap-2">
+                    <span className="text-3xl font-semibold leading-none text-foreground">
+                        {value}
+                    </span>
+                    {badge && (
+                        <span
+                            className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${badgeTone}`}
+                        >
+                            {badge}
+                        </span>
+                    )}
+                </div>
+
+                {hint && (
+                    <p className="mt-3 text-[11px] text-muted-foreground">{hint}</p>
+                )}
+            </div>
+
+            <span
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tone}`}
+            >
+                <Icon className="h-4 w-4" aria-hidden="true" />
+            </span>
         </div>
     );
 }
@@ -996,6 +1036,16 @@ export default function AuditLogPage() {
     const rangeStart = totalElements === 0 ? 0 : page * size + 1;
     const rangeEnd = Math.min((page + 1) * size, totalElements);
 
+    const dayStats = viewCounts?.byDay ?? [];
+    const rangeDays = dayStats.length;
+    const activeDays = dayStats.filter((day) => day.total > 0).length;
+    const averagePerDay =
+        rangeDays > 0 ? (totalEvents / rangeDays).toFixed(1) : null;
+    const peakFailureDay = dayStats.reduce<(typeof dayStats)[number] | null>(
+        (peak, day) => (day.failures > (peak?.failures ?? 0) ? day : peak),
+        null,
+    );
+
     const openHistory = (log: AuditLogDTO) =>
         setHistoryTarget({
             entityType: log.entityType,
@@ -1181,23 +1231,44 @@ export default function AuditLogPage() {
                     )}
 
                     {view === "logs" && viewCounts && (
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                             <LogKpi
                                 label="Total events"
                                 value={totalEvents.toLocaleString("en-US")}
-                                hint="in the selected period"
+                                hint={
+                                    averagePerDay
+                                        ? `${averagePerDay} events per day on average`
+                                        : "in the selected period"
+                                }
+                                icon={Activity}
+                                tone="bg-indigo-500/10 text-indigo-500"
                             />
                             <LogKpi
-                                label="Failures & denials"
+                                label="Denied / failures"
                                 value={failedEvents.toLocaleString("en-US")}
-                                hint={`${failureShare}% of total`}
-                                tone="text-red-600 dark:text-red-400"
+                                badge={`${failureShare}% of total`}
+                                badgeTone="bg-red-500/10 text-red-500"
+                                hint={
+                                    peakFailureDay
+                                        ? `Peak on ${formatShortDay(peakFailureDay.date)} (${peakFailureDay.failures} failures)`
+                                        : "No failures in this period"
+                                }
+                                icon={AlertTriangle}
+                                tone="bg-red-500/10 text-red-500"
                             />
                             <LogKpi
                                 label="Success rate"
                                 value={successRate}
-                                hint={`${(totalEvents - failedEvents).toLocaleString("en-US")} of ${totalEvents.toLocaleString("en-US")} events`}
-                                tone="text-emerald-600 dark:text-emerald-400"
+                                hint={`${(totalEvents - failedEvents).toLocaleString("en-US")} of ${totalEvents.toLocaleString("en-US")} events succeeded`}
+                                icon={CheckCircle2}
+                                tone="bg-emerald-500/10 text-emerald-500"
+                            />
+                            <LogKpi
+                                label="Activity window"
+                                value={`${activeDays} days`}
+                                hint={`out of ${rangeDays} days in range`}
+                                icon={CalendarDays}
+                                tone="bg-violet-500/10 text-violet-500"
                             />
                         </div>
                     )}
