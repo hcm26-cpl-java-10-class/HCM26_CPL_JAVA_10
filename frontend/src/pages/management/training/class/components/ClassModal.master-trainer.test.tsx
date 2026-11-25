@@ -21,6 +21,9 @@ const savedClass = {
 
 beforeEach(() => {
     fakeHttp.reset();
+    fakeHttp.on("get", "/programs", pageOf([
+        { id: 1, code: "PROGRAM", name: "Chương trình đang hoạt động", status: "ACTIVE", isActive: true },
+    ]));
     fakeHttp.on("get", "/users", { content: [
         { id: 1, firstName: "Active", lastName: "Admin", email: "admin@example.test", status: "ACTIVE" },
         { id: 2, firstName: "Locked", lastName: "Admin", status: "LOCKED" },
@@ -30,7 +33,7 @@ beforeEach(() => {
     fakeHttp.on("get", "/trainers/data-source", { source: "INTERNAL", approved: true, sampleData: false });
 });
 
-const trainerSelect = () => screen.getByLabelText(/^Master Trainer/i) as HTMLSelectElement;
+const trainerSelect = () => screen.getByLabelText(/^Giảng viên chính/i) as HTMLSelectElement;
 const adminSelect = () => document.querySelector<HTMLSelectElement>("#class-admin")!;
 
 describe("ClassModal Master Trainer directory contract", () => {
@@ -77,7 +80,7 @@ describe("ClassModal Master Trainer directory contract", () => {
         await screen.findByRole("alert");
         expect(trainerSelect()).toBeDisabled();
         expect(screen.queryByRole("option", { name: /Verified Trainer/ })).not.toBeInTheDocument();
-        expect(screen.getByRole("alert")).toHaveTextContent("sample or unverified");
+        expect(screen.getByRole("alert")).toHaveTextContent("chưa được xác minh");
         await screen.findByRole("option", { name: "Active Admin (admin@example.test)" });
         expect(adminSelect()).toBeEnabled();
         expect(adminSelect().tagName).toBe("SELECT");
@@ -93,7 +96,7 @@ describe("ClassModal Master Trainer directory contract", () => {
             renderAt(<ClassModal open onOpenChange={vi.fn()} />, { route: "/classes" });
             await screen.findByRole("alert");
             expect(trainerSelect()).toBeDisabled();
-            expect(screen.getByRole("alert")).toHaveTextContent("BLOCKED");
+            expect(screen.getByRole("alert")).toHaveTextContent(/giảng viên/i);
             expect(screen.queryByRole("option", { name: /Verified Trainer/ })).not.toBeInTheDocument();
             expect(adminSelect()).toBeEnabled();
         });
@@ -104,18 +107,18 @@ describe("ClassModal Master Trainer directory contract", () => {
         renderAt(<ClassModal open onOpenChange={vi.fn()} />, { route: "/classes" });
         await screen.findByRole("alert");
         expect(trainerSelect()).toBeDisabled();
-        expect(screen.getByRole("alert")).toHaveTextContent("BLOCKED");
+        expect(screen.getByRole("alert")).toHaveTextContent(/giảng viên/i);
     });
 
     it("explains the missing internal data and reloads after a real directory becomes available", async () => {
         fakeHttp.on("get", "/trainers/options", pageOf([]));
         const { user } = renderAt(<ClassModal open onOpenChange={vi.fn()} classItem={savedClass} />, { route: "/classes" });
-        expect(await screen.findByRole("alert")).toHaveTextContent("/trainers");
-        expect(screen.getByRole("alert")).toHaveTextContent("TRAINER_CREATE");
+        expect(await screen.findByRole("alert")).toHaveTextContent("Quản lý giảng viên");
+        expect(screen.getByRole("alert")).toHaveTextContent("bổ sung hoặc cập nhật hồ sơ");
         expect(trainerSelect()).toBeDisabled();
         expect(trainerSelect().value).toBe("legacy");
         fakeHttp.on("get", "/trainers/options", pageOf(trainers));
-        await user.click(screen.getByRole("button", { name: "Tải lại danh mục Trainer" }));
+        await user.click(screen.getByRole("button", { name: "Tải lại danh sách giảng viên" }));
         await waitFor(() => expect(trainerSelect()).toBeEnabled());
         await user.selectOptions(trainerSelect(), "9100");
         expect(trainerSelect().value).toBe("9100");
@@ -127,7 +130,7 @@ describe("ClassModal Master Trainer directory contract", () => {
         fakeHttp.on("get", "/trainers/options", () => { throw httpError(403); });
         const { user } = renderAt(<ClassModal open onOpenChange={vi.fn()} classItem={savedClass} />, { route: "/classes" });
         expect(await screen.findByRole("alert")).toHaveTextContent("Thiếu quyền");
-        await user.click(screen.getByRole("button", { name: "Tải lại danh mục Trainer" }));
+        await user.click(screen.getByRole("button", { name: "Tải lại danh sách giảng viên" }));
         await waitFor(() => expect(fakeHttp.callsTo("get", "/trainers/options")).toHaveLength(2));
         expect(await screen.findByRole("alert")).toHaveTextContent("Thiếu quyền");
         expect(trainerSelect()).toBeDisabled();
@@ -143,14 +146,15 @@ describe("ClassModal Master Trainer directory contract", () => {
         fakeHttp.on("get", "/trainers/options", () => new Promise(resolve => { finish = resolve; }));
         const { user } = renderAt(<ClassModal open onOpenChange={vi.fn()} classItem={savedClass} />, { route: "/classes", client });
         expect(trainerSelect()).toBeDisabled();
-        expect(screen.getByRole("status")).toHaveTextContent("Đang kiểm tra");
+        expect(screen.getByText("Đang kiểm tra danh sách giảng viên...")).toBeInTheDocument();
+        await screen.findByRole("option", { name: "PROGRAM — Chương trình đang hoạt động" });
         // A stale DOM selection must also be rejected by submit validation.
         fireEvent.change(trainerSelect(), { target: { value: "9100" } });
         await user.click(screen.getByRole("button", { name: "Lưu thay đổi" }));
         expect(await screen.findByText(/Vui lòng chờ trước khi lưu/)).toBeInTheDocument();
         expect(fakeHttp.callsTo("put", "/classes/42")).toHaveLength(0);
         await act(async () => finish(pageOf([trainers[1]])));
-        await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+        await waitFor(() => expect(screen.queryByText("Đang kiểm tra danh sách giảng viên...")).not.toBeInTheDocument());
         expect(trainerSelect()).toBeDisabled();
         await user.click(screen.getByRole("button", { name: "Lưu thay đổi" }));
         expect(fakeHttp.callsTo("put", "/classes/42")).toHaveLength(0);
@@ -161,7 +165,7 @@ describe("ClassModal Master Trainer directory contract", () => {
         const { user } = renderAt(<ClassModal open onOpenChange={vi.fn()} />, { route: "/classes" });
         await screen.findByRole("option", { name: "Verified Trainer (trainer@example.test)" });
         fireEvent.change(document.querySelector("#class-code")!, { target: { value: "NEW_CLASS" } });
-        fireEvent.change(document.querySelector("#class-program")!, { target: { value: "PROGRAM" } });
+        await user.selectOptions(screen.getByLabelText(/^Chương trình đào tạo/), "1");
         await user.selectOptions(adminSelect(), "Active Admin");
         await user.selectOptions(trainerSelect(), "9100");
         await user.click(screen.getByRole("button", { name: "Tạo lớp học" }));
