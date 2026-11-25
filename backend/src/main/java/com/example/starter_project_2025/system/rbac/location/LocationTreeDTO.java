@@ -16,8 +16,13 @@ public class LocationTreeDTO {
     Long id;
     String code;
     String name;
-    Long parentId;
-    String status;
+    String description;
+    Long parentLocationId;
+
+    String path;   // Đường dẫn cây: "VN / HN / Cơ sở 1"
+    Integer level; // Độ sâu (0, 1, 2...)
+
+    LocationStatus status; // Chuẩn Enum Type-Safety
 
     Integer totalUsers;
 

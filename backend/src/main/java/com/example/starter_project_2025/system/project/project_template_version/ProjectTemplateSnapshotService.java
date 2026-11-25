@@ -1,7 +1,7 @@
 package com.example.starter_project_2025.system.project.project_template_version;
 
 import com.example.starter_project_2025.base.crud.service.BaseCrudService;
-import com.example.starter_project_2025.system.project.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.system.project.project_template_version.audit.ProjectTemplateSnapshotAuditLogDTO;
 
 import java.util.List;
@@ -88,4 +88,18 @@ public interface ProjectTemplateSnapshotService
      * Flattened rows for the Excel/CSV export.
      */
     List<ProjectTemplateSnapshotExportRow> getExportRows();
+
+    ProjectTemplateSnapshotDTO createNewVersionForSuggestion(Long sourceVersionId);
+
+    void recordSuggestionVersionCreated(
+            Long snapshotId,
+            Long sourceVersionId
+    );
+
+    /**
+     * Updates the content JSON of a snapshot created for an AI suggestion.
+     * Does not perform lifecycle transitions or write audit/outbox events.
+     * Those actions are handled after the suggestion is successfully applied.
+     */
+    void updateContentJsonForSuggestion(Long snapshotId, String contentJson);
 }

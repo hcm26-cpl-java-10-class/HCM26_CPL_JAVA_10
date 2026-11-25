@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 import { examApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +29,7 @@ export function formatDateTime(value: string | null | undefined) {
 }
 
 export default function EssayAttemptListPage() {
+    const embedded = useContext(EmbeddedLayoutContext);
     const { examId } = useParams<{ examId: string }>();
     const numericExamId = Number(examId);
     const validId = Number.isInteger(numericExamId) && numericExamId > 0;
@@ -44,22 +47,24 @@ export default function EssayAttemptListPage() {
     return (
         <MainLayout pathName={{ exams: "Quản lý đề thi", grading: "Essay & Coding Grading" }}>
             <section className="flex flex-col gap-5">
-                <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
+                <header className={`flex flex-wrap items-end gap-4 border-b pb-4 ${embedded ? "justify-end" : "justify-between"}`}>
+                    {!embedded && (
                     <div>
                         <Button variant="ghost" size="sm" className="-ml-2 mb-2" onClick={() => navigate("/exams")}>
                             <ChevronLeft className="size-4" />
-                            Back to Exam Management
+                            Back to Assessment Management
                         </Button>
                         <h1 className="text-2xl font-semibold">Submissions Grading</h1>
                         <p className="mt-1 text-sm text-muted-foreground">
                             Exam #{examId} · {rows.length} submission(s)
                         </p>
                     </div>
+                    )}
                     <div className="flex items-center gap-2">
                         <Button
                             variant="outline"
                             className="gap-1.5 border-purple-200 bg-purple-50/50 text-purple-700 hover:bg-purple-100 hover:text-purple-900 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-300"
-                            onClick={() => navigate(`/exams/${numericExamId}/grading/similarity`)}
+                            onClick={() => navigate(`/exams/${numericExamId}/similarity`)}
                             disabled={!validId}
                             title="Kiểm tra tương đồng và trùng lặp bài tự luận"
                         >
@@ -88,7 +93,7 @@ export default function EssayAttemptListPage() {
                         </TableHeader>
                         <TableBody>
                             {!validId && (
-                                <TableRow><TableCell colSpan={7} className="h-24 text-center text-destructive">Invalid exam ID.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={7} className="h-24 text-center text-destructive">Invalid assessment ID.</TableCell></TableRow>
                             )}
                             {attemptsQuery.isLoading && (
                                 <TableRow><TableCell colSpan={7} className="h-24 text-center text-muted-foreground">Loading submissions...</TableCell></TableRow>

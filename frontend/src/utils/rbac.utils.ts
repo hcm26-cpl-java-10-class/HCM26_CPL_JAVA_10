@@ -118,6 +118,7 @@ export const resolveEffectivePermissions = (
   allPermissions: string[],
 ): string[] => {
   const role = normalizeRole(activeRole);
+  const accountGrants = new Set(uniquePermissions(allPermissions));
 
   if (role === TEACHER_ROLE) {
     const teacherDefaults = new Set([
@@ -138,13 +139,13 @@ export const resolveEffectivePermissions = (
     ]);
 
     return uniquePermissions([
-      ...(rolePermissions[role] ?? []),
+      ...uniquePermissions(rolePermissions[role] ?? []).filter((permission) => accountGrants.has(permission)),
       ...allPermissions.filter((permission) => teacherDefaults.has(permission)),
     ]);
   }
 
   if (role && rolePermissions[role]?.length) {
-    return uniquePermissions(rolePermissions[role]);
+    return uniquePermissions(rolePermissions[role]).filter((permission) => accountGrants.has(permission));
   }
 
   if (role === STUDENT_ROLE) {
@@ -152,11 +153,12 @@ export const resolveEffectivePermissions = (
       "MENU_READ", "BOOK_READ", "COURSE_READ", "LESSON_READ", "EXAM_TAKE",
       "ENROLLMENT_READ", "ENROLLMENT_CREATE", "ENROLLMENT_DELETE",
       "LEARNER_ACCESS", "LEARNING_SELF_READ", "ENROLL_COURSE",
+      "LESSON_PROGRESS_READ", "LESSON_PROGRESS_UPDATE", "CERTIFICATE_READ", "INVITATION_READ",
     ]);
     return uniquePermissions(
       allPermissions.filter(
         (permission) =>
-          permission.endsWith("_READ") || learnerPermissions.has(permission),
+          learnerPermissions.has(permission),
       ),
     );
   }
@@ -212,7 +214,13 @@ export const canAccessPath = (path: string, activeRole: string | null, permissio
   path = path.replace(/\/+$/, "") || "/";
   if (["/profile", "/fams/profile", "/fams/ho-so-ca-nhan-oi-mat-khau", "/fams/ho-so-ca-nhan-doi-mat-khau"].includes(path)) return true;
   if (path === "/dashboard") return activeRole !== STUDENT_ROLE && granted.has("ADMIN_ACCESS") && granted.has("USER_READ");
-  if (path === "/student" || path === "/student/exams") return activeRole === STUDENT_ROLE && granted.has("LEARNER_ACCESS");
+  if (path === "/notifications") return true;
+  if (path === "/student" || path.startsWith("/student/")) {
+    return activeRole === STUDENT_ROLE && granted.has("LEARNER_ACCESS");
+  }
+  if (path === "/invitations" && activeRole === STUDENT_ROLE) {
+    return granted.has("LEARNER_ACCESS") && granted.has("INVITATION_READ");
+  }
   if (["/my-learning", "/fams/my-learning", "/learning", "/enrollments"].includes(path)) {
     return granted.has("LEARNER_ACCESS") && granted.has("LEARNING_SELF_READ");
   }

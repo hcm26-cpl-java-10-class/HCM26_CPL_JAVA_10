@@ -13,6 +13,7 @@ import {
     ADMIN_ROLE,
     STUDENT_ROLE,
 } from "@/utils/rbac.utils";
+import { resolveMenuPermission } from "@/router/menu-permission.utils";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
@@ -73,12 +74,17 @@ export function useActiveModuleGroups(enabled = true) {
             ]);
 
             const groups = groupPage.content ?? groupPage.items ?? [];
-            const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) => {
-                const url = module.url ?? "";
-                const isExcludedPath = [
-                    "/management/project-templates",
-                    "/management/project-teams",
-                ].some((path) => url.startsWith(path));
+            const modules = (modulePage.content ?? modulePage.items ?? [])
+                .map((module) => ({
+                    ...module,
+                    requiredPermission: resolveMenuPermission(module.url, module.requiredPermission),
+                }))
+                .filter((module) => {
+                    const url = module.url ?? "";
+                    const isExcludedPath = [
+                        "/management/project-templates",
+                        "/management/project-teams",
+                    ].some((path) => url.startsWith(path));
 
                 if (isExcludedPath || url === "/tasks" || url === "/management/tasks" || url === "/team-allocation") {
                     return false;

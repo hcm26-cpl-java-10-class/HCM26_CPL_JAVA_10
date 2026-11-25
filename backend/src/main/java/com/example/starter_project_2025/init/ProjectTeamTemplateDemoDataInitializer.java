@@ -1,22 +1,23 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.ProjectMemberRole;
-import com.example.starter_project_2025.system.project.ProjectTemplate;
-import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.repository.ProjectTemplateRepository;
 import com.example.starter_project_2025.system.project.rubric.domain.RubricVersion;
 import com.example.starter_project_2025.system.project.rubric.service.RubricCatalogService;
 import com.example.starter_project_2025.system.project.tenant.TenantRepository;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateAudit;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateAuditRepository;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateLevel;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
-import com.example.starter_project_2025.system.project.template.TemplateConfigurationService;
-import com.example.starter_project_2025.system.project.template.backlog.TemplateBacklogItem;
-import com.example.starter_project_2025.system.project.template.backlog.TemplateBacklogItemRepository;
-import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestone;
-import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneChecklistItem;
-import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRepository;
-import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneTimeUnit;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplateAudit;
+import com.example.starter_project_2025.system.project.template.repository.ProjectTemplateAuditRepository;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplateStatus;
+import com.example.starter_project_2025.system.project.template.service.TemplateConfigurationService;
+import com.example.starter_project_2025.system.project.template.domain.backlog.TemplateBacklogItem;
+import com.example.starter_project_2025.system.project.template.repository.backlog.TemplateBacklogItemRepository;
+import com.example.starter_project_2025.system.project.template.domain.milestone.TemplateMilestone;
+import com.example.starter_project_2025.system.project.template.domain.milestone.TemplateMilestoneChecklistItem;
+import com.example.starter_project_2025.system.project.template.repository.milestone.TemplateMilestoneRepository;
+import com.example.starter_project_2025.system.project.template.domain.milestone.TemplateMilestoneTimeUnit;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,48 +45,49 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Profile("!prod")
 @ConditionalOnProperty(prefix = "app.seed.team-allocation", name = "enabled", havingValue = "true", matchIfMissing = true)
+@StartupMutation
 public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner {
     private static final String SEED_ACTION = "PROJECT_TEMPLATE_DEMO_SEEDED_V2";
     private static final List<String> RUBRIC_NAMES = List.of(
             "Technical Documentation Rubric", "Milestone Delivery Rubric", "Demo and Presentation Rubric");
     private static final List<TemplateSeed> TEMPLATES = List.of(
             new TemplateSeed("SAMPLE-WEB-PORTAL", "Campus Service Portal", "Web Application",
-                    ProjectTemplateLevel.INTERMEDIATE, 10, 4, 6, false, new RoleQuotas(1, 1, 1, 1),
+                    "INTERMEDIATE", 10, 4, 6, false, new RoleQuotas(1, 1, 1, 1),
                     "room booking, support requests and service notifications",
                     "students, campus staff and service administrators",
                     List.of("Room availability and booking", "Support request tracking", "Service notifications and reports")),
             new TemplateSeed("SAMPLE-MOBILE-BOOKING", "Mobile Appointment Booking", "Mobile Application",
-                    ProjectTemplateLevel.INTERMEDIATE, 9, 3, 4, true, new RoleQuotas(1, 1, 1, 0),
+                    "INTERMEDIATE", 9, 3, 4, true, new RoleQuotas(1, 1, 1, 0),
                     "appointment scheduling, reminders and booking management",
                     "customers, service providers and reception staff",
                     List.of("Service and provider discovery", "Appointment booking and cancellation", "Mobile reminders and booking history")),
             new TemplateSeed("SAMPLE-DATA-REPORTING", "Sales Analytics Dashboard", "Data Analytics",
-                    ProjectTemplateLevel.BEGINNER, 8, 2, 5, true, new RoleQuotas(1, 0, 1, 0),
+                    "BEGINNER", 8, 2, 5, true, new RoleQuotas(1, 0, 1, 0),
                     "sales data preparation, KPI reporting and interactive dashboards",
                     "sales analysts, branch managers and business owners",
                     List.of("Sales data import and validation", "Revenue and conversion analysis", "Interactive KPI dashboard")),
             new TemplateSeed("SAMPLE-CAPSTONE-ERP", "Inventory and Order Management", "Capstone",
-                    ProjectTemplateLevel.ADVANCED, 15, 5, 7, false, new RoleQuotas(1, 1, 2, 1),
+                    "ADVANCED", 15, 5, 7, false, new RoleQuotas(1, 1, 2, 1),
                     "inventory control, purchase orders and stock reconciliation",
                     "warehouse operators, purchasing staff and operations managers",
                     List.of("Product and supplier management", "Purchase orders and stock movements", "Stock reconciliation and audit reports")),
             new TemplateSeed("SAMPLE-TEAM-COLLAB", "Team Collaboration Workspace", "Cross-functional",
-                    ProjectTemplateLevel.INTERMEDIATE, 12, 4, 8, true, new RoleQuotas(1, 1, 1, 1),
+                    "INTERMEDIATE", 12, 4, 8, true, new RoleQuotas(1, 1, 1, 1),
                     "team planning, shared work items and progress reporting",
                     "team leaders, project members and mentors",
                     List.of("Team membership and role management", "Shared work planning and progress tracking", "Project discussion and weekly reports")),
             new TemplateSeed("SAMPLE-WEB-SHOP", "Student Marketplace", "Web Application",
-                    ProjectTemplateLevel.BEGINNER, 8, 3, 5, false, new RoleQuotas(1, 0, 1, 1),
+                    "BEGINNER", 8, 3, 5, false, new RoleQuotas(1, 0, 1, 1),
                     "product listings, purchase requests and marketplace moderation",
                     "student buyers, student sellers and marketplace moderators",
                     List.of("Product listings and search", "Purchase requests and order tracking", "Seller feedback and moderation")),
             new TemplateSeed("SAMPLE-MOBILE-LEARNING", "Mobile Learning Companion", "Mobile Application",
-                    ProjectTemplateLevel.INTERMEDIATE, 10, 4, 6, false, new RoleQuotas(1, 1, 1, 1),
+                    "INTERMEDIATE", 10, 4, 6, false, new RoleQuotas(1, 1, 1, 1),
                     "learning schedules, practice quizzes and personal progress tracking",
                     "learners, instructors and academic support staff",
                     List.of("Course content and study schedules", "Practice quizzes and instant feedback", "Learning progress and reminders")),
             new TemplateSeed("SAMPLE-DATA-INSIGHTS", "Student Performance Analytics", "Data Analytics",
-                    ProjectTemplateLevel.ADVANCED, 12, 4, 6, false, new RoleQuotas(1, 1, 1, 1),
+                    "ADVANCED", 12, 4, 6, false, new RoleQuotas(1, 1, 1, 1),
                     "academic data quality, performance indicators and early risk analysis",
                     "program managers, mentors and academic advisors",
                     List.of("Academic dataset preparation", "Performance trends and risk indicators", "Advisor dashboards and summary reports"))
@@ -248,7 +250,7 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
 
     private record RoleQuotas(int pm, int ba, int dev, int qa) { }
 
-    private record TemplateSeed(String code, String name, String category, ProjectTemplateLevel level, int weeks,
+    private record TemplateSeed(String code, String name, String category, String level, int weeks,
                                 int minMembers, int maxMembers, boolean allowMultiRole, RoleQuotas roles,
                                 String scope, String users, List<String> features) { }
 }

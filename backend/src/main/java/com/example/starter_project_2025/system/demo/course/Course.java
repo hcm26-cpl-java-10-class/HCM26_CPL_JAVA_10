@@ -1,6 +1,6 @@
 package com.example.starter_project_2025.system.demo.course;
 import com.example.starter_project_2025.system.demo.category.Category;
-import com.example.starter_project_2025.system.demo.syllabus.Syllabus;
+import com.example.starter_project_2025.system.demo.syllabus.entity.Syllabus;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
@@ -66,6 +66,16 @@ public class Course extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "syllabus_id")
     Syllabus syllabus;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20,
+            columnDefinition = "varchar(20) default 'STANDARD'")
+    CourseType courseType = CourseType.STANDARD;
+
+    public boolean allowsOutlineEditing() {
+        return courseType == CourseType.FROM_SYLLABUS && status == CourseStatus.DRAFT;
+    }
 
     @Builder.Default
     @Enumerated(EnumType.STRING)

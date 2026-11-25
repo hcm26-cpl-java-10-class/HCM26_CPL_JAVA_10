@@ -2,8 +2,8 @@ package com.example.starter_project_2025.system.learning;
 
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentService;
 import com.example.starter_project_2025.system.demo.progress.LessonProgressService;
-import com.example.starter_project_2025.system.exam.dto.PublishedExamScoreDTO;
-import com.example.starter_project_2025.system.exam.service.PublishedExamScoreService;
+import com.example.starter_project_2025.system.exam.result.dto.PublishedExamScoreDTO;
+import com.example.starter_project_2025.system.exam.result.service.PublishedExamScoreService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

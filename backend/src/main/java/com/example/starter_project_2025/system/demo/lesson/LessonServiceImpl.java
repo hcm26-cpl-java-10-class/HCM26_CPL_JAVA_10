@@ -105,7 +105,7 @@ public class LessonServiceImpl
             lesson.setIsActive(true);
         }
         validateContent(request.getContentType(), request.getContentUrl(),
-                request.getTextContent(), ctx);
+                request.getTextContent(), allowsOutlineEditing(lesson), ctx);
         if (sectionId != null) {
             validateOrderIndex(sectionId, request.getOrderIndex(), null, ctx);
         }
@@ -134,7 +134,7 @@ public class LessonServiceImpl
         String text = request.getTextContent() != null
                 ? request.getTextContent() : lesson.getTextContent();
 
-        validateContent(type, url, text, ctx);
+        validateContent(type, url, text, allowsOutlineEditing(lesson), ctx);
         PENDING_CHANGES.set(detectChanges(lesson, request));
     }
 
@@ -278,8 +278,14 @@ public class LessonServiceImpl
         }
     }
 
+    private boolean allowsOutlineEditing(Lesson lesson) {
+        return lesson.getSection() != null
+                && lesson.getSection().getCourse() != null
+                && lesson.getSection().getCourse().allowsOutlineEditing();
+    }
+
     private void validateContent(LessonContentType type, String url, String text,
-                                 ValidationContext ctx) {
+                                 boolean outlineEditable, ValidationContext ctx) {
         if (type == null) {
             return;
         }
@@ -294,9 +300,9 @@ public class LessonServiceImpl
                     ctx.add("contentUrl", "Content URL must be a valid http/https URL");
                 }
             }
-            case TEXT -> {
-                if (!hasText) {
-                    ctx.add("textContent", "Text content is required for TEXT lessons");
+            case TEXT, QUIZ, EXAM, ASSIGNMENT -> {
+                if (!hasText && !outlineEditable) {
+                    ctx.add("textContent", "Text content or assessment instructions are required");
                 }
             }
         }

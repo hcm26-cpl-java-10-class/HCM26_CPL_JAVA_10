@@ -1,7 +1,11 @@
 package com.example.starter_project_2025.system.project.alert;
 
+import com.example.starter_project_2025.system.project.ProjectMember;
+import com.example.starter_project_2025.system.project.ProjectMemberRepository;
+import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.ProjectTeamRepository;
+import com.example.starter_project_2025.system.project.ProjectTeamStatus;
 import com.example.starter_project_2025.security.UserPrincipal;
-import com.example.starter_project_2025.system.project.*;
 import com.example.starter_project_2025.system.project.trainingclass.*;
 import com.example.starter_project_2025.system.rbac.user.*;
 import com.example.starter_project_2025.system.project.tenant.TenantRepository;
@@ -64,7 +68,7 @@ public class ProjectAlertAccess {
                 .filter(team->admin(actor)||Objects.equals(team.getAssignedMentorId(),actor.getId())
                         ||Objects.equals(team.getTrainingClass().getMentorId(),actor.getId())
                         ||members.findByTeam_IdAndClassMember_User_Id(team.getId(),actor.getId())
-                        .filter(this::current).filter(member->member.getRole()!=null&&Set.of("PM","TEAM_LEADER","TEAM_LEAD").contains(member.getRole())).isPresent())
+                        .filter(this::current).filter(member->team.isLedBy(member.getClassMember().getId())).isPresent())
                 .toList();
     }
     private boolean classTenantAllowed(User actor,TrainingClass trainingClass) {

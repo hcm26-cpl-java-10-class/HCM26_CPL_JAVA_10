@@ -1,0 +1,52 @@
+﻿,,,,,,,,
+,,,,,,,,
+,Fresher / OJT Training Program,,,,,,,
+,"POSTGRESQL QUERY TUNING, INDEXING & PARTITIONING SYLLABUS",,,,,,,
+,,,,,,,,
+,,,,,Document Code,,,SYL-CPL10_DB_TUNING
+,,,,,Version,,,1.0
+,,,,,Effective Date,,,11/11/2026
+"PostgreSQL Query Tuning, Indexing & Partitioning Syllabus",,,,,,,,
+1,Technical Group,Database,,,,,,
+2,Topic Name,"PostgreSQL Query Tuning, Indexing & Partitioning",,,,,,
+3,Topic Code,CPL10_DB_TUNING,,,,,,
+4,Version,1.0,,,,,,
+5,Training Audience,Backend Developers & Data Engineers working with relational databases,,,,,,
+6,Course Objectives,"Analyze EXPLAIN ANALYZE plans, design composite/GIN/BRIN indexes, implement table partitioning, and prevent MVCC bloat & deadlocks.",,,,,,
+7,Topic Outline,"- Unit 1: Query Execution Plans & Indexing Strategies
+- Unit 2: Partitioning, Concurrency & MVCC Internals
+- Unit 3: SQL Tuning Evaluation",,,,,,
+8,Time Allocation,Concept/Lecture,0.30,"Theory, architecture concepts",7 Sessions,,,
+,,Assignment/Lab,0.35,Hands-on coding & exercises,,,,
+,,Guides/Review,0.10,Code walkthrough & Q&A,,,,
+,,Seminar/Workshop,0.00,Interactive seminar & debugging,,,,
+,,Exam,0.25,Quizzes & practical defense exam,,,,
+9,Training Materials & Environments,Text book,Official Database Documentation & FAMS Guides,,,,,
+,,References,FAMS Internal LMS Knowledge Base,,,,,
+,,Technical requirements,"Modern IDE, Docker, Git, Browser DevTools",,,,,
+10,Assessment Scheme,Quizzes & Knowledge Tests,2,20,Short quizzes checking core theory (>= 6.0 / 10),,,
+,,Practical Lab Test,2,30,Hands-on lab assignments & Git code quality (>= 6.0 / 10),,,
+,,Final Practical Test,1,50,Capstone implementation & live defense (>= 6.0 / 10),,,
+,,Pass Criteria,6,Overall GPA >= 6.0 / 10; Complete 100% quizzes and final practical test,,,,
+11,Training Delivery Principles,Trainees,Completed prerequisite track; Active participation in daily labs,,,,,
+,Training Delivery Principles,Trainer,Senior Database Engineer / Technical Mentor,,,,,
+,Training Delivery Principles,Training,"- Concept lectures in morning or online
+- Hands-on lab exercises & reviews in afternoon
+- Max 4h (240 mins) per session",,,,,
+,Training Delivery Principles,Re-Test,2 - Allow up to 2 re-takes with different exam variants,,,,,
+,Training Delivery Principles,Marking,Evaluated by trainer against official FAMS rubric,,,,,
+,Training Delivery Principles,Waiver Criteria,Fast-track entry exam score >= 8.5 / 10,,,,,
+,,,,,,,,
+"PostgreSQL Query Tuning, Indexing & Partitioning - Training Schedule",,,,,,,,
+Training Unit/Chapter,,Session,Content,Learning Objectives,Delivery Type,Duration (mins),Training Format,Training Materials / Logistics & General Notes
+1,Query Execution Plans & Indexing Strategies,1,"Reading EXPLAIN (ANALYZE, BUFFERS) Output","Interpret Seq Scan, Index Scan, Hash Join, and Nested Loop costs",Concept/Lecture,180,Offline - Sáng (Morning),Slide-Postgres-Explain.pdf
+,,2,"Composite, Partial & Covering Indexes Lab",Reduce slow query latency from seconds to milliseconds on 5M rows,Assignment/Lab,240,Offline - Chiều (Afternoon),Lab-01-Indexing.sql
+2,"Partitioning, Concurrency & MVCC Internals",3,Range/Hash Table Partitioning & JSONB Indexing,Configure monthly time-series partitions and GIN indexes,Concept/Lecture,180,Online - Sáng (Morning),Slide-Partitioning-GIN.pdf
+,,4,"Transaction Isolation, Deadlocks & Autovacuum Lab","Reproduce and fix lost updates, deadlocks, and table bloat",Assignment/Lab,180,Offline - Chiều (Afternoon),Lab-02-MVCC-Locks.sql
+,,5,Slow Query Clinic & Index Review,Review pg_stat_statements top slow queries from sample apps,Guides/Review,120,Online - Sáng (Morning),Guide-pg_stat_statements.pdf
+3,SQL Tuning Evaluation,6,PostgreSQL Internals & Indexing Quiz,"Assess understanding of B-Tree selectivity, MVCC, and locks",Test/Quiz,120,Offline - Sáng (Morning),Quiz-Postgres-Tuning.pdf
+,,7,Live SQL Performance Tuning Exam,Optimize 5 slow reporting queries within strict buffer budget,Exam,180,Offline - Chiều (Afternoon),Exam-Postgres-Tuning.pdf
+,,,,,,,,
+AUTHORSHIP,,,,,,,,
+,Role,Name,Account,Unit,Notes,,,
+,Course Lead,Le Minh Hoang,hoanglm26,Training Department,HCM26_CPL_JAVA_10,,,

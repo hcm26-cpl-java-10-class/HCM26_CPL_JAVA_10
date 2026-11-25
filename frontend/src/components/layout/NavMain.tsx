@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
 import { ChevronRight, type LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useState } from "react";
 
 import {
     Collapsible,
@@ -16,12 +16,74 @@ import {
     SidebarMenuSubItem
 } from "@/components/ui/sidebar";
 
-type NavItem = {
+export type NavItem = {
     title: string;
     url: string;
     icon: LucideIcon;
     isActive?: boolean;
+    children?: NavItem[];
+    disabled?: boolean;
 };
+
+function NavEntry({ item }: { item: NavItem }) {
+    if (item.children?.length) {
+        return (
+            <Collapsible asChild defaultOpen className="group/nav-entry">
+                <SidebarMenuSubItem>
+                    <CollapsibleTrigger asChild>
+                        <SidebarMenuSubButton asChild isActive={item.isActive}>
+                            <button type="button" className="w-full">
+                                <item.icon />
+                                <span>{item.title}</span>
+                                <ChevronRight className="ml-auto transition-transform group-data-[state=open]/nav-entry:rotate-90" />
+                            </button>
+                        </SidebarMenuSubButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                        <SidebarMenuSub>
+                            {item.children.map((child) => <NavEntry key={child.url || child.title} item={child} />)}
+                        </SidebarMenuSub>
+                    </CollapsibleContent>
+                </SidebarMenuSubItem>
+            </Collapsible>
+        );
+    }
+
+    return (
+        <SidebarMenuSubItem>
+            <SidebarMenuSubButton asChild isActive={item.isActive}
+                className="data-[active=true]:bg-blue-800 data-[active=true]:text-white [&[data-active=true]>svg]:text-white">
+                {item.disabled ? (
+                    <button type="button" disabled className="w-full" title="Coming soon">
+                        <item.icon /><span>{item.title}</span>
+                    </button>
+                ) : (
+                    <Link to={item.url} aria-current={item.isActive ? "page" : undefined}>
+                        <item.icon /><span>{item.title}</span>
+                    </Link>
+                )}
+            </SidebarMenuSubButton>
+        </SidebarMenuSubItem>
+    );
+}
+
+const GROUP_STATE_KEY = "sidebar_group_state";
+
+function readGroupState(): Record<string, boolean> {
+    try {
+        return JSON.parse(localStorage.getItem(GROUP_STATE_KEY) ?? "{}") ?? {};
+    } catch {
+        return {};
+    }
+}
+
+function writeGroupState(title: string, open: boolean) {
+    try {
+        localStorage.setItem(GROUP_STATE_KEY, JSON.stringify({ ...readGroupState(), [title]: open }));
+    } catch {
+        // storage unavailable; group state simply won't persist
+    }
+}
 
 export function NavMain({
     title,
@@ -33,27 +95,25 @@ export function NavMain({
     sidebarState: "expanded" | "collapsed";
 }) {
     const groupActive = items.some((i) => i.isActive);
-    const [isOpen, setIsOpen] = useState(true);
-    const activeItemRef = useRef<HTMLLIElement>(null);
+    const [open, setOpen] = useState(() => groupActive || (readGroupState()[title] ?? true));
 
-    // If an item in this group becomes active, make sure the collapsible is open
-    useEffect(() => {
-        if (groupActive) {
-            setIsOpen(true);
-        }
-    }, [groupActive]);
+    const [prevGroupActive, setPrevGroupActive] = useState(groupActive);
 
-    // On initial mount or when active item changes, ensure active item is visible in view
-    useEffect(() => {
-        if (groupActive && activeItemRef.current) {
-            activeItemRef.current.scrollIntoView({ block: "nearest", behavior: "auto" });
-        }
-    }, [groupActive]);
+    // Always reveal the group that contains the current page.
+    if (groupActive !== prevGroupActive) {
+        setPrevGroupActive(groupActive);
+        if (groupActive) setOpen(true);
+    }
+
+    const handleOpenChange = (next: boolean) => {
+        setOpen(next);
+        writeGroupState(title, next);
+    };
 
     if (sidebarState !== "expanded") {
         return (
             <>
-                {items.map((item) => (
+                {items.flatMap((item) => item.children?.length ? item.children : [item]).map((item) => (
                     <SidebarMenuItem
                         key={item.title}
                         className="flex justify-center"
@@ -73,7 +133,10 @@ export function NavMain({
                         "
                         >
                             <Link
-                                to={item.url}
+                                to={item.disabled ? "#" : item.url}
+                                aria-disabled={item.disabled || undefined}
+                                tabIndex={item.disabled ? -1 : undefined}
+                                onClick={item.disabled ? (event) => event.preventDefault() : undefined}
                                 className="
                                 flex
                                 h-9
@@ -96,8 +159,9 @@ export function NavMain({
     return (
         <Collapsible
             key={title}
-            open={isOpen}
-            onOpenChange={setIsOpen}
+            asChild
+            open={open}
+            onOpenChange={handleOpenChange}
             className="group/collapsible"
         >
             <SidebarMenuItem>
@@ -124,30 +188,7 @@ export function NavMain({
 
                 <CollapsibleContent>
                     <SidebarMenuSub>
-                        {items.map((subItem) => (
-                            <SidebarMenuSubItem
-                                key={subItem.title}
-                                ref={subItem.isActive ? activeItemRef : undefined}
-                            >
-                                <SidebarMenuSubButton
-                                    asChild
-                                    isActive={subItem.isActive}
-                                    className="
-                                        group
-                                        data-[active=true]:bg-blue-800
-                                        data-[active=true]:text-white
-                                    "
-                                >
-                                    <Link
-                                        to={subItem.url}
-                                        className="flex items-center gap-2"
-                                    >
-                                        <subItem.icon className="h-4 w-4 group-data-[active=true]:text-white" />
-                                        <span>{subItem.title}</span>
-                                    </Link>
-                                </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                        ))}
+                        {items.map((item) => <NavEntry key={item.url || item.title} item={item} />)}
                     </SidebarMenuSub>
                 </CollapsibleContent>
             </SidebarMenuItem>

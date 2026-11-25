@@ -15,6 +15,6 @@ import lombok.Setter;
 @AllArgsConstructor
 public class LocationFilter extends BaseFilter {
 
-    @FilterField(entityField = "parentId")
+    @FilterField(entityField = "parentLocation.id")
     Long parentLocationId;
 }

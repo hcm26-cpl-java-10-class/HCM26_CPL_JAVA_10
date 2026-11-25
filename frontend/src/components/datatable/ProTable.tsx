@@ -83,6 +83,8 @@ interface ProTableProps<TData = any> {
 
     hideActions?: boolean;
 
+    /** Ẩn toàn bộ toolbar (search, sort, filter, actions). */
+    hideToolbar?: boolean;
     /** Hide only the default Create action while retaining import/export actions */
     hideCreate?: boolean;
 
@@ -142,6 +144,7 @@ export function ProTable<TData = any>({
     autoPageSize = true,
     rowHeight = 49,
     hideActions = false,
+    hideToolbar = false,
     hideCreate = false,
     mode = "default",
     selectable = true,
@@ -301,20 +304,26 @@ export function ProTable<TData = any>({
           : (renderEmpty ?? <NoResult />);
 
     return (
-        <div className="grid gap-4 h-full font-inter grid-rows-[auto_1fr_auto]">
-            <Toolbar
-                table={table}
-                headerActions={headerActions}
-                extraHeaderActions={extraHeaderActions}
-                browseActions={browseActions}
-                viewMode={effectiveViewMode}
-                onViewModeChange={setViewMode}
-                showViewModeToggle={!isBrowseMode}
-                showActions={!isBrowseMode}
-                showCardColumnToggle={!isBrowseMode}
-                compact={compactToolbar}
-                hideCreate={hideCreate}
-            />
+        <div
+            className={`grid gap-4 h-full font-inter ${
+                hideToolbar ? "grid-rows-[1fr_auto]" : "grid-rows-[auto_1fr_auto]"
+            }`}
+        >
+            {!hideToolbar && (
+                <Toolbar
+                    table={table}
+                    headerActions={headerActions}
+                    extraHeaderActions={extraHeaderActions}
+                    browseActions={browseActions}
+                    viewMode={effectiveViewMode}
+                    onViewModeChange={setViewMode}
+                    showViewModeToggle={!isBrowseMode}
+                    showActions={!isBrowseMode}
+                    showCardColumnToggle={!isBrowseMode}
+                    compact={compactToolbar}
+                    hideCreate={hideCreate}
+                />
+            )}
 
             <div
                 ref={containerRef}

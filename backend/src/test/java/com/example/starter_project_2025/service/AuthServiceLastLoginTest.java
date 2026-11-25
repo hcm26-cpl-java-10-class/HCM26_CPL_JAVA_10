@@ -33,6 +33,9 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
+import com.example.starter_project_2025.system.auth.audit.AuthAuditService;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -76,9 +79,11 @@ public class AuthServiceLastLoginTest {
                 authMapper,
                 userRepository,
                 roleRepository,
+                mock(TenantRepository.class),
                 passwordEncoder,
                 ssoAccessPolicy,
-                mock(com.example.starter_project_2025.system.audit.AuditLogService.class)
+                mock(com.example.starter_project_2025.system.audit.AuditLogService.class),
+                mock(AuthAuditService.class)
         );
 
         Role adminRole = Role.builder()
@@ -109,9 +114,9 @@ public class AuthServiceLastLoginTest {
 
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(successfulAuth);
-        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(refreshTokenService.generateAccessToken(any())).thenReturn("mock-access-token");
-        when(refreshTokenService.createRefreshToken(any())).thenReturn("mock-refresh-token");
+
+        when(refreshTokenService.generateAccessToken(any(), eq("session-id"))).thenReturn("mock-access-token");
+        when(refreshTokenService.createSessionRefreshToken(eq(sampleUser), anyBoolean(), isNull(), isNull())).thenReturn(new RefreshTokenService.CreatedRefreshToken("mock-refresh-token", "session-id", true));
 
         assertNull(sampleUser.getLastLoginAt());
         assertNull(sampleUser.getLastLoginDevice());
@@ -123,7 +128,7 @@ public class AuthServiceLastLoginTest {
         assertEquals("Chrome ┬╖ Windows 11", sampleUser.getLastLoginDevice());
         assertTrue(sampleUser.getLastLoginAt().isBefore(Instant.now().plusSeconds(1)));
         verify(userRepository).save(sampleUser);
-        verify(refreshTokenService).revokeAllRefreshTokens(sampleUser.getId());
+        verify(refreshTokenService, never()).revokeAllRefreshTokens(sampleUser.getId());
     }
 
     @Test
@@ -146,9 +151,10 @@ public class AuthServiceLastLoginTest {
     @DisplayName("loginWithGoogle - Successful Google login should update and persist lastLoginAt and device")
     void loginWithGoogle_Success_ShouldUpdateLastLoginAt() {
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(sampleUser));
-        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(refreshTokenService.generateAccessToken(any())).thenReturn("mock-access-token");
-        when(refreshTokenService.createRefreshToken(any())).thenReturn("mock-refresh-token");
+        when(userRepository.save(sampleUser)).thenReturn(sampleUser);
+
+        when(refreshTokenService.generateAccessToken(any(), eq("session-id"))).thenReturn("mock-access-token");
+        when(refreshTokenService.createSessionRefreshToken(eq(sampleUser), anyBoolean(), isNull(), isNull())).thenReturn(new RefreshTokenService.CreatedRefreshToken("mock-refresh-token", "session-id", true));
 
         assertNull(sampleUser.getLastLoginAt());
         assertNull(sampleUser.getLastLoginDevice());
@@ -159,6 +165,6 @@ public class AuthServiceLastLoginTest {
         assertNotNull(sampleUser.getLastLoginAt());
         assertEquals("Safari ┬╖ macOS", sampleUser.getLastLoginDevice());
         verify(userRepository).save(sampleUser);
-        verify(refreshTokenService).revokeAllRefreshTokens(sampleUser.getId());
+        verify(refreshTokenService, never()).revokeAllRefreshTokens(sampleUser.getId());
     }
 }

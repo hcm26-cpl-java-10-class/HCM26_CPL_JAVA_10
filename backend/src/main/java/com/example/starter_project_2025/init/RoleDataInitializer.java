@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -25,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@StartupMutation
 public class RoleDataInitializer implements CommandLineRunner {
 
     private static final String ADMIN_ROLE = "ADMIN";
@@ -37,6 +40,10 @@ public class RoleDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        ensurePermission("COURSE_REPORT", "READ");
+        ensurePermission("STUDENT_ANALYTICS", "READ");
+        ensurePermission("PROJECT_ANALYTICS", "READ");
+        ensurePermission("PROJECT_ANALYTICS", "EXPORT");
         ensurePermission("PEO", "TEAM_ALLOCATE");
         ensurePermission("EXAM", "TAKE");
         ensurePermission("ARTIFACT", "DRAFT_WRITE");
@@ -47,6 +54,12 @@ public class RoleDataInitializer implements CommandLineRunner {
         ensurePermission("SCORE_APPEAL", "VIEW_OWN");
         ensurePermission("SCORE_APPEAL", "READ");
         ensurePermission("SCORE_APPEAL", "REVIEW");
+        // Tu danh gia / danh gia cheo (UFR-EXM-012)
+        ensurePermission("EXAM_REVIEW", "READ");
+        ensurePermission("EXAM_REVIEW", "CREATE");
+        ensurePermission("EXAM_REVIEW", "ASSIGN");
+        ensurePermission("EXAM_REVIEW", "VIEW_ALL");
+        List<Permission> allPermissions = permissionRepository.findAll();
 
         // The marker permission makes this mapping migration run once.
         boolean migrateAccess = !permissionRepository.existsByName("LEARNING_SELF_READ");
@@ -54,14 +67,8 @@ public class RoleDataInitializer implements CommandLineRunner {
         ensurePermission("LEARNER", "ACCESS");
         ensurePermission("USER_LEARNING", "READ");
         ensurePermission("LEARNING_SELF", "READ");
-        List<Permission> allPermissions = permissionRepository.findAll();
-
-        upsertRole(
-                ADMIN_ROLE,
-                "Administrator with full system access",
-                allPermissions.stream().filter(p -> !isPersonalLearning(p.getName())).toList()
-        );
-
+        upsertRole(ADMIN_ROLE, "Administrator with full system access",
+                permissionRepository.findAll().stream().filter(p -> !isPersonalLearning(p.getName())).toList());
         upsertRole(
                 STUDENT_ROLE,
                 "Student with access to books, courses and exams",
@@ -88,16 +95,21 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "STUDENT_SCORE_VIEW_OWN",
                         "SCORE_APPEAL_CREATE",
                         "SCORE_APPEAL_VIEW_OWN",
+                        "EXAM_REVIEW_READ",
+                        "EXAM_REVIEW_CREATE",
                         "WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
                         "MILESTONE_READ", "SPRINT_READ", "TASK_WRITE", "ARTIFACT_READ", "ARTIFACT_SUBMIT",
                         "ARTIFACT_DRAFT_WRITE",
-                        "FEEDBACK_READ", "WORKSPACE_ACTIVITY_READ"
+                        "FEEDBACK_READ", "WORKSPACE_ACTIVITY_READ",
+                        "PROJECT_ANALYTICS_READ", "PROJECT_ANALYTICS_EXPORT",
+                        "PROGRAM_READ",
+                        "SUBJECT_READ",
+                        "SESSION_READ"
                 )
         );
-
         upsertRole(
                 TEACHER_ROLE,
-                "Teacher with book, course, section, syllabus and exam management permissions",
+                "Teacher with book, course, section, syllabus, training and exam management permissions",
                 findPermissions(
                         "ADMIN_ACCESS",
                         "MENU_READ",
@@ -119,6 +131,9 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "INVITATION_DELETE",
                         "SCORE_APPEAL_READ",
                         "SCORE_APPEAL_REVIEW",
+                        "EXAM_REVIEW_READ",
+                        "EXAM_REVIEW_ASSIGN",
+                        "EXAM_REVIEW_VIEW_ALL",
                         "USER_READ",
                         "DEPARTMENT_READ",
                         "DEPARTMENT_UPDATE",
@@ -134,6 +149,7 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "LESSON_DELETE",
                         "CATEGORY_CREATE", "CATEGORY_READ", "CATEGORY_UPDATE", "CATEGORY_DELETE",
                         "COURSE_REPORT_READ",
+                        "STUDENT_ANALYTICS_READ",
                         "SECTION_CREATE", "SECTION_READ", "SECTION_UPDATE", "SECTION_DELETE",
                         "SYLLABUS_CREATE", "SYLLABUS_READ", "SYLLABUS_UPDATE", "SYLLABUS_DELETE",
                         "LESSON_QUESTION_READ", "LESSON_QUESTION_DELETE",
@@ -144,7 +160,10 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "WORKSPACE_READ", "WORKSPACE_CREATE", "WORKSPACE_MEMBER_READ", "TEAM_READ", "TEAM_UPDATE",
                         "MILESTONE_READ", "MILESTONE_WRITE", "SPRINT_READ", "SPRINT_WRITE",
                         "ARTIFACT_READ", "ARTIFACT_WRITE", "ARTIFACT_REVIEW", "FEEDBACK_READ", "FEEDBACK_WRITE",
-                        "WORKSPACE_ACTIVITY_READ"
+                        "WORKSPACE_ACTIVITY_READ", "PROJECT_ANALYTICS_READ", "PROJECT_ANALYTICS_EXPORT",
+                        "PROGRAM_READ", "PROGRAM_CREATE", "PROGRAM_UPDATE", "PROGRAM_DELETE",
+                        "SUBJECT_READ", "SUBJECT_CREATE", "SUBJECT_UPDATE", "SUBJECT_DELETE",
+                        "SESSION_CREATE", "SESSION_READ", "SESSION_UPDATE", "SESSION_DELETE"
                 )
         );
 
@@ -153,7 +172,8 @@ public class RoleDataInitializer implements CommandLineRunner {
             pm.getPermissions().addAll(findPermissions("WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
                     "MILESTONE_READ", "MILESTONE_WRITE", "SPRINT_READ", "SPRINT_WRITE",
                     "ARTIFACT_READ", "ARTIFACT_WRITE", "ARTIFACT_SUBMIT", "ARTIFACT_REVIEW",
-                    "FEEDBACK_READ", "FEEDBACK_WRITE", "WORKSPACE_ACTIVITY_READ"));
+                    "FEEDBACK_READ", "FEEDBACK_WRITE", "WORKSPACE_ACTIVITY_READ",
+                    "PROJECT_ANALYTICS_READ", "PROJECT_ANALYTICS_EXPORT"));
             roleRepository.save(pm);
         });
         ensureAllocationPermissionForRole(
@@ -165,6 +185,9 @@ public class RoleDataInitializer implements CommandLineRunner {
         grantWorkspaceLogAccess("MENTOR");
         grantWorkspaceLogAccess("PROGRAM_MANAGER");
         grantWorkspaceLogAccess("CLASS_ADMIN");
+        grantProjectAnalyticsAccess("MENTOR");
+        grantProjectAnalyticsAccess("PROGRAM_MANAGER");
+        grantProjectAnalyticsAccess("CLASS_ADMIN");
 
         if (migrateAccess) {
             for (Role role : roleRepository.findAll()) {
@@ -217,11 +240,6 @@ public class RoleDataInitializer implements CommandLineRunner {
         roleRepository.save(role);
     }
 
-    private boolean isPersonalLearning(String name) {
-        return name.equals("LEARNER_ACCESS") || name.equals("LEARNING_SELF_READ")
-                || name.startsWith("ENROLLMENT_") || name.equals("EXAM_TAKE");
-    }
-
     private List<Permission> findPermissions(String... permissionNames) {
         List<Permission> permissions = new ArrayList<>();
         for (String permissionName : permissionNames) {
@@ -248,12 +266,23 @@ public class RoleDataInitializer implements CommandLineRunner {
         role.getPermissions().add(classReadPermission);
         roleRepository.save(role);
     }
-
     private void grantWorkspaceLogAccess(String roleName) {
         roleRepository.findByName(roleName).ifPresent(role -> {
             role.getPermissions().addAll(findPermissions("WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
                     "MILESTONE_READ", "SPRINT_READ", "WORKSPACE_ACTIVITY_READ"));
             roleRepository.save(role);
         });
+    }
+
+    /** US-ANL-001 / US-ANL-010: mentor/PM roles may view and export project Analytics. */
+    private void grantProjectAnalyticsAccess(String roleName) {
+        roleRepository.findByName(roleName).ifPresent(role -> {
+            role.getPermissions().addAll(findPermissions("PROJECT_ANALYTICS_READ", "PROJECT_ANALYTICS_EXPORT"));
+            roleRepository.save(role);
+        });
+    }
+    private boolean isPersonalLearning(String name) {
+        return name.equals("LEARNER_ACCESS") || name.equals("LEARNING_SELF_READ")
+                || name.startsWith("ENROLLMENT_") || name.equals("EXAM_TAKE");
     }
 }

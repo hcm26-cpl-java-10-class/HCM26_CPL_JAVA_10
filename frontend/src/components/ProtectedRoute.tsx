@@ -34,6 +34,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/login" replace />;
   }
 
+  if (activeRole === "STUDENT" && (/^\/exams(?:\/|$)/.test(pathname) || /^\/management\/exam(?:\/|$)/.test(pathname))) {
+    return <Navigate to="/student/exams" replace />;
+  }
+
   if (!canAccessPath(pathname, activeRole, permissions)) {
     return <Navigate to="/unauthorized" replace />;
   }

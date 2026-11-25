@@ -1,15 +1,18 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Align existing Planning projects with the workspace activation rule. */
+/** Repair Planning projects of published teams; a pre-created workspace must not start a draft team's project. */
 @Component
 @Order(19)
 @RequiredArgsConstructor
+@StartupMutation
 public class WorkspaceProjectStatusInitializer implements CommandLineRunner {
     private final ProjectRepository projects;
 

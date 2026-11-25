@@ -146,9 +146,16 @@ public class MilestoneQueryService {
         validateListQuery(query, search);
         Long tenantId = teamRead.requireTenant(teamId);
         scopeService.requireTeamScope(null, teamId, tenantId);
+        Instant deadlineFrom = null;
+        Instant deadlineToExclusive = null;
+        if (query.deadlineFrom() != null || query.deadlineTo() != null) {
+            ZoneId zone = tenantSettingsPort.requireTimeZone(tenantId);
+            if (query.deadlineFrom() != null) deadlineFrom = query.deadlineFrom().atStartOfDay(zone).toInstant();
+            if (query.deadlineTo() != null) deadlineToExclusive = query.deadlineTo().plusDays(1).atStartOfDay(zone).toInstant();
+        }
         return mapper.toPageResponse(null, repository.findAll(
                 MilestoneSpecifications.matching(tenantId, null, teamId, search, query.status(),
-                        query.mandatory(), query.latePolicyType(), null, null, query.lifecycleStatus()).and(studentVisibility()),
+                        query.mandatory(), query.latePolicyType(), deadlineFrom, deadlineToExclusive, query.lifecycleStatus()).and(studentVisibility()),
                 PageRequest.of(query.page(), query.size(), buildSort(query.sort()))));
     }
 
@@ -174,11 +181,11 @@ public class MilestoneQueryService {
     @Transactional(readOnly = true)
     public MilestoneDetailResponse getTeamDetail(Long teamId, UUID milestoneId) {
         Long tenantId = teamRead.requireTenant(teamId);
-        var scope = scopeService.requireTeamScope(null, teamId, tenantId);
         var milestone = repository.findByIdAndTeamIdAndTenantId(milestoneId, teamId, tenantId)
                 .filter(Milestone::isActive)
                 .filter(m -> !isStudent() || m.getStatus() != MilestoneStatus.PLANNED)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+        var scope = scopeService.requireTeamScope(milestone.getProjectId(), teamId, tenantId);
         var rubric = milestone.getRubricSnapshotId() == null ? null : rubricPort.requireSnapshotForRead(milestone.getRubricSnapshotId(), scope.projectId(), tenantId);
         var reviewer = milestone.getReviewerId() == null ? null
                 : reviewerPort.requireReviewerForRead(milestone.getReviewerId(), scope.projectId(), tenantId);

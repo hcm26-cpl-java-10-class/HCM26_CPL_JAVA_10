@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.project.task.reminder;
 
+import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.domain.ProjectStatus;
 import com.example.starter_project_2025.system.project.team.ProjectRole;
@@ -8,7 +9,6 @@ import com.example.starter_project_2025.system.project.team.TeamMember;
 import com.example.starter_project_2025.system.project.team.TeamMemberRepository;
 import com.example.starter_project_2025.system.project.team.TeamRepository;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
-import com.example.starter_project_2025.system.project.*;
 import com.example.starter_project_2025.system.project.task.*;
 import com.example.starter_project_2025.system.project.task.alert.*;
 import com.example.starter_project_2025.system.rbac.user.*;

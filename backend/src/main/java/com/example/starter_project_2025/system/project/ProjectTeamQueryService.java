@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,7 +40,7 @@ public class ProjectTeamQueryService {
                 authentication, session.getTrainingClass());
 
         List<ProjectTeam> teams =
-                teamRepository.findAllByAllocationSession_IdOrderByIdAsc(sessionId);
+                teamRepository.findAllByAllocationSession_IdAndIsActiveTrueOrderByIdAsc(sessionId);
         Map<Long, List<ProjectMember>> assignmentsByTeam = new HashMap<>();
         for (ProjectTeam team : teams) {
             assignmentsByTeam.put(
@@ -79,10 +80,12 @@ public class ProjectTeamQueryService {
                         team.getProjectTemplateId(),
                         team.getProjectTemplateName(),
                         capacity == null ? null : capacity.minMembers(),
-                        capacity == null ? null : capacity.maxMembers(),
+                        capacity == null ? team.getMaxMembers() : capacity.maxMembers(),
                         memberIds.size(),
                         policy.allowMultiRole(),
-                        policy.quotas()
+                        policy.quotas(),
+                        ProjectTeamLeaderService.activeLeaderId(team, assignments),
+                        team.getProjectId()
                     );
                 })
                 .toList();
@@ -91,7 +94,7 @@ public class ProjectTeamQueryService {
     }
 
     private ProjectTemplateConstraints.Capacity readTemplateCapacity(ProjectTeam team) {
-        ProjectTemplate template = team.getProjectTemplate();
+        ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
         if (template == null) {
             return null;
         }
@@ -105,7 +108,7 @@ public class ProjectTeamQueryService {
     }
 
     private ProjectTemplateConstraints.RolePolicy readTemplatePolicy(ProjectTeam team) {
-        ProjectTemplate template = team.getProjectTemplate();
+        ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
         if (template == null) {
             return ProjectTemplateConstraints.RolePolicy.singleRoleDefault();
         }

@@ -1,8 +1,10 @@
+import { assessmentPreparationPath, learnerAssessmentReturnPath } from '@/utils/assessment-navigation';
 import {
     runCode,
     saveExamAnswers,
+    sendEntryPhoto,
     sendIntegrityEvents, // NEW (anti-cheat)
-    startOrResumeExam,
+    getCurrentExamAttempt,
     submitExamAttempt,
     type ExamAttemptAnswer,
     type SaveExamAnswerRequest,
@@ -13,12 +15,14 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Loader2, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { CodingWorkspace } from './components/CodingWorkspace';
 import { EssayPopup } from './components/EssayPopup';
 import { ExamIntegrityNotice, useExamIntegrity } from '@/hooks/useExamIntegrity'; // NEW (anti-cheat)
+import { FontSizeControl, useQuestionFontSize } from '@/hooks/useQuestionFontSize';
+import { SubmitConfirmOverlay } from '@/components/exam/SubmitConfirmOverlay';
 
 const attemptQueryKey = (examId: number) => ['student-exam-attempt', examId] as const;
 
@@ -96,7 +100,21 @@ export default function StudentExamTakingPage() {
     const { examId: rawExamId } = useParams();
     const examId = Number(rawExamId);
     const validExamId = Number.isSafeInteger(examId) && examId > 0;
+    const location = useLocation();
     const navigate = useNavigate();
+    const navigationState = location.state as { returnTo?: unknown } | null;
+    const returnTo = learnerAssessmentReturnPath(new URLSearchParams(location.search).get('returnTo') ?? navigationState?.returnTo);
+    const isCourseReturnPath = returnTo.startsWith('/enrollments/') || returnTo.startsWith('/courses/');
+    const returnLabel = returnTo === '/invitations'
+        ? 'Back to Invitations'
+        : isCourseReturnPath
+            ? 'Back to Course'
+            : 'Back to Exam Schedule';
+    const returnCrumbLabel = returnTo === '/invitations'
+        ? 'Invitations'
+        : isCourseReturnPath
+            ? 'Course Learning'
+            : 'Exam Schedule';
     const [searchParams, setSearchParams] = useSearchParams();
     const essayParam = Number(searchParams.get('essay'));
     const codeParam = Number(searchParams.get('code'));
@@ -123,7 +141,7 @@ export default function StudentExamTakingPage() {
 
     const attemptQuery = useQuery({
         queryKey: validExamId ? attemptQueryKey(examId) : ['student-exam-attempt', 'invalid'],
-        queryFn: () => startOrResumeExam(examId),
+        queryFn: () => getCurrentExamAttempt(examId),
         enabled: validExamId,
         retry: false,
         refetchOnWindowFocus: false,
@@ -140,6 +158,10 @@ export default function StudentExamTakingPage() {
             writeDrafts(attempt.id, {});
             clearAllPendingSaves();
             queryClient.invalidateQueries({ queryKey: ["my-exam-scores"] });
+            queryClient.invalidateQueries({ queryKey: ["exam-preparation", examId] });
+            queryClient.invalidateQueries({ queryKey: ["student-exam-attempts"] });
+            queryClient.invalidateQueries({ queryKey: ["lesson-progress"] });
+            queryClient.invalidateQueries({ queryKey: ["course-exams"] });
             if (attempt.status === 'EXPIRED') {
                 toast.warning('Time is up! Your exam has been automatically submitted.');
             } else {
@@ -160,8 +182,15 @@ export default function StudentExamTakingPage() {
         config: attempt?.integrity,
         active: attempt?.status === 'IN_PROGRESS',
         send: sendIntegrityEvents,
+        sendEntryPhoto,
+        onEntryPhotoSaved: () => void attemptQuery.refetch(),
+        supervisorStreaming: true,
+
     });
 
+    const questionFont = useQuestionFontSize();
+    const [confirmText, setConfirmText] = useState<string | null>(null);
+    const skipConfirmRef = useRef(false);
     const [flagged, setFlagged] = useState<Set<number>>(new Set());
     const [activeQuestionId, setActiveQuestionId] = useState<number | null>(null);
     const flagKey = attempt ? `exam-flagged-${attempt.id}` : null;
@@ -354,18 +383,23 @@ export default function StudentExamTakingPage() {
             return;
         }
 
-        if (
-            requireConfirmation &&
-            !window.confirm(
+        if (requireConfirmation && !skipConfirmRef.current) {
+            // In-page dialog: a native confirm() would take the browser out of fullscreen.
+            const unsaved = attempt.questions.filter((q) => q.type === 'ESSAY' && !answersRef.current[q.id]?.saved).length;
+            const unanswered = attempt.questions.filter((q) => {
+                const a = answersRef.current[q.id];
+                return q.type === 'ESSAY' || q.type === 'CODING'
+                    ? (a?.textAnswer ?? '').trim().length === 0
+                    : (a?.selectedOptionIds.length ?? 0) === 0;
+            }).length;
+            setConfirmText(
                 'Are you sure you want to submit your exam? Please double-check your answers before proceeding.' +
-                (() => {
-                    const unsaved = attempt.questions.filter((q) => q.type === 'ESSAY' && !answersRef.current[q.id]?.saved).length;
-                    return unsaved > 0 ? `\n\nThere are ${unsaved} essay question(s) that have not been saved (unsaved content will still be submitted).` : '';
-                })()
-            )
-        ) {
+                (unanswered > 0 ? `\n\nYou have ${unanswered} unanswered question(s) out of ${attempt.questions.length}.` : '') +
+                (unsaved > 0 ? `\n\nThere are ${unsaved} essay question(s) that have not been saved (unsaved content will still be submitted).` : ''),
+            );
             return;
         }
+        skipConfirmRef.current = false;
 
         submitStartedRef.current = true;
 
@@ -482,9 +516,11 @@ export default function StudentExamTakingPage() {
         scheduleAnswerSave(questionId, next);
     };
 
-    const openEssay = (questionId: number) => setSearchParams({ essay: String(questionId) });
-    const openCode = (questionId: number) => setSearchParams({ code: String(questionId) });
-    const closeEssay = () => setSearchParams({});
+    const openEssay = (questionId: number) =>
+        setSearchParams({ returnTo, essay: String(questionId) }, { state: { ...location.state, returnTo } });
+    const openCode = (questionId: number) =>
+        setSearchParams({ returnTo, code: String(questionId) }, { state: { ...location.state, returnTo } });
+    const closeEssay = () => setSearchParams({ returnTo }, { state: { ...location.state, returnTo } });
 
     const hasText = (questionId: number) => (answers[questionId]?.textAnswer ?? '').trim().length > 0;
     const isAnswered = (question: { id: number; type: string }) =>
@@ -553,7 +589,8 @@ export default function StudentExamTakingPage() {
             <MainLayout>
                 <div role="alert" className="space-y-4 rounded-lg border border-destructive p-6 text-destructive">
                     <p>{getStartErrorMessage(attemptQuery.error)}</p>
-                    <Button variant="outline" onClick={() => navigate('/invitations')}>Back to Invitations</Button>
+                    <Button variant="outline" onClick={() => navigate(assessmentPreparationPath(examId, returnTo))}>Assessment overview</Button>
+                    <Button variant="outline" onClick={() => navigate(returnTo)}>{returnLabel}</Button>
                 </div>
             </MainLayout>
         );
@@ -577,6 +614,18 @@ export default function StudentExamTakingPage() {
             {formatCountdown(secondsRemaining)}
         </div>
     );
+
+    const confirmOverlay = confirmText ? (
+        <SubmitConfirmOverlay
+            message={confirmText}
+            onCancel={() => setConfirmText(null)}
+            onConfirm={() => {
+                setConfirmText(null);
+                skipConfirmRef.current = true;
+                void submitCurrentAnswers(true);
+            }}
+        />
+    ) : null;
 
     const timeUpOverlay = isTimeUp ? (
         <div
@@ -618,16 +667,16 @@ export default function StudentExamTakingPage() {
     };
 
     const pinnedBar = (
-        <div className="pointer-events-none sticky top-0 z-30 flex items-start justify-between gap-4 py-3">
+        <div className="pointer-events-none sticky top-3 z-30 flex h-0 items-start justify-between gap-4">
             {timerBox}
-            <div className="pointer-events-auto flex w-[15.5rem] shrink-0 flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <div className="pointer-events-auto flex w-[11.5rem] shrink-0 flex-col gap-2 rounded-xl border bg-card p-2.5 shadow-sm">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
                     <span className="w-full text-sm font-semibold text-foreground">Questions Navigation</span>
                     <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-black ring-1 ring-border" /> Unanswered</span>
                     <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-green-600" /> Answered</span>
                     <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-yellow-400" /> Flagged</span>
                 </div>
-                <div className="grid max-h-[8.5rem] grid-cols-5 justify-items-center gap-2 overflow-y-auto p-1">
+                <div className="grid max-h-[8.5rem] grid-cols-5 justify-items-center gap-1.5 overflow-y-auto p-0.5">
                     {attempt.questions.map((question, index) => {
                         const isFlagged = flagged.has(question.id);
                         const color = isFlagged
@@ -644,12 +693,15 @@ export default function StudentExamTakingPage() {
                                 aria-label={`Question ${index + 1}: ${isAnswered(question) ? 'Answered' : 'Unanswered'}${isFlagged ? ', Flagged' : ''}`}
                                 aria-current={activeId === question.id ? 'true' : undefined}
                                 onClick={() => jumpToQuestion(question)}
-                                className={`flex h-8 w-8 items-center justify-center rounded-sm text-xs font-medium ${color} ${ring}`}
+                                className={`flex h-7 w-7 items-center justify-center rounded-sm text-xs font-medium ${color} ${ring}`}
                             >
                                 {index + 1}
                             </button>
                         );
                     })}
+                </div>
+                <div className="border-t pt-2">
+                    <FontSizeControl font={questionFont} />
                 </div>
             </div>
         </div>
@@ -663,8 +715,13 @@ export default function StudentExamTakingPage() {
 
     if (!isFinished && currentCode) {
         return (
-            <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }}>
+            <MainLayout
+                pathName={{ exams: returnCrumbLabel, take: 'Take Exam' }}
+                pathLinks={{ exams: returnTo }}
+                focusMode
+            >
                 {timeUpOverlay}
+{confirmOverlay}
                 <CodingWorkspace
                     key={currentCode.id}
                     question={currentCode}
@@ -686,8 +743,13 @@ export default function StudentExamTakingPage() {
     }
 
     return (
-        <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }}>
+        <MainLayout
+            pathName={{ exams: returnCrumbLabel, take: 'Take Exam' }}
+            pathLinks={{ exams: returnTo }}
+            focusMode={!isFinished}
+        >
             {timeUpOverlay}
+{confirmOverlay}
             <main className="flex w-full flex-col gap-5">
                 {!isFinished && pinnedBar}
                 {!isFinished && <ExamIntegrityNotice config={attempt.integrity} state={integrity} />}
@@ -703,6 +765,8 @@ export default function StudentExamTakingPage() {
                         onClose={closeEssay}
                     />
                 )}
+                {/* Timer + Questions Navigation noi tren noi dung; chua cho deu 2 ben de cau hoi luon nam giua. */}
+                <div className="w-full lg:px-[12.5rem]">
                 <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
                     <header className="flex flex-wrap items-start justify-between gap-4 border-b pb-4">
                         <div>
@@ -765,8 +829,9 @@ export default function StudentExamTakingPage() {
                                     Final score will be updated once grading is finished: coding answers are graded automatically within a few minutes, and essay answers are graded by your teacher.
                                 </p>
                             )}
-                            <Button className="mt-5" variant="outline" onClick={() => navigate('/invitations')}>
-                                Back to Invitations
+                            <Button className="mt-5 mr-2" variant="outline" onClick={() => navigate(assessmentPreparationPath(examId, returnTo))}>Assessment overview</Button>
+                            <Button className="mt-5" variant="outline" onClick={() => navigate(returnTo)}>
+                                {returnLabel}
                             </Button>
                         </section>
                     ) : (
@@ -850,7 +915,7 @@ export default function StudentExamTakingPage() {
                                             {starButton(question.id, index + 1)}
                                         </div>
 
-                                        <p className="mt-3 whitespace-pre-wrap">{question.content}</p>
+                                        <p className="mt-3 whitespace-pre-wrap" style={questionFont.style}>{question.content}</p>
 
                                         {question.imageUrl?.trim() && (
                                             <div className="mt-3">
@@ -913,7 +978,7 @@ export default function StudentExamTakingPage() {
                                                                 className="mt-1"
                                                             />
                                                             <div className="flex flex-col gap-2">
-                                                                <span>{option.content}</span>
+                                                                <span style={questionFont.style}>{option.content}</span>
                                                                 {option.imageUrl?.trim() && (
                                                                     <img
                                                                         src={option.imageUrl}
@@ -937,6 +1002,7 @@ export default function StudentExamTakingPage() {
                             </footer>
                         </>
                     )}
+                </div>
                 </div>
             </main>
         </MainLayout>

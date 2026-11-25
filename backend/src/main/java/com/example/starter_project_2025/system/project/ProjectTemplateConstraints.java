@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -43,6 +44,13 @@ public final class ProjectTemplateConstraints {
     public static final int DEFAULT_MIN_MEMBERS = 1;
 
     private ProjectTemplateConstraints() {
+    }
+
+    public static ProjectTemplate templateFor(ProjectTeam team) {
+        ProjectTemplate original = team.getProjectTemplate();
+        if (original == null || team.getAssignedConstraintsJson() == null) return original;
+        return ProjectTemplate.builder().id(original.getId()).code(original.getCode())
+                .name(team.getProjectTemplateName()).constraintsJson(team.getAssignedConstraintsJson()).build();
     }
 
     public record Capacity(int minMembers, int maxMembers) {

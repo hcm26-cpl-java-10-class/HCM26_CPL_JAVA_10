@@ -12,6 +12,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -49,6 +50,7 @@ public class Role extends BaseEntity {
 
     @Builder.Default
     @Column(name = "is_system", nullable = false)
+    @ColumnDefault("false")
     @ExportField(name = "Is System")
     Boolean isSystem = false;
 

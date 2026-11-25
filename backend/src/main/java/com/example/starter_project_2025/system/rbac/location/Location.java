@@ -1,4 +1,5 @@
 package com.example.starter_project_2025.system.rbac.location;
+import com.example.starter_project_2025.init.annotation.ResourceMenu;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportEntity;
@@ -11,38 +12,81 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
+
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 @Entity
 @Table(name = "locations")
 @Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
 @ImportEntity("location")
 @ExportEntity(fileName = "locations", sheetName = "Locations")
 @ResourcePermission("LOCATION")
+@ResourceMenu(
+        title = "Location",
+        group = "RBAC Management",
+        icon = "location",
+        url = "/locations",
+        order = 5,
+        permission = "LOCATION_READ"
+)
 public class Location extends BaseEntity {
 
     @Column(nullable = false, unique = true)
     @ImportField(name = "Code", required = true)
     @ExportField(name = "Code")
-    String code;
+    private String code;
 
     @Column(nullable = false)
     @ImportField(name = "Name", required = true)
     @ExportField(name = "Name")
-    String name;
+    private String name;
 
-    @Column(name = "parent_id")
-    Long parentId;
+    @Column(name = "description")
+    @ImportField(name = "Description")
+    @ExportField(name = "Description")
+    private String description;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    @ExportField(name = "Status")
+    private LocationStatus status = LocationStatus.ACTIVE;
+
+    @Transient
+    @ImportField(name = "Parent Code")
+    private String parentCode;
+
+    @Transient
+    @ImportField(name = "Assigned User Emails")
+    private String assignedUserEmails;
+
+    // --- Bổ sung phục vụ Mô hình Cây (Tree Structure) ---
+
+    @Column(name = "path", length = 500)
+    @ExportField(name = "Path")
+    private String path;
 
     @Builder.Default
-    @Column(nullable = false)
-    @ExportField(name = "Status")
-    String status = "ACTIVE";
+    @Column(name = "level")
+    private Integer level = 0;
+
+    // --- Quan hệ Cha - Con (Self-Referencing) ---
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id")
+    private Location parentLocation;
+
+    @Builder.Default
+    @OneToMany(mappedBy = "parentLocation", cascade = CascadeType.ALL)
+    private Set<Location> children = new HashSet<>();
+
+    // --- Many-To-Many Relationship ---
 
     @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)
@@ -51,5 +95,111 @@ public class Location extends BaseEntity {
             joinColumns = @JoinColumn(name = "location_id"),
             inverseJoinColumns = @JoinColumn(name = "user_id")
     )
-    Set<User> users = new HashSet<>();
+    private Set<User> users = new HashSet<>();
+
+    // =========================================================================
+    // Domain Methods (Hành vi OOP cho mô hình Cây)
+    // =========================================================================
+
+    public void updateInfo(String name, String description) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Tên vị trí không được để trống");
+        }
+        this.name = name;
+        this.description = description;
+        this.recalculatePath();
+    }
+
+    public void setParentLocation(Location newParent) {
+        if (newParent != null
+                && this.getId() != null
+                && Objects.equals(this.getId(), newParent.getId())) {
+            throw new IllegalArgumentException("Không thể chọn chính vị trí này làm vị trí cha");
+        }
+
+        if (this.parentLocation != null) {
+            this.parentLocation.children.remove(this);
+        }
+
+        this.parentLocation = newParent;
+
+        if (newParent != null) {
+            newParent.children.add(this);
+            int parentLevel = (newParent.getLevel() != null) ? newParent.getLevel() : 0;
+            this.level = parentLevel + 1;
+        } else {
+            this.level = 0;
+        }
+
+        this.recalculatePath();
+    }
+
+    public void recalculatePath() {
+        if (this.parentLocation == null) {
+            this.path = this.name;
+        } else {
+            String parentPath = (this.parentLocation.getPath() != null && !this.parentLocation.getPath().isBlank())
+                    ? this.parentLocation.getPath()
+                    : this.parentLocation.getName();
+            this.path = parentPath + " / " + this.name;
+        }
+
+        if (this.children != null) {
+            for (Location child : this.children) {
+                child.recalculatePath();
+            }
+        }
+    }
+
+    public Set<Location> getChildren() {
+        return Collections.unmodifiableSet(this.children);
+    }
+
+    public Set<User> getUsers() {
+        return Collections.unmodifiableSet(this.users);
+    }
+
+    public void addUser(User user) {
+        if (user != null) {
+            this.users.add(user);
+        }
+    }
+
+    public void removeUser(User user) {
+        if (user != null) {
+            this.users.remove(user);
+        }
+    }
+
+    public void deactivate() {
+        this.status = LocationStatus.INACTIVE;
+    }
+
+    public void activate() {
+        this.status = LocationStatus.ACTIVE;
+    }
+
+    public void changeStatus(LocationStatus newStatus) {
+        if (newStatus == null) {
+            return;
+        }
+        if (newStatus == LocationStatus.INACTIVE) {
+            deactivate();
+        } else {
+            activate();
+        }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Location location = (Location) o;
+        return code != null && Objects.equals(code, location.getCode());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(code);
+    }
 }

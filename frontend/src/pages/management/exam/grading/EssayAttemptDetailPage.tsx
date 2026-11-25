@@ -65,6 +65,9 @@ export default function EssayAttemptDetailPage() {
     const [aiProposals, setAiProposals] = useState<Record<number, AiQuestionProposal>>({});
     const [aiModelUsed, setAiModelUsed] = useState<string | null>(null);
     const [isOverwriteModalOpen, setIsOverwriteModalOpen] = useState(false);
+    const [isRevisionModalOpen, setIsRevisionModalOpen] = useState(false);
+    const [revisionNote, setRevisionNote] = useState("");
+    const [revisionDeadline, setRevisionDeadline] = useState("");
     const [selectedTab, setSelectedTab] = useState<"essay" | "coding" | null>(null);
 
     const detailQuery = useQuery({
@@ -128,6 +131,25 @@ export default function EssayAttemptDetailPage() {
         },
     });
 
+    const returnForRevisionMutation = useMutation({
+        mutationFn: () =>
+            examApi.returnForRevision(numericExamId, numericAttemptId, {
+                note: revisionNote.trim(),
+                deadline: revisionDeadline ? new Date(revisionDeadline).toISOString() : null,
+            }),
+        onSuccess: () => {
+            setIsRevisionModalOpen(false);
+            setRevisionNote("");
+            setRevisionDeadline("");
+            void queryClient.invalidateQueries({ queryKey: ["essay-attempt", numericExamId, numericAttemptId] });
+            void queryClient.invalidateQueries({ queryKey: ["essay-attempts", numericExamId] });
+            toast.success("Attempt returned to student for revision.");
+        },
+        onError: (error) => {
+            toast.error(getErrorMessage(error, "Failed to return attempt for revision."));
+        },
+    });
+
     const handleApplyAiProposal = (questionId: number) => {
         const proposal = aiProposals[questionId];
         if (!proposal) return;
@@ -165,20 +187,20 @@ export default function EssayAttemptDetailPage() {
         if (!detail?.essays?.length) return null;
 
         const gradesList = [];
-        for (const essay of detail.essays) {
+        for (const [essayIndex, essay] of detail.essays.entries()) {
             const draft = draftGrades[essay.questionId];
             if (!draft || draft.score.trim() === "") {
-                toast.error(`Please assign a score for Essay Question ${essay.displayOrder}.`);
+                toast.error(`Please assign a score for Essay Question ${essayIndex + 1}.`);
                 return null;
             }
             const scoreNum = Number(draft.score);
             if (isNaN(scoreNum) || scoreNum < 0) {
-                toast.error(`Score for Essay Question ${essay.displayOrder} must be a non-negative number.`);
+                toast.error(`Score for Essay Question ${essayIndex + 1} must be a non-negative number.`);
                 return null;
             }
             if (scoreNum > (essay.maxScore ?? essay.points)) {
                 toast.error(
-                    `Score for Essay Question ${essay.displayOrder} cannot exceed maximum points (${formatScore(
+                    `Score for Essay Question ${essayIndex + 1} cannot exceed maximum points (${formatScore(
                         essay.maxScore ?? essay.points
                     )}).`
                 );
@@ -218,7 +240,7 @@ export default function EssayAttemptDetailPage() {
         selectedTab ?? (detail && detail.essays.length === 0 && codings.length > 0 ? "coding" : "essay");
 
     return (
-        <MainLayout pathName={{ exams: "Exam Management", grading: "Essay Grading", detail: "Submission Review" }}>
+        <MainLayout pathName={{ exams: "Assessment Management", grading: "Essay Grading", detail: "Submission Review" }}>
             <section className="mx-auto flex w-full max-w-4xl flex-col gap-6 pb-12">
                 {/* Top Action & Navigation Bar */}
                 <div className="flex flex-wrap items-center justify-between gap-4">
@@ -239,6 +261,13 @@ export default function EssayAttemptDetailPage() {
                                 Apply All AI Suggestions
                             </Button>
                         )}
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsRevisionModalOpen(true)}
+                            disabled={saveGradeMutation.isPending || returnForRevisionMutation.isPending}
+                        >
+                            Return for Revision
+                        </Button>
                         <Button
                             variant="outline"
                             className="border-purple-300 hover:border-purple-400 hover:bg-purple-50/50 dark:border-purple-800"
@@ -268,7 +297,7 @@ export default function EssayAttemptDetailPage() {
                         <AlertTriangle className="size-5 shrink-0 mt-0.5" />
                         <div>
                             <h4 className="font-semibold text-sm">Failed to load submission</h4>
-                            <p className="text-xs mt-1">It may not have been submitted or does not belong to this exam.</p>
+                            <p className="text-xs mt-1">It may not have been submitted or does not belong to this assessment.</p>
                         </div>
                     </div>
                 )}
@@ -436,7 +465,7 @@ export default function EssayAttemptDetailPage() {
                         {tab === "essay" && detail.essays.length === 0 && (
                             <div className="rounded-xl border bg-card p-12 text-center text-muted-foreground">
                                 <FileText className="mx-auto size-8 text-muted-foreground/50 mb-2" />
-                                <p className="font-medium text-sm">This exam attempt contains no essay questions.</p>
+                                <p className="font-medium text-sm">This assessment attempt contains no essay questions.</p>
                             </div>
                         )}
 
@@ -778,7 +807,7 @@ export default function EssayAttemptDetailPage() {
                             ) : (
                                 <Save className="mr-1.5 size-4" />
                             )}
-                            {saveGradeMutation.isPending ? "Saving..." : "Confirm & Save Official Grade"}
+                            {saveGradeMutation.isPending ? "Saving..." : "Confirm & Save"}
                         </Button>
                     </div>
                 )}
@@ -792,7 +821,7 @@ export default function EssayAttemptDetailPage() {
                                 Overwrite Confirmed Grade?
                             </DialogTitle>
                             <DialogDescription>
-                                This exam attempt has already been graded with an official final score of{" "}
+                                This assessment attempt has already been graded with an official final score of{" "}
                                 <span className="font-semibold text-foreground">
                                     {detail?.finalScore != null ? `${formatScore(detail.finalScore)} pts` : "Graded"}
                                 </span>
@@ -813,6 +842,58 @@ export default function EssayAttemptDetailPage() {
                                 onClick={handleConfirmOverwrite}
                             >
                                 {saveGradeMutation.isPending ? "Overwriting..." : "Overwrite & Save Grade"}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Return for Revision Dialog */}
+                <Dialog open={isRevisionModalOpen} onOpenChange={setIsRevisionModalOpen}>
+                    <DialogContent className="sm:max-w-lg">
+                        <DialogHeader>
+                            <DialogTitle>Return Attempt for Revision</DialogTitle>
+                            <DialogDescription>
+                                Provide clear feedback so the student can revise and resubmit before the deadline (default: 24 hours).
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-2">
+                            <div className="space-y-1.5">
+                                <label htmlFor="revision-note" className="text-sm font-medium">
+                                    Revision Instructions *
+                                </label>
+                                <Textarea
+                                    id="revision-note"
+                                    rows={4}
+                                    placeholder="Explain what needs to be improved or clarified..."
+                                    value={revisionNote}
+                                    onChange={(e) => setRevisionNote(e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label htmlFor="revision-deadline" className="text-sm font-medium">
+                                    Resubmission Deadline (optional)
+                                </label>
+                                <Input
+                                    id="revision-deadline"
+                                    type="datetime-local"
+                                    value={revisionDeadline}
+                                    onChange={(e) => setRevisionDeadline(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter className="gap-2 sm:gap-0">
+                            <Button
+                                variant="outline"
+                                disabled={returnForRevisionMutation.isPending}
+                                onClick={() => setIsRevisionModalOpen(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                disabled={returnForRevisionMutation.isPending || !revisionNote.trim()}
+                                onClick={() => returnForRevisionMutation.mutate()}
+                            >
+                                {returnForRevisionMutation.isPending ? "Returning..." : "Confirm Return"}
                             </Button>
                         </DialogFooter>
                     </DialogContent>

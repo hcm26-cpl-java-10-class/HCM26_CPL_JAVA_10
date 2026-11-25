@@ -47,6 +47,10 @@ public class CourseDTO extends BaseDTO {
     String syllabusCode;
     String syllabusName;
 
+    @com.fasterxml.jackson.annotation.JsonProperty(
+            access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    CourseType courseType;
+
     CourseStatus status;
 
     Boolean isFree;

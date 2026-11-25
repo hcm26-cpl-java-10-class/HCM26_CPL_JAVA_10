@@ -1,11 +1,16 @@
 package com.example.starter_project_2025.system.project.task.alert;
 
+import com.example.starter_project_2025.system.project.ProjectMember;
+import com.example.starter_project_2025.system.project.ProjectMemberRepository;
+import com.example.starter_project_2025.system.project.ProjectRepository;
+import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.ProjectTeamRepository;
+import com.example.starter_project_2025.system.project.ProjectTeamStatus;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.team.TeamMemberRepository;
 import com.example.starter_project_2025.system.project.team.TeamRepository;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
 
-import com.example.starter_project_2025.system.project.*;
 import com.example.starter_project_2025.system.project.task.Task;
 import com.example.starter_project_2025.system.project.trainingclass.*;
 import com.example.starter_project_2025.system.rbac.user.*;
@@ -34,7 +39,8 @@ class TaskAlertProjectBridgeTest {
         var targetClass = new ClassMember(); targetClass.setId(50L); targetClass.setUser(target); targetClass.setTrainingClass(training); targetClass.setStatus(ClassMemberStatus.ACTIVE);
         var actorClass = new ClassMember(); actorClass.setId(51L); actorClass.setUser(actor); actorClass.setTrainingClass(training); actorClass.setStatus(ClassMemberStatus.ACTIVE);
         var member = new ProjectMember(); member.setId(60L); member.setTeam(team); member.setClassMember(targetClass);
-        var leader = new ProjectMember(); leader.setId(61L); leader.setTeam(team); leader.setClassMember(actorClass); leader.setRole("TEAM_LEADER");
+        var leader = new ProjectMember(); leader.setId(61L); leader.setTeam(team); leader.setClassMember(actorClass); leader.setRole("DEV");
+        team.setLeaderMemberId(actorClass.getId());
         var memberLink = new TaskAlertData.MemberLink(); memberLink.setId(memberAlias); memberLink.setProjectId(projectAlias);
         memberLink.setSource(TaskAlertData.MemberSource.PROJECT_MEMBER); memberLink.setSourceMemberId(60L);
         when(memberLinks.findById(memberAlias)).thenReturn(Optional.of(memberLink));
@@ -43,16 +49,18 @@ class TaskAlertProjectBridgeTest {
         Task task = Task.builder().projectId(projectAlias).assigneeProjectMemberId(memberAlias).build();
         assertThat(bridge.findMemberUserId(projectAlias, memberAlias)).contains(21L);
         assertThat(bridge.canSend(actor, task)).isTrue();
-        leader.setRole("DEV");
+        team.setLeaderMemberId(null);
+        leader.setRole("PM");
         assertThat(bridge.canSend(actor, task)).isFalse();
-        leader.setRole("TEAM_LEADER");
+        team.setLeaderMemberId(actorClass.getId());
+        leader.setRole("DEV");
         targetClass.setStatus(ClassMemberStatus.INACTIVE);
         assertThat(bridge.findMemberUserId(projectAlias, memberAlias)).isEmpty();
         // The current leader retains scope, so send() can return a batch conflict
         // for the inactive recipient rather than misreporting a permission failure.
         assertThat(bridge.canRead(actor, task)).isTrue();
         assertThat(bridge.canSend(actor, task)).isTrue();
-        leader.setRole("DEV");
+        team.setLeaderMemberId(null);
         assertThat(bridge.canSend(actor, task)).isFalse();
     }
 }

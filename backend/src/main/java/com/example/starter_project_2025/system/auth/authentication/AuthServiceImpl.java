@@ -1,18 +1,25 @@
 package com.example.starter_project_2025.system.auth.authentication;
 
 import com.example.starter_project_2025.exception.BadRequestException;
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserDetailsServiceImpl;
 import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.system.auth.audit.AuthAuditAction;
+import com.example.starter_project_2025.system.auth.audit.AuthAuditService;
+import com.example.starter_project_2025.system.auth.authentication.dto.request.ChangePasswordRequest;
 import com.example.starter_project_2025.system.auth.authentication.dto.request.LoginRequest;
 import com.example.starter_project_2025.system.auth.authentication.dto.request.RegisterRequest;
 import com.example.starter_project_2025.system.auth.authentication.dto.request.ResetPasswordRequest;
 import com.example.starter_project_2025.system.auth.authentication.dto.request.TokenRequest;
 import com.example.starter_project_2025.system.auth.authentication.dto.response.AuthenticationResponse;
+import com.example.starter_project_2025.system.auth.authentication.dto.response.UserSessionDTO;
 import com.example.starter_project_2025.system.auth.token.onetime.OneTimeToken;
 import com.example.starter_project_2025.system.auth.token.onetime.OneTimeTokenService;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshToken;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import com.example.starter_project_2025.system.auth.verify.VerificationService;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import com.example.starter_project_2025.system.auth.util.PasswordPolicy;
@@ -22,7 +29,11 @@ import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.NonFinal;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -34,6 +45,7 @@ import java.time.Instant;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -57,50 +69,53 @@ public class AuthServiceImpl implements AuthService {
     AuthMapper authMapper;
     UserRepository userRepository;
     RoleRepository roleRepository;
+    TenantRepository tenantRepository;
     PasswordEncoder passwordEncoder;
     SsoAccessPolicy ssoAccessPolicy;
     AuditLogService auditLogService;
+    AuthAuditService authAuditService;
 
-
+    @NonFinal
+    @Value("${app.auth.sso.jit-provisioning-enabled:true}")
+    boolean ssoJitProvisioningEnabled;
 
     @Override
     @Transactional
     public AuthenticationResponse login(LoginRequest request) {
-
-return login(request, request != null ? request.device() : null);
+        return login(request, null, null);
     }
 
     @Override
     @Transactional
     public AuthenticationResponse login(LoginRequest request, String device) {
-        String email = request.email();
+        return login(request, device, null, null);
+    }
 
+    @Override
+    @Transactional
+    public AuthenticationResponse login(LoginRequest request, String ipAddress, String userAgent) {
+        return login(request, request.device(), ipAddress, userAgent);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse login(LoginRequest request, String device, String ipAddress, String userAgent) {
+        String normalizedEmail = request.email() == null ? "" : request.email().trim();
         Authentication authentication;
-
         try {
             authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                            email,
-                            request.password()
-                    )
+                    new UsernamePasswordAuthenticationToken(normalizedEmail, request.password())
             );
         } catch (AuthenticationException ex) {
-            auditLogService.logLoginFailure(
-                    email,
-                    UUID.randomUUID().toString()
-            );
-
+            authAuditService.record(null, null, normalizedEmail, null,
+                    AuthAuditAction.LOGIN_FAILED, ipAddress, userAgent, ex.getClass().getSimpleName());
+            auditLogService.logLoginFailure(normalizedEmail, UUID.randomUUID().toString());
             throw ex;
         }
 
         UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
         User user = principal.getUser();
-        user.setLastLoginAt(Instant.now());
-        if (StringUtils.hasText(device)) {
-            user.setLastLoginDevice(device.trim());
-        }
-        user = userRepository.save(user);
-
+        ensureUserAndTenantActive(user, ipAddress, userAgent, AuthAuditAction.LOGIN_FAILED);
         // Temporary password (for example from an Excel import): the password was right, but the account
         // can only be used after its owner chooses their own. No access or refresh token is issued, so the
         // temporary password cannot be used to call the API; the user only gets a short-lived token to set
@@ -115,35 +130,30 @@ return login(request, request != null ? request.device() : null);
                     .setupToken(setupToken)
                     .build();
         }
+        if (StringUtils.hasText(device)) {
+            user.setLastLoginDevice(device.trim());
+        }
 
-        refreshTokenService.revokeAllRefreshTokens(principal.getUser().getId());
+        user.setLastLoginAt(Instant.now());
+        userRepository.save(user);
 
-        String accessToken = refreshTokenService.generateAccessToken(authentication);
-        String refreshToken = refreshTokenService.createRefreshToken(principal.getUser());
-
-        AuthenticationResponse response = buildAuthResponse(
-                principal,
-                accessToken,
-                refreshToken
+        boolean rememberMe = request.isRememberMeEnabled();
+        RefreshTokenService.CreatedRefreshToken created = refreshTokenService.createSessionRefreshToken(
+                user, rememberMe, ipAddress, userAgent
         );
+        String accessToken = refreshTokenService.generateAccessToken(authentication, created.sessionId());
 
-        auditLogService.log(
-                "LOGIN",
-                "AUTH",
-                String.valueOf(principal.getUser().getId()),
-                null,
-                null,
-                UUID.randomUUID().toString(),
-                "SUCCESS"
-        );
+        authAuditService.record(user.getTenantId(), user.getId(), user.getEmail(), user.getId(),
+                AuthAuditAction.LOGIN_SUCCESS, ipAddress, userAgent, "sessionId=" + created.sessionId());
 
-        return response;
+        auditLogService.log("LOGIN", "AUTH", String.valueOf(user.getId()), null, null, UUID.randomUUID().toString(), "SUCCESS");
+        return buildAuthResponse(principal, accessToken, created.rawToken(), rememberMe);
     }
 
     @Override
     @Transactional
     public AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName) {
-        return loginWithGoogle(email, true, firstName, lastName, null);
+        return loginWithGoogle(email, firstName, lastName, null, null);
     }
 
     @Override
@@ -160,17 +170,35 @@ return login(request, request != null ? request.device() : null);
 
     @Override
     @Transactional
+    public AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName, String ipAddress, String userAgent) {
+        return loginWithGoogle(email, true, firstName, lastName, null, ipAddress, userAgent);
+    }
+
+    @Override
+    @Transactional
     public AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName, String device) {
+        return loginWithGoogle(email, emailVerified, firstName, lastName, device, null, null);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName, String device, String ipAddress, String userAgent) {
         if (!StringUtils.hasText(email)) {
             throw new SsoLoginException(SsoLoginException.AUTH_FAILED, "Google account email is required");
         }
 
+        email = email.trim();
         ssoAccessPolicy.checkEmail(email, emailVerified);
 
         // Only accounts that already exist may sign in (imported or created by an administrator),
         // unless app.sso.auto-create-users=true.
         User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
         if (user == null) {
+            if (!ssoJitProvisioningEnabled) {
+                authAuditService.record(null, null, email, null, AuthAuditAction.LOGIN_GOOGLE_FAILED,
+                        ipAddress, userAgent, "JIT provisioning disabled");
+                throw new DisabledException("Account does not exist and automatic SSO provisioning is disabled");
+            }
             if (!ssoAccessPolicy.autoCreateUsers()) {
                 throw ssoAccessPolicy.notRegistered(email);
             }
@@ -178,6 +206,7 @@ return login(request, request != null ? request.device() : null);
         }
 
         ssoAccessPolicy.checkAccount(user);
+        ensureUserAndTenantActive(user, ipAddress, userAgent, AuthAuditAction.LOGIN_GOOGLE_FAILED);
 
         user = updateUserFromGoogleProfile(user, firstName, lastName);
 
@@ -187,7 +216,6 @@ return login(request, request != null ? request.device() : null);
         }
         user = userRepository.save(user);
 
-        refreshTokenService.revokeAllRefreshTokens(user.getId());
 
         UserPrincipal principal = UserPrincipal.fromUser(user);
         Authentication authentication = new UsernamePasswordAuthenticationToken(
@@ -196,10 +224,15 @@ return login(request, request != null ? request.device() : null);
                 principal.getAuthorities()
         );
 
-        String accessToken = refreshTokenService.generateAccessToken(authentication);
-        String refreshToken = refreshTokenService.createRefreshToken(user);
+        RefreshTokenService.CreatedRefreshToken created = refreshTokenService.createSessionRefreshToken(
+                user, true, ipAddress, userAgent
+        );
+        String accessToken = refreshTokenService.generateAccessToken(authentication, created.sessionId());
 
-        return buildAuthResponse(principal, accessToken, refreshToken);
+        authAuditService.record(user.getTenantId(), user.getId(), user.getEmail(), user.getId(),
+                AuthAuditAction.LOGIN_GOOGLE_SUCCESS, ipAddress, userAgent, "sessionId=" + created.sessionId());
+
+        return buildAuthResponse(principal, accessToken, created.rawToken(), true);
     }
 
     @Override
@@ -236,17 +269,42 @@ return login(request, request != null ? request.device() : null);
     @Override
     @Transactional
     public AuthenticationResponse refresh(TokenRequest request) {
+        return refresh(request, null, null);
+    }
 
-        RefreshToken refreshToken = refreshTokenService.verifyRefreshToken(request.token());
+    @Override
+    @Transactional
+    public AuthenticationResponse refresh(TokenRequest request, String ipAddress, String userAgent) {
+        RefreshToken refreshToken;
+        try {
+            refreshToken = refreshTokenService.verifyRefreshToken(request.token());
+        } catch (RuntimeException ex) {
+            authAuditService.record(null, null, null, null,
+                    AuthAuditAction.REFRESH_FAILED, ipAddress, userAgent, ex.getMessage());
+            throw ex;
+        }
 
         User user = refreshToken.getUser();
 
         if (Boolean.TRUE.equals(user.getLocked())) {
-            refreshTokenService.revokeAllRefreshTokens(user.getId());
+            refreshTokenService.revokeAllRefreshTokens(user.getId(), "ACCOUNT_LOCKED");
+            authAuditService.record(user.getTenantId(), user.getId(), user.getEmail(), user.getId(),
+                    AuthAuditAction.REFRESH_FAILED, ipAddress, userAgent, "Account is locked");
+            throw new LockedException("Account is locked");
+        }
 
-            throw new org.springframework.security.authentication.LockedException(
-                    "Account is locked"
-            );
+        if (!Boolean.TRUE.equals(user.getIsActive())) {
+            refreshTokenService.revokeAllRefreshTokens(user.getId(), "ACCOUNT_DISABLED");
+            authAuditService.record(user.getTenantId(), user.getId(), user.getEmail(), user.getId(),
+                    AuthAuditAction.REFRESH_FAILED, ipAddress, userAgent, "Account is deactivated");
+            throw new DisabledException("Account is deactivated or not active");
+        }
+
+        if (!isTenantActive(user)) {
+            refreshTokenService.revokeAllRefreshTokens(user.getId(), "TENANT_INACTIVE");
+            authAuditService.record(user.getTenantId(), user.getId(), user.getEmail(), user.getId(),
+                    AuthAuditAction.REFRESH_FAILED, ipAddress, userAgent, "Tenant is inactive");
+            throw new DisabledException("Organization tenant is currently inactive");
         }
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
@@ -255,12 +313,13 @@ return login(request, request != null ? request.device() : null);
                 userDetails, null, userDetails.getAuthorities()
         );
 
-        String newAccessToken = refreshTokenService.generateAccessToken(authentication);
-
-        String newRefreshToken = refreshTokenService.rotateRefreshToken(refreshToken);
+        RefreshTokenService.CreatedRefreshToken rotated = refreshTokenService.rotateSessionRefreshToken(
+                refreshToken, ipAddress, userAgent
+        );
+        String newAccessToken = refreshTokenService.generateAccessToken(authentication, rotated.sessionId());
 
         if (userDetails instanceof UserPrincipal principal) {
-            return buildAuthResponse(principal, newAccessToken, newRefreshToken);
+            return buildAuthResponse(principal, newAccessToken, rotated.rawToken(), rotated.rememberMe());
         }
 
         Set<String> roles = resolveRoles(user);
@@ -268,47 +327,50 @@ return login(request, request != null ? request.device() : null);
         Map<String, Set<String>> rolePermissions = resolveRolePermissions(user, roles);
 
         return AuthenticationResponse.builder()
-            .accessToken(newAccessToken)
-            .refreshToken(newRefreshToken)
-            .email(user.getEmail())
-            .firstName(user.getFirstName())
-            .lastName(user.getLastName())
-            .role(roles.stream().findFirst().orElse(null))
-            .roles(roles)
-            .permissions(permissions)
-            .rolePermissions(rolePermissions)
-            .build();
+                .accessToken(newAccessToken)
+                .refreshToken(rotated.rawToken())
+                .rememberMe(rotated.rememberMe())
+                .email(user.getEmail())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .role(roles.stream().findFirst().orElse(null))
+                .roles(roles)
+                .permissions(permissions)
+                .rolePermissions(rolePermissions)
+                .build();
     }
 
     @Override
     public void logout(TokenRequest request) {
+        logout(request == null ? null : request.token(), null, null, null, null, null);
+    }
+
+    @Override
+    @Transactional
+    public void logout(
+            String rawRefreshToken,
+            String sessionId,
+            Long actorId,
+            String actorEmail,
+            String ipAddress,
+            String userAgent
+    ) {
         String correlationId = UUID.randomUUID().toString();
-
-        RefreshToken refreshToken;
-
         try {
-            refreshToken =
-                    refreshTokenService.verifyRefreshToken(request.token());
-
-            refreshTokenService.revokeRefreshToken(request.token());
+            if (StringUtils.hasText(rawRefreshToken)) {
+                refreshTokenService.revokeRefreshToken(rawRefreshToken);
+            }
+            if (StringUtils.hasText(sessionId)) {
+                refreshTokenService.revokeSession(sessionId, "LOGOUT");
+            }
         } catch (RuntimeException ex) {
-            auditLogService.logLogout(
-                    null,
-                    null,
-                    correlationId,
-                    "FAILURE"
-            );
+            auditLogService.logLogout(actorId, actorEmail, correlationId, "FAILURE");
             throw ex;
         }
-
-        User user = refreshToken.getUser();
-
-        auditLogService.logLogout(
-                user.getId(),
-                user.getEmail(),
-                correlationId,
-                "SUCCESS"
-        );
+        auditLogService.logLogout(actorId, actorEmail, correlationId, "SUCCESS");
+        authAuditService.record(null, actorId, actorEmail, actorId,
+                AuthAuditAction.LOGOUT, ipAddress, userAgent,
+                StringUtils.hasText(sessionId) ? "sessionId=" + sessionId : "cookie-logout");
     }
 
     @Override
@@ -334,7 +396,7 @@ return login(request, request != null ? request.device() : null);
         user.setMustChangePassword(false);
         userRepository.save(user);
 
-        refreshTokenService.revokeAllRefreshTokens(user.getId());
+        refreshTokenService.revokeAllRefreshTokens(user.getId(), "PASSWORD_RESET");
 
         oneTimeTokenService.markUsed(resetToken);
 
@@ -347,6 +409,128 @@ return login(request, request != null ? request.device() : null);
                 null,
                 null
         );
+        authAuditService.record(user.getTenantId(), user.getId(), user.getEmail(), user.getId(),
+                AuthAuditAction.PASSWORD_RESET, null, null, "Password reset completed; all sessions revoked");
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(
+            Long userId,
+            String currentSessionId,
+            ChangePasswordRequest request,
+            String ipAddress,
+            String userAgent
+    ) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            throw new BadRequestException("Current password is incorrect");
+        }
+
+        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new BadRequestException("New password must be different from the current password");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+
+        int revoked = 0;
+        if (request.shouldRevokeOtherSessions()) {
+            revoked = refreshTokenService.revokeOtherSessions(userId, currentSessionId, "PASSWORD_CHANGED");
+        }
+
+        authAuditService.record(user.getTenantId(), user.getId(), user.getEmail(), user.getId(),
+                AuthAuditAction.PASSWORD_CHANGED, ipAddress, userAgent,
+                "revokedOtherSessions=" + revoked);
+    }
+
+    @Override
+    public List<UserSessionDTO> listActiveSessions(Long userId, String currentSessionId) {
+        return refreshTokenService.listActiveSessions(userId).stream()
+                .map(token -> UserSessionDTO.builder()
+                        .sessionId(token.getSessionId())
+                        .ipAddress(token.getIpAddress())
+                        .userAgent(token.getUserAgent())
+                        .rememberMe(token.isRememberMe())
+                        .current(currentSessionId != null && currentSessionId.equals(token.getSessionId()))
+                        .createdAt(token.getCreatedAt())
+                        .lastUsedAt(token.getLastUsedAt())
+                        .expiresAt(token.getExpiryDate())
+                        .build())
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public void revokeSession(Long userId, String sessionId, String ipAddress, String userAgent) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        refreshTokenService.revokeSessionForUser(userId, sessionId, "USER_REVOKED");
+        authAuditService.record(user.getTenantId(), user.getId(), user.getEmail(), user.getId(),
+                AuthAuditAction.SESSION_REVOKED, ipAddress, userAgent, "sessionId=" + sessionId);
+    }
+
+    @Override
+    @Transactional
+    public int revokeOtherSessions(Long userId, String currentSessionId, String ipAddress, String userAgent) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        int revoked = refreshTokenService.revokeOtherSessions(userId, currentSessionId, "USER_REVOKED_OTHERS");
+        authAuditService.record(user.getTenantId(), user.getId(), user.getEmail(), user.getId(),
+                AuthAuditAction.OTHER_SESSIONS_REVOKED, ipAddress, userAgent, "revokedCount=" + revoked);
+        return revoked;
+    }
+
+    @Override
+    @Transactional
+    public void adminRevokeUserSessions(
+            Long adminUserId,
+            String adminEmail,
+            Long targetUserId,
+            String ipAddress,
+            String userAgent
+    ) {
+        User target = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        refreshTokenService.revokeAllRefreshTokens(targetUserId, "ADMIN_REVOKED");
+        authAuditService.record(target.getTenantId(), adminUserId, adminEmail, targetUserId,
+                AuthAuditAction.ADMIN_SESSIONS_REVOKED, ipAddress, userAgent,
+                "targetEmail=" + target.getEmail());
+    }
+
+    private void ensureUserAndTenantActive(
+            User user,
+            String ipAddress,
+            String userAgent,
+            AuthAuditAction failAction
+    ) {
+        if (Boolean.TRUE.equals(user.getLocked())) {
+            authAuditService.record(user.getTenantId(), user.getId(), user.getEmail(), user.getId(),
+                    failAction, ipAddress, userAgent, "Account is locked");
+            throw new LockedException("Account is locked");
+        }
+        if (!Boolean.TRUE.equals(user.getIsActive())) {
+            authAuditService.record(user.getTenantId(), user.getId(), user.getEmail(), user.getId(),
+                    failAction, ipAddress, userAgent, "Account is not active");
+            throw new DisabledException("Account is deactivated or not active");
+        }
+        if (!isTenantActive(user)) {
+            authAuditService.record(user.getTenantId(), user.getId(), user.getEmail(), user.getId(),
+                    failAction, ipAddress, userAgent, "Tenant is inactive");
+            throw new DisabledException("Organization tenant is currently inactive");
+        }
+    }
+
+    private boolean isTenantActive(User user) {
+        if (user.getTenantId() == null) {
+            return true;
+        }
+        return tenantRepository.findById(user.getTenantId())
+                .map(Tenant::getActive)
+                .map(Boolean.TRUE::equals)
+                .orElse(true);
     }
 
     private User createGoogleUser(String email, String firstName, String lastName) {
@@ -365,11 +549,6 @@ return login(request, request != null ? request.device() : null);
 
     private User updateUserFromGoogleProfile(User user, String firstName, String lastName) {
         boolean shouldUpdate = false;
-
-        if (!Boolean.TRUE.equals(user.getIsActive())) {
-            user.setIsActive(true);
-            shouldUpdate = true;
-        }
 
         if (!StringUtils.hasText(user.getFirstName())) {
             user.setFirstName(resolveFirstName(firstName, user.getEmail()));
@@ -421,7 +600,8 @@ return login(request, request != null ? request.device() : null);
     private AuthenticationResponse buildAuthResponse(
             UserPrincipal principal,
             String accessToken,
-            String refreshToken
+            String refreshToken,
+            boolean rememberMe
     ) {
         User user = principal.getUser();
         Set<String> roles = resolveRoles(user);
@@ -431,6 +611,7 @@ return login(request, request != null ? request.device() : null);
         return AuthenticationResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
+                .rememberMe(rememberMe)
                 .email(user.getEmail())
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())

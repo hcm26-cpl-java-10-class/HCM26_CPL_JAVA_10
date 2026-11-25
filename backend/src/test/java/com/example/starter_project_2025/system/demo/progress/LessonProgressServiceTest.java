@@ -9,6 +9,8 @@ import com.example.starter_project_2025.system.demo.lesson.LessonContentType;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import com.example.starter_project_2025.system.demo.section.Section;
 import com.example.starter_project_2025.system.notification.NotificationService;
+import com.example.starter_project_2025.system.analytics.student.StudentLearningActivity;
+import com.example.starter_project_2025.system.analytics.student.StudentLearningActivityRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +18,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -36,6 +39,11 @@ class LessonProgressServiceTest {
     NotificationService notificationService;
     @Mock
     CertificateService certificateService;
+    @Mock
+    StudentLearningActivityRepository activityRepository;
+
+    @Mock com.example.starter_project_2025.system.demo.course.CourseAssessmentService assessments;
+    @Mock com.example.starter_project_2025.system.demo.course.CourseAssessmentCompletionService completion;
 
     @InjectMocks
     LessonProgressService service;
@@ -45,6 +53,8 @@ class LessonProgressServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(assessments.grade(anyLong(),anyLong())).thenReturn(new com.example.starter_project_2025.system.demo.course.CourseAssessmentService.Grade(null,"NO_ASSESSMENTS",List.of()));
+        lenient().when(assessments.canComplete(anyLong(),anyLong())).thenReturn(true);
         Course course = Course.builder().id(10L).name("Java 21").build();
         Section section = Section.builder()
                 .id(20L)
@@ -60,7 +70,7 @@ class LessonProgressServiceTest {
                 .textContent("Hello")
                 .orderIndex(0)
                 .build();
-        enrollment = CourseEnrollment.builder().id(40L).course(course).build();
+        enrollment = CourseEnrollment.builder().id(40L).course(course).user(com.example.starter_project_2025.system.rbac.user.User.builder().id(7L).build()).build();
     }
 
     @Test
@@ -102,6 +112,7 @@ class LessonProgressServiceTest {
         assertTrue(progress.isCompleted());
         assertNotNull(progress.getCompletedAt());
         assertNotNull(progress.getLastAccessedAt());
+        verify(activityRepository).save(any(StudentLearningActivity.class));
         assertEquals(100, result.progressPercentage());
         verify(progressRepository).save(progress);
     }
@@ -149,6 +160,7 @@ class LessonProgressServiceTest {
         verify(enrollmentRepository).save(enrollment);
         verify(enrollmentRepository).findOwnedByIdForUpdate(40L, 7L);
         verify(progressRepository).save(any(LessonProgress.class));
+        verify(activityRepository).save(any(StudentLearningActivity.class));
     }
 
     @Test
@@ -169,5 +181,45 @@ class LessonProgressServiceTest {
         assertEquals("My answer", progress.getStudentAnswer());
         assertEquals("My answer", result.lessons().getFirst().studentAnswer());
         verify(progressRepository).save(progress);
+        verify(activityRepository).save(any(StudentLearningActivity.class));
+    }
+
+    @Test
+    void studyTimeIsCappedByRealElapsedTimeSinceLastUpdate() {
+        LessonProgress progress = LessonProgress.builder()
+                .enrollment(enrollment)
+                .lesson(lesson)
+                .lastAccessedAt(LocalDateTime.now().minusSeconds(10))
+                .studySeconds(100L)
+                .build();
+        stubForStudyTime(progress);
+
+        service.addStudyTime(7L, 40L, 30L, 600L);
+
+        long added = progress.getStudySeconds() - 100L;
+        assertTrue(added >= 10 && added <= 16,
+                "Chỉ được cộng tối đa ~thời gian thực trôi qua (10s + sai số), nhưng cộng " + added);
+    }
+
+    @Test
+    void firstStudyTimeCallIsCappedByPerCallLimit() {
+        LessonProgress progress = LessonProgress.builder()
+                .enrollment(enrollment)
+                .lesson(lesson)
+                .build();
+        stubForStudyTime(progress);
+
+        service.addStudyTime(7L, 40L, 30L, 5_000L);
+
+        assertEquals(600L, progress.getStudySeconds());
+    }
+
+    private void stubForStudyTime(LessonProgress progress) {
+        when(enrollmentRepository.findOwnedByIdForUpdate(40L, 7L)).thenReturn(Optional.of(enrollment));
+        when(lessonRepository.findById(30L)).thenReturn(Optional.of(lesson));
+        when(progressRepository.findByEnrollment_IdAndLesson_Id(40L, 30L)).thenReturn(Optional.of(progress));
+        when(lessonRepository.findByCourseIdOrdered(10L)).thenReturn(List.of(lesson));
+        when(progressRepository.findAllByEnrollment_Id(40L)).thenReturn(List.of(progress));
+        when(progressRepository.save(any(LessonProgress.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 }

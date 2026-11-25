@@ -1,3 +1,4 @@
+import { useAuth } from "@/contexts/AuthContext";
 import { enrollmentApi } from "@/api";
 import { notificationQueryKey } from "@/api/features/notification.api";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -13,6 +14,7 @@ import { getErrorMessage } from "../utils/course.utils.ts";
  */
 export function useCourseEnrollment() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { hasPermission } = usePermissions();
 
   const canEnroll = hasPermission("ENROLLMENT_CREATE");
@@ -20,9 +22,10 @@ export function useCourseEnrollment() {
   const canReadEnrollments = hasPermission("ENROLLMENT_READ");
 
   const enrollmentsQuery = useQuery({
-    queryKey: ["my-enrollments"],
+    queryKey: ["my-enrollments", user?.email],
     queryFn: enrollmentApi.getMyCourses,
-    enabled: canReadEnrollments,
+    enabled: !!user && canReadEnrollments,
+    gcTime: 0,
   });
 
   const enrollmentByCourseId = useMemo(
@@ -34,10 +37,11 @@ export function useCourseEnrollment() {
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ["my-enrollments"] }),
       queryClient.invalidateQueries({ queryKey: ["course-catalog"] }),
+      queryClient.invalidateQueries({ queryKey: ["course-recommendations"] }),
       queryClient.invalidateQueries({ queryKey: ["course-detail"] }),
       queryClient.invalidateQueries({ queryKey: ["personal-learning"] }),
       queryClient.invalidateQueries({ queryKey: ["personal-learning-roadmap"] }),
-      queryClient.invalidateQueries({ queryKey: notificationQueryKey }),
+      queryClient.invalidateQueries({ queryKey: notificationQueryKey(user?.email ?? "signed-out") }),
     ]);
 
   const enrollMutation = useMutation({

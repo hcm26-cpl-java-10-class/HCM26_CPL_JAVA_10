@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.auth.authentication.dto.request;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Builder;
@@ -8,15 +9,21 @@ import lombok.Builder;
 public record LoginRequest(
 
         @NotBlank(message = "Email is required")
+        @Email(message = "Email format is invalid")
         String email,
 
         @NotBlank(message = "Password is required")
         @Size(min = 5, message = "Password must be at least 5 characters long")
         String password,
 
-        String device
+        String device,
+        Boolean rememberMe
 ) {
     public LoginRequest(String email, String password) {
-        this(email, password, null);
+        this(email, password, null, false);
+    }
+
+    public boolean isRememberMeEnabled() {
+        return Boolean.TRUE.equals(rememberMe);
     }
 }

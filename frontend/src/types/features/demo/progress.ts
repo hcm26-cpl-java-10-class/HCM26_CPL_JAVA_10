@@ -14,6 +14,8 @@ export interface LessonProgressItem {
   completed: boolean;
   completedAt?: string | null;
   lastAccessedAt?: string | null;
+  /** Tổng số giây học viên đã dành cho bài học này. */
+  studySeconds?: number | null;
 }
 
 export interface EnrollmentProgress {
@@ -23,6 +25,11 @@ export interface EnrollmentProgress {
   totalLessons: number;
   completedLessons: number;
   progressPercentage: number;
+  courseCompleted: boolean;
+  assessmentStatus: string;
+  overallScore: number | null;
+  /** Published outcomes for the owner of this enrollment; never private grading data. */
+  assessmentOutcomes?: Record<string, "PASSED" | "FAILED" | "COMPLETED" | "AWAITING_RESULTS" | "IN_PROGRESS" | "NOT_STARTED">;
   lastLessonId?: number | null;
   lastAccessedAt?: string | null;
   lessons: LessonProgressItem[];

@@ -1,4 +1,6 @@
 package com.example.starter_project_2025.system.project.alert;
+
+import com.example.starter_project_2025.config.startup.StartupMutation;
 import com.example.starter_project_2025.system.rbac.permission.*;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 @Component @Order(8) @RequiredArgsConstructor
+@StartupMutation
 public class ProjectAlertPermissionInitializer implements CommandLineRunner {
     private final PermissionRepository permissions;
     private final RoleRepository roles;
@@ -23,6 +26,6 @@ public class ProjectAlertPermissionInitializer implements CommandLineRunner {
         }
         for(String name:List.of("ADMIN","ADMINISTRATOR","SYSTEM_ADMIN","SUPER_ADMIN","TEACHER","MENTOR","TRAINER","TEAM_LEADER","STUDENT","TRAINEE"))
             roles.findByName(name).ifPresent(role->{role.getPermissions().addAll(alertPermissions);roles.save(role);});
-        // STUDENT still needs an active PM/leader membership in the selected team.
+        // STUDENT still needs to be the active, designated leader of the selected team.
     }
 }

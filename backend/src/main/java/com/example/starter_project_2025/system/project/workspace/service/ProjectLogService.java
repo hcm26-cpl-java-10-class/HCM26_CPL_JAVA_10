@@ -12,7 +12,6 @@ import com.example.starter_project_2025.system.project.trainingclass.ClassStaffA
 import com.example.starter_project_2025.system.project.trainingclass.ClassStaffAssignmentRepository;
 import com.example.starter_project_2025.system.project.trainingclass.ClassStaffRoleType;
 import com.example.starter_project_2025.system.project.workspace.domain.*;
-import com.example.starter_project_2025.system.project.workspace.dto.ProjectLogDtos.*;
 import com.example.starter_project_2025.system.project.workspace.repository.*;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
@@ -40,6 +39,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import com.example.starter_project_2025.system.project.workspace.dto.ProjectLogDtos.*;
 
 @Service
 @RequiredArgsConstructor
@@ -307,6 +307,9 @@ public class ProjectLogService {
     }
 
     private void requireWrite(Context context) {
+        if (context.workspace().getCurrentSlot() == null
+                || context.workspace().getStatus() != com.example.starter_project_2025.system.project.workspace.domain.WorkspaceStatus.ACTIVE)
+            throw new AccessDeniedException("Previous workspaces are read-only");
         User user = context.user();
         requireRead(user);
         boolean administrator = user.getRoles().stream()

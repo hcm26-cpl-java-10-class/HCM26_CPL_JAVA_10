@@ -98,7 +98,7 @@ const questionSchema: EntitySchema = {
       editable: false,
       filterable: true,
       filterType: "dateRange",
-      visible: false,
+      visible: true,
     },
     {
       name: "createdBy",

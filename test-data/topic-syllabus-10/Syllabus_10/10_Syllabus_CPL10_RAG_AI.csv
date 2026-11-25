@@ -1,0 +1,52 @@
+﻿,,,,,,,,
+,,,,,,,,
+,Fresher / OJT Training Program,,,,,,,
+,APPLIED LLM ENGINEERING & RAG PIPELINES WITH PYTHON SYLLABUS,,,,,,,
+,,,,,,,,
+,,,,,Document Code,,,SYL-CPL10_RAG_AI
+,,,,,Version,,,1.0
+,,,,,Effective Date,,,11/11/2026
+Applied LLM Engineering & RAG Pipelines with Python Syllabus,,,,,,,,
+1,Technical Group,AI_ML,,,,,,
+2,Topic Name,Applied LLM Engineering & RAG Pipelines with Python,,,,,,
+3,Topic Code,CPL10_RAG_AI,,,,,,
+4,Version,1.0,,,,,,
+5,Training Audience,Developers integrating AI/LLM capabilities into enterprise apps,,,,,,
+6,Course Objectives,"Design production Retrieval-Augmented Generation pipelines: document chunking, embeddings, vector databases, prompt evals, and FastAPI serving.",,,,,,
+7,Topic Outline,"- Unit 1: LLM APIs, Structured Outputs & Prompt Evaluation
+- Unit 2: Vector Search & Retrieval-Augmented Generation
+- Unit 3: AI Engineering Assessment",,,,,,
+8,Time Allocation,Concept/Lecture,0.30,"Theory, architecture concepts",7 Sessions,,,
+,,Assignment/Lab,0.35,Hands-on coding & exercises,,,,
+,,Guides/Review,0.10,Code walkthrough & Q&A,,,,
+,,Seminar/Workshop,0.00,Interactive seminar & debugging,,,,
+,,Exam,0.25,Quizzes & practical defense exam,,,,
+9,Training Materials & Environments,Text book,Official AI_ML Documentation & FAMS Guides,,,,,
+,,References,FAMS Internal LMS Knowledge Base,,,,,
+,,Technical requirements,"Modern IDE, Docker, Git, Browser DevTools",,,,,
+10,Assessment Scheme,Quizzes & Knowledge Tests,2,20,Short quizzes checking core theory (>= 6.0 / 10),,,
+,,Practical Lab Test,2,30,Hands-on lab assignments & Git code quality (>= 6.0 / 10),,,
+,,Final Practical Test,1,50,Capstone implementation & live defense (>= 6.0 / 10),,,
+,,Pass Criteria,6,Overall GPA >= 6.0 / 10; Complete 100% quizzes and final practical test,,,,
+11,Training Delivery Principles,Trainees,Completed prerequisite track; Active participation in daily labs,,,,,
+,Training Delivery Principles,Trainer,Senior AI_ML Engineer / Technical Mentor,,,,,
+,Training Delivery Principles,Training,"- Concept lectures in morning or online
+- Hands-on lab exercises & reviews in afternoon
+- Max 4h (240 mins) per session",,,,,
+,Training Delivery Principles,Re-Test,2 - Allow up to 2 re-takes with different exam variants,,,,,
+,Training Delivery Principles,Marking,Evaluated by trainer against official FAMS rubric,,,,,
+,Training Delivery Principles,Waiver Criteria,Fast-track entry exam score >= 8.5 / 10,,,,,
+,,,,,,,,
+Applied LLM Engineering & RAG Pipelines with Python - Training Schedule,,,,,,,,
+Training Unit/Chapter,,Session,Content,Learning Objectives,Delivery Type,Duration (mins),Training Format,Training Materials / Logistics & General Notes
+1,"LLM APIs, Structured Outputs & Prompt Evaluation",1,"Transformers Intuition, Tool Calling & JSON Schemas",Design deterministic structured outputs and guardrail prompts,Concept/Lecture,180,Offline - Sáng (Morning),Slide-LLM-Structured-Output.pdf
+,,2,FastAPI AI Gateway with Streaming SSE Lab,Expose streaming LLM assistant endpoints with token budget tracking,Assignment/Lab,180,Offline - Chiều (Afternoon),Lab-01-FastAPI-LLM.zip
+2,Vector Search & Retrieval-Augmented Generation,3,"Chunking Strategies, Embeddings & Hybrid Search",Combine BM25 keyword retrieval with pgvector cosine similarity,Concept/Lecture,180,Online - Sáng (Morning),Slide-RAG-Hybrid-Search.pdf
+,,4,Enterprise Syllabus Q&A RAG Pipeline Lab,"Index PDF/Markdown docs, retrieve top-k citations, and prevent hallucinations",Assignment/Lab,240,Offline - Chiều (Afternoon),Lab-02-RAG-Pipeline.zip
+,,5,RAGAS Evaluation & Hallucination Review,"Measure faithfulness, context recall, and latency metrics",Guides/Review,120,Online - Sáng (Morning),Guide-RAG-Evaluation.pdf
+3,AI Engineering Assessment,6,LLM & Vector Retrieval Quiz,"Assess chunk overlap, embedding dimensionality, and prompt safety",Test/Quiz,120,Offline - Sáng (Morning),Quiz-RAG-AI.pdf
+,,7,Practical RAG Assistant Capstone Defense,Demonstrate grounded Q&A service with citations and eval scores,Exam,180,Offline - Chiều (Afternoon),Exam-RAG-Rubric.pdf
+,,,,,,,,
+AUTHORSHIP,,,,,,,,
+,Role,Name,Account,Unit,Notes,,,
+,Course Lead,Le Minh Hoang,hoanglm26,Training Department,HCM26_CPL_JAVA_10,,,

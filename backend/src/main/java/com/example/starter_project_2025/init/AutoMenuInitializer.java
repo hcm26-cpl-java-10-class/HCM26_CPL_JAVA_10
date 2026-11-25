@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.system.menu.module.Module;
 import com.example.starter_project_2025.system.menu.module.ModuleRepository;
@@ -22,6 +24,7 @@ import java.util.Set;
 @Order(10)
 @Component
 @RequiredArgsConstructor
+@StartupMutation
 public class AutoMenuInitializer implements CommandLineRunner {
 
     private final ModuleRepository moduleRepository;
@@ -39,6 +42,11 @@ public class AutoMenuInitializer implements CommandLineRunner {
                 new ClassPathScanningCandidateComponentProvider(false);
 
         scanner.addIncludeFilter(new AnnotationTypeFilter(ResourceMenu.class));
+        // Retire the removed feature in databases that already contain its generated menu.
+        moduleRepository.findByUrl("/course-releases").ifPresent(module -> {
+            module.setIsActive(false);
+            moduleRepository.save(module);
+        });
 
         Set<BeanDefinition> candidates =
                 scanner.findCandidateComponents(BASE_PACKAGE);

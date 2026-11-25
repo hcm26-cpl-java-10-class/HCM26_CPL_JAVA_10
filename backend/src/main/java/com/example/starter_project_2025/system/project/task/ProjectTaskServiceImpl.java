@@ -94,7 +94,7 @@ public class ProjectTaskServiceImpl implements ProjectTaskService {
     @Override
     @Transactional
     public TaskCardResponse createTask(Long projectId, Long sprintId, CreateTaskRequest request) {
-        validateDescriptionWordLimit(request.description());
+        validateDescriptionLength(request.description());
         User actor = requireAuthenticatedActor();
         Project project = requireProjectScope(projectId, actor);
 
@@ -397,7 +397,7 @@ try {
     @Override
     @Transactional
     public TaskCardResponse updateTask(Long projectId, Long taskId, UpdateTaskRequest request) {
-        validateDescriptionWordLimit(request.description());
+        validateDescriptionLength(request.description());
         User actor = requireAuthenticatedActor();
         requireProjectScope(projectId, actor);
         Task task = taskRepository.findByIdAndProjectIdAndIsActiveTrue(taskId, projectId)
@@ -787,10 +787,9 @@ try {
         return description.trim();
     }
 
-    private void validateDescriptionWordLimit(String description) {
-        if (description != null && !description.isBlank()
-                && description.strip().split("\\s+").length > 1000) {
-            throw new TaskValidationException("description", "Description must not exceed 1000 words");
+    private void validateDescriptionLength(String description) {
+        if (description != null && description.length() > TaskValidator.MAX_DESCRIPTION_LENGTH) {
+            throw new TaskValidationException("description", "Description must not exceed 1000 characters");
         }
     }
 

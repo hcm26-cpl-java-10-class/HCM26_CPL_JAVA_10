@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.sprint.Sprint;
 import com.example.starter_project_2025.system.project.sprint.SprintRepository;
 import com.example.starter_project_2025.system.project.sprint.SprintStatus;
@@ -27,6 +29,7 @@ import java.time.LocalDate;
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@StartupMutation
 public class SprintDataInitializer implements CommandLineRunner {
 
     /**

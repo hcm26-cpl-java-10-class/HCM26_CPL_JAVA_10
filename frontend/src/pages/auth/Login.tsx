@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { motion } from "motion/react";
 import { FcGoogle } from "react-icons/fc";
 import { useDispatch } from "react-redux";
-import { setLogin } from "@/store/slices/auth/authSlice";
+import { setLogin, setLogout } from "@/store/slices/auth/authSlice";
 import { authApi } from "@/api/features/auth.api";
 import axios from "axios";
 import { Eye, EyeOff } from "lucide-react";
@@ -55,17 +55,17 @@ export const Login: React.FC = () => {
         setError("");
         setIsLoading(true);
         const cleanEmail = email.trim();
-        const cleanPassword = password.trim();
         try {
-            const res = await authApi.login({ email: cleanEmail, password: cleanPassword, isRememberedMe });
+            const res = await authApi.login({ email: cleanEmail, password, isRememberedMe });
+            if (res.passwordChangeRequired && res.setupToken) {
+                dispatch(setLogout());
+                navigate(`/reset-password?token=${encodeURIComponent(res.setupToken)}`, { replace: true });
+                return;
+            }
             setViewRole(null);
             dispatch(setLogin(res));
             const primaryRole = res.role ?? availableAccountViews(res.permissions ?? [])[0];
-            const effectivePermissions = resolveEffectivePermissions(
-                primaryRole,
-                res.rolePermissions,
-                res.permissions ?? []
-            );
+            const effectivePermissions = resolveEffectivePermissions(primaryRole, res.rolePermissions, res.permissions ?? []);
             navigate(getHomePathByRole(primaryRole, effectivePermissions), { replace: true });
         } catch (err) {
             if (axios.isAxiosError(err)) {
@@ -134,6 +134,14 @@ export const Login: React.FC = () => {
                             <label htmlFor="password" className="text-sm font-medium leading-none">
                                 Password
                             </label>
+                            <Button
+                                type="button"
+                                variant="link"
+                                className="p-0 h-auto text-xs font-medium text-muted-foreground hover:text-foreground"
+                                onClick={() => navigate("/forgot-password")}
+                            >
+                                Forgot password?
+                            </Button>
                         </div>
                         <div className="flex justify-items-center">
                             <Input
@@ -156,7 +164,11 @@ export const Login: React.FC = () => {
                     </div>
 
                     <div className="flex items-center space-x-2">
-                        <Checkbox id="remember" onCheckedChange={(checked: boolean) => handleIsRememberMe(checked)} />
+                        <Checkbox
+                            id="remember"
+                            checked={isRememberedMe}
+                            onCheckedChange={(checked) => handleIsRememberMe(checked === true)}
+                        />
                         <label htmlFor="remember" className="text-sm font-medium leading-none cursor-pointer">
                             Remember me
                         </label>
@@ -206,23 +218,25 @@ export const Login: React.FC = () => {
                     </p>
                 </div>
 
-                <div className="mt-8 pt-6 border-t border-dashed">
-                    <p className="text-xs font-semibold uppercase text-muted-foreground mb-3">(Test Only):</p>
-                    <div className="space-y-2 text-sm bg-muted/50 p-3 rounded-lg border">
-                        <p className="flex justify-between">
-                            <span className="text-muted-foreground font-mono text-[11px]">ADMIN:</span>
-                            <span className="font-medium">admin@example.com / password123</span>
-                        </p>
-                        <p className="flex justify-between">
-                            <span className="text-muted-foreground font-mono text-[11px]">STUDENT:</span>
-                            <span className="font-medium">student@example.com / password123</span>
-                        </p>
-                        <p className="flex justify-between">
-                            <span className="text-muted-foreground font-mono text-[11px]">TEACHER:</span>
-                            <span className="font-medium">teacher@example.com / password123</span>
-                        </p>
+                {import.meta.env.DEV && (
+                    <div className="mt-8 pt-6 border-t border-dashed">
+                        <p className="text-xs font-semibold uppercase text-muted-foreground mb-3">(Dev Test Only):</p>
+                        <div className="space-y-2 text-sm bg-muted/50 p-3 rounded-lg border">
+                            <p className="flex justify-between">
+                                <span className="text-muted-foreground font-mono text-[11px]">ADMIN:</span>
+                                <span className="font-medium">admin@example.com / password123</span>
+                            </p>
+                            <p className="flex justify-between">
+                                <span className="text-muted-foreground font-mono text-[11px]">STUDENT:</span>
+                                <span className="font-medium">student@example.com / password123</span>
+                            </p>
+                            <p className="flex justify-between">
+                                <span className="text-muted-foreground font-mono text-[11px]">TEACHER:</span>
+                                <span className="font-medium">teacher@example.com / password123</span>
+                            </p>
+                        </div>
                     </div>
-                </div>
+                )}
             </motion.div>
         </div>
     );

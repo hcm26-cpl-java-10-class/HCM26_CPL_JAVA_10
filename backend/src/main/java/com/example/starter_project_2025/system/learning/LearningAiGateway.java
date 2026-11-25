@@ -1,6 +1,6 @@
 package com.example.starter_project_2025.system.learning;
 
-import com.example.starter_project_2025.system.exam.service.ai.AiEssayGradingClient;
+import com.example.starter_project_2025.system.exam.ai.AiEssayGradingClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;

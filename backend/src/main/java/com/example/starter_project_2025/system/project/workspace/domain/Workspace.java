@@ -40,12 +40,12 @@ import java.util.List;
 @Table(
         name = "workspaces",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_workspace_tenant_team", columnNames = {"tenant_id", "team_id"})
+                @UniqueConstraint(name = "uk_workspace_current_team", columnNames = {"tenant_id", "team_id", "current_slot"})
         }
 )
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("WORKSPACE")
-@ResourceMenu(title = "Workspace", group = "Project Management", icon = "folder", url = "/management/workspaces/candidates", order = 3, permission = "WORKSPACE_READ")
+@ResourceMenu(title = "Workspaces", group = "Project Management", icon = "folder", url = "/management/workspaces/candidates", order = 3, permission = "WORKSPACE_READ")
 public class Workspace extends BaseEntity {
 
     @Column(nullable = false, length = 100)
@@ -69,6 +69,10 @@ public class Workspace extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private WorkspaceStatus status;
+
+    @Column(name = "current_slot", columnDefinition = "bigint default 1")
+    @Builder.Default
+    private Long currentSlot = 1L;
 
     @Column(name = "task_key_prefix", length = 8)
     @Builder.Default

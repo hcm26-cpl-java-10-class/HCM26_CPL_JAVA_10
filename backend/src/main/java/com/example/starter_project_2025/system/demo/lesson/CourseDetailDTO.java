@@ -24,8 +24,15 @@ public record CourseDetailDTO(
         int lessonCount,
         long totalDuration,
         List<SectionItem> sections,
-        SyllabusInfo syllabus
+        SyllabusInfo syllabus,
+        com.example.starter_project_2025.system.demo.course.CourseType courseType,
+        List<AssessmentItem> assessments
 ) {
+    /** Public outline metadata only: no questions, answers, passwords or student scores. */
+    public record AssessmentItem(Long id,String title,
+            com.example.starter_project_2025.system.exam.core.domain.ExamCategory category,
+            java.math.BigDecimal courseWeight,Integer durationMinutes,Long sectionId,Long lessonId) {}
+
     public record SyllabusInfo(Long id, String code, String name) {}
 
 

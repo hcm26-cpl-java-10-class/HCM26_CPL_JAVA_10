@@ -5,8 +5,8 @@ import com.example.starter_project_2025.system.project.domain.ProjectStatus;
 import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.project.ProjectTeam;
 import com.example.starter_project_2025.system.project.ProjectTeamRepository;
-import com.example.starter_project_2025.system.project.ProjectTemplate;
-import com.example.starter_project_2025.system.project.template.assignment.TemplateAssignmentProvisioningService;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.service.assignment.TemplateAssignmentProvisioningService;
 import com.example.starter_project_2025.system.project.team.Team;
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
 import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
@@ -56,7 +56,7 @@ public class WorkspaceCreationTransaction {
         var chosen = selection.resolve(user, request, true);
         if (chosen.project() == null && team.getProjectTemplate() != null) {
             provisioning.provision(team, team.getProjectTemplate(), user.getId(), correlationId);
-            Workspace workspace = workspaces.findFirstByTeamIdOrderByIdAsc(team.getId())
+            Workspace workspace = workspaces.findCurrentByTeamId(team.getId())
                     .orElseThrow(() -> new IllegalStateException("The project workspace was not created"));
             workspace.setTaskKeyPrefix(normalizeTaskKeyPrefix(request.getTaskKeyPrefix()));
             workspaces.save(workspace);

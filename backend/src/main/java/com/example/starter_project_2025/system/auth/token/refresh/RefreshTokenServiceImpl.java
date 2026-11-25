@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.auth.token.refresh;
 
-import com.example.starter_project_2025.exception.BadRequestException;
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.exception.UnauthorizedException;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.auth.util.TokenUtil;
 import com.example.starter_project_2025.system.rbac.role.Role;
@@ -44,6 +45,14 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     @Value("${jwt.refresh-token.duration}")
     long refreshExpirationSeconds;
 
+    @NonFinal
+    @Value("${jwt.refresh-token.short-duration:86400}")
+    long shortRefreshExpirationSeconds;
+
+    @NonFinal
+    @Value("${app.auth.max-active-sessions:5}")
+    int maxActiveSessions;
+
     @Override
     public Jwt decodeAccessToken(String accessToken) {
         return jwtDecoder.decode(accessToken);
@@ -51,7 +60,11 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
     @Override
     public String generateAccessToken(Authentication authentication) {
+        return generateAccessToken(authentication, null);
+    }
 
+    @Override
+    public String generateAccessToken(Authentication authentication, String sessionId) {
         Instant now = Instant.now();
 
         JwtClaimsSet.Builder claimsBuilder = JwtClaimsSet.builder()
@@ -59,7 +72,11 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(accessExpirationSeconds))
                 .subject(authentication.getName())
-            .claim("type", "AccessToken");
+                .claim("type", "AccessToken");
+
+        if (StringUtils.hasText(sessionId)) {
+            claimsBuilder.claim("sid", sessionId);
+        }
 
         if (authentication.getPrincipal() instanceof UserPrincipal principal) {
             User user = principal.getUser();
@@ -67,23 +84,16 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
             Set<String> permissions = resolvePermissions(user);
             Map<String, Set<String>> rolePermissions = resolveRolePermissions(user, roles);
 
-            /*
-             * ADMIN owns every permission, so rolePermissions.ADMIN is an exact
-             * duplicate of the top-level permissions claim. Keeping both made
-             * the bearer token exceed Tomcat's request-header limit. The
-             * frontend reconstructs the primary role entry from permissions,
-             * while the STUDENT/TEACHER entries remain available for preview.
-             */
             compactRolePermissionsForToken(roles, rolePermissions);
 
             claimsBuilder
-                .claim("email", user.getEmail())
-                .claim("firstName", user.getFirstName())
-                .claim("lastName", user.getLastName())
-                .claim("role", roles.stream().findFirst().orElse(null))
-                .claim("roles", roles)
-                .claim("permissions", permissions)
-                .claim("rolePermissions", rolePermissions);
+                    .claim("email", user.getEmail())
+                    .claim("firstName", user.getFirstName())
+                    .claim("lastName", user.getLastName())
+                    .claim("role", roles.stream().findFirst().orElse(null))
+                    .claim("roles", roles)
+                    .claim("permissions", permissions)
+                    .claim("rolePermissions", rolePermissions);
         }
 
         JwtClaimsSet claims = claimsBuilder.build();
@@ -102,36 +112,42 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
     @Override
     public String createRefreshToken(User user) {
-        String rawToken = UUID.randomUUID().toString() + UUID.randomUUID();
+        return createSessionRefreshToken(user, true, null, null).rawToken();
+    }
 
-        RefreshToken token = RefreshToken.builder()
-                .tokenHash(TokenUtil.hash(rawToken))
-                .user(user)
-                .expiryDate(Instant.now().plusSeconds(refreshExpirationSeconds))
-                .revoked(false)
-                .build();
-
-        refreshTokenRepository.save(token);
-
-        return rawToken;
+    @Override
+    @Transactional
+    public CreatedRefreshToken createSessionRefreshToken(
+            User user,
+            boolean rememberMe,
+            String ipAddress,
+            String userAgent
+    ) {
+        enforceMaxActiveSessions(user.getId());
+        String sessionId = UUID.randomUUID().toString();
+        return persistRefreshToken(user, sessionId, rememberMe, ipAddress, userAgent);
     }
 
     @Override
     public RefreshToken verifyRefreshToken(String rawToken) {
+        if (!StringUtils.hasText(rawToken)) {
+            throw new UnauthorizedException("Missing refresh token");
+        }
         String hash = TokenUtil.hash(rawToken);
 
         RefreshToken token = refreshTokenRepository.findByTokenHash(hash)
-                .orElseThrow(() -> new BadRequestException("Invalid refresh token"));
+                .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
 
         if (token.isRevoked()) {
-            throw new BadRequestException("Refresh token has been revoked");
+            throw new UnauthorizedException("Refresh token has been revoked");
         }
 
         if (token.getExpiryDate().isBefore(Instant.now())) {
             token.setRevoked(true);
+            token.setRevokedReason("EXPIRED");
             refreshTokenRepository.save(token);
 
-            throw new BadRequestException("Refresh token has expired");
+            throw new UnauthorizedException("Refresh token has expired");
         }
 
         return token;
@@ -140,32 +156,189 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     @Override
     @Transactional
     public String rotateRefreshToken(RefreshToken oldToken) {
+        return rotateSessionRefreshToken(oldToken, oldToken.getIpAddress(), oldToken.getUserAgent()).rawToken();
+    }
+
+    @Override
+    @Transactional
+    public CreatedRefreshToken rotateSessionRefreshToken(
+            RefreshToken oldToken,
+            String ipAddress,
+            String userAgent
+    ) {
         oldToken.setRevoked(true);
+        oldToken.setRevokedReason("ROTATED");
         refreshTokenRepository.save(oldToken);
 
-        return createRefreshToken(
-                oldToken.getUser()
+        String sessionId = StringUtils.hasText(oldToken.getSessionId())
+                ? oldToken.getSessionId()
+                : UUID.randomUUID().toString();
+
+        return persistRefreshToken(
+                oldToken.getUser(),
+                sessionId,
+                oldToken.isRememberMe(),
+                StringUtils.hasText(ipAddress) ? ipAddress : oldToken.getIpAddress(),
+                StringUtils.hasText(userAgent) ? userAgent : oldToken.getUserAgent()
         );
     }
 
     @Override
+    public boolean isSessionActive(String sessionId) {
+        if (!StringUtils.hasText(sessionId)) {
+            return true;
+        }
+        return refreshTokenRepository.existsBySessionIdAndRevokedFalseAndExpiryDateAfter(
+                sessionId,
+                Instant.now()
+        );
+    }
+
+    @Override
+    @Transactional
     public void revokeRefreshToken(String rawToken) {
+        if (!StringUtils.hasText(rawToken)) {
+            return;
+        }
         String hash = TokenUtil.hash(rawToken);
 
         refreshTokenRepository.findByTokenHash(hash)
                 .ifPresent(token -> {
                     token.setRevoked(true);
+                    token.setRevokedReason("LOGOUT");
                     refreshTokenRepository.save(token);
+                    if (StringUtils.hasText(token.getSessionId())) {
+                        revokeSession(token.getSessionId(), "LOGOUT");
+                    }
                 });
     }
 
     @Override
+    @Transactional
+    public void revokeSession(String sessionId, String reason) {
+        if (!StringUtils.hasText(sessionId)) {
+            return;
+        }
+        List<RefreshToken> active = refreshTokenRepository.findAllBySessionIdAndRevokedFalse(sessionId);
+        if (active.isEmpty()) {
+            return;
+        }
+        active.forEach(t -> {
+            t.setRevoked(true);
+            t.setRevokedReason(reason);
+        });
+        refreshTokenRepository.saveAll(active);
+    }
+
+    @Override
+    @Transactional
+    public void revokeSessionForUser(Long userId, String sessionId, String reason) {
+        List<RefreshToken> active = refreshTokenRepository.findAllBySessionIdAndRevokedFalse(sessionId)
+                .stream()
+                .filter(t -> t.getUser() != null && userId.equals(t.getUser().getId()))
+                .toList();
+        if (active.isEmpty()) {
+            throw new ResourceNotFoundException("Active session not found");
+        }
+        active.forEach(t -> {
+            t.setRevoked(true);
+            t.setRevokedReason(reason);
+        });
+        refreshTokenRepository.saveAll(active);
+    }
+
+    @Override
+    @Transactional
+    public int revokeOtherSessions(Long userId, String currentSessionId, String reason) {
+        List<RefreshToken> active = listActiveSessions(userId);
+        List<RefreshToken> toRevoke = active.stream()
+                .filter(t -> currentSessionId == null || !currentSessionId.equals(t.getSessionId()))
+                .toList();
+        toRevoke.forEach(t -> {
+            t.setRevoked(true);
+            t.setRevokedReason(reason);
+        });
+        if (!toRevoke.isEmpty()) {
+            refreshTokenRepository.saveAll(toRevoke);
+        }
+        return toRevoke.size();
+    }
+
+    @Override
+    @Transactional
     public void revokeAllRefreshTokens(Long userId) {
+        revokeAllRefreshTokens(userId, "REVOKED_ALL");
+    }
+
+    @Override
+    @Transactional
+    public void revokeAllRefreshTokens(Long userId, String reason) {
         List<RefreshToken> tokens = refreshTokenRepository.findAllByUserId(userId);
-
-        tokens.forEach(t -> t.setRevoked(true));
-
+        tokens.stream()
+                .filter(t -> !t.isRevoked())
+                .forEach(t -> {
+                    t.setRevoked(true);
+                    t.setRevokedReason(reason);
+                });
         refreshTokenRepository.saveAll(tokens);
+    }
+
+    @Override
+    public List<RefreshToken> listActiveSessions(Long userId) {
+        return refreshTokenRepository.findAllByUserIdAndRevokedFalseAndExpiryDateAfterOrderByCreatedAtDesc(
+                userId,
+                Instant.now()
+        );
+    }
+
+    private void enforceMaxActiveSessions(Long userId) {
+        if (maxActiveSessions <= 0) {
+            return;
+        }
+        List<RefreshToken> active = listActiveSessions(userId);
+        if (active.size() < maxActiveSessions) {
+            return;
+        }
+        // Keep (maxActiveSessions - 1) newest sessions, revoke oldest overflow.
+        List<RefreshToken> overflow = active.subList(maxActiveSessions - 1, active.size());
+        overflow.forEach(t -> {
+            t.setRevoked(true);
+            t.setRevokedReason("MAX_SESSIONS_EXCEEDED");
+        });
+        refreshTokenRepository.saveAll(overflow);
+    }
+
+    private CreatedRefreshToken persistRefreshToken(
+            User user,
+            String sessionId,
+            boolean rememberMe,
+            String ipAddress,
+            String userAgent
+    ) {
+        String rawToken = UUID.randomUUID().toString() + UUID.randomUUID();
+        long ttlSeconds = rememberMe ? refreshExpirationSeconds : shortRefreshExpirationSeconds;
+        Instant now = Instant.now();
+
+        RefreshToken token = RefreshToken.builder()
+                .tokenHash(TokenUtil.hash(rawToken))
+                .sessionId(sessionId)
+                .user(user)
+                .expiryDate(now.plusSeconds(ttlSeconds))
+                .revoked(false)
+                .rememberMe(rememberMe)
+                .ipAddress(truncate(ipAddress, 64))
+                .userAgent(truncate(userAgent, 512))
+                .lastUsedAt(now)
+                .build();
+
+        refreshTokenRepository.save(token);
+
+        return new CreatedRefreshToken(rawToken, sessionId, rememberMe);
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null) return null;
+        return value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
 
     private Set<String> resolveRoles(User user) {
@@ -253,5 +426,4 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     private String normalizeRoleName(String roleName) {
         return roleName.trim().toUpperCase();
     }
-
 }

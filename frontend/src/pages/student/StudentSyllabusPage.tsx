@@ -7,11 +7,10 @@ import { toast } from "sonner";
 import {
     ArrowLeft,
     BookOpenText,
+    Link2,
     Check,
     ChevronDown,
     Copy,
-    Download,
-    FileText,
     LayoutGrid,
     Table2,
     Layers3,
@@ -21,7 +20,13 @@ import {
 } from "lucide-react";
 
 import { MainLayout } from "@/components/layout/MainLayout";
-import SyllabusLearningPlanTable, { ResourceAction } from "./SyllabusLearningPlanTable";
+import { SyllabusLanguageSwitcher, translatedSyllabusLink, useSyllabusLanguage } from "./SyllabusLanguageSwitcher";
+import { syllabusLabel } from "./syllabusTranslationUi";
+import { usePermissions } from "@/hooks/usePermissions";
+import SyllabusLearningPlanTable from "./SyllabusLearningPlanTable";
+import { StudentTopicCourseMaterials } from "./StudentTopicCourseMaterials";
+import { courseApi } from "@/api";
+import type { CourseDetail } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,21 +50,21 @@ import {
 
 type Section = StudentSyllabusDetail["sections"][number];
 type Topic = Section["topics"][number];
-type Material = StudentSyllabusDetail["materials"][number];
 
 const textOrDash = (
-    value: string | number | null | undefined
+    value: string | number | null | undefined,
+    language: "en" | "vi" = "en",
 ) =>
     value == null || String(value).trim() === ""
-        ? "Not provided"
+        ? (language === "vi" ? "Chưa cung cấp" : "Not provided")
         : String(value);
 
-function sectionName(section: Section): string {
+function sectionName(section: Section, language: "en" | "vi" = "en"): string {
     const name = section.title
-        .replace(/^\s*Section\s+\d+\s*[:.\-–]\s*/i, "")
+        .replace(/^\s*(?:Section|Chương)\s+\d+\s*[:.\-–]\s*/i, "")
         .trim();
 
-    return `Section ${section.orderIndex}: ${
+    return `${language === "vi" ? "Chương" : "Section"} ${section.orderIndex}: ${
         name || section.title
     }`;
 }
@@ -67,7 +72,7 @@ function sectionName(section: Section): string {
 function topicName(topic: Topic): string {
     const name = topic.title
         .replace(
-            /^\s*(?:Topic\s+)?\d+\s*[:.)\-–]\s+/i,
+            /^\s*(?:(?:Topic|Chủ đề)\s+)?\d+\s*[:.)\-–]\s+/i,
             ""
         )
         .trim();
@@ -79,10 +84,11 @@ function topicName(topic: Topic): string {
 
 function InfoField({
                        label,
-                       value,
+                       value, language = "en",
                    }: {
     label: string;
     value: string | number | null | undefined;
+    language?: "en" | "vi";
 }) {
     return (
         <div className="border-b pb-4 last:border-b-0">
@@ -91,80 +97,8 @@ function InfoField({
             </dt>
 
             <dd className="mt-1 whitespace-pre-wrap text-sm leading-6">
-                {textOrDash(value)}
+                {textOrDash(value, language)}
             </dd>
-        </div>
-    );
-}
-
-function MaterialList({
-                          items, syllabusId, onDownload,
-                      }: {
-    items: Material[];
-    syllabusId: number;
-    onDownload: (key: string, name: string) => Promise<void>;
-}) {
-    if (!items.length) {
-        return (
-            <p className="text-sm text-muted-foreground">
-                No learning materials attached.
-            </p>
-        );
-    }
-
-    return (
-        <div className="grid gap-3 sm:grid-cols-2">
-            {items.map((material) => {
-                return (
-                    <article
-                        key={material.id}
-                        className="min-w-0 rounded-xl border bg-card p-4 shadow-sm"
-                    >
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="secondary">
-                                {material.type}
-                            </Badge>
-
-                            {material.topicId == null && (
-                                <Badge variant="outline">Shared reference</Badge>
-                            )}
-
-                            {material.mainMaterial && (
-                                <Badge variant="outline">
-                                    Main material
-                                </Badge>
-                            )}
-                        </div>
-
-                        <h4 className="mt-3 break-words text-sm font-semibold">
-                            {material.title}
-                        </h4>
-
-                        {(material.author || material.publisher) && (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                                {[
-                                    material.author,
-                                    material.publisher,
-                                ]
-                                    .filter(Boolean)
-                                    .join(" · ")}
-                            </p>
-                        )}
-
-                        {material.note && (
-                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-                                {material.note}
-                            </p>
-                        )}
-
-                        <ResourceAction
-                            material={material}
-                            syllabusId={syllabusId}
-                            onDownload={onDownload}
-                        />
-                    </article>
-                );
-            })}
         </div>
     );
 }
@@ -185,10 +119,13 @@ function DetailLoading() {
 
 export default function StudentSyllabusPage() {
     const { id } = useParams();
+    const language = useSyllabusLanguage();
+    const { hasPermission } = usePermissions();
+    const canReadCourses = hasPermission("COURSE_READ");
     const [searchParams] = useSearchParams();
     const fromCourse = Number(searchParams.get("fromCourse"));
     const validSource = Number.isSafeInteger(fromCourse) && fromCourse > 0;
-    const backPath = validSource ? `/courses/${fromCourse}` : "/student/syllabuses";
+    const backPath = validSource ? `/courses/${fromCourse}` : translatedSyllabusLink("/student/syllabuses", language);
 
     const syllabusId = Number(id);
     const validId =
@@ -198,7 +135,6 @@ export default function StudentSyllabusPage() {
     const [tab, setTab] = useState("overview");
     const [search, setSearch] = useState("");
     const [planView, setPlanView] = useState<"cards" | "table">("cards");
-    const [downloading, setDownloading] = useState(false);
 
     const [openById, setOpenById] = useState<
         Record<number, boolean>
@@ -222,34 +158,60 @@ export default function StudentSyllabusPage() {
     });
 
     const syllabus = query.data;
+    // Translate only the display copy. Keep the English source for stable Topic -> Lesson matching.
+    const translationQuery = useQuery({
+        queryKey: ["student-syllabus-translation", syllabusId, syllabus],
+        queryFn: () => studentSyllabusApi.translateDetail(syllabusId),
+        enabled: language === "vi" && validId && !!syllabus,
+        staleTime: 30 * 60 * 1000,
+        retry: false,
+    });
+    const displayedSyllabus = language === "vi" && translationQuery.isSuccess
+        ? translationQuery.data : syllabus;
+    const sourceSectionMap = new Map<number, Section>((syllabus?.sections ?? []).map(section => [section.id, section]));
+
+    const relatedCoursesQuery = useQuery({
+        queryKey: ["student-syllabus-related-courses", syllabusId],
+        queryFn: () => studentSyllabusApi.relatedCourses(syllabusId),
+        enabled: validId && !!syllabus && canReadCourses,
+        retry: (count, error) =>
+            !(axios.isAxiosError(error) && [403, 404].includes(error.response?.status ?? 0)) && count < 2,
+    });
+
+    // Read-only published Course outlines. Content URLs remain gated by the Course API.
+    // On a failed detail request, show an error instead of falsely saying Online.
+    const courseOutlinesQuery = useQuery({
+        queryKey: ["student-syllabus-course-outlines", syllabusId,
+            (relatedCoursesQuery.data ?? []).map((course) => course.id)],
+        enabled: validId && canReadCourses && relatedCoursesQuery.isSuccess &&
+            (relatedCoursesQuery.data?.length ?? 0) > 0,
+        queryFn: async (): Promise<CourseDetail[]> => {
+            return Promise.all(
+                (relatedCoursesQuery.data ?? []).map((course) => courseApi.getCatalogDetail(course.id)),
+            );
+        },
+        retry: false,
+    });
+    const linkedCourses = relatedCoursesQuery.data ?? [];
+    const courseOutlines = courseOutlinesQuery.data ?? [];
+    const errorCourseMaterials = relatedCoursesQuery.isError || courseOutlinesQuery.isError;
+    const loadingCourseMaterials = canReadCourses &&
+        (relatedCoursesQuery.isPending || (linkedCourses.length > 0 && courseOutlinesQuery.isPending));
 
     const sections = [
-        ...(syllabus?.sections ?? []),
+        ...(displayedSyllabus?.sections ?? []),
     ].sort(
         (a, b) => a.orderIndex - b.orderIndex
     );
 
     const clos = [
-        ...(syllabus?.clos ?? []),
+        ...(displayedSyllabus?.clos ?? []),
     ].sort(
         (a, b) => a.orderIndex - b.orderIndex
     );
 
     const cloById = new Map(clos.map((clo) => [clo.id, clo]));
-    const materials = syllabus?.materials ?? [];
-
-    const generalMaterials = materials.filter(
-        (m) => m.topicId == null
-    );
-
     const searchText = search.trim().toLocaleLowerCase();
-    const visibleGeneralMaterials = generalMaterials.filter(
-        (material) =>
-            !searchText ||
-            `${material.title} ${material.note ?? ""}`
-                .toLocaleLowerCase()
-                .includes(searchText)
-    );
     const topicMatchesClo = (topic: Topic) => (topic.cloIds ?? []).some((cloId) => {
         const clo = cloById.get(cloId);
         return clo != null &&
@@ -259,7 +221,7 @@ export default function StudentSyllabusPage() {
     const filteredSections = sections.filter(
         (section) =>
             !searchText ||
-            sectionName(section)
+            sectionName(section, language)
                 .toLocaleLowerCase()
                 .includes(searchText) ||
             (section.mission ?? "")
@@ -270,14 +232,7 @@ export default function StudentSyllabusPage() {
                     topicName(topic)
                         .toLocaleLowerCase()
                         .includes(searchText) ||
-                    topicMatchesClo(topic) ||
-                    materials.some(
-                        (material) =>
-                            material.topicId === topic.id &&
-                            material.title
-                                .toLocaleLowerCase()
-                                .includes(searchText)
-                    )
+                    topicMatchesClo(topic)
             )
     );
 
@@ -306,47 +261,14 @@ export default function StudentSyllabusPage() {
         }
     }
 
-    function saveBlob(blob: Blob, fileName: string) {
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = fileName;
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
-    }
-
-    async function downloadFile(key: string, fileName: string) {
-        try {
-            const blob = await studentSyllabusApi.downloadFile(syllabusId, key);
-            saveBlob(blob, fileName);
-        } catch {
-            toast.error("Unable to download learning file.");
-        }
-    }
-
-    async function downloadAll() {
-        if (!syllabus || downloading) return;
-        setDownloading(true);
-        try {
-            const archive = await studentSyllabusApi.downloadArchive(syllabusId);
-            const safeCode = syllabus.code.replace(/[^a-zA-Z0-9_-]/g, "_");
-            saveBlob(archive, `${safeCode}_student_materials.zip`);
-            toast.success("Materials archive downloaded.");
-        } catch {
-            toast.error("Unable to download materials archive.");
-        } finally {
-            setDownloading(false);
-        }
-    }
-
     return (
         <MainLayout
+            headerActions={<SyllabusLanguageSwitcher loading={language === "vi" && translationQuery.isFetching} />}
             pathName={{
-                syllabuses: "Syllabuses",
-                [String(id)]: syllabus?.name ?? "Details",
+                syllabuses: language === "vi" ? "Đề cương" : "Syllabuses",
+                [String(id)]: displayedSyllabus?.name ?? "Details",
             }}
+            pathLinks={{ syllabuses: translatedSyllabusLink("/student/syllabuses", language) }}
         >
             <div className={`mx-auto w-full space-y-6 pb-10 ${tab === "learning" && planView === "table" ? "max-w-[1600px]" : "max-w-6xl"}`}>
 
@@ -357,13 +279,24 @@ export default function StudentSyllabusPage() {
                 >
                     <Link to={backPath}>
                         <ArrowLeft className="size-4" />
-                        {validSource ? "Back to Course" : "Back to Syllabuses"}
+                        {validSource
+                            ? syllabusLabel(language, "backToCourse", "Back to Course")
+                            : syllabusLabel(language, "backToSyllabuses", "Back to Syllabuses")}
                     </Link>
                 </Button>
 
+                {language === "vi" && translationQuery.isError && (
+                    <div role="alert" className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3 text-sm text-muted-foreground">
+                        {syllabusLabel(language, "translationError", "Translation unavailable. The original text is shown.")}
+                        <Button size="sm" variant="outline" onClick={() => void translationQuery.refetch()}>
+                            {syllabusLabel(language, "retry", "Retry")}
+                        </Button>
+                    </div>
+                )}
+
                 {!validId ? (
                     <div className="rounded-2xl border bg-card p-8">
-                        Invalid Syllabus ID.
+                        {syllabusLabel(language, "invalid", "Invalid Syllabus ID.")}
                     </div>
                 ) : query.isPending ? (
                     <DetailLoading />
@@ -373,12 +306,11 @@ export default function StudentSyllabusPage() {
                         className="space-y-3 rounded-2xl border bg-card p-8"
                     >
                         <h1 className="text-lg font-semibold">
-                            Syllabus unavailable
+                            {syllabusLabel(language, "syllabusUnavailable", "Syllabus unavailable")}
                         </h1>
 
                         <p className="text-sm text-muted-foreground">
-                            This syllabus may be unpublished,
-                            inactive, deleted or temporarily unavailable.
+                            {syllabusLabel(language, "syllabusUnavailableHelp", "This syllabus may be unpublished, inactive, deleted or temporarily unavailable.")}
                         </p>
 
                         <div className="flex gap-2">
@@ -386,12 +318,12 @@ export default function StudentSyllabusPage() {
                                 variant="outline"
                                 onClick={() => void query.refetch()}
                             >
-                                Retry
+                                {syllabusLabel(language, "retry", "Retry")}
                             </Button>
 
                             <Button asChild>
-                                <Link to="/student/syllabuses">
-                                    Browse syllabuses
+                                <Link to={translatedSyllabusLink("/student/syllabuses", language)}>
+                                    {syllabusLabel(language, "browseSyllabuses", "Browse syllabuses")}
                                 </Link>
                             </Button>
                         </div>
@@ -414,7 +346,7 @@ export default function StudentSyllabusPage() {
                                     <div className="flex flex-wrap items-center gap-2">
                                         <Badge variant="secondary">
                                             <Check className="mr-1 size-3" />
-                                            Published
+                                            {syllabusLabel(language, "published", "Published")}
                                         </Badge>
 
                                         <Badge
@@ -425,19 +357,50 @@ export default function StudentSyllabusPage() {
                                         </Badge>
 
                                         <span className="text-xs text-muted-foreground">
-                      Read only
+                      {syllabusLabel(language, "readOnly", "Read only")}
                     </span>
                                     </div>
 
                                     <h1 className="break-words text-2xl font-bold tracking-tight sm:text-3xl">
-                                        {syllabus.name}
+                                        {displayedSyllabus?.name}
                                     </h1>
 
                                     <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-                                        {textOrDash(syllabus.description)}
+                                        {textOrDash(displayedSyllabus?.description, language)}
                                     </p>
                                 </div>
                             </header>
+
+                            {/* Related Courses use explicit FK relations, never matching names. */}
+                            {canReadCourses && (
+                                <section className="rounded-2xl border bg-card p-5" aria-label="Related Courses">
+                                    <div className="mb-3 flex items-center gap-2">
+                                        <Link2 className="size-4 text-muted-foreground" />
+                                        <h2 className="font-semibold">{syllabusLabel(language, "relatedCourses", "Related Courses")}</h2>
+                                    </div>
+                                    {relatedCoursesQuery.isPending ? (
+                                        <p className="text-sm text-muted-foreground">{syllabusLabel(language, "loadingRelated", "Loading related Courses...")}</p>
+                                    ) : relatedCoursesQuery.isError ? (
+                                        <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                                            {syllabusLabel(language, "unavailableRelated", "Unable to load related Courses.")}
+                                            <Button size="sm" variant="outline" onClick={() => void relatedCoursesQuery.refetch()}>{syllabusLabel(language, "retry", "Retry")}</Button>
+                                        </div>
+                                    ) : !relatedCoursesQuery.data?.length ? (
+                                        <p className="text-sm text-muted-foreground">{syllabusLabel(language, "noneRelated", "No published Courses are currently linked to this Syllabus.")}</p>
+                                    ) : (
+                                        <div className="grid gap-2 sm:grid-cols-2">
+                                            {relatedCoursesQuery.data.map((course) => (
+                                                <Link key={course.id} to={`/courses/${course.id}`}
+                                                    className="flex items-center gap-2 rounded-lg border p-3 text-sm font-medium transition-colors hover:bg-muted/50">
+                                                    <BookOpenText className="size-4 shrink-0 text-muted-foreground" />
+                                                    <span className="min-w-0 flex-1 truncate">{course.name}</span>
+                                                    <span className="text-xs text-muted-foreground">{syllabusLabel(language, "viewCourse", "View Course")}</span>
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    )}
+                                </section>
+                            )}
 
                             {/* CONTENT TABS */}
                             <Tabs
@@ -451,7 +414,7 @@ export default function StudentSyllabusPage() {
                                         className="gap-2"
                                     >
                                         <BookOpenText className="size-4" />
-                                        Overview
+                                        {syllabusLabel(language, "overview", "Overview")}
                                     </TabsTrigger>
 
                                     <TabsTrigger
@@ -459,7 +422,7 @@ export default function StudentSyllabusPage() {
                                         className="gap-2"
                                     >
                                         <Layers3 className="size-4" />
-                                        Learning Plan
+                                        {syllabusLabel(language, "learningPlan", "Learning Plan")}
                                     </TabsTrigger>
                                 </TabsList>
 
@@ -470,38 +433,44 @@ export default function StudentSyllabusPage() {
                                 >
                                     <section className="rounded-2xl border bg-card p-6">
                                         <h2 className="mb-5 text-lg font-semibold">
-                                            General Information
+                                            {syllabusLabel(language, "generalInformation", "General Information")}
                                         </h2>
 
                                         <dl className="grid gap-x-8 gap-y-4 md:grid-cols-2">
                                             <InfoField
-                                                label="Teaching Methods"
-                                                value={syllabus.teachingMethods}
+                                                label={syllabusLabel(language, "teachingMethods", "Teaching Methods")}
+                                                value={displayedSyllabus?.teachingMethods}
+                                                language={language}
                                             />
 
                                             <InfoField
-                                                label="Degree Level"
-                                                value={syllabus.degreeLevel}
+                                                label={syllabusLabel(language, "degreeLevel", "Degree Level")}
+                                                value={displayedSyllabus?.degreeLevel}
+                                                language={language}
                                             />
 
                                             <InfoField
-                                                label="Time Allocation"
-                                                value={syllabus.timeAllocation}
+                                                label={syllabusLabel(language, "timeAllocation", "Time Allocation")}
+                                                value={displayedSyllabus?.timeAllocation}
+                                                language={language}
                                             />
 
                                             <InfoField
-                                                label="Scoring Scale"
-                                                value={syllabus.scoringScale}
+                                                label={syllabusLabel(language, "scoringScale", "Scoring Scale")}
+                                                value={displayedSyllabus?.scoringScale}
+                                                language={language}
                                             />
 
                                             <InfoField
-                                                label="Student Responsibilities"
-                                                value={syllabus.studentResponsibilities}
+                                                label={syllabusLabel(language, "responsibilities", "Student Responsibilities")}
+                                                value={displayedSyllabus?.studentResponsibilities}
+                                                language={language}
                                             />
 
                                             <InfoField
-                                                label="Required Tools"
-                                                value={syllabus.requiredTools}
+                                                label={syllabusLabel(language, "requiredTools", "Required Tools")}
+                                                value={displayedSyllabus?.requiredTools}
+                                                language={language}
                                             />
                                         </dl>
                                     </section>
@@ -509,7 +478,7 @@ export default function StudentSyllabusPage() {
                                     <section className="rounded-2xl border bg-card p-6">
                                         <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
                                             <ListChecks className="size-5" />
-                                            Course Learning Outcomes
+                                            {syllabusLabel(language, "outcomes", "Course Learning Outcomes")}
                                         </h2>
 
                                         {clos.length ? (
@@ -534,7 +503,7 @@ export default function StudentSyllabusPage() {
                                             </div>
                                         ) : (
                                             <p className="text-sm text-muted-foreground">
-                                                No learning outcomes available.
+                                                {syllabusLabel(language, "noOutcomes", "No learning outcomes available.")}
                                             </p>
                                         )}
                                     </section>
@@ -549,12 +518,11 @@ export default function StudentSyllabusPage() {
                                         <div className="flex flex-wrap items-center justify-between gap-3">
                                             <div>
                                                 <h2 className="text-lg font-semibold">
-                                                    Learning Plan
+                                                    {syllabusLabel(language, "learningPlan", "Learning Plan")}
                                                 </h2>
 
                                                 <p className="text-sm text-muted-foreground">
-                                                    Browse sections, topics, missions
-                                                    and learning materials.
+                                                    {syllabusLabel(language, "learningDescription", "Links appear only when a published Course contains the matching Section and Topic as a Lesson.")}
                                                 </p>
                                             </div>
 
@@ -562,24 +530,20 @@ export default function StudentSyllabusPage() {
                                                 <div className="flex items-center rounded-md border bg-background p-0.5" aria-label="Learning plan view mode">
                                                     <Button size="sm" variant={planView === "cards" ? "secondary" : "ghost"}
                                                         onClick={() => setPlanView("cards")} aria-pressed={planView === "cards"} className="gap-1.5">
-                                                        <LayoutGrid className="size-4" /> Cards
+                                                        <LayoutGrid className="size-4" /> {syllabusLabel(language, "cards", "Cards")}
                                                     </Button>
                                                     <Button size="sm" variant={planView === "table" ? "secondary" : "ghost"}
                                                         onClick={() => setPlanView("table")} aria-pressed={planView === "table"} className="gap-1.5">
-                                                        <Table2 className="size-4" /> Table
+                                                        <Table2 className="size-4" /> {syllabusLabel(language, "table", "Table")}
                                                     </Button>
                                                 </div>
-                                                <Button size="sm" variant="outline" onClick={() => void downloadAll()}
-                                                    disabled={downloading || materials.length === 0} className="gap-1.5">
-                                                    <Download className="size-4" /> {downloading ? "Preparing ZIP..." : "Download all materials"}
-                                                </Button>
                                                 {planView === "cards" && <>
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
                                                     onClick={() => expandAll(true)}
                                                 >
-                                                    Expand all
+                                                    {syllabusLabel(language, "expandAll", "Expand all")}
                                                 </Button>
 
                                                 <Button
@@ -587,21 +551,21 @@ export default function StudentSyllabusPage() {
                                                     size="sm"
                                                     onClick={() => expandAll(false)}
                                                 >
-                                                    Collapse all
+                                                    {syllabusLabel(language, "collapseAll", "Collapse all")}
                                                 </Button>
                                                 </>}
                                             </div>
                                         </div>
 
                                         <p className="mt-3 text-xs text-muted-foreground">
-                                            Uploaded documents are packed into the ZIP; external references are included as links (.url), not copied files.
+                                            {syllabusLabel(language, "learningNote", "Only the Sections and Topics implemented by a published Course show View lesson. Other topics display Online.")}
                                         </p>
                                         <div className="relative mt-4">
                                             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
                                             <Input
                                                 aria-label="Find section or topic"
-                                                placeholder="Find a section, topic or resource..."
+                                                placeholder={syllabusLabel(language, "findTopic", "Find a section, topic or resource...")}
                                                 className="pl-9 pr-9"
                                                 value={search}
                                                 onChange={(event) =>
@@ -622,25 +586,12 @@ export default function StudentSyllabusPage() {
                                         </div>
                                     </section>
 
-                                    {/* GENERAL MATERIALS: shared at Syllabus level, not assigned to the first Topic */}
-                                    {visibleGeneralMaterials.length > 0 && (
-                                        <section className="rounded-2xl border bg-card p-5">
-                                            <h3 className="mb-4 flex items-center gap-2 font-semibold">
-                                                <FileText className="size-4" />
-                                                General Learning Materials
-                                            </h3>
-                                            <MaterialList
-                                                items={visibleGeneralMaterials}
-                                                syllabusId={syllabusId}
-                                                onDownload={downloadFile}
-                                            />
-                                        </section>
-                                    )}
-
                                     {planView === "table" ? (
-                                        <SyllabusLearningPlanTable sections={sections} clos={clos}
-                                            materials={materials.filter((material) => material.topicId != null)}
-                                            syllabusId={syllabusId} search={search} onDownload={downloadFile} />
+                                        <SyllabusLearningPlanTable sections={sections} clos={clos} search={search}
+                                            originalSections={syllabus?.sections ?? []} language={language}
+                                            courses={linkedCourses} outlines={courseOutlines}
+                                            loadingCourses={loadingCourseMaterials} coursesError={errorCourseMaterials}
+                                            canReadCourses={canReadCourses} />
                                     ) : <>
                                     {/* SECTIONS */}
                                     {filteredSections.map((section) => {
@@ -655,7 +606,7 @@ export default function StudentSyllabusPage() {
                                                 index === 0);
 
                                         const sectionMatches =
-                                            sectionName(section)
+                                            sectionName(section, language)
                                                 .toLocaleLowerCase()
                                                 .includes(searchText) ||
                                             (section.mission ?? "")
@@ -676,14 +627,7 @@ export default function StudentSyllabusPage() {
                                                     topicName(topic)
                                                         .toLocaleLowerCase()
                                                         .includes(searchText) ||
-                                                    topicMatchesClo(topic) ||
-                                                    materials.some(
-                                                        (m) =>
-                                                            m.topicId === topic.id &&
-                                                            m.title
-                                                                .toLocaleLowerCase()
-                                                                .includes(searchText)
-                                                    )
+                                                    topicMatchesClo(topic)
                                             );
 
                                         return (
@@ -706,12 +650,12 @@ export default function StudentSyllabusPage() {
                                                         className="flex w-full items-center justify-between gap-3 p-5 text-left hover:bg-muted/30"
                                                     >
                             <span className="font-semibold">
-                              {sectionName(section)}
+                              {sectionName(section, language)}
                             </span>
 
                                                         <span className="flex shrink-0 items-center gap-2">
                               <Badge variant="secondary">
-                                {section.topics.length} topics
+                                {section.topics.length} {syllabusLabel(language, "topics", "topics")}
                               </Badge>
 
                               <ChevronDown
@@ -728,12 +672,12 @@ export default function StudentSyllabusPage() {
                                                 <CollapsibleContent className="space-y-4 border-t p-5">
                                                     <div>
                                                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                                            Mission
+                                                            {syllabusLabel(language, "mission", "Mission")}
                                                         </p>
 
                                                         <p className="mt-1 whitespace-pre-wrap text-sm leading-6">
                                                             {textOrDash(
-                                                                section.mission
+                                                                section.mission, language
                                                             )}
                                                         </p>
                                                     </div>
@@ -750,7 +694,7 @@ export default function StudentSyllabusPage() {
                                                             {(topic.cloIds ?? []).some((cloId) => cloById.has(cloId)) && (
                                                                 <div className="space-y-2 rounded-lg border bg-card/60 p-3">
                                                                     <p className="text-xs font-medium text-muted-foreground">
-                                                                        Learning outcomes
+                                                                        {syllabusLabel(language, "learningOutcomes", "Learning outcomes")}
                                                                     </p>
                                                                     {(topic.cloIds ?? []).map((cloId) => {
                                                                         const clo = cloById.get(cloId);
@@ -768,20 +712,19 @@ export default function StudentSyllabusPage() {
                                                                 </div>
                                                             )}
 
-                                                            <MaterialList
-                                                                syllabusId={syllabusId}
-                                                                onDownload={downloadFile}
-                                                                items={materials.filter(
-                                                                    (m) =>
-                                                                        m.topicId === topic.id
-                                                                )}
-                                                            />
+                                                            <div className="space-y-2">
+                                                                <p className="text-xs font-semibold text-muted-foreground">{syllabusLabel(language, "studentMaterials", "Student materials")}</p>
+                                                                <StudentTopicCourseMaterials topicTitle={sourceSectionMap.get(section.id)?.topics.find(sourceTopic => sourceTopic.id === topic.id)?.title ?? topic.title}
+                                                                    sectionTitle={sourceSectionMap.get(section.id)?.title ?? section.title} courses={linkedCourses}
+                                                                    outlines={courseOutlines} loading={loadingCourseMaterials}
+                                                                    error={errorCourseMaterials} canReadCourses={canReadCourses} language={language} />
+                                                            </div>
                                                         </article>
                                                     ))}
 
                                                     {topics.length === 0 && (
                                                         <p className="text-sm text-muted-foreground">
-                                                            No matching topics in this section.
+                                                            {syllabusLabel(language, "noTopicMatches", "No matching topics in this section.")}
                                                         </p>
                                                     )}
                                                 </CollapsibleContent>
@@ -789,11 +732,11 @@ export default function StudentSyllabusPage() {
                                         );
                                     })}
 
-                                    {!filteredSections.length && visibleGeneralMaterials.length === 0 && (
+                                    {!filteredSections.length && (
                                         <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
                                             {searchText
-                                                ? "No matching sections or topics."
-                                                : "No sections available."}
+                                                ? (language === "vi" ? "Không có Section hoặc Topic phù hợp." : "No matching sections or topics.")
+                                                : syllabusLabel(language, "noSections", "No sections available.")}
                                         </div>
                                     )}
                                     </>}
@@ -822,10 +765,6 @@ export default function StudentSyllabusPage() {
                                                     0
                                                 ),
                                             ],
-                                            [
-                                                "Materials",
-                                                materials.length,
-                                            ],
                                         ] as const
                                     ).map(([label, value]) => (
                                         <div
@@ -850,13 +789,13 @@ export default function StudentSyllabusPage() {
                                     onClick={() => void copyCode()}
                                 >
                                     <Copy className="size-4" />
-                                    Copy syllabus code
+                                    {syllabusLabel(language, "copyCode", "Copy syllabus code")}
                                 </Button>
                             </section>
 
                             <section className="rounded-2xl border bg-card p-5">
                                 <h2 className="font-semibold">
-                                    Explore this syllabus
+                                    {syllabusLabel(language, "exploreSyllabus", "Explore this syllabus")}
                                 </h2>
 
                                 <div className="mt-3 flex flex-col gap-2">
@@ -872,7 +811,7 @@ export default function StudentSyllabusPage() {
                                         }
                                     >
                                         <BookOpenText className="size-4" />
-                                        Overview
+                                        {syllabusLabel(language, "overview", "Overview")}
                                     </Button>
 
                                     <Button
@@ -887,7 +826,7 @@ export default function StudentSyllabusPage() {
                                         }
                                     >
                                         <Layers3 className="size-4" />
-                                        Learning Plan
+                                        {syllabusLabel(language, "learningPlan", "Learning Plan")}
                                     </Button>
                                 </div>
                             </section>

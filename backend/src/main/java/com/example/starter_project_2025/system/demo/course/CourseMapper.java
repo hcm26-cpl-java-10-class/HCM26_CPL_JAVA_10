@@ -20,6 +20,7 @@ public interface CourseMapper extends BaseCrudMapper<Course, CourseDTO> {
     @Mapping(target = "instructorUser", ignore = true)
     @Mapping(target = "categories", ignore = true)
     @Mapping(target = "syllabus", ignore = true)
+    @Mapping(target = "courseType", ignore = true)
     Course toEntity(CourseDTO dto);
 
     @Override
@@ -37,6 +38,7 @@ public interface CourseMapper extends BaseCrudMapper<Course, CourseDTO> {
     @Mapping(target = "instructorUser", ignore = true)
     @Mapping(target = "categories", ignore = true)
     @Mapping(target = "syllabus", ignore = true)
+    @Mapping(target = "courseType", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void update(@MappingTarget Course entity, CourseDTO dto);
 

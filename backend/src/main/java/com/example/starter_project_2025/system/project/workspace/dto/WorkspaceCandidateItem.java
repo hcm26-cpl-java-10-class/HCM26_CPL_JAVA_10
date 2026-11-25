@@ -29,6 +29,7 @@ public class WorkspaceCandidateItem {
     private Long classId;
     private String classCode;
     private String className;
+    private Long allocationSessionId;
 
     private Long workspaceId;
     private WorkspaceStatus workspaceStatus;

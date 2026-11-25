@@ -1,11 +1,17 @@
 package com.example.starter_project_2025.system.project.allocation;
 
+import com.example.starter_project_2025.system.project.ProjectMemberRepository;
+import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.ProjectTeamRepository;
+import com.example.starter_project_2025.system.project.ProjectTemplateConstraints;
+import com.example.starter_project_2025.system.project.TeamAllocationSession;
+import com.example.starter_project_2025.system.project.TeamAllocationSessionRepository;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.repository.ProjectTemplateRepository;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
-import com.example.starter_project_2025.system.project.*;
 import com.example.starter_project_2025.system.project.project_template_version.*;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateLevel;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplateStatus;
 import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,13 +49,13 @@ public class TemplateCandidateService {
     private final TemplateSearchAuditWriter audit;
 
     public record Candidate(Long templateId, Long versionId, String version, String code, String name,
-            String description, String category, ProjectTemplateLevel level, Integer durationWeeks,
+            String description, String category, String level, Integer durationWeeks,
             int minMembers, int maxMembers, boolean capacityMatch) {}
 
     public record Preview(Candidate template, JsonNode brief) {}
 
     public Page<Candidate> search(Long classId, Long sessionId, Long teamId, Authentication auth,
-            String q, ProjectTemplateLevel level, String category, int page, int size) {
+            String q, String level, String category, int page, int size) {
         Context context = requireContext(classId, sessionId, teamId, auth);
         if (page < 0 || size < 1 || size > 50 || (q != null && q.length() > 120)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid pagination or search term");
@@ -116,7 +122,7 @@ public class TemplateCandidateService {
                 members.countByTeam_Id(team.getId()));
     }
 
-    static Specification<ProjectTemplate> eligible(Context context, String q, ProjectTemplateLevel level, String category) {
+    static Specification<ProjectTemplate> eligible(Context context, String q, String level, String category) {
         return (root, query, cb) -> {
             List<Predicate> all = new ArrayList<>();
             all.add(cb.equal(root.get("tenantId"), context.tenantId()));
@@ -135,7 +141,7 @@ public class TemplateCandidateService {
                         cb.like(cb.lower(root.get("code")), value, '\\'),
                         cb.like(cb.lower(root.get("description")), value, '\\')));
             }
-            if (level != null) all.add(cb.equal(root.get("level"), level));
+            if (level != null && !level.isBlank()) all.add(cb.equal(root.get("level"), level.strip()));
             if (category != null && !category.isBlank())
                 all.add(cb.equal(cb.lower(root.get("category")), category.strip().toLowerCase(Locale.ROOT)));
             return cb.and(all.toArray(Predicate[]::new));

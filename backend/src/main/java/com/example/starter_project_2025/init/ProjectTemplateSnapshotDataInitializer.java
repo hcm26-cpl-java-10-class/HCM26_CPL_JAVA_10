@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.init;
 
-import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.config.startup.StartupMutation;
+import com.example.starter_project_2025.system.project.template.repository.ProjectTemplateRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Profile("!prod")
 @ConditionalOnProperty(prefix = "app.seed.team-allocation", name = "enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
+@StartupMutation
 public class ProjectTemplateSnapshotDataInitializer implements CommandLineRunner {
     private final ProjectTemplateRepository templates;
     private final ProjectTemplateSnapshotService versions;
@@ -23,7 +25,7 @@ public class ProjectTemplateSnapshotDataInitializer implements CommandLineRunner
     @Transactional
     public void run(String... args) {
         templates.findAll().stream().filter(template -> Boolean.TRUE.equals(template.getIsActive())
-                && template.getStatus() != com.example.starter_project_2025.system.project.template.ProjectTemplateStatus.ARCHIVED
+                && template.getStatus() != com.example.starter_project_2025.system.project.template.domain.ProjectTemplateStatus.ARCHIVED
                 && !"MANUAL-GROUPING-DEFAULT".equals(template.getCode()))
                 .forEach(versions::createInitialVersion);
     }

@@ -30,6 +30,13 @@ public interface ProjectTemplateSnapshotRepository
             Long templateId, ProjectTemplateVersionStatus status);
 
     /**
+     * Batch form of {@link #findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDesc}: the first row per
+     * template id is its current version in that status.
+     */
+    List<ProjectTemplateSnapshot> findAllByTemplateIdInAndStatusAndIsActiveTrueOrderByCreatedAtDesc(
+            java.util.Collection<Long> templateIds, ProjectTemplateVersionStatus status);
+
+    /**
      * Used by the sample data seeder to upsert a version per template without
      * duplicating rows (mirrors {@code SprintRepository#findByName}).
      */
@@ -38,4 +45,9 @@ public interface ProjectTemplateSnapshotRepository
     boolean existsByTemplateIdAndVersion(Long templateId, String version);
 
     boolean existsByTemplateIdAndVersionAndIdNot(Long templateId, String version, Long id);
+
+    Optional<ProjectTemplateSnapshot> findByIdAndTemplateIdAndIsActiveTrue(
+            Long snapshotId,
+            Long templateId
+    );
 }

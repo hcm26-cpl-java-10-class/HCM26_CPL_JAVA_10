@@ -4,7 +4,6 @@ import com.example.starter_project_2025.system.auth.authentication.AuthService;
 import com.example.starter_project_2025.system.auth.authentication.dto.response.AuthenticationResponse;
 import com.example.starter_project_2025.system.auth.util.CookieUtil;
 import com.example.starter_project_2025.system.auth.util.DeviceUtil;
-import org.springframework.util.StringUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.AccessLevel;
@@ -17,6 +16,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
@@ -54,20 +54,20 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             String clientDevice = request.getHeader("X-Device-Info");
             String device = StringUtils.hasText(clientDevice) ? clientDevice.trim() : DeviceUtil.parse(userAgent);
 
-            AuthenticationResponse authResponse = authService.loginWithGoogle(email, firstName, lastName, device);
+            AuthenticationResponse authResponse = authService.loginWithGoogle(
+                    email,
+                    Boolean.TRUE.equals(attributes.get("email_verified")),
+                    firstName,
+                    lastName,
+                    device,
+                    resolveClientIp(request),
+                    request.getHeader("User-Agent")
+            );
+            cookieUtil.setRefreshTokenCookie(response, authResponse.getRefreshToken(), true);
 
-            if (authResponse == null || !StringUtils.hasText(authResponse.getAccessToken())) {
-                throw new IllegalStateException("Access token is missing from AuthenticationResponse");
-            }
-
-            if (authResponse.getRefreshToken() != null && !authResponse.getRefreshToken().isBlank()) {
-                cookieUtil.setRefreshTokenCookie(response, authResponse.getRefreshToken());
-            }
-
+            // Do not expose accessToken in URL query parameters; frontend exchanges HttpOnly refresh cookie via /api/auth/refresh.
             String redirectUrl = UriComponentsBuilder.fromHttpUrl(frontendUrl)
                     .path("/oauth2/redirect")
-                    .queryParam("token", authResponse.getAccessToken())
-                    .fragment("token=" + authResponse.getAccessToken())
                     .build()
                     .encode()
                     .toUriString();
@@ -90,5 +90,13 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     private String getStringAttribute(Map<String, Object> attributes, String key) {
         Object value = attributes.get(key);
         return value instanceof String stringValue ? stringValue : null;
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        if (StringUtils.hasText(xff)) {
+            return xff.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

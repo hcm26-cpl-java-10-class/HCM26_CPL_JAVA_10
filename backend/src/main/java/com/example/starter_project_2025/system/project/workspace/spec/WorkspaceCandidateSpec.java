@@ -39,7 +39,7 @@ public final class WorkspaceCandidateSpec {
                 if (Boolean.TRUE.equals(filter.getOnlyUncreated()) || filter.getWorkspaceStatus() != null) {
                     var workspace = query.subquery(Long.class);
                     var row = workspace.from(Workspace.class);
-                    var matches = cb.equal(row.get("team").get("id"), root.get("id"));
+                    var matches = cb.and(cb.equal(row.get("team").get("id"), root.get("id")), cb.equal(row.get("currentSlot"), 1L));
                     if (filter.getWorkspaceStatus() != null) matches = cb.and(matches, cb.equal(row.get("status"), filter.getWorkspaceStatus()));
                     workspace.select(row.get("id")).where(matches);
                     predicates.add(Boolean.TRUE.equals(filter.getOnlyUncreated()) ? cb.not(cb.exists(workspace)) : cb.exists(workspace));
@@ -63,6 +63,7 @@ public final class WorkspaceCandidateSpec {
             var member = membership.from(ProjectMember.class);
             membership.select(member.get("id")).where(cb.equal(member.get("team").get("id"), root.get("id")),
                     cb.isTrue(member.get("isActive")),
+                    cb.isTrue(member.get("classMember").get("isActive")),
                     cb.equal(member.get("classMember").get("trainingClass").get("id"),
                             root.get("trainingClass").get("id")),
                     cb.equal(member.get("classMember").get("user").get("id"), userId),

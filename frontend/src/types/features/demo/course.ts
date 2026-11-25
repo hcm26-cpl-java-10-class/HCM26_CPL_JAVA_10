@@ -1,6 +1,8 @@
 import type { BaseDTO, BaseFilter } from "@/types/common/base";
 import type { LessonContentType } from "./lesson";
 
+export type CourseType = "STANDARD" | "FROM_SYLLABUS";
+
 export type CourseLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
 export type CourseStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
@@ -10,6 +12,7 @@ export interface CourseDTO extends BaseDTO {
   courseLevel?: string;
   publicationStatus?: string;
   instructorEmail?: string;
+  courseType?: CourseType;
   name?: string;
   description?: string;
   thumbnailUrl?: string;
@@ -17,6 +20,9 @@ export interface CourseDTO extends BaseDTO {
   instructorId?: number;
   categoryIds?: number[];
   categoryNames?: string[];
+  syllabusId?: number;
+  syllabusCode?: string;
+  syllabusName?: string;
   /** true = bỏ danh mục của khóa học khi cập nhật (backend bỏ qua categoryId = null). */
   clearCategory?: boolean;
   status?: CourseStatus;
@@ -25,6 +31,7 @@ export interface CourseDTO extends BaseDTO {
 }
 
 export interface CourseFilter extends BaseFilter {
+  courseType?: CourseType;
   categoryId?: number;
   status?: CourseStatus;
   level?: CourseLevel;
@@ -54,6 +61,8 @@ export interface CatalogCourse {
   totalDuration: number;
   isFree: boolean;
   enrolled: boolean;
+  averageRating: number;
+  totalReviews: number;
 }
 
 export type CatalogSort = "createdAt,desc" | "name,asc" | "name,desc";
@@ -104,7 +113,15 @@ export interface CourseDetailSection {
   lessons: CourseDetailLesson[];
 }
 
+export interface CourseDetailAssessment {
+  id: number; title: string; category: "QUIZ" | "ASSIGNMENT" | "MIDTERM" | "FINAL_TEST";
+  courseWeight: number | null; durationMinutes: number | null; sectionId: number | null; lessonId: number | null;
+}
+
 export interface CourseDetail {
+  assessments?: CourseDetailAssessment[];
+  courseType?: CourseType;
+  syllabus?: { id: number; code: string; name: string } | null;
   id: number;
   name: string;
   description?: string | null;

@@ -20,7 +20,7 @@ import com.example.starter_project_2025.system.project.trainingclass.TrainingCla
 import com.example.starter_project_2025.system.project.ProjectTeam;
 import com.example.starter_project_2025.system.project.ProjectTeamRepository;
 import com.example.starter_project_2025.system.project.ProjectTeamStatus;
-import com.example.starter_project_2025.system.project.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -56,9 +56,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     private Specification<ProjectTeam> candidateScope(WorkspaceCandidateFilter filter, User user) {
         access.requireTenant(user, false);
         return WorkspaceCandidateSpec.forTeamList(filter)
-                .and((root, query, cb) ->
-                        cb.equal(root.get("trainingClass").get("tenantId"),
-                                user.getTenant().getId()));
+                .and(WorkspaceCandidateSpec.forScope(user.getId(), user.getTenant().getId()));
     }
 
     @Override
@@ -92,7 +90,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
                 : template == null ? null
                 : template.getCode() != null && !template.getCode().isBlank() ? template.getCode()
                 : "Template #" + template.getId();
-        Workspace existing = workspaceRepository.findFirstByTeamIdOrderByIdAsc(team.getId()).orElse(null);
+        Workspace existing = workspaceRepository.findCurrentByTeamId(team.getId()).orElse(null);
         long memberCount = roster.current(team).size();
         boolean eligible = Boolean.TRUE.equals(team.getIsActive()) && team.getStatus() == ProjectTeamStatus.ACTIVE
                 && existing == null && memberCount > 0
@@ -116,6 +114,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
                 .classId(trainingClass.getId())
                 .classCode(trainingClass.getCode())
                 .className(trainingClass.getName())
+                .allocationSessionId(team.getAllocationSession().getId())
                 .workspaceId(existing != null ? existing.getId() : null)
                 .workspaceStatus(existing != null ? existing.getStatus() : null)
                 .eligibleForWorkspace(eligible)

@@ -18,11 +18,15 @@ export interface WorkspaceResource {
   description?: string | null;
   kind: WorkspaceResourceKind;
   url?: string | null;
-  category?: string | null;
   orderIndex: number;
   updatedAt?: string | null;
   updatedBy?: number | null;
   files: WorkspaceResourceFile[];
+  sourceTemplateId: number | null;
+  sourceName: string | null;
+  origin: "PROJECT" | "PARENT" | "SUB_PROJECT" | null;
+  projectId: number;
+  canManage: boolean;
 }
 
 export interface WorkspaceResourceCollection {
@@ -43,7 +47,6 @@ export interface WorkspaceResourcePayload {
   description?: string | null;
   kind: WorkspaceResourceKind;
   url?: string | null;
-  category?: string | null;
   orderIndex?: number | null;
 }
 

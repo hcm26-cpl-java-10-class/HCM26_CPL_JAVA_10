@@ -2,9 +2,9 @@ package com.example.starter_project_2025.system.learning;
 
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentService;
 import com.example.starter_project_2025.system.demo.progress.LessonProgressService;
-import com.example.starter_project_2025.system.exam.dto.PublishedExamScoreDTO;
-import com.example.starter_project_2025.system.exam.service.PublishedExamScoreService;
-import com.example.starter_project_2025.system.exam.service.ai.AiEssayGradingClient;
+import com.example.starter_project_2025.system.exam.result.dto.PublishedExamScoreDTO;
+import com.example.starter_project_2025.system.exam.result.service.PublishedExamScoreService;
+import com.example.starter_project_2025.system.exam.ai.AiEssayGradingClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -100,7 +100,7 @@ class LearningInsightsTest {
     }
 
     private PublishedExamScoreDTO score(long id, String title, int value, int max, boolean published) {
-        return new PublishedExamScoreDTO(id, title, 1, null, BigDecimal.valueOf(value), BigDecimal.valueOf(max),
-                null, null, Instant.EPOCH, id, published);
+        return new PublishedExamScoreDTO(id, title, null, 1, null, BigDecimal.valueOf(value), BigDecimal.valueOf(max),
+                null, null, Instant.EPOCH, id, published, null, null);
     }
 }

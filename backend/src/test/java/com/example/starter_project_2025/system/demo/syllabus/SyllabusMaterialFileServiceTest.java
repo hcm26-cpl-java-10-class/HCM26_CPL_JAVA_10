@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.demo.syllabus;
 
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusMaterial;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -16,6 +18,10 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import com.example.starter_project_2025.system.demo.syllabus.storage.SyllabusMaterialFileService;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusMaterialRepository;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusRepository;
+import com.example.starter_project_2025.system.demo.syllabus.service.SyllabusWorkflowService;
 
 @ExtendWith(MockitoExtension.class)
 class SyllabusMaterialFileServiceTest {

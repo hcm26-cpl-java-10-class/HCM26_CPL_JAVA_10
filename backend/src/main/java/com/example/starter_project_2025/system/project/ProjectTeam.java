@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClass;
@@ -46,6 +47,12 @@ public class ProjectTeam extends BaseEntity {
     @Column(name = "project_template_version_id")
     Long projectTemplateVersionId;
 
+    @Column(name = "assigned_constraints_json", columnDefinition = "TEXT")
+    String assignedConstraintsJson;
+
+    @Column(name = "assigned_template_name", length = 255)
+    String assignedTemplateName;
+
     public Long getProjectId() {
         return project == null ? null : project.getId();
     }
@@ -55,6 +62,7 @@ public class ProjectTeam extends BaseEntity {
     }
 
     public String getProjectTemplateName() {
+        if (assignedTemplateName != null) return assignedTemplateName;
         return projectTemplate == null ? null : projectTemplate.getName();
     }
 
@@ -77,14 +85,31 @@ public class ProjectTeam extends BaseEntity {
     @Column(length = 2000)
     String conflictResolution;
 
+    /** Business revision of saved charter content; unrelated to the entity lock version. */
+    @lombok.Builder.Default
+    @Column(name = "charter_revision", nullable = false, columnDefinition = "bigint default 0")
+    Long charterRevision = 0L;
+
+    @Column(name = "charter_roster_token", length = 64)
+    String charterRosterToken;
+
     @Column(name = "team_name", nullable = false, length = 255)
     String teamName;
 
     @Column(name = "assigned_mentor_id")
     Long assignedMentorId;
 
+    /** Class member selected as leader while the team is a draft. */
+    @Column(name = "leader_member_id")
+    Long leaderMemberId;
+
     @Column(name = "max_members", nullable = false)
     Integer maxMembers;
+
+    /** Null on legacy rows, which are treated as manually created teams. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "allocation_source", length = 10)
+    TeamAllocationSource allocationSource;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -93,4 +118,8 @@ public class ProjectTeam extends BaseEntity {
     @Version
     @Column(nullable = false)
     Long version;
+
+    public boolean isLedBy(Long memberId) {
+        return memberId != null && memberId.equals(leaderMemberId);
+    }
 }

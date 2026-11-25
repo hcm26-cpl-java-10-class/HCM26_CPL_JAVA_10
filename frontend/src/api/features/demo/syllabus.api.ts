@@ -265,6 +265,11 @@ export const syllabusApi = {
             )
         ).data,
 
+    bulkCreateClos: async (syllabusId: number, details: string[]) =>
+        (
+            await api.post<SyllabusClo[]>(`${root}/${syllabusId}/clos/bulk`, { details })
+        ).data,
+
     updateClo: async (
         syllabusId: number,
         cloId: number,

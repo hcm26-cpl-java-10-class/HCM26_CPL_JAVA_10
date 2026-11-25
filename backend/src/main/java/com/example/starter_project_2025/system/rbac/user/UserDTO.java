@@ -66,7 +66,6 @@ public class UserDTO extends BaseDTO {
     String fullName;
 
     Long tenantId;
-
     Long departmentId;
 
     String departmentName;

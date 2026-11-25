@@ -16,6 +16,7 @@ public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
     @Override
     @Mapping(target = "tenantId", source = "tenantId")
     @IgnoreAuditFields
+    @Mapping(target = "isGuest", ignore = true)
     @Mapping(target = "passwordHash", ignore = true)
     @Mapping(target = "userCode", ignore = true)
     User toEntity(UserDTO request);
@@ -34,6 +35,7 @@ public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
     UserDTO toResponse(User user);
 
     @Override
+    @Mapping(target = "isGuest", ignore = true)
     @Mapping(target = "passwordHash", ignore = true)
     @Mapping(target = "userCode", ignore = true)
     @Mapping(target = "departments", ignore = true)

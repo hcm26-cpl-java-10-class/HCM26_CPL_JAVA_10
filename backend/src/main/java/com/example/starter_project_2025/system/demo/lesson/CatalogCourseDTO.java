@@ -14,6 +14,8 @@ public record CatalogCourseDTO(
         long lessonCount,
         long totalDuration,
         boolean isFree,
-        boolean enrolled
+        boolean enrolled,
+        double averageRating,
+        long totalReviews
 ) {
 }

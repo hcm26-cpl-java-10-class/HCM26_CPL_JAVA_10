@@ -1,199 +1,200 @@
-import { examApi, type PublishedExamScore } from "@/api/features/exam.api";
-import { studentScoreApi } from "@/api/features/demo/student_score.api";
-import { scoreAppealApi } from "@/api/features/score-appeal.api";
+import { COURSE_GRADE_STATUS_LABEL } from "@/types/features/course-my-scores";
+
+import { courseApi } from "@/api/features/demo/course.api";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { examApi } from "@/api/features/exam.api";
+import { Input } from "@/components/ui/input";
+import {
+  DateRangeFilter,
+  EMPTY_RANGE,
+  MyExamStatistics,
+  effectiveRange,
+  inRange,
+  type DateRange,
+} from "@/pages/student/components/MyExamStatistics";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { StudentScoreColumnDTO, StudentScoreDTO } from "@/types/features/demo/student_score";
-import { formatScore } from "@/utils/examScore";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-const toColumns = (score: StudentScoreDTO): StudentScoreColumnDTO[] => {
-  if (score.scoreColumns?.length) return score.scoreColumns;
-  if (Array.isArray(score.scores)) return score.scores;
-  return Object.entries(score.scores ?? {}).map(([key, value]) => ({ key, label: key, value }));
-};
-
-function formatSubmittedAt(value?: string | null): string {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString();
-}
-
-function ExamScoreCard({
-  score,
-  appealed,
-  onAppeal,
-}: {
-  score: PublishedExamScore;
-  appealed: boolean;
-  onAppeal: () => void;
-}) {
-  const isFinalized = score.finalScore != null;
-  const isPublished = score.resultPublished !== false;
-  const displayScore = isFinalized ? score.finalScore : score.objectiveScore;
-  // Results are not released yet -> the student cannot appeal (backend also rejects with 400)
-  const canAppeal = isFinalized && isPublished;
-
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-3">
-        <CardTitle>{score.examTitle || `Exam #${score.examId}`}</CardTitle>
-        <Badge variant={isFinalized ? "default" : "secondary"}>
-          {isFinalized ? "Graded" : "Pending grade"}
-        </Badge>
-      </CardHeader>
-      <CardContent className="space-y-1 text-sm">
-        <div className="flex justify-between border-b pb-2 text-base font-semibold">
-          <span>{isFinalized ? "Score" : "Provisional score"}</span>
-          <span>
-            {canAppeal
-              ? `${formatScore(displayScore ?? 0)}/${formatScore(score.maxScore ?? 10)}`
-              : "Awaiting publication"}
-          </span>
-        </div>
-        {score.secondScore != null && isPublished && (
-          <>
-            <div className="flex justify-between text-muted-foreground">
-              <span>1st grading</span>
-              <span>{formatScore(score.firstScore ?? 0)}/{formatScore(score.maxScore ?? 10)}</span>
-            </div>
-            <div className="flex justify-between text-muted-foreground">
-              <span>2nd grading (official)</span>
-              <span>{formatScore(score.secondScore)}/{formatScore(score.maxScore ?? 10)}</span>
-            </div>
-          </>
-        )}
-        <div className="flex justify-between text-muted-foreground">
-          <span>Attempt</span>
-          <span>{score.attemptNumber}</span>
-        </div>
-        <div className="flex justify-between text-muted-foreground">
-          <span>Submitted at</span>
-          <span>{formatSubmittedAt(score.submittedAt)}</span>
-        </div>
-        {!isPublished && (
-          <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-            Your result has not been released by the teacher yet. You can appeal once the results are published.
-          </p>
-        )}
-        {isFinalized && (
-          <div className="pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              disabled={appealed || !canAppeal}
-              title={
-                !canAppeal
-                  ? "You can only appeal after the teacher publishes the results"
-                  : undefined
-              }
-              onClick={onAppeal}
-            >
-              {appealed
-                ? "Appeal submitted"
-                : canAppeal
-                  ? "Appeal score"
-                  : "Awaiting publication"}
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 
 export default function MyScoresPage() {
   const navigate = useNavigate();
 
   const {
-    data: examScores = [],
-    isLoading: isExamScoresLoading,
-    isError: isExamScoresError,
-  } = useQuery({
-    queryKey: ["my-exam-scores"],
-    queryFn: examApi.getMyPublishedExamScores,
-  });
-
-  const {
     data: courseScores = [],
-    isLoading: isCourseScoresLoading,
-    isError: isCourseScoresError,
+    isLoading,
+    isError,
   } = useQuery({
-    queryKey: ["my-scores"],
-    queryFn: studentScoreApi.getMine,
+    queryKey: ["my-course-scores"],
+    queryFn: courseApi.getMyScores,
   });
 
-  const myAppealsQuery = useQuery({
-    queryKey: ["my-appeals-for-scores"],
-    queryFn: scoreAppealApi.getMyAppeals,
+  const { data: insights } = useQuery({
+    queryKey: ["my-score-insights"],
+    queryFn: () => examApi.getMyScoreInsights(),
   });
 
-  const appealedAttemptIds = new Set(
-    (myAppealsQuery.data ?? []).map((a) => a.attemptId).filter((v): v is number => v != null)
+  const [search, setSearch] = useState("");
+  const [range, setRange] = useState<DateRange>(EMPTY_RANGE);
+
+  const enrolledAtByCourse = useMemo(
+    () => new Map((insights?.courses ?? []).map((c) => [c.courseId, c.enrolledAt])),
+    [insights],
   );
 
+  const visibleScores = useMemo(() => {
+    const applied = effectiveRange(range);
+    const term = search.trim().toLowerCase();
+    return courseScores.filter((course) => {
+      const label = `${course.courseCode ?? ""} ${course.courseName}`.toLowerCase();
+      return (
+        label.includes(term) &&
+        inRange(enrolledAtByCourse.get(course.courseId) ?? null, applied)
+      );
+    });
+  }, [courseScores, search, range, enrolledAtByCourse]);
+
   return (
-    <MainLayout pathName={{ "my-scores": "My Scores" }}>
-      <div className="space-y-6 p-4">
-        <h1 className="text-2xl font-bold">My Scores</h1>
+      <MainLayout pathName={{ "my-scores": "My Scores" }}>
+        <div className="space-y-6 p-4">
+          <h1 className="text-2xl font-bold">My Scores</h1>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Exam Scores</h2>
-          {isExamScoresLoading && <p className="text-muted-foreground">Loading...</p>}
-          {isExamScoresError && (
-            <p className="text-destructive">Could not load exam scores.</p>
-          )}
-          {!isExamScoresLoading && !isExamScoresError && examScores.length === 0 && (
-            <p className="text-muted-foreground">No graded exam attempts yet.</p>
-          )}
-          {examScores.map((score) => (
-            <ExamScoreCard
-              key={`${score.examId}-${score.attemptNumber}`}
-              score={score}
-              appealed={appealedAttemptIds.has(score.attemptId)}
-              onAppeal={() => navigate(`/my-appeals?attemptId=${score.attemptId}`)}
-            />
-          ))}
-        </section>
+          <Tabs defaultValue="course-scores" className="space-y-4">
+            <TabsList className="w-full">
+              <TabsTrigger value="statistics" className="flex-1">Statistics</TabsTrigger>
+              <TabsTrigger value="course-scores" className="flex-1">Course Scores</TabsTrigger>
+            </TabsList>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Course Scores</h2>
-          {isCourseScoresLoading && <p className="text-muted-foreground">Loading...</p>}
-          {isCourseScoresError && (
-            <p className="text-destructive">Could not load scores.</p>
-          )}
-          {!isCourseScoresLoading && !isCourseScoresError && courseScores.length === 0 && (
-            <p className="text-muted-foreground">No released scores yet.</p>
-          )}
-          {courseScores.map((score) => (
-            <Card key={score.id}>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>{score.className || score.studentCode}</CardTitle>
-                <Badge variant={score.status === "ADJUSTED" ? "secondary" : "default"}>
-                  {score.status}
-                </Badge>
-              </CardHeader>
-              <CardContent className="space-y-1 text-sm">
-                {toColumns(score).map((c, i) => (
-                  <div key={c.key ?? i} className="flex justify-between">
-                    <span>{c.label ?? c.name ?? c.key}</span>
-                    <span>{c.value ?? "-"}</span>
-                  </div>
-                ))}
-                <div className="flex justify-between border-t pt-2 font-semibold">
-                  <span>Overall</span>
-                  <span>{score.overallScore ?? "-"}</span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </section>
-      </div>
-    </MainLayout>
+            <TabsContent value="statistics">
+              <MyExamStatistics />
+            </TabsContent>
+
+            <TabsContent value="course-scores">
+          <section className="space-y-4">
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="space-y-1">
+                <label htmlFor="course-scores-search" className="text-xs font-medium text-muted-foreground">
+                  Search course
+                </label>
+                <Input
+                  id="course-scores-search"
+                  className="w-64"
+                  placeholder="Course name..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <DateRangeFilter value={range} onChange={setRange} idPrefix="course-scores-filter" />
+            </div>
+
+            {isLoading && (
+                <p className="text-sm text-muted-foreground">
+                  Loading course scores...
+                </p>
+            )}
+
+            {isError && (
+                <p className="text-sm text-destructive">
+                  Unable to load course scores.
+                </p>
+            )}
+
+            {!isLoading && !isError && courseScores.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No course scores available.
+                </p>
+            )}
+
+            {!isLoading && !isError && courseScores.length > 0 && visibleScores.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No course matches the current search or date filter.
+                </p>
+            )}
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {visibleScores.map((course) => (
+                  <Card
+                      key={course.courseId}
+                      className="cursor-pointer transition-shadow hover:shadow-md"
+                      onClick={() => navigate(`/my-scores/${course.courseId}`)}
+                  >
+
+                    <div className="flex items-start gap-4 p-4">
+                      {/* Course thumbnail - 88x88 */}
+                      <div className="h-[88px] w-[120px] shrink-0 overflow-hidden rounded-lg bg-muted">
+                        {course.thumbnailUrl && (
+                            <img
+                                src={course.thumbnailUrl}
+                                alt={course.courseName}
+                                className="h-full w-full object-cover"
+                            />
+                        )}
+                      </div>
+
+                      {/* Course information */}
+                      <div className="min-w-0 flex-1">
+                        <CardHeader className="p-0 pb-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <CardTitle className="text-base">
+                                {course.courseCode
+                                    ? `${course.courseCode} - `
+                                    : ""}
+                                {course.courseName}
+                              </CardTitle>
+
+                              {course.className && (
+                                  <CardDescription>
+                                    Class: {course.className}
+                                  </CardDescription>
+                              )}
+                            </div>
+
+                            {course.resultStatus && (
+                                <Badge
+                                    variant={
+                                      course.resultStatus === "PASSED"
+                                          ? "default"
+                                          : course.resultStatus === "FAILED" ? "destructive" : "outline"
+                                    }
+                                >
+                                  {COURSE_GRADE_STATUS_LABEL[course.resultStatus] || course.resultStatus}
+                                </Badge>
+                            )}
+                          </div>
+                        </CardHeader>
+
+                        <CardContent className="p-0">
+                          <div className="flex items-center justify-between gap-2">
+        <span className="text-sm text-muted-foreground">
+          Overall Score
+        </span>
+
+                            <span className="text-2xl font-semibold">
+          {course.overallScore != null
+              ? course.overallScore.toFixed(1)
+              : "-"}
+        </span>
+                          </div>
+                        </CardContent>
+                      </div>
+                    </div>
+
+                  </Card>
+              ))}
+            </div>
+          </section>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </MainLayout>
   );
 }

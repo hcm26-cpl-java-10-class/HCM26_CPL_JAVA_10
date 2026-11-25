@@ -1,4 +1,6 @@
 package com.example.starter_project_2025.system.project.milestone.risk.demo;
+
+import com.example.starter_project_2025.config.startup.StartupMutation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -6,8 +8,9 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import javax.sql.DataSource;
-@Component @Order(22) @Profile("!test & !prod") @RequiredArgsConstructor
+@Component @Order(41) @Profile("!test & !prod") @RequiredArgsConstructor
 @ConditionalOnProperty(name = "app.task-alert.demo.enabled", havingValue = "true", matchIfMissing = true)
+@StartupMutation
 public class MilestoneRiskDemoInitializer implements CommandLineRunner {
     private final MilestoneRiskDemoDataService demo;
     private final DataSource dataSource;

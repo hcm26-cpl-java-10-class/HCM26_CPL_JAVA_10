@@ -13,8 +13,8 @@ import {
   resolveEffectivePermissions,
 } from "@/utils/rbac.utils";
 import { useNavigate } from "react-router-dom";
-import { authApi } from "@/api/features/auth.api";
-import { setLogout } from "@/store/slices/auth/authSlice";
+import { performAppLogout } from "@/utils/auth-logout";
+import { useQueryClient } from "@tanstack/react-query";
 import { initialProfileData } from "@/pages/management/profile/mockData";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 import {
@@ -29,6 +29,7 @@ import {
 export default function HeaderRight({ compact = false }: { compact?: boolean } = {}) {
   const { canLearn } = usePermissions();
   const dispatch = useDispatch();
+  const queryClient = useQueryClient();
   const auth = useSelector((state: RootState) => state.auth);
   const { role, roles, rolePermissions, permissions, isAuthenticated } = auth;
   const { activeRole, availableRoles, isPreviewMode, setViewRole } = useRoleSwitch();
@@ -60,17 +61,13 @@ export default function HeaderRight({ compact = false }: { compact?: boolean } =
   const userInitials = computeInitials(userName);
   const userRoleDisplay = role ? formatRoleLabel(primaryRole) : initialProfileData.role;
 
-  const handleLogout = async () => {
-    if (isAuthenticated) {
-      try {
-        await authApi.logout();
-      } catch {
-        // Proceed with client logout even if backend is offline
-      }
-    }
-    dispatch(setLogout());
-    navigate("/login");
-  };
+  const handleLogout = () => performAppLogout({
+    dispatch,
+    queryClient,
+    navigate,
+    clearViewRole: () => setViewRole(null),
+    skipApi: !isAuthenticated,
+  });
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -273,7 +270,7 @@ export default function HeaderRight({ compact = false }: { compact?: boolean } =
         </Badge>
       )}
 
-      <NotificationBell />
+      <NotificationBell key={auth.email} />
       {/* User Account Dropdown */}
       {renderUserAccountMenu()}
 

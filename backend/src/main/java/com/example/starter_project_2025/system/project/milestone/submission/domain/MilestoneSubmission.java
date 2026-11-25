@@ -34,7 +34,7 @@ public class MilestoneSubmission {
     @JoinColumn(name = "milestone_id", nullable = false, updatable = false)
     private Milestone milestone;
 
-    @Column(name = "team_id", nullable = false, updatable = false)
+    @Column(name = "team_id", updatable = false)
     private Long teamId;
 
     @Column(name = "team_name", nullable = false, length = 120)

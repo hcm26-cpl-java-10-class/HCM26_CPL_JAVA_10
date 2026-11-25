@@ -5,13 +5,20 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.system.rbac.user.User;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -23,6 +30,7 @@ public class LocationServiceImpl
 
     LocationMapper locationMapper;
     LocationRepository locationRepository;
+    UserRepository userRepository;
 
     @Override
     protected BaseCrudRepository<Location, Long> getRepository() {
@@ -36,7 +44,7 @@ public class LocationServiceImpl
 
     @Override
     protected String[] searchableFields() {
-        return new String[]{"code", "name"};
+        return new String[]{"code", "name", "path"};
     }
 
     @Override
@@ -45,20 +53,12 @@ public class LocationServiceImpl
 
         if (locationRepository.existsByCode(request.getCode())) {
             ctx.add("code", "Location code is already in use");
+            return;
         }
 
-        Long parentId = resolveParentId(request.getParentLocationId(), null, ctx);
-
-        location.setCode(request.getCode());
-        location.setName(request.getName());
-        location.setParentId(parentId);
-
-        if (location.getIsActive() == null) {
-            location.setIsActive(true);
-        }
-
-        if (location.getStatus() == null) {
-            location.setStatus("ACTIVE");
+        Location parent = resolveParent(request.getParentLocationId(), null, ctx);
+        if (!ctx.hasErrors()) {
+            location.setParentLocation(parent);
         }
     }
 
@@ -72,14 +72,12 @@ public class LocationServiceImpl
             }
         }
 
-        Long parentId = resolveParentId(request.getParentLocationId(), location.getId(), ctx);
+        location.updateInfo(request.getName(), request.getDescription());
+        location.changeStatus(request.getStatus());
 
+        Location newParent = resolveParent(request.getParentLocationId(), location.getId(), ctx);
         if (!ctx.hasErrors()) {
-            location.setParentId(parentId);
-        }
-
-        if (location.getIsActive() == null) {
-            location.setIsActive(true);
+            location.setParentLocation(newParent);
         }
     }
 
@@ -87,8 +85,11 @@ public class LocationServiceImpl
     protected void beforeDelete(Location location) {
         ValidationContext ctx = new ValidationContext();
 
-        if (locationRepository.existsByParentId(location.getId())) {
+        if (location.getChildren() != null && !location.getChildren().isEmpty()) {
             ctx.add("id", "Cannot delete a location that still has child locations");
+        }
+        if (location.getUsers() != null && !location.getUsers().isEmpty()) {
+            ctx.add("id", "Cannot delete a location that still has assigned users");
         }
 
         ctx.throwIfErrors();
@@ -99,60 +100,149 @@ public class LocationServiceImpl
     public List<LocationTreeDTO> getTree() {
         checkPermission(CrudAction.READ);
 
-        List<Location> all = locationRepository.findAll();
+        // Fetch toàn bộ location một lần để Hibernate nạp đầy đủ vào Persistence Context
+        List<Location> allLocations = locationRepository.findAll();
 
-        Map<Long, List<Location>> childrenByParent = new HashMap<>();
-        List<Location> roots = new ArrayList<>();
-
-        for (Location loc : all) {
-            Long parentId = loc.getParentId();
-            if (parentId == null) {
-                roots.add(loc);
-            } else {
-                childrenByParent.computeIfAbsent(parentId, k -> new ArrayList<>()).add(loc);
-            }
-        }
+        // Lọc ra danh sách các nút gốc (Parent is null)
+        List<Location> roots = allLocations.stream()
+                .filter(loc -> loc.getParentLocation() == null)
+                .sorted(Comparator.comparing(Location::getName, String.CASE_INSENSITIVE_ORDER))
+                .toList();
 
         return roots.stream()
-                .sorted(Comparator.comparing(Location::getName, String.CASE_INSENSITIVE_ORDER))
-                .map(loc -> toNode(loc, childrenByParent))
+                .map(this::toNode)
                 .toList();
     }
 
-    private LocationTreeDTO toNode(Location loc, Map<Long, List<Location>> childrenByParent) {
-        List<LocationTreeDTO> children = childrenByParent
-                .getOrDefault(loc.getId(), List.of())
-                .stream()
+    @Transactional
+    public void processImportedLocations(List<Location> importedLocations) {
+        Map<String, Location> locationMap = new HashMap<>();
+        for (Location loc : importedLocations) {
+            if (loc.getCode() != null) {
+                locationMap.put(loc.getCode().trim(), loc);
+            }
+        }
+
+        for (Location loc : importedLocations) {
+            if (loc.getParentCode() != null && !loc.getParentCode().isBlank()) {
+                Location parent = locationMap.get(loc.getParentCode().trim());
+                if (parent == null) {
+                    parent = locationRepository.findByCode(loc.getParentCode().trim()).orElse(null);
+                }
+                if (parent != null) {
+                    loc.setParentLocation(parent);
+                }
+            }
+
+            if (loc.getAssignedUserEmails() != null && !loc.getAssignedUserEmails().isBlank()) {
+                String[] emails = loc.getAssignedUserEmails().split(",");
+                for (String email : emails) {
+                    userRepository.findByEmail(email.trim()).ifPresent(loc::addUser);
+                }
+            }
+        }
+
+        locationRepository.saveAll(importedLocations);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ByteArrayInputStream exportLocationsToExcel() {
+        List<Location> locations = locationRepository.findAll();
+
+        try (Workbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+            Sheet sheet = workbook.createSheet("Locations");
+
+            // Tạo Header Row
+            Row headerRow = sheet.createRow(0);
+            String[] headers = {"Code", "Name", "Parent Code", "Description", "Status", "Assigned User Emails"};
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+            }
+
+            // Ghi dữ liệu từng dòng
+            int rowIdx = 1;
+            for (Location loc : locations) {
+                Row row = sheet.createRow(rowIdx++);
+
+                row.createCell(0).setCellValue(loc.getCode() != null ? loc.getCode() : "");
+                row.createCell(1).setCellValue(loc.getName() != null ? loc.getName() : "");
+
+                // Lấy Parent Code
+                String parentCode = (loc.getParentLocation() != null) ? loc.getParentLocation().getCode() : "";
+                row.createCell(2).setCellValue(parentCode);
+
+                row.createCell(3).setCellValue(loc.getDescription() != null ? loc.getDescription() : "");
+                row.createCell(4).setCellValue(loc.getStatus() != null ? loc.getStatus().name() : "ACTIVE");
+
+                // Gom danh sách Email User phân cách bằng dấu phẩy
+                String assignedEmails = "";
+                if (loc.getUsers() != null && !loc.getUsers().isEmpty()) {
+                    assignedEmails = loc.getUsers().stream()
+                            .map(User::getEmail)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.joining(","));
+                }
+                row.createCell(5).setCellValue(assignedEmails);
+            }
+
+            workbook.write(out);
+            return new ByteArrayInputStream(out.toByteArray());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to export locations to Excel: " + e.getMessage());
+        }
+    }
+
+    private LocationTreeDTO toNode(Location loc) {
+        Set<Location> rawChildren = loc.getChildren();
+        List<LocationTreeDTO> childrenNodes = (rawChildren == null || rawChildren.isEmpty())
+                ? List.of()
+                : rawChildren.stream()
                 .sorted(Comparator.comparing(Location::getName, String.CASE_INSENSITIVE_ORDER))
-                .map(child -> toNode(child, childrenByParent))
+                .map(this::toNode)
                 .toList();
 
-        List<UserSummaryDTO> userSummaries = loc.getUsers() == null ? List.of() :
-                loc.getUsers().stream()
-                        .map(u -> {
-                            String roleName = (u.getRoles() != null && !u.getRoles().isEmpty())
-                                    ? u.getRoles().iterator().next().getName()
-                                    : null;
+        Set<User> rawUsers = loc.getUsers();
+        List<UserSummaryDTO> userSummaries = (rawUsers == null || rawUsers.isEmpty())
+                ? List.of()
+                : rawUsers.stream()
+                .map(u -> {
+                    String roleName = (u.getRoles() != null && !u.getRoles().isEmpty())
+                            ? u.getRoles().iterator().next().getName()
+                            : null;
 
-                            return UserSummaryDTO.builder()
-                                    .id(u.getId())
-                                    .email(u.getEmail())
-                                    .fullName(u.getFullName())
-                                    .phone(u.getPhone())
-                                    .roleName(roleName)
-                                    .build();
-                        })
-                        .toList();
+                    return UserSummaryDTO.builder()
+                            .id(u.getId())
+                            .email(u.getEmail())
+                            .fullName(u.getFullName())
+                            .phone(u.getPhone())
+                            .roleName(roleName)
+                            .build();
+                })
+                .toList();
+
+        // Tính tổng nhân sự đệ quy: số user gán trực tiếp + tổng nhân sự của các nút con
+        int directUsersCount = userSummaries.size();
+        int childrenUsersCount = childrenNodes.stream()
+                .mapToInt(LocationTreeDTO::getTotalUsers)
+                .sum();
+        int totalCalculated = directUsersCount + childrenUsersCount;
 
         return LocationTreeDTO.builder()
                 .id(loc.getId())
                 .code(loc.getCode())
                 .name(loc.getName())
-                .parentId(loc.getParentId())
+                .description(loc.getDescription())
+                .parentLocationId(loc.getParentLocation() != null ? loc.getParentLocation().getId() : null)
+                .path(loc.getPath())
+                .level(loc.getLevel())
                 .status(loc.getStatus())
                 .users(userSummaries)
-                .totalUsers(userSummaries.size())
-                .children(children)
+                .totalUsers(totalCalculated)
+                .children(childrenNodes)
                 .build();
     }
 
@@ -165,7 +255,7 @@ public class LocationServiceImpl
         }
     }
 
-    private Long resolveParentId(Long parentId, Long currentId, ValidationContext ctx) {
+    private Location resolveParent(Long parentId, Long currentId, ValidationContext ctx) {
         if (parentId == null) {
             return null;
         }
@@ -175,27 +265,24 @@ public class LocationServiceImpl
             return null;
         }
 
-        Optional<Location> parent = locationRepository.findById(parentId);
-
-        if (parent.isEmpty()) {
+        Location parent = locationRepository.findById(parentId).orElse(null);
+        if (parent == null) {
             ctx.add("parentLocationId", "Parent location does not exist");
             return null;
         }
 
         if (currentId != null) {
-            Long cursorId = parent.get().getParentId();
-            Set<Long> visited = new HashSet<>();
-
-            while (cursorId != null && visited.add(cursorId)) {
-                if (cursorId.equals(currentId)) {
+            Location cursor = parent;
+            while (cursor != null) {
+                if (Objects.equals(cursor.getId(), currentId)) {
                     ctx.add("parentLocationId", "Parent location cannot be a descendant of this location");
                     return null;
                 }
-                Optional<Location> cursorLoc = locationRepository.findById(cursorId);
-                cursorId = cursorLoc.map(Location::getParentId).orElse(null);
+                cursor = cursor.getParentLocation();
             }
         }
 
-        return parentId;
+        return parent;
     }
+
 }

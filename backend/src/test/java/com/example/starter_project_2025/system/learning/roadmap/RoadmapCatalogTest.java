@@ -51,7 +51,7 @@ class RoadmapCatalogTest {
 
     private CatalogCourseDTO candidate(Long id, long seconds) {
         return new CatalogCourseDTO(id, "Java", "Java basics", null, null, null, null,
-                CourseLevel.BEGINNER, 2, seconds, true, false);
+                CourseLevel.BEGINNER, 2, seconds, true, false, 0.0, 0L);
     }
 
     private Course course(Long id) {

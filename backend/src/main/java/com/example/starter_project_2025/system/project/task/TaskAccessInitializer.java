@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.task;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.rbac.permission.PermissionRepository;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,7 @@ import java.util.List;
 @Component
 @Order(4)
 @RequiredArgsConstructor
+@StartupMutation
 public class TaskAccessInitializer implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
