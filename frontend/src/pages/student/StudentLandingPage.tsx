@@ -1,3 +1,4 @@
+import { formatDateNow } from "@/i18n/format";
 import { enrollmentApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +26,7 @@ const checklistItems = [
 
 const formatEnrollmentDate = (value: string) => {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("vi-VN");
+  return Number.isNaN(date.getTime()) ? value : formatDateNow(date);
 };
 
 export default function StudentLandingPage() {
@@ -68,6 +69,7 @@ export default function StudentLandingPage() {
             Xem cac khoa hoc da dang ky, danh sach sach va lich thi sap toi.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
+            {hasPermission("ENROLLMENT_CREATE") && <Button asChild variant="outline"><Link to="/student/recommendations">For you</Link></Button>}
             <Button asChild className="bg-cyan-600 text-white hover:bg-cyan-500">
               <Link to="/student/exams">
                 <CalendarDays className="mr-2 size-4" />

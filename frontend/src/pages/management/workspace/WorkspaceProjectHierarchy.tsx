@@ -1,3 +1,4 @@
+import { formatDateTimeNow } from "@/i18n/format";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { ChevronDown, ChevronRight, FolderTree, History } from "lucide-react";
@@ -35,7 +36,7 @@ export function WorkspaceProjectHierarchy({ data, selectedId, onSelect }: {
     {data.readOnly && <p role="status" className="rounded-lg border bg-muted/30 p-4 text-sm">This is a previous workspace. Its project brief, resources and work history are available for viewing.</p>}
     {data.assignmentId !== null && <Card><CardHeader><CardTitle className="flex items-center gap-2"><FolderTree className="size-5" />Project hierarchy</CardTitle>
       <p className="text-sm text-muted-foreground">{data.mode === "WHOLE" ? "Your team owns the complete master project." : "Your team works on the modules assigned to this workspace."}
-        {data.assignedAt && ` Assigned ${new Date(data.assignedAt).toLocaleString("en-GB")}.`}</p></CardHeader>
+        {data.assignedAt && ` Assigned ${formatDateTimeNow(data.assignedAt)}.`}</p></CardHeader>
       <CardContent><ul className="space-y-2">{data.projects.map(node => <ProjectNode key={node.id} node={node} selectedId={selectedId} onSelect={onSelect} />)}</ul></CardContent></Card>}
     {data.history.length > 1 && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><History className="size-4" />Workspace history</CardTitle></CardHeader>
       <CardContent className="flex flex-wrap gap-2">{data.history.map(workspace => <Button key={workspace.workspaceId} asChild size="sm" variant={workspace.workspaceId === data.workspaceId ? "secondary" : "outline"}>

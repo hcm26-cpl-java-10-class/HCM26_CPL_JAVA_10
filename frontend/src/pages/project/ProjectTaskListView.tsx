@@ -1,4 +1,7 @@
 import { projectBoardApi } from "@/api/features/project-board.api";
+import { createLocaleFormatter } from "@/i18n/format";
+import { toLanguage } from "@/i18n/languages";
+import i18n from "@/i18n";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,10 +68,7 @@ function statusLabel(status: BoardTaskStatus) {
 function formatDateTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("vi-VN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return createLocaleFormatter(toLanguage(i18n.language)).formatDateTimeMedium(date);
 }
 
 function errorMessage(error: unknown) {

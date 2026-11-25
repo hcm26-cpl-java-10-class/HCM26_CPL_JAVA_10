@@ -12,6 +12,9 @@ import { Fragment, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useActiveModuleGroups } from "@/hooks/useSidebarMenus.ts";
 import { iconMap } from "@/components/datatable/iconMap";
+import { useTranslation } from "react-i18next";
+import { toLanguage } from "@/i18n/languages";
+import { translateForRender } from "@/i18n/translator";
 
 type Props = {
     pathTitles?: Record<string, string>;
@@ -80,7 +83,11 @@ export default function DynamicBreadcrumbs({
     const isStudentVariant = variant === "student";
 
     const homePath = isStudentVariant ? "/student" : "/";
-    const homeLabel = isStudentVariant ? "Student Home" : "Home";
+    // Dịch ngay lúc render để không nháy tiếng Anh rồi mới ra tiếng Việt.
+    const { i18n } = useTranslation();
+    const language = toLanguage(i18n.language);
+    const translate = (text: string) => translateForRender(text, language) ?? text;
+    const homeLabel = translate(isStudentVariant ? "Student Home" : "Home");
     const HomeIcon = isStudentVariant ? GraduationCap : Home;
 
     const modules = useMemo(() => moduleGroups?.flatMap((group) => group.modules) ?? [], [moduleGroups]);
@@ -106,10 +113,8 @@ export default function DynamicBreadcrumbs({
     // Hrefs are built from the full path; ignored segments (e.g. ones without a page of their own) are only hidden.
     const pathnameSegments = location.pathname.split("/").filter(Boolean);
 
-    const rawSegments =
-        isStudentVariant && pathnameSegments[0]?.toLowerCase() === "student"
-            ? pathnameSegments.slice(1)
-            : pathnameSegments;
+    const rawSegments = pathnameSegments;
+    if (isStudentVariant) ignoredPaths.add("student");
 
     const crumbs: BreadcrumbNode[] = rawSegments.flatMap((segment, index) => {
         const routeHref = `/${rawSegments.slice(0, index + 1).join("/")}`;
@@ -215,7 +220,7 @@ export default function DynamicBreadcrumbs({
                                 ) : node.crumb.isLast || !hasPage ? (
                                     <BreadcrumbPage className="inline-flex max-w-[44vw] items-center gap-1.5 truncate rounded-md bg-accent px-2.5 py-1 font-semibold">
                                         <ActiveIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                                        <span className="truncate">{node.crumb.title}</span>
+                                        <span className="truncate">{translate(node.crumb.title)}</span>
                                     </BreadcrumbPage>
                                 ) : (
                                     <BreadcrumbLink
@@ -223,7 +228,7 @@ export default function DynamicBreadcrumbs({
                                         className="inline-flex max-w-[24vw] items-center truncate rounded-md px-2 py-1 text-muted-foreground hover:bg-accent"
                                     >
                                         <Link to={node.crumb.href} className="truncate">
-                                            {node.crumb.title}
+                                            {translate(node.crumb.title)}
                                         </Link>
                                     </BreadcrumbLink>
                                 )}

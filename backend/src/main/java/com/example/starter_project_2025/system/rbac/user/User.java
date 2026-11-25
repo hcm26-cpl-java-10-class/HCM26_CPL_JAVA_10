@@ -18,6 +18,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -106,6 +107,9 @@ public class User extends BaseEntity {
     @Builder.Default
     @Column(nullable = false)
     Boolean locked = false;
+
+    @Column(name = "last_login_at")
+    LocalDateTime lastLoginAt;
 
     @Builder.Default
     @Column(name = "is_guest", nullable = false)

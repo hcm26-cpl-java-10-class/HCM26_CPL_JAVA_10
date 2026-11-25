@@ -16,6 +16,8 @@ export interface LessonProgressItem {
   lastAccessedAt?: string | null;
   /** Tổng số giây học viên đã dành cho bài học này. */
   studySeconds?: number | null;
+  /** true = học viên được tua video của bài học này. */
+  allowSeeking?: boolean;
 }
 
 export interface EnrollmentProgress {
@@ -28,6 +30,8 @@ export interface EnrollmentProgress {
   courseCompleted: boolean;
   assessmentStatus: string;
   overallScore: number | null;
+  /** Published outcomes for the owner of this enrollment; never private grading data. */
+  assessmentOutcomes?: Record<string, "PASSED" | "FAILED" | "COMPLETED" | "AWAITING_RESULTS" | "IN_PROGRESS" | "NOT_STARTED">;
   lastLessonId?: number | null;
   lastAccessedAt?: string | null;
   lessons: LessonProgressItem[];

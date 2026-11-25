@@ -1,3 +1,4 @@
+import { formatNumberNow } from "@/i18n/format";
 import { useQuery } from "@tanstack/react-query";
 import { courseAnalyticsApi } from "@/api/features/demo/course-analytics.api";
 import {
@@ -34,6 +35,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useMemo, useState } from "react";
+import { AllCoursesLearningHours } from "@/pages/management/demo/analytics/components/AllCoursesLearningHours";
 import { AnalyticsLoading } from "@/pages/management/demo/analytics/components/AnalyticsLoading";
 
 type Props = {
@@ -43,7 +45,13 @@ type Props = {
 /** Formats study hours as "12.5 h" (one decimal place). */
 const formatHours = (value?: number | null): string =>
   typeof value === "number" && Number.isFinite(value)
-    ? `${value.toLocaleString("en-US", { maximumFractionDigits: 1 })} h`
+    ? `${formatNumberNow(value, { maximumFractionDigits: 1 })} h`
+    : "—";
+
+/** Formats seconds as whole minutes, e.g. "85 min". */
+const formatMinutes = (seconds?: number | null): string =>
+  typeof seconds === "number" && Number.isFinite(seconds)
+    ? `${formatNumberNow(Math.round(seconds / 60))} min`
     : "—";
 
 /** Converts seconds into "1 h 25 min" for extra detail. */
@@ -59,7 +67,43 @@ const formatDuration = (seconds?: number | null): string => {
   return `${hours} h ${minutes} min`;
 };
 
+/** Study time: the selected course, or learning hours across all courses. */
 export function StudyTimeTab({ courseId }: Props) {
+  const [scope, setScope] = useState<"course" | "all">("course");
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        {(
+          [
+            { value: "course", label: "This course" },
+            { value: "all", label: "All courses" },
+          ] as const
+        ).map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => setScope(option.value)}
+            className={`rounded-md border px-3 py-2 text-sm transition-colors ${
+              scope === option.value
+                ? "border-primary bg-primary text-primary-foreground"
+                : "bg-background hover:bg-muted"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {scope === "course" ? (
+        <CourseStudyTime courseId={courseId} />
+      ) : (
+        <AllCoursesLearningHours />
+      )}
+    </div>
+  );
+}
+
+function CourseStudyTime({ courseId }: Props) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["course-analytics", "study-time", courseId],
     queryFn: () => courseAnalyticsApi.getStudyTime(courseId),
@@ -204,7 +248,7 @@ export function StudyTimeTab({ courseId }: Props) {
 
       <AnalyticsPanel
         title="Study time per learner"
-        description="Total study time, number of completed lessons and the most recent visit of every learner in the course. Scope: this course only — for learning hours across all courses, see Enrollment → Learning Hours."
+        description="Total study time, number of completed lessons and the most recent visit of every learner in the course. Scope: this course only — use the All courses switch above for learning hours across the whole system."
       >
         <div className="flex flex-wrap items-center gap-2 pb-3">
           <TableSearchBox
@@ -230,7 +274,6 @@ export function StudyTimeTab({ courseId }: Props) {
                   <TableHead>Learner</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead className="text-right">Total study time</TableHead>
-                  <TableHead className="text-right">Duration</TableHead>
                   <TableHead className="text-right">Lessons completed</TableHead>
                   <TableHead className="text-right">Completion rate</TableHead>
                   <TableHead className="text-right">Last accessed</TableHead>
@@ -240,7 +283,7 @@ export function StudyTimeTab({ courseId }: Props) {
                 {pagedLearners.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={8}
+                      colSpan={7}
                       className="py-6 text-center text-muted-foreground"
                     >
                       No learner matches the current search.
@@ -260,10 +303,7 @@ export function StudyTimeTab({ courseId }: Props) {
                       </TableCell>
                       <TableCell>{item.departmentName ?? "—"}</TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatHours(item.studyHours)}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {formatDuration(item.studySeconds)}
+                        {formatMinutes(item.studySeconds)}
                       </TableCell>
                       <TableCell className="text-right">
                         {formatNumber(item.completedLessons)}/{formatNumber(item.totalLessons)}

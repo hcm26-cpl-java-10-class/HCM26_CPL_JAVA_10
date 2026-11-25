@@ -195,8 +195,9 @@ public class DepartmentStudentDataInitializer
     }
 
     private Course ensureCourse() {
-        Course course = courseRepository.findByName(COURSE_NAME)
-                .orElseGet(Course::new);
+        var existing = courseRepository.findByName(COURSE_NAME);
+        if (existing.isPresent()) return existing.get();
+        Course course = new Course();
 
         course.setName(COURSE_NAME);
         course.setDescription(

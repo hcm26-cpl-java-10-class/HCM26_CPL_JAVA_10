@@ -2,7 +2,7 @@ package com.example.starter_project_2025.system.exam.gradebook;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.system.demo.course.Course;
-import com.example.starter_project_2025.system.exam.domain.Exam;
+import com.example.starter_project_2025.system.exam.core.domain.Exam;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;

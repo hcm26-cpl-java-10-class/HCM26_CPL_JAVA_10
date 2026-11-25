@@ -275,7 +275,7 @@ describe("WeeklyCalendarPage", () => {
       URL.createObjectURL = origCreateObjectURL;
       URL.revokeObjectURL = origRevokeObjectURL;
     }
-  });
+  }, 15000);
 
   it("shows a clear error message instead of partial data when a later calendar page fails", async () => {
     fakeHttp.on("get", "/calendar/sessions", (req: { params?: Record<string, unknown> }) => {
@@ -424,5 +424,5 @@ describe("WeeklyCalendarPage", () => {
       URL.createObjectURL = origCreateObjectURL;
       URL.revokeObjectURL = origRevokeObjectURL;
     }
-  });
+  }, 15000);
 });

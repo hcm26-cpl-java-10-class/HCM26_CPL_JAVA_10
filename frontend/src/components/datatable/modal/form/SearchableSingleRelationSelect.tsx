@@ -86,7 +86,7 @@ export function SearchableSingleRelationSelect({
           )}
           {selectedId != null && selectedQuery.data && (
             <a className="text-sm underline" href={`/student/syllabuses/${selectedId}`}
-              target="_blank" rel="noopener noreferrer">Preview selected syllabus</a>
+              target="_blank" rel="opener">Preview selected syllabus</a>
           )}
         </PopoverContent>
       </Popover>

@@ -65,6 +65,8 @@ export interface QuestionDTO {
   options: QuestionOptionDTO[];
   imageUrl?: string | null;
   code?: CodeSpec | null;
+  source?: string | null;
+  isAiGenerated?: boolean | null;
   createdAt?: string | null;
   updatedAt?: string | null;
   createdBy?: number | null;
@@ -79,6 +81,8 @@ export interface QuestionFilter {
 }
 
 export type LatePolicy = "NOT_ALLOWED" | "ALLOWED_WITH_PENALTY" | "ALLOWED";
+export type ExamStatus = "DRAFT" | "PUBLISHED" | "CLOSED" | "ARCHIVED";
+export type IntegrityReviewStatus = "UNREVIEWED" | "CLEARED" | "CONFIRMED_VIOLATION";
 export type ExamType = "MULTIPLE_CHOICE" | "ESSAY" | "CODING" | "MC_CODING" | "MIXED";
 export type ExamCategory = "ASSIGNMENT" | "QUIZ" | "MIDTERM" | "FINAL_TEST";
 export type ResultVisibility = "IMMEDIATE" | "AFTER_EXAM_CLOSED" | "MANUAL_RELEASE";
@@ -106,9 +110,14 @@ export interface ExamDTO {
   createdByName?: string | null;
   /** Submitted attempts waiting for the teacher to grade. */
   pendingGradingCount?: number;
+  invitationCount?: number;
   hasAttempts?: boolean;
   title: string;
   durationMinutes: number;
+  status?: ExamStatus;
+  startTime?: string | null;
+  endTime?: string | null;
+  version?: number | null;
   maxAttempts?: number;
   shuffleQuestions?: boolean;
   shuffleOptions?: boolean;
@@ -122,6 +131,7 @@ export interface ExamDTO {
   resultVisibility?: ResultVisibility;
   category?: ExamCategory;
   examType?: ExamType;
+  allowedQuestionTypes?: QuestionType[];
   questionIds?: number[];
   questions?: QuestionDTO[];
   totalPoints?: number;

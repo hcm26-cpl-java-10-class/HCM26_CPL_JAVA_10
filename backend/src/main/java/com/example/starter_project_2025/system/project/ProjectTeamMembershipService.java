@@ -36,6 +36,7 @@ public class ProjectTeamMembershipService {
     private final ProjectTeamMemberHistoryService historyService;
     private final ObjectMapper objectMapper;
     private final EntityManager entityManager;
+    private final com.example.starter_project_2025.system.project.charter.TeamCharterIntegrity charterIntegrity;
 
     @Transactional
     public void addMember(
@@ -420,6 +421,7 @@ public class ProjectTeamMembershipService {
             String afterState
     ) {
         Long actorId = ((UserPrincipal) authentication.getPrincipal()).getUser().getId();
+        charterIntegrity.rosterChanged(team, actorId);
         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
         if (correlationId == null || correlationId.isBlank()) {
             correlationId = UUID.randomUUID().toString();

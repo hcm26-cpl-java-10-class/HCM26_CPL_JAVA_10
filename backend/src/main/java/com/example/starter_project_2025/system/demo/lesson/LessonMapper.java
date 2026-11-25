@@ -19,6 +19,7 @@ public interface LessonMapper extends BaseCrudMapper<Lesson, LessonDTO> {
 
     @Override
     @Mapping(source = "section.id", target = "sectionId")
+    @Mapping(target = "allowSeeking", expression = "java(Boolean.TRUE.equals(entity.getAllowSeeking()))")
     @Mapping(target = "outlineEditable", expression = "java(entity.getSection() != null "
             + "&& entity.getSection().getCourse() != null "
             + "&& entity.getSection().getCourse().allowsOutlineEditing())")

@@ -1,3 +1,4 @@
+import { formatDateTimeNow } from "@/i18n/format";
 import {
     AlertTriangle,
     ArrowRight,
@@ -270,7 +271,7 @@ export function ClassLifecyclePanel({ classItem }: { classItem: ExternalClass })
                                             {STATUS_LABELS[entry.to] ?? entry.to}
                                         </Badge>
                                         <span className="ml-auto text-muted-foreground">
-                                            {new Date(entry.changedAt).toLocaleString("vi-VN")}
+                                            {formatDateTimeNow(entry.changedAt)}
                                         </span>
                                     </div>
                                     {entry.reason && (

@@ -2,6 +2,7 @@ import axios from "axios";
 import { store } from "@/store/store";
 import { setLogin, setLogout } from "@/store/slices/auth/authSlice";
 import { normalizeAuthRolePayload } from "@/utils/rbac.utils";
+import { getStoredLanguage } from "@/i18n";
 
 interface BackendAuthenticationResponse {
     accessToken: string;
@@ -44,15 +45,29 @@ const axiosInstance = axios.create({
     withCredentials: true,
 });
 
+const PUBLIC_AUTH_PATHS = [
+    "/auth/login",
+    "/auth/register",
+    "/auth/refresh",
+    "/auth/forgot-password",
+    "/auth/reset-password",
+    "/auth/resend-verification",
+];
+
+const isPublicAuthRequest = (requestUrl: string) =>
+    PUBLIC_AUTH_PATHS.some((path) => requestUrl.startsWith(path) || requestUrl.includes(path));
+
 axiosInstance.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem("token");
+        const token = store.getState().auth.token;
         const requestUrl = config.url ?? "";
-        const isAuthRequest = requestUrl.startsWith("/auth/") || requestUrl.includes("/auth/");
 
-        if (token && !isAuthRequest) {
+        if (token && !isPublicAuthRequest(requestUrl)) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+
+        const language = getStoredLanguage();
+        config.headers["Accept-Language"] = language;
         return config;
     },
     (error) => {
@@ -72,6 +87,7 @@ axiosInstance.interceptors.response.use(
 
         if (
             error?.response?.status === 401 &&
+            store.getState().auth.isAuthenticated &&
             !originalReq._retry &&
             !requestUrl.includes("/auth/login") &&
             !requestUrl.includes("/auth/logout") &&

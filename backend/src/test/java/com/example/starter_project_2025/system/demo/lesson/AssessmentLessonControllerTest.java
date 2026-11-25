@@ -3,9 +3,9 @@ package com.example.starter_project_2025.system.demo.lesson;
 import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.section.Section;
 import com.example.starter_project_2025.system.demo.section.SectionRepository;
-import com.example.starter_project_2025.system.exam.domain.ExamCategory;
-import com.example.starter_project_2025.system.exam.dto.ExamDTO;
-import com.example.starter_project_2025.system.exam.service.ExamServiceImpl;
+import com.example.starter_project_2025.system.exam.core.domain.ExamCategory;
+import com.example.starter_project_2025.system.exam.core.dto.ExamDTO;
+import com.example.starter_project_2025.system.exam.core.service.ExamServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -80,7 +80,18 @@ class AssessmentLessonControllerTest {
         verifyNoInteractions(lessons,exams);
     }
     @Test void examLessonAcceptsFinalTest() {
-        assertEquals(ExamCategory.FINAL_TEST,controller.create(request(LessonContentType.EXAM,ExamCategory.FINAL_TEST)).assessment().getCategory());
+        var result=controller.create(request(LessonContentType.EXAM,ExamCategory.FINAL_TEST));
+        assertEquals(ExamCategory.FINAL_TEST,result.assessment().getCategory());
+        assertEquals(7L,result.assessment().getCourseId());
+        assertEquals(11L,result.assessment().getSectionId());
+        assertEquals(101L,result.assessment().getLessonId());
+    }
+    @Test void examLessonAcceptsMidterm() {
+        var result=controller.create(request(LessonContentType.EXAM,ExamCategory.MIDTERM));
+        assertEquals(ExamCategory.MIDTERM,result.assessment().getCategory());
+        assertEquals(7L,result.assessment().getCourseId());
+        assertEquals(11L,result.assessment().getSectionId());
+        assertEquals(101L,result.assessment().getLessonId());
     }
     @Test void assignmentLessonAcceptsAssignment() {
         assertEquals(ExamCategory.ASSIGNMENT,controller.create(request(LessonContentType.ASSIGNMENT,ExamCategory.ASSIGNMENT)).assessment().getCategory());

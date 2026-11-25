@@ -253,7 +253,8 @@ public class LessonProgressService {
                 items,
                 percentage==100 && assessments.canComplete(enrollment.getCourse().getId(),enrollment.getUser().getId()),
                 grade.status(),
-                grade.overallScore()
+                grade.overallScore(),
+                assessments.assessmentOutcomes(enrollment.getCourse().getId(), enrollment.getUser().getId())
         );
     }
 
@@ -272,7 +273,8 @@ public class LessonProgressService {
                 progress != null && progress.isCompleted(),
                 progress == null ? null : progress.getCompletedAt(),
                 progress == null ? null : progress.getLastAccessedAt(),
-                progress == null ? null : progress.getStudySeconds()
+                progress == null ? null : progress.getStudySeconds(),
+                Boolean.TRUE.equals(lesson.getAllowSeeking())
         );
     }
 }

@@ -1,3 +1,4 @@
+import { formatDateTimeCustomNow } from "@/i18n/format";
 import { enrollmentApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,9 @@ import type { AuditFilterOptions, AuditLogRow, AuditSummary, PageResponse } from
 import { useQuery } from "@tanstack/react-query";
 import {
     Activity,
+    ArrowDown,
+    ArrowUp,
+    ArrowUpDown,
     BookOpen,
     Building2,
     Calendar,
@@ -33,6 +37,9 @@ import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
 import { DepartmentLogDetailSheet } from "./DepartmentLogDetailSheet";
+
+type SortField = "createdAt" | "studentCount";
+type SortDirection = "asc" | "desc";
 
 const getStatusBadge = (status?: string | null) => {
     switch (status?.toUpperCase()) {
@@ -53,7 +60,29 @@ const formatDate = (value?: string | null) => {
     if (!value) return "-";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "medium" });
+    return formatDateTimeCustomNow(date, { dateStyle: "short", timeStyle: "medium" });
+};
+
+const sortAuditRows = (
+    items: AuditLogRow[],
+    sortBy: SortField,
+    sortDir: SortDirection,
+): AuditLogRow[] => {
+    const multiplier = sortDir === "asc" ? 1 : -1;
+
+    return [...items].sort((a, b) => {
+        if (sortBy === "studentCount") {
+            const countA = Number(a.studentCount ?? 0);
+            const countB = Number(b.studentCount ?? 0);
+            return (countA - countB) * multiplier;
+        }
+
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        const safeA = Number.isNaN(timeA) ? 0 : timeA;
+        const safeB = Number.isNaN(timeB) ? 0 : timeB;
+        return (safeA - safeB) * multiplier;
+    });
 };
 
 export default function EnrollmentLogPage() {
@@ -66,6 +95,8 @@ export default function EnrollmentLogPage() {
     const [courseId, setCourseId] = useState("ALL");
     const [fromDate, setFromDate] = useState("");
     const [toDate, setToDate] = useState("");
+    const [sortBy, setSortBy] = useState<SortField>("createdAt");
+    const [sortDir, setSortDir] = useState<SortDirection>("desc");
     const [page, setPage] = useState(0);
     const [pageSize, setPageSize] = useState(20);
     const [selected, setSelected] = useState<AuditLogRow | null>(null);
@@ -102,13 +133,36 @@ export default function EnrollmentLogPage() {
         staleTime: 60_000,
     });
 
-    const rows = data?.content ?? [];
+    const rows = useMemo(
+        () => sortAuditRows(data?.content ?? [], sortBy, sortDir),
+        [data?.content, sortBy, sortDir],
+    );
     const totalPages = data?.totalPages ?? 1;
     const totalElements = data?.totalElements ?? rows.length;
 
     const handleFilterChange = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, val: T) => {
         setter(val);
         setPage(0);
+    };
+
+    const handleSort = (field: SortField) => {
+        if (sortBy === field) {
+            setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+        } else {
+            setSortBy(field);
+            setSortDir("desc");
+        }
+    };
+
+    const renderSortIcon = (field: SortField) => {
+        if (sortBy !== field) {
+            return <ArrowUpDown className="size-3.5 text-muted-foreground/60" />;
+        }
+        return sortDir === "asc" ? (
+            <ArrowUp className="size-3.5 text-primary" />
+        ) : (
+            <ArrowDown className="size-3.5 text-primary" />
+        );
     };
 
     const handleResetFilter = () => {
@@ -119,6 +173,8 @@ export default function EnrollmentLogPage() {
         setCourseId("ALL");
         setFromDate("");
         setToDate("");
+        setSortBy("createdAt");
+        setSortDir("desc");
         setPage(0);
     };
 
@@ -129,7 +185,9 @@ export default function EnrollmentLogPage() {
         (isDepartmentTab && departmentId !== "ALL") ||
         courseId !== "ALL" ||
         fromDate ||
-        toDate,
+        toDate ||
+        sortBy !== "createdAt" ||
+        sortDir !== "desc",
     );
 
     const colCount = 8;
@@ -163,6 +221,7 @@ export default function EnrollmentLogPage() {
 
     const handleExport = async () => {
         const result = await enrollmentApi.getAuditLogs({ ...filterParams, page: 0, size: 10_000 });
+        const sortedExportRows = sortAuditRows(result.content ?? [], sortBy, sortDir);
         const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
         const headers = [
             "Type",
@@ -179,7 +238,7 @@ export default function EnrollmentLogPage() {
             "Timestamp",
             "Details",
         ];
-        const lines = (result.content ?? []).map((row) =>
+        const lines = sortedExportRows.map((row) =>
             [
                 row.type,
                 row.actorName,
@@ -253,6 +312,8 @@ export default function EnrollmentLogPage() {
                                 setActiveTab(nextTab);
                                 setSource("ALL");
                                 setDepartmentId("ALL");
+                                setSortBy("createdAt");
+                                setSortDir("desc");
                                 setPage(0);
                             }}
                             className="w-full sm:w-auto"
@@ -387,11 +448,31 @@ export default function EnrollmentLogPage() {
                                 <th className="px-4 py-2 font-semibold">{isDepartmentTab ? "Department" : "Student"}</th>
                                 <th className="px-4 py-2 font-semibold">Course</th>
                                 {isDepartmentTab ? (
-                                    <th className="px-4 py-2 text-right font-semibold">Students</th>
+                                    <th className="px-4 py-2 text-right font-semibold">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSort("studentCount")}
+                                            className="inline-flex items-center justify-end gap-1.5 uppercase tracking-wider hover:text-foreground transition-colors"
+                                            title="Sort by member count"
+                                        >
+                                            <span>Students</span>
+                                            {renderSortIcon("studentCount")}
+                                        </button>
+                                    </th>
                                 ) : (
                                     <th className="px-4 py-2 font-semibold">Source</th>
                                 )}
-                                <th className="px-4 py-2 font-semibold">Timestamp</th>
+                                <th className="px-4 py-2 font-semibold">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSort("createdAt")}
+                                        className="inline-flex items-center gap-1.5 uppercase tracking-wider hover:text-foreground transition-colors"
+                                        title="Sort by enrollment time"
+                                    >
+                                        <span>Timestamp</span>
+                                        {renderSortIcon("createdAt")}
+                                    </button>
+                                </th>
                                 <th className="px-4 py-2 font-semibold">Status</th>
                                 <th className="px-4 py-2 text-right font-semibold">Action</th>
                             </tr>
@@ -640,4 +721,4 @@ export default function EnrollmentLogPage() {
             </Sheet>
         </MainLayout>
     );
-}
+}

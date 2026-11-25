@@ -12,7 +12,7 @@ import java.util.UUID;
         indexes={@Index(name="idx_report_export_worker",columnList="status,created_at"),@Index(name="idx_report_export_owner",columnList="tenant_id,actor_id,created_at")})
 @Getter @Setter @NoArgsConstructor
 public class ProjectReportExportJob {
-    public enum State { QUEUED,RUNNING,READY,FAILED,EXPIRED }
+    public enum State { QUEUED,RUNNING,READY,FAILED,EXPIRED } // EXPIRED is retained for legacy rows.
     @Id private UUID id;
     @Column(name="actor_id",nullable=false,updatable=false) private Long actorId;
     @Column(name="tenant_id",nullable=false,updatable=false) private Long tenantId;
@@ -25,11 +25,10 @@ public class ProjectReportExportJob {
     @Column(name="created_at",nullable=false,updatable=false) private Instant createdAt;
     @Column(name="started_at") private Instant startedAt;
     @Column(name="generated_at") private Instant generatedAt;
-    @Column(name="expires_at") private Instant expiresAt;
     @Column(name="row_count") private Long rowCount;
     @Column(name="project_ids",columnDefinition="TEXT") private String projectIds;
     @Column(name="file_name",length=160) private String fileName;
-    @Lob @Basic(fetch=FetchType.LAZY) @Column(name="file_content") private byte[] fileContent;
+    @Lob @Basic(fetch=FetchType.LAZY) @Column(name="file_content") private byte[] fileContent; // Legacy reports only.
     @Column(length=300) private String message;
     @Version private long version;
 }

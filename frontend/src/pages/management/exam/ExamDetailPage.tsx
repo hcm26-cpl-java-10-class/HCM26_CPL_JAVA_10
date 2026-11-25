@@ -1,12 +1,15 @@
+import { ApiErrorState } from "@/components/exam/ApiErrorState";
 import { assessmentReturnPath } from "@/utils/assessment-navigation";
 import { examApi } from "@/api";
 import HeaderRight from "@/components/layout/HeaderRight";
 import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 import { Button } from "@/components/ui/button";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, BookOpen, ClipboardCheck, Mail, Pencil, BarChart3 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Archive, ArrowLeft, BookOpen, CheckCircle2, ClipboardCheck, Copy, Lock, Mail, Pencil, BarChart3 } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
+import { getErrorMessage } from "./examConfig";
 import { ExamEditPanel } from "./ExamEditPanel";
 import { ExamQuestionsPanel } from "./ExamQuestionsPanel";
 import ResultStatisticsPage from "./ResultStatisticsPage";
@@ -54,14 +57,40 @@ export default function ExamDetailPage() {
     };
   }, []);
 
+  const queryClient = useQueryClient();
   const examQuery = useQuery({
     queryKey: ["exam-detail", id],
     queryFn: () => examApi.getById(examId),
     enabled: Number.isFinite(id) && id > 0,
   });
+  const examStatus = examQuery.data?.status ?? "PUBLISHED";
+
+  const lifecycleMutation = useMutation({
+    mutationFn: async (action: "publish" | "close" | "archive" | "duplicate") => {
+      if (action === "publish") return { action, exam: await examApi.publish(id) };
+      if (action === "close") return { action, exam: await examApi.close(id) };
+      if (action === "archive") return { action, exam: await examApi.archive(id) };
+      return { action, exam: await examApi.duplicate(id) };
+    },
+    onSuccess: ({ action, exam }) => {
+      void queryClient.invalidateQueries({ queryKey: ["exam-detail", id] });
+      void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
+      void queryClient.invalidateQueries({ queryKey: ["exams"] });
+      if (action === "duplicate" && exam?.id) {
+        toast.success("Exam duplicated", { duration: 3000 });
+        navigate(`/exams/${exam.id}/questions${returnQuery}`);
+      } else {
+        toast.success(`Assessment ${action}d successfully`, { duration: 3000 });
+      }
+    },
+    onError: (err) => toast.error(getErrorMessage(err, "Action failed")),
+  });
   const title = examQuery.data?.title;
   const counts: Partial<Record<TabKey, { value: number; warn?: boolean }>> = {
     questions: { value: examQuery.data?.questionIds?.length ?? examQuery.data?.questions?.length ?? 0 },
+    ...((examQuery.data?.invitationCount ?? 0) > 0
+      ? { invitations: { value: examQuery.data?.invitationCount ?? 0 } }
+      : {}),
     ...((examQuery.data?.pendingGradingCount ?? 0) > 0
       ? { grading: { value: examQuery.data?.pendingGradingCount ?? 0, warn: true } }
       : {}),
@@ -72,12 +101,14 @@ export default function ExamDetailPage() {
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate(returnTo)}>
+          <Button variant="ghost" size="sm" className="shrink-0" onClick={() => navigate(returnTo)}>
             <ArrowLeft className="mr-1 size-4" />
-            {returnTo.startsWith("/courses/") || returnTo.startsWith("/course-enrollments/") ? "Back to course" : returnTo.startsWith("/exams/curriculum") ? "Back to curriculum mapping" : "Assessment Management"}
+            <span className="hidden lg:inline">
+              {returnTo.startsWith("/courses/") || returnTo.startsWith("/course-enrollments/") ? "Back to course" : returnTo.startsWith("/exams/curriculum") ? "Back to curriculum mapping" : "Assessment Management"}
+            </span>
           </Button>
           <span className="text-muted-foreground">/</span>
-          <h1 className="truncate text-base font-semibold">{title ?? "Loading..."}</h1>
+          <h1 className="min-w-0 truncate text-base font-semibold" title={title ?? undefined}>{title ?? "Loading..."}</h1>
           {examQuery.data && (examQuery.data.courseName ? (
             <span
               className="hidden max-w-[40ch] truncate rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground md:inline"
@@ -96,10 +127,64 @@ export default function ExamDetailPage() {
             </button>
           ))}
         </div>
-        <HeaderRight />
+        <div className="flex items-center gap-2">
+          {examQuery.data && (
+            <div className="hidden items-center gap-1.5 sm:flex">
+              <span className="rounded-md bg-slate-900 px-2 py-0.5 text-xs font-medium text-white dark:bg-slate-100 dark:text-slate-900">
+                {examStatus}
+              </span>
+              {(examStatus === "DRAFT" || examStatus === "CLOSED") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={lifecycleMutation.isPending}
+                  onClick={() => lifecycleMutation.mutate("publish")}
+                >
+                  <CheckCircle2 className="mr-1 size-3.5" />
+                  Publish
+                </Button>
+              )}
+              {examStatus === "PUBLISHED" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={lifecycleMutation.isPending}
+                  onClick={() => lifecycleMutation.mutate("close")}
+                >
+                  <Lock className="mr-1 size-3.5" />
+                  Close
+                </Button>
+              )}
+              {examStatus !== "ARCHIVED" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={lifecycleMutation.isPending}
+                  onClick={() => lifecycleMutation.mutate("archive")}
+                >
+                  <Archive className="mr-1 size-3.5" />
+                  Archive
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={lifecycleMutation.isPending}
+                onClick={() => lifecycleMutation.mutate("duplicate")}
+              >
+                <Copy className="mr-1 size-3.5" />
+                {lifecycleMutation.isPending && lifecycleMutation.variables === "duplicate" ? "Duplicating..." : "Duplicate"}
+              </Button>
+            </div>
+          )}
+          <HeaderRight />
+        </div>
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
+        {examQuery.isError ? (
+          <ApiErrorState error={examQuery.error} onRetry={() => void examQuery.refetch()} onBack={() => navigate(returnTo)} />
+        ) : (<>
         <div className="grid grid-cols-2 gap-1 rounded-lg border bg-muted/40 p-1 sm:grid-cols-5" role="tablist" aria-label="Assessment sections">
           {TABS.map(({ key, label, segment, icon: Icon }) => (
             <button
@@ -139,6 +224,7 @@ export default function ExamDetailPage() {
           </EmbeddedLayoutContext.Provider>
           {active === "edit" && <ExamEditPanel examId={id} />}
         </div>
+        </>)}
       </main>
     </div>
   );

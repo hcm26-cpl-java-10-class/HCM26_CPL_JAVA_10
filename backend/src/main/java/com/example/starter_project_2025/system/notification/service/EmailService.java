@@ -2,7 +2,7 @@ package com.example.starter_project_2025.system.notification.service;
 
 import java.math.BigDecimal;
 import com.example.starter_project_2025.system.auth.util.MailUtil;
-import com.example.starter_project_2025.system.exam.domain.Invitation;
+import com.example.starter_project_2025.system.exam.invitation.domain.Invitation;
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

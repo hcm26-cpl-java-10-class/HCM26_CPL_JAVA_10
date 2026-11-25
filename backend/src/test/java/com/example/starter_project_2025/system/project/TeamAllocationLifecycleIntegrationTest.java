@@ -1,9 +1,10 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.init.SprintBacklogDataInitializer;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import com.example.starter_project_2025.system.project.domain.*;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplateStatus;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
 import com.example.starter_project_2025.system.project.trainingclass.*;
 import com.example.starter_project_2025.system.project.workspace.domain.*;
@@ -69,7 +70,8 @@ class TeamAllocationLifecycleIntegrationTest {
             var session=new TeamAllocationSession();session.setTrainingClass(school);session.setProjectTemplate(template);
             session.setStatus(TeamAllocationSessionStatus.OPEN);session.setMaxMembers(5);em.persist(session);em.flush();sessionId=session.getId();
             var team=new ProjectTeam();team.setTrainingClass(school);team.setAllocationSession(session);team.setTeamName("Draft team");
-            team.setStatus(ProjectTeamStatus.DRAFT);team.setMaxMembers(5);team.setProjectTemplate(template);em.persist(team);em.flush();teamId=team.getId();
+            team.setStatus(ProjectTeamStatus.DRAFT);team.setMaxMembers(5);team.setProjectTemplate(template);
+            team.setAssignedMentorId(mentor.getId());em.persist(team);em.flush();teamId=team.getId();
             var cm=new ClassMember();cm.setTrainingClass(school);cm.setUser(learner);cm.setStatus(ClassMemberStatus.ACTIVE);em.persist(cm);em.flush();leaderId=cm.getId();
             var member=new ProjectMember();member.setTeam(team);member.setClassMember(cm);member.setRole("PM");em.persist(member);em.flush();memberId=member.getId();team.setLeaderMemberId(cm.getId());
             var project=new Project();project.setTenantId(tenantId);project.setClassId(classId);project.setTeamId(teamId);

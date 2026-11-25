@@ -1,8 +1,8 @@
 package com.example.starter_project_2025.system.exam.code;
 
 import com.example.starter_project_2025.system.exam.code.CodeRunner.RunOutcome;
-import com.example.starter_project_2025.system.question.dto.CodeSpecDTO;
-import com.example.starter_project_2025.system.question.service.CodeSpecSupport;
+import com.example.starter_project_2025.system.question.core.dto.CodeSpecDTO;
+import com.example.starter_project_2025.system.question.core.service.CodeSpecSupport;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;

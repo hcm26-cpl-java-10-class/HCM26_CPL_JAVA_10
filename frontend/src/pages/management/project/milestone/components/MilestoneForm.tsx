@@ -1,3 +1,4 @@
+import { formatNumberNow } from "@/i18n/format";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useCallback, useEffect, useState } from "react";
 import { Controller, type FieldErrors, type FieldPath, useForm, useWatch } from "react-hook-form";
@@ -270,7 +271,7 @@ export function MilestoneForm({
           <AlertDescription>
             <p>No eligible rubric is available. Create and publish one, then reload the options.</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button asChild type="button" size="sm" variant="outline"><a href="/rubrics" target="_blank" rel="noreferrer">Manage rubrics <ExternalLink className="size-4" /></a></Button>
+              <Button asChild type="button" size="sm" variant="outline"><a href="/rubrics" target="_blank" rel="opener">Manage rubrics <ExternalLink className="size-4" /></a></Button>
               <Button type="button" size="sm" variant="outline" onClick={onReloadOptions} disabled={reloadingOptions}><RefreshCw className="size-4" /> {reloadingOptions ? "Reloading..." : "Reload options"}</Button>
             </div>
           </AlertDescription>
@@ -296,7 +297,7 @@ export function MilestoneForm({
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-3">
                   <Label htmlFor="milestone-description">Description</Label>
-                  <span className="text-xs text-muted-foreground">{values.description?.length ?? 0}/{MILESTONE_FORM_LIMITS.description.toLocaleString("en-US")}</span>
+                  <span className="text-xs text-muted-foreground">{formatNumberNow(values.description?.length ?? 0)}/{formatNumberNow(MILESTONE_FORM_LIMITS.description)}</span>
                 </div>
                 <Textarea
                   id="milestone-description"

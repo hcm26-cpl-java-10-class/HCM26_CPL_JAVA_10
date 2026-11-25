@@ -1,3 +1,6 @@
+import { createLocaleFormatter } from "@/i18n/format";
+import { toLanguage } from "@/i18n/languages";
+import i18n from "@/i18n";
 import type {
   TopicChapter,
   TopicSession,
@@ -332,7 +335,9 @@ export function parseStandardSyllabusCsv(csvText: string): ParsedSyllabus {
   return {
     documentCode,
     version: version || "1.0",
-    effectiveDate: effectiveDate || new Date().toLocaleDateString("en-GB"),
+    effectiveDate:
+      effectiveDate ||
+      createLocaleFormatter(toLanguage(i18n.language)).formatDate(new Date()),
     technicalGroup: technicalGroup || "Java",
     topicName: topicName || "Imported Topic",
     topicCode: topicCode || "TOPIC-01",

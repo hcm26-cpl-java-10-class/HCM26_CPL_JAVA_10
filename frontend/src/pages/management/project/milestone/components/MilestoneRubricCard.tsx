@@ -1,3 +1,4 @@
+import { getCurrentLocale } from "@/i18n/format";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +8,7 @@ import { useState } from "react";
 import { RubricCriterionCard } from "@/pages/management/project/rubric/components/RubricCriterionCard";
 import { RubricWeightBar } from "@/pages/management/project/rubric/components/RubricWeightBar";
 
-const formatNumber = (value: number) => new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 }).format(value);
+const formatNumber = (value: number) => new Intl.NumberFormat(getCurrentLocale(), { maximumFractionDigits: 2 }).format(value);
 
 export function MilestoneRubricCard({ rubric }: { rubric: MilestoneRubricDetail }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());

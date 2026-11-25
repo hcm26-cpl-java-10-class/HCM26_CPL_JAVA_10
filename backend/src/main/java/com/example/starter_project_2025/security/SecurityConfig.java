@@ -61,12 +61,20 @@ public class SecurityConfig {
             "/oauth2/**",
             "/login/oauth2/**",
             "/verify/**",
-            "/api/auth/**",
+            "/api/auth/login",
+            "/api/auth/register",
+            "/api/auth/refresh",
+            "/api/auth/logout",
+            "/api/auth/forgot-password",
+            "/api/auth/reset-password",
+            "/api/auth/resend-verification",
             "/api/external/**",
             "/api/public/**",
             "/api/exams/verify-access/**",
             "/api/exams/anonymous-session",
             "/api/exams/anonymous/**",
+            "/api/i18n/translate",
+            "/api/i18n/languages",
             "/h2-console/**"
     };
 
@@ -108,7 +116,13 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(frontendUrl, backendUrl, "http://localhost:5173", "http://localhost:8080"));
+        // Vite tự chọn port khi 5173 đã bận, nên pattern được dùng cho mọi port của localhost.
+        config.setAllowedOriginPatterns(List.of(
+                frontendUrl,
+                backendUrl,
+                "http://localhost:[*]",
+                "http://127.0.0.1:[*]"
+        ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

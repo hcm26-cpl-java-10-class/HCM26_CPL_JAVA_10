@@ -66,6 +66,43 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
       </label>
 
       <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+        Assessment Status
+        <Select value={cfg.status} onValueChange={(value) => { if (value) setCfg((c) => ({ ...c, status: value as ExamConfigForm["status"] })); }}>
+          <SelectTrigger aria-label="Assessment status" className="w-full min-w-0 max-w-full">
+            <SelectValue placeholder="Select status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="DRAFT">Draft (Hidden from learners)</SelectItem>
+            <SelectItem value="PUBLISHED">Published (Open to learners)</SelectItem>
+            <SelectItem value="CLOSED">Closed (No new attempts)</SelectItem>
+            <SelectItem value="ARCHIVED">Archived</SelectItem>
+          </SelectContent>
+        </Select>
+      </label>
+
+      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+        Open Time (optional)
+        <Input
+          type="datetime-local"
+          className="w-full min-w-0 max-w-full"
+          value={cfg.startTime}
+          onChange={(event) => setCfg((c) => ({ ...c, startTime: event.target.value }))}
+        />
+        <span className="text-xs font-normal text-muted-foreground">Leave blank to open immediately.</span>
+      </label>
+
+      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+        Close Time (optional)
+        <Input
+          type="datetime-local"
+          className="w-full min-w-0 max-w-full"
+          value={cfg.endTime}
+          onChange={(event) => setCfg((c) => ({ ...c, endTime: event.target.value }))}
+        />
+        <span className="text-xs font-normal text-muted-foreground">Must be after Open Time; duration cannot exceed window.</span>
+      </label>
+
+      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
         Exam Password / Access Code (leave blank if not required)
         <Input
           type="text"

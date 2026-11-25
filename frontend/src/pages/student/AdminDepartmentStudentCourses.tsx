@@ -1,3 +1,4 @@
+import { formatDateNow } from "@/i18n/format";
 import { departmentApi, enrollmentApi } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +20,7 @@ import { StudentCheckboxList, studentFullName } from "./StudentCheckboxList";
 
 const formatEnrollmentDate = (value: string) => {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("vi-VN");
+  return Number.isNaN(date.getTime()) ? value : formatDateNow(date);
 };
 
 function CourseCards({ enrollments }: { enrollments: Enrollment[] }) {

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { authApi } from "@/api/features/auth.api";
 import { toast } from "sonner";
 import { Link, useNavigate } from "react-router-dom";
@@ -24,6 +25,7 @@ export default function RegisterPage() {
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-[#f9fafb] p-6">
+            <div className="fixed right-4 top-4 z-50"><LanguageSwitcher /></div>
             <div className="w-full max-w-lg overflow-hidden bg-white shadow-2xl rounded-[32px] border border-gray-100 transition-all">
                 <RegisterForm onSubmit={onRegister} loading={loading} />
                 <div className="text-center mb-6">

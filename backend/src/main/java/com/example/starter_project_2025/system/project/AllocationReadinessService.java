@@ -1,7 +1,8 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
-import com.example.starter_project_2025.system.project.template.assignment.hierarchy.ProjectAssignmentService;
+import com.example.starter_project_2025.system.project.template.service.assignment.ProjectAssignmentService;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMember;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberRepository;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
@@ -104,7 +105,9 @@ public class AllocationReadinessService {
                         classId, ClassMemberStatus.ACTIVE).stream()
                 .filter(AllocationStudentEligibility::isEligible).toList();
 
-        List<ProjectTeam> teams = teamRepository.findAllByAllocationSession_IdOrderByIdAsc(session.getId())
+        // Soft-deleted drafts keep status=DRAFT and only flip isActive=false, so the
+        // isActive-aware query is required to keep ghost teams out of the counts.
+        List<ProjectTeam> teams = teamRepository.findAllByAllocationSession_IdAndIsActiveTrueOrderByIdAsc(session.getId())
                 .stream().filter(team -> team.getStatus() != ProjectTeamStatus.ARCHIVED).toList();
         Map<Long, List<ProjectMember>> rosters = new HashMap<>();
         Map<Long, Integer> membershipCounts = new HashMap<>();

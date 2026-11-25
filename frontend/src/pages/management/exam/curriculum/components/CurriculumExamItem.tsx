@@ -4,7 +4,6 @@ import { EXAM_CATEGORY_LABEL, type CourseExam } from "@/types";
 import {
   Award,
   Clock,
-  ExternalLink,
   FileCode2,
   HelpCircle,
   ListChecks,
@@ -12,6 +11,7 @@ import {
   Unlink,
 } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 interface CurriculumExamItemProps {
   exam: CourseExam;
@@ -79,16 +79,13 @@ export function CurriculumExamItem({ exam, onUnlink, compact = false }: Curricul
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <a
-                href={`/exams/${exam.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                to={`/exams/${exam.id}`}
                 className="font-medium text-foreground hover:text-primary hover:underline truncate max-w-sm flex items-center gap-1.5"
-                title="Open assessment in new tab"
+                title="Open assessment"
               >
-                <span>{exam.title}</span>
-                <ExternalLink className="size-3 text-muted-foreground shrink-0" />
-              </a>
+                {exam.title}
+              </Link>
 
               <span className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${cfg.badgeStyle}`}>
                 {EXAM_CATEGORY_LABEL[exam.category] || exam.category}

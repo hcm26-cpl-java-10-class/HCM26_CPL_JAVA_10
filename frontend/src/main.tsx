@@ -4,7 +4,13 @@ import ReactDOM from "react-dom/client";
 import { Provider } from "react-redux";
 import App from "./App";
 import "./index.css";
+import "./i18n";
+import { DomTranslator } from "./i18n/DomTranslator";
 import { store } from "./store/store";
+import { setAuthInitialized, setLogin, setLogout } from "./store/slices/auth/authSlice";
+import { installAuthTabSessionBridge } from "./store/slices/auth/authTabSession";
+import { authApi } from "./api/features/auth.api";
+import { installCrossTabLogoutListener } from "./utils/auth-logout";
 
 export const queryClient = new QueryClient();
 
@@ -29,12 +35,27 @@ const initializeTheme = () => {
 };
 
 initializeTheme();
+installAuthTabSessionBridge(
+  () => store.getState().auth,
+  (session) => store.dispatch(setLogin(session)),
+  () => store.dispatch(setAuthInitialized()),
+  window,
+  () => authApi.refreshSession(),
+);
+installCrossTabLogoutListener(() => {
+  if (store.getState().auth.isAuthenticated) {
+    queryClient.clear();
+    store.dispatch(setLogout());
+    window.location.href = "/login";
+  }
+});
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <Provider store={store}>
         <QueryClientProvider client={queryClient}>
             <App />
+            <DomTranslator />
         </QueryClientProvider>
     </Provider>
   </React.StrictMode>

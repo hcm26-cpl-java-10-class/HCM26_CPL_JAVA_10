@@ -1,7 +1,8 @@
+import { courseMappingReturnPath } from "@/utils/assessment-navigation";
 import { CourseAssessmentPanel } from "@/pages/management/demo/course/components/CourseAssessmentPanel";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useState, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -12,7 +13,6 @@ import {
   ChevronUp,
   ClipboardCheck,
   FolderOpen,
-  GraduationCap,
   Plus,
   Search,
   Unlink,
@@ -106,15 +106,13 @@ function SectionLessonsList({
               {lessonExam ? (
                 <div className="flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-xs">
                   <ClipboardCheck className="size-3.5 text-indigo-500 shrink-0" />
-                  <a
-                    href={`/exams/${lessonExam.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <Link
+                    to={`/exams/${lessonExam.id}`}
                     className="font-medium text-foreground hover:text-primary hover:underline truncate max-w-[180px]"
                     title={lessonExam.title}
                   >
                     {lessonExam.title}
-                  </a>
+                  </Link>
                   <Badge variant="outline" className="text-[10px] px-1 py-0 border-indigo-500/40 text-indigo-400">
                     {EXAM_CATEGORY_LABEL[lessonExam.category] || lessonExam.category}
                   </Badge>
@@ -155,6 +153,8 @@ export default function ExamCurriculumPage() {
 
   const parsedCourseId = Number(searchParams.get("courseId"));
   const courseId = Number.isSafeInteger(parsedCourseId) && parsedCourseId > 0 ? parsedCourseId : 0;
+
+  const backToCourse = courseMappingReturnPath(searchParams.get("returnTo"), courseId);
 
   const [courseSearch, setCourseSearch] = useState("");
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<Set<number>>(new Set());
@@ -251,25 +251,32 @@ export default function ExamCurriculumPage() {
   };
 
   return (
-    <MainLayout>
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="flex flex-col gap-6">
-          {/* Header */}
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b pb-6">
-            <div>
-              <div className="flex items-center gap-2">
-                <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <GraduationCap className="size-5" />
-                </div>
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                  Curriculum Assessment Mapping
-                </h1>
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Add a quiz to a lesson and place the final exam after all course lessons.
-              </p>
-            </div>
+    <MainLayout pathName={{ exams: "Assessment Management", curriculum: "Curriculum Mapping" }}>
+      <section className="flex flex-col gap-5">
+
+        {/* Header – same pattern as ExamManagementPage */}
+        <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
+          <div>
+            <p className="text-sm text-muted-foreground">Assessment Management</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight">
+              Curriculum Assessment Mapping
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Add a quiz to a lesson and place the final exam after all course lessons.
+            </p>
           </div>
+
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link to={backToCourse}>
+                <ArrowLeft className="mr-1.5 size-4" />
+                {courseId > 0 ? "Back to course" : "Back to courses"}
+              </Link>
+            </Button>
+          </div>
+        </header>
+
+        <div className="flex flex-col gap-6">
 
           {/* ----------------- When NO Course Selected: Course Catalogue / Picker ----------------- */}
           {!courseId ? (
@@ -348,7 +355,7 @@ export default function ExamCurriculumPage() {
           ) : (
             /* ----------------- When Course IS Selected: Full Screen Section & Assessment View ----------------- */
             <div className="space-y-5">
-              <CourseAssessmentPanel courseId={courseId} />
+              <CourseAssessmentPanel courseId={courseId} showManageLinks={false} />
               {/* Top Bar with Course Switcher */}
               <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border/80 bg-card/70 backdrop-blur-xs p-4 shadow-xs">
                 <div className="flex items-center gap-3">
@@ -621,7 +628,7 @@ export default function ExamCurriculumPage() {
             />
           )}
         </div>
-      </div>
+      </section>
     </MainLayout>
   );
 }

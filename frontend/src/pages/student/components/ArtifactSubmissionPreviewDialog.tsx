@@ -1,3 +1,4 @@
+import { formatNumberNow } from "@/i18n/format";
 import { useState, type RefObject } from "react";
 import { AlertCircle, Check, Clock, Copy, ExternalLink, FileText, GitBranch, Globe, Loader2, Send, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -90,7 +91,7 @@ export function ArtifactSubmissionPreviewDialog({ open, onOpenChange, onConfirm,
         </section>
 
         <section className="min-w-0 space-y-2 border-t pt-4">
-          <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold">Release notes</h3><span className="text-xs tabular-nums text-muted-foreground">{countReleaseNoteCharacters(releaseNotes).toLocaleString("en-GB")} / {RELEASE_NOTES_MAX_CHARACTERS.toLocaleString("en-GB")} characters</span></div>
+          <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold">Release notes</h3><span className="text-xs tabular-nums text-muted-foreground">{formatNumberNow(countReleaseNoteCharacters(releaseNotes))} / {formatNumberNow(RELEASE_NOTES_MAX_CHARACTERS)} characters</span></div>
           <div tabIndex={0} aria-label="Release notes content" className="max-h-40 min-w-0 overflow-y-auto overscroll-contain whitespace-pre-wrap break-words rounded-lg border bg-muted/25 px-3 py-2.5 text-sm leading-relaxed [overflow-wrap:anywhere]">{releaseNotes.trim() || <span className="text-muted-foreground">No release notes provided.</span>}</div>
         </section>
         {!!attachments?.length && <section className="space-y-2 border-t pt-4"><h3 className="text-sm font-semibold">Attachments ({attachments.length})</h3><ul className="space-y-2">{attachments.map(file => <li key={file.id} className="min-w-0 rounded-lg bg-muted/25 px-3 py-2 text-sm [overflow-wrap:anywhere]">{file.fileName}<span className="ml-2 text-xs text-muted-foreground">{file.sizeBytes.toLocaleString()} bytes</span></li>)}</ul></section>}

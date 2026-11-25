@@ -61,6 +61,19 @@ class RubricDraftPersistenceTest {
     }
 
     @Test
+    void persistsRubricNamesUpTo250Characters() {
+        String name = "R".repeat(250);
+        var created = service.create(new SaveRubricDraftRequest(name, null, draft("Criterion").criteria()));
+
+        assertEquals(name, created.name());
+        assertEquals(250, jdbc.queryForObject(
+                "SELECT LENGTH(name) FROM rubrics WHERE rubric_id=?", Integer.class, created.id()));
+        assertEquals(250, jdbc.queryForObject(
+                "SELECT LENGTH(name_snapshot) FROM rubric_versions WHERE rubric_id=?",
+                Integer.class, created.id()));
+    }
+
+    @Test
     void creatingDraftVersionKeepsPublishedVersionAsSeparateListRow() {
         var created = service.create(draft("Original criterion"));
         UUID publishedId = created.versions().getFirst().id();

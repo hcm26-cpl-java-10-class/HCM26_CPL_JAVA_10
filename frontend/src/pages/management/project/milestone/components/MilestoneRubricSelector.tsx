@@ -1,3 +1,4 @@
+import { getCurrentLocale } from "@/i18n/format";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import type { MilestoneRubricOption } from "@/types";
 import { AlertTriangle, ClipboardCheck, ExternalLink, Eye, FileCheck2 } from "lucide-react";
 import { useState, type Ref } from "react";
 
-const formatNumber = (value: number) => new Intl.NumberFormat("en-GB", {
+const formatNumber = (value: number) => new Intl.NumberFormat(getCurrentLocale(), {
   maximumFractionDigits: 2,
 }).format(value);
 
@@ -69,7 +70,7 @@ export function MilestoneRubricSelector({
               </CardDescription>
             </div>
             {allowManage && <Button asChild type="button" variant="ghost" size="sm" className="w-fit shrink-0">
-              <a href="/rubrics" target="_blank" rel="noreferrer">
+              <a href="/rubrics" target="_blank" rel="opener">
                 Manage rubrics <ExternalLink className="size-4" />
               </a>
             </Button>}

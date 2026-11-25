@@ -1,3 +1,4 @@
+import { formatNumberNow } from "@/i18n/format";
 import { useQuery } from "@tanstack/react-query";
 import { courseAnalyticsApi } from "@/api/features/demo/course-analytics.api";
 import {
@@ -30,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TopLearnersPanel } from "@/pages/management/demo/analytics/components/TopLearnersPanel";
 import { AnalyticsLoading } from "@/pages/management/demo/analytics/components/AnalyticsLoading";
 
 type Props = {
@@ -210,7 +212,7 @@ export function DepartmentAnalyticsTab({ courseId }: Props) {
                 />
                 <Tooltip shared={false} cursor={false} wrapperStyle={{ pointerEvents: "none", zIndex: 50 }}
                   formatter={(value) => [
-                    `${Number(value).toLocaleString("en-US", {
+                    `${formatNumberNow(Number(value), {
                       maximumFractionDigits: 1,
                     })} h`,
                     "Total study time",
@@ -301,6 +303,8 @@ export function DepartmentAnalyticsTab({ courseId }: Props) {
           </Table>
         </div>
       </AnalyticsPanel>
+
+      <TopLearnersPanel courseId={courseId} />
     </div>
   );
 }
