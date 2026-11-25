@@ -1,3 +1,4 @@
+import { formatDateNow } from "@/i18n/format";
 import axios from "axios";
 import { UnsupportedApiResponseError } from "@/api/features/project-assignment.api";
 import type { AssignmentBriefMilestone, AssignmentCatalogFilter, AssignmentCatalogSort, AssignmentTemplateLevel } from "@/types/features/project-assignment";
@@ -60,5 +61,5 @@ export function milestoneDue(milestone: Pick<AssignmentBriefMilestone, "dueAfter
 export function formatPublishedAt(value: string | null | undefined) {
   if (!value) return null;
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString("vi-VN");
+  return Number.isNaN(date.getTime()) ? null : formatDateNow(date);
 }

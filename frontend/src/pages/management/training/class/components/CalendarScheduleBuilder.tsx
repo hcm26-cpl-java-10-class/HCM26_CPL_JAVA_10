@@ -1,3 +1,4 @@
+import { formatDateCustomNow } from "@/i18n/format";
 import { useMemo, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, Clock3, Loader2, Save, Send, Settings2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -53,7 +54,7 @@ function overlaps(left?: string, right?: string) {
 }
 function formatDate(value: string, options: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" }) {
     const date = parseDate(value);
-    return date ? date.toLocaleDateString("en-GB", { ...options, timeZone: "UTC" }) : "—";
+    return date ? formatDateCustomNow(date, { ...options, timeZone: "UTC" }) : "—";
 }
 function dateInWeek(date: string, start: Date) {
     const parsed = parseDate(date);

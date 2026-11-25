@@ -95,20 +95,21 @@ export default function NotificationCenterPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const account = user?.email ?? "signed-out";
+  const queryKey = notificationQueryKey(account);
   const [category, setCategory] = useState<NotificationCategory | undefined>();
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [page, setPage] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const query = useQuery({
-    queryKey: [...notificationQueryKey(account), "page", category ?? "ALL", unreadOnly, page],
+    queryKey: [...queryKey, "page", category ?? "ALL", unreadOnly, page],
     queryFn: () => notificationApi.getPage({ category, unreadOnly, page, size: PAGE_SIZE }),
     enabled: account !== "signed-out",
     refetchInterval: 10_000,
     placeholderData: (previous) => previous,
   });
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: notificationQueryKey(account) });
+  const refresh = () => queryClient.invalidateQueries({ queryKey });
   const markRead = useMutation({ mutationFn: notificationApi.markRead, onSuccess: refresh });
   const markAllRead = useMutation({ mutationFn: notificationApi.markAllRead, onSuccess: refresh });
   const remove = useMutation({

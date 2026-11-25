@@ -1,3 +1,4 @@
+import { getCurrentLocale } from "@/i18n/format";
 import {
   Award,
   CalendarDays,
@@ -27,7 +28,7 @@ function formatDate(date?: string): string {
     return date;
   }
 
-  return new Intl.DateTimeFormat("vi-VN", {
+  return new Intl.DateTimeFormat(getCurrentLocale(), {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",

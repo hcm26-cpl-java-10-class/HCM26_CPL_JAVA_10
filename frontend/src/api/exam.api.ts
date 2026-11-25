@@ -454,6 +454,9 @@ export interface IntegrityReportRow {
     totalAwaySeconds: number;
     lastViolationAt: string | null;
     flagged: boolean;
+    aiPercent?: number | null;
+    aiLevel?: "LOW" | "MEDIUM" | "HIGH" | null;
+    aiSignals?: string[] | null;
     durationSeconds: number | null;
     reviewStatus?: IntegrityReviewStatus;
     reviewNote?: string | null;

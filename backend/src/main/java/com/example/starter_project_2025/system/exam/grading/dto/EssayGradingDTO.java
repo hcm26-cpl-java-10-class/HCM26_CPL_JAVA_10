@@ -69,6 +69,10 @@ public class EssayGradingDTO {
         private com.example.starter_project_2025.system.question.core.dto.CodeSpecDTO spec;
         /** null = da co diem; PENDING = dang cham nen; RETRYING = may cham loi, se tu thu lai; FAILED = het luot, can cham tay. */
         private String autoGradeState;
+        /** Estimated % AI-written (null = too short / not analysed). */
+        private Integer aiPercent;
+        private String aiLevel;
+        private List<String> aiSignals;
         /** Trang thai tung test (OK, WRONG_ANSWER, ...) cua lan cham tu dong da luu; null neu chua co. */
         private List<String> testStatuses;
     }
@@ -105,6 +109,10 @@ public class EssayGradingDTO {
         private int points;
         private BigDecimal maxScore;
         private String answerText;
+        /** Estimated % AI-written (null = too short / not analysed). */
+        private Integer aiPercent;
+        private String aiLevel;
+        private List<String> aiSignals;
         private BigDecimal score;
         private String feedback;
         private String referenceAnswer;

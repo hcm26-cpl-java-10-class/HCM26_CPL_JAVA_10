@@ -226,6 +226,10 @@ export interface EssayGradingItem {
   points: number;
   maxScore?: number;
   answerText: string;
+  /** Estimated % AI-written; null/undefined = too short to judge. */
+  aiPercent?: number | null;
+  aiLevel?: "LOW" | "MEDIUM" | "HIGH" | null;
+  aiSignals?: string[] | null;
   score?: number | null;
   feedback?: string | null;
   referenceAnswer?: string | null;
@@ -273,6 +277,9 @@ export interface CodingGradingItem {
   points: number;
   maxScore?: number;
   code: string;
+  aiPercent?: number | null;
+  aiLevel?: "LOW" | "MEDIUM" | "HIGH" | null;
+  aiSignals?: string[] | null;
   score?: number | null;
   feedback?: string | null;
   spec?: CodeSpec | null;

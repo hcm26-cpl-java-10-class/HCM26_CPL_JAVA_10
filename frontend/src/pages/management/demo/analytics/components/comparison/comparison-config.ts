@@ -1,3 +1,4 @@
+import { formatNumberNow } from "@/i18n/format";
 import {
   BarChart3,
   Building2,
@@ -50,7 +51,7 @@ export type ComparisonModuleDef = {
 };
 
 const pct = (value: number) => `${value.toFixed(1)}%`;
-const num = (value: number) => value.toLocaleString("en-US");
+const num = (value: number) => formatNumberNow(value);
 const hours = (value: number) => `${value.toFixed(2)}h`;
 const stars = (value: number) => `${value.toFixed(2)}★`;
 
