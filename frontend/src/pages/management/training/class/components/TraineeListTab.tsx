@@ -933,6 +933,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                 membershipOnly={internal}
                 open={modalState.open}
                 mode={modalState.mode}
+                classItem={classItem}
                 site={classSite}
                 trainee={modalState.trainee}
                 existingTrainees={activeTrainees}
@@ -943,6 +944,17 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                         ? () => setModalState((prev) => ({ ...prev, mode: "edit" }))
                         : undefined
                 }
+                onSelectTrainee={(nextTrainee) =>
+                    setModalState((prev) => ({ ...prev, trainee: nextTrainee }))
+                }
+                onNavigateToAttendance={() => {
+                    setModalState((prev) => ({ ...prev, open: false }));
+                    handleAttendance();
+                }}
+                onNavigateToTopicMark={() => {
+                    setModalState((prev) => ({ ...prev, open: false }));
+                    handleTopicMark();
+                }}
             />
 
             {importOpen && <TraineeImportModal open classId={classItem.id} onOpenChange={setImportOpen} />}

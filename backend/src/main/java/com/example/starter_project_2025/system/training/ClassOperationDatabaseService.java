@@ -6,6 +6,7 @@ import com.example.starter_project_2025.system.subject.Subject;
 import com.example.starter_project_2025.system.subject.SubjectRepository;
 import com.example.starter_project_2025.system.subject.SubjectStatus;
 import com.example.starter_project_2025.system.training.entity.ClassActivityEntity;
+import com.example.starter_project_2025.system.training.entity.ClassAttendanceEntity;
 import com.example.starter_project_2025.system.training.entity.ClassOperationEntity;
 import com.example.starter_project_2025.system.training.entity.ClassTopicAssessmentEntity;
 import com.example.starter_project_2025.system.training.entity.TrainingClass;
@@ -34,6 +35,9 @@ public class ClassOperationDatabaseService {
     private final ClassOperationRepository operationRepository;
     private final ClassTopicAssessmentRepository topicAssessmentRepository;
     private final ClassActivityEntityRepository activityRepository;
+    private final ClassAttendanceRepository attendanceRepository;
+    private final ClassEnrollmentRepository enrollmentRepository;
+    private final MasterTraineeDirectory masterTraineeDirectory;
     private final TrainingClassRepository trainingClassRepository;
     private final SessionRepository sessionRepository;
     private final ClassTrainingProgramRepository classTrainingProgramRepository;
@@ -42,6 +46,116 @@ public class ClassOperationDatabaseService {
 
     private static final DateTimeFormatter MONTH_LABEL_FMT = DateTimeFormatter.ofPattern("MMM - yyyy", Locale.ENGLISH);
     private static final DateTimeFormatter ACTIVITY_TS_FMT = DateTimeFormatter.ofPattern("dd-MMM-yyyy HH:mm:ss", Locale.ENGLISH);
+
+    // =========================================================================
+    // 0. BASELINE CLASSES & TRAINEE ENROLLMENTS SEED (H2 DATABASE)
+    // =========================================================================
+
+    @Transactional
+    public List<TrainingClass> ensureDefaultTrainingClassesInH2() {
+        if (trainingClassRepository.count() > 0) {
+            return trainingClassRepository.findAll();
+        }
+        List<TrainingClass> defaults = List.of(
+                buildDefaultTrainingClass(
+                        "LOCAL_JAVA_01",
+                        "Lớp Chuyên sâu Java Backend (K26)",
+                        LocalDate.of(2026, 10, 1),
+                        LocalDate.of(2027, 1, 31),
+                        25,
+                        "LOCAL_JAVA",
+                        "Nguyễn Ngọc Tân (Trainer)",
+                        "Offline",
+                        "Java, Spring Boot",
+                        "Phòng Lab 201 (F-Town 2)"
+                ),
+                buildDefaultTrainingClass(
+                        "LOCAL_JAVA_02",
+                        "Lớp Lập trình Fullstack Java Web (K26)",
+                        LocalDate.of(2026, 11, 15),
+                        LocalDate.of(2027, 3, 15),
+                        30,
+                        "LOCAL_FULLSTACK",
+                        "Nguyễn Mạnh Hoàng (Trainer)",
+                        "Hybrid",
+                        "Java, React",
+                        "Phòng 304 (Innovation Hall)"
+                )
+        );
+        return trainingClassRepository.saveAll(defaults);
+    }
+
+    @Transactional
+    public List<ClassEnrollment> initializeEnrollmentsFromH2(TrainingClass tc) {
+        if (tc == null || tc.getId() == null) {
+            return List.of();
+        }
+        if (enrollmentRepository.countByTrainingClass_Id(tc.getId()) > 0) {
+            return enrollmentRepository.findByTrainingClass_IdAndIsActiveTrueOrderByIdAsc(tc.getId());
+        }
+
+        List<MasterTraineeDirectory.Profile> seedProfiles = switch (tc.getCode() != null ? tc.getCode() : "") {
+            case "LOCAL_JAVA_01" -> MasterTraineeDirectory.CLASS_1_SEED_PROFILES;
+            case "LOCAL_JAVA_02" -> MasterTraineeDirectory.CLASS_2_SEED_PROFILES;
+            default -> List.of();
+        };
+        if (seedProfiles.isEmpty()) {
+            return List.of();
+        }
+
+        int cap = tc.getPlannedSize() != null && tc.getPlannedSize() > 0
+                ? tc.getPlannedSize()
+                : seedProfiles.size();
+
+        List<ClassEnrollment> toSave = new ArrayList<>();
+        for (int i = 0; i < Math.min(cap, seedProfiles.size()); i++) {
+            MasterTraineeDirectory.Profile p = seedProfiles.get(i);
+            ClassEnrollment enrollment = new ClassEnrollment();
+            enrollment.setTrainingClass(tc);
+            enrollment.setTraineeId(p.id());
+            enrollment.setStudentId(p.studentId());
+            enrollment.setFullName(p.fullName());
+            enrollment.setPersonalEmail(p.personalEmail());
+            enrollment.setDob(p.dob());
+            enrollment.setGender(p.gender());
+            enrollment.setStatus(ClassEnrollment.Status.ACTIVE);
+            enrollment.setIsActive(true);
+            toSave.add(enrollment);
+        }
+        return enrollmentRepository.saveAll(toSave);
+    }
+
+    private TrainingClass buildDefaultTrainingClass(
+            String code,
+            String name,
+            LocalDate startDate,
+            LocalDate endDate,
+            int plannedSize,
+            String program,
+            String masterTrainer,
+            String formatType,
+            String skills,
+            String location
+    ) {
+        TrainingClass tc = new TrainingClass();
+        tc.setCode(code);
+        tc.setName(name);
+        tc.setStatus("active");
+        tc.setStartDate(startDate);
+        tc.setEndDate(endDate);
+        tc.setPlannedSize(plannedSize);
+        tc.setSite("TP. Hồ Chí Minh");
+        tc.setTraineeType("Fresher");
+        tc.setProgram(program);
+        tc.setClassAdmin("admin@example.com");
+        tc.setMasterTrainer(masterTrainer);
+        tc.setDeliveryType("Class");
+        tc.setFormatType(formatType);
+        tc.setSkills(skills);
+        tc.setLocation(location);
+        tc.setIsActive(true);
+        return tc;
+    }
 
     // =========================================================================
     // 1. OPERATION & MILESTONES (QUERYING & PERSISTING IN H2 DATABASE)
@@ -270,6 +384,374 @@ public class ClassOperationDatabaseService {
                 .build();
 
         return activityRepository.save(entity);
+    }
+
+    // =========================================================================
+    // 4. CLASS ATTENDANCE TRACKER (H2 DATABASE)
+    // =========================================================================
+
+    private static final int DEFAULT_CONDUCTED_SESSIONS = 20;
+    private static final int DEFAULT_PLANNED_SESSIONS = 40;
+    private static final int[][] PRESET_ATTENDANCE_PROFILES = {
+            {0, 0, 0}, {1, 0, 1}, {1, 2, 1}, {0, 0, 0}, {1, 1, 2},
+            {1, 3, 1}, {1, 0, 0}, {1, 2, 2}, {1, 4, 1}, {0, 0, 1}
+    };
+    private static final List<String> ATTENDANCE_SESSION_TOPICS = List.of(
+            "Session 01: Course Orientation & Java Environment Setup",
+            "Session 02: Java Syntax, Data Types & Control Flow",
+            "Session 03: Object-Oriented Programming - Classes & Objects",
+            "Session 04: Inheritance, Polymorphism & Abstraction",
+            "Session 05: Interfaces, Packages & Access Modifiers",
+            "Session 06: Exception Handling & Debugging in Java",
+            "Session 07: Java Collections Framework - List & Set",
+            "Session 08: Java Collections Framework - Map & Generics",
+            "Session 09: Java Streams API & Lambda Expressions",
+            "Session 10: File I/O & Serialization",
+            "Session 11: Multithreading & Concurrency Basics",
+            "Session 12: JDBC & Relational Database Connectivity",
+            "Session 13: Maven Build Tool & Unit Testing with JUnit 5",
+            "Session 14: Spring Core & Dependency Injection",
+            "Session 15: Spring Boot Auto-Configuration & Profiles",
+            "Session 16: Building RESTful APIs with Spring Web MVC",
+            "Session 17: Spring Data JPA & Hibernate ORM",
+            "Session 18: Bean Validation & Global Exception Handling",
+            "Session 19: Spring Security & JWT Authentication",
+            "Session 20: Midterm Project Review & Code Assessment"
+    );
+
+    private record AttendanceSeedTrainee(Long traineeId, String studentId, String fullName, String personalEmail) {}
+
+    @Transactional
+    public Map<String, Object> getClassAttendance(Long classId) {
+        List<ClassAttendanceEntity> list = attendanceRepository.findByClassIdOrderByTraineeIdAsc(classId);
+        if (list.isEmpty()) {
+            list = initializeAttendanceFromH2(classId);
+        }
+
+        int conductedSessions = list.stream()
+                .map(ClassAttendanceEntity::getConductedSessions)
+                .filter(Objects::nonNull)
+                .max(Integer::compareTo)
+                .orElse(DEFAULT_CONDUCTED_SESSIONS);
+        int plannedSessions = list.stream()
+                .map(ClassAttendanceEntity::getPlannedSessions)
+                .filter(Objects::nonNull)
+                .max(Integer::compareTo)
+                .orElse(DEFAULT_PLANNED_SESSIONS);
+
+        List<Map<String, Object>> records = new ArrayList<>();
+        Map<String, Map<String, Object>> recordsByTraineeId = new LinkedHashMap<>();
+        for (ClassAttendanceEntity entity : list) {
+            List<Map<String, Object>> logs = parseAttendanceLogs(entity.getLogsJson());
+            Map<String, Object> traineeRecord = new LinkedHashMap<>();
+            traineeRecord.put("traineeId", entity.getTraineeId());
+            traineeRecord.put("excusedAbsent", entity.getExcusedAbsent() != null ? entity.getExcusedAbsent() : 0);
+            traineeRecord.put("unexcusedAbsent", entity.getUnexcusedAbsent() != null ? entity.getUnexcusedAbsent() : 0);
+            traineeRecord.put("lateCount", entity.getLateCount() != null ? entity.getLateCount() : 0);
+            traineeRecord.put("logs", logs);
+            recordsByTraineeId.put(String.valueOf(entity.getTraineeId()), traineeRecord);
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", entity.getId());
+            row.put("classId", entity.getClassId());
+            row.put("traineeId", entity.getTraineeId());
+            row.put("studentId", entity.getStudentId());
+            row.put("fullName", entity.getFullName());
+            row.put("personalEmail", entity.getPersonalEmail());
+            row.put("conductedSessions", entity.getConductedSessions());
+            row.put("plannedSessions", entity.getPlannedSessions());
+            row.put("attendedSessions", entity.getAttendedSessions());
+            row.put("excusedAbsent", entity.getExcusedAbsent());
+            row.put("unexcusedAbsent", entity.getUnexcusedAbsent());
+            row.put("lateCount", entity.getLateCount());
+            row.put("absentRate", entity.getAbsentRate());
+            row.put("attendanceStatus", entity.getAttendanceStatus());
+            row.put("logs", logs);
+            row.put("updatedAt", entity.getUpdatedAt());
+            records.add(row);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("classId", classId);
+        result.put("conductedSessions", conductedSessions);
+        result.put("plannedSessions", plannedSessions);
+        result.put("records", records);
+        result.put("recordsByTraineeId", recordsByTraineeId);
+        return result;
+    }
+
+    @Transactional
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> saveClassAttendance(Long classId, Map<String, Object> body) {
+        int conductedSessions = parseIntOrDefault(body != null ? body.get("conductedSessions") : null, DEFAULT_CONDUCTED_SESSIONS);
+        int plannedSessions = Math.max(conductedSessions, parseIntOrDefault(body != null ? body.get("plannedSessions") : null, DEFAULT_PLANNED_SESSIONS));
+
+        Map<Long, Map<String, Object>> traineeMetaById = new HashMap<>();
+        if (body != null && body.get("trainees") instanceof List<?> traineeList) {
+            for (Object item : traineeList) {
+                if (item instanceof Map<?, ?> m) {
+                    Long id = parseLongOrNull(m.get("id"));
+                    if (id != null) {
+                        traineeMetaById.put(id, (Map<String, Object>) m);
+                    }
+                }
+            }
+        }
+
+        Object rawRecordsMap = body != null ? body.get("recordsByTraineeId") : null;
+        if (!(rawRecordsMap instanceof Map<?, ?> recordsMap)) {
+            return getClassAttendance(classId);
+        }
+
+        Map<Long, ClassAttendanceEntity> existingByTraineeId = new HashMap<>();
+        for (ClassAttendanceEntity existing : attendanceRepository.findByClassIdOrderByTraineeIdAsc(classId)) {
+            existingByTraineeId.put(existing.getTraineeId(), existing);
+        }
+
+        String nowTs = LocalDateTime.now().format(ACTIVITY_TS_FMT);
+        List<ClassAttendanceEntity> toSave = new ArrayList<>();
+
+        for (Map.Entry<?, ?> entry : recordsMap.entrySet()) {
+            Long traineeId = parseLongOrNull(entry.getKey());
+            if (traineeId == null || !(entry.getValue() instanceof Map<?, ?> recordMap)) {
+                continue;
+            }
+
+            List<Map<String, Object>> logs = recordMap.get("logs") instanceof List<?> rawLogs
+                    ? (List<Map<String, Object>>) (List<?>) rawLogs
+                    : List.of();
+
+            int excused = countLogStatus(logs, "Excused", parseIntOrDefault(recordMap.get("excusedAbsent"), 0));
+            int unexcused = countLogStatus(logs, "Unexcused", parseIntOrDefault(recordMap.get("unexcusedAbsent"), 0));
+            int late = countLogStatus(logs, "Late", parseIntOrDefault(recordMap.get("lateCount"), 0));
+            int totalAbsent = excused + unexcused;
+            int totalConducted = Math.max(1, conductedSessions);
+            int attended = Math.max(0, totalConducted - totalAbsent);
+            double absentRate = Math.round(((totalAbsent * 100.0) / totalConducted) * 10.0) / 10.0;
+            String status = resolveAttendanceStatusLabel(absentRate);
+
+            ClassAttendanceEntity entity = existingByTraineeId.getOrDefault(
+                    traineeId,
+                    ClassAttendanceEntity.builder().classId(classId).traineeId(traineeId).build()
+            );
+
+            Map<String, Object> meta = traineeMetaById.get(traineeId);
+            if (meta != null) {
+                if (meta.get("studentId") != null) entity.setStudentId(String.valueOf(meta.get("studentId")));
+                if (meta.get("fullName") != null) entity.setFullName(String.valueOf(meta.get("fullName")));
+                if (meta.get("personalEmail") != null) entity.setPersonalEmail(String.valueOf(meta.get("personalEmail")));
+            }
+
+            entity.setConductedSessions(conductedSessions);
+            entity.setPlannedSessions(plannedSessions);
+            entity.setAttendedSessions(attended);
+            entity.setExcusedAbsent(excused);
+            entity.setUnexcusedAbsent(unexcused);
+            entity.setLateCount(late);
+            entity.setAbsentRate(absentRate);
+            entity.setAttendanceStatus(status);
+            entity.setLogsJson(serializeAttendanceLogs(logs));
+            entity.setUpdatedAt(nowTs);
+            toSave.add(entity);
+        }
+
+        if (!toSave.isEmpty()) {
+            attendanceRepository.saveAll(toSave);
+        }
+        return getClassAttendance(classId);
+    }
+
+    @Transactional
+    public List<ClassAttendanceEntity> initializeAttendanceFromH2(Long classId) {
+        List<ClassAttendanceEntity> existing = attendanceRepository.findByClassIdOrderByTraineeIdAsc(classId);
+        if (!existing.isEmpty()) {
+            return existing;
+        }
+
+        List<AttendanceSeedTrainee> seedTrainees = resolveSeedAttendanceTrainees(classId);
+        if (seedTrainees.isEmpty()) {
+            return List.of();
+        }
+
+        TrainingClass tc = trainingClassRepository.findById(classId).orElse(null);
+        LocalDate start = tc != null && tc.getStartDate() != null ? tc.getStartDate() : LocalDate.now().minusDays(45);
+        LocalDate today = LocalDate.now();
+        LocalDate pastEnd = today.minusDays(1);
+        if (tc != null && tc.getEndDate() != null && tc.getEndDate().isBefore(pastEnd)) {
+            pastEnd = tc.getEndDate();
+        }
+        if (start.isAfter(pastEnd)) {
+            start = pastEnd.minusDays(30);
+        }
+        long spanDays = Math.max(1, Duration.between(start.atStartOfDay(), pastEnd.atStartOfDay()).toDays());
+
+        List<String> sessionDates = new ArrayList<>();
+        for (int i = 0; i < DEFAULT_CONDUCTED_SESSIONS; i++) {
+            long offset = Math.round((i * (double) spanDays) / Math.max(1, DEFAULT_CONDUCTED_SESSIONS - 1));
+            sessionDates.add(start.plusDays(offset).toString());
+        }
+
+        String nowTs = LocalDateTime.now().format(ACTIVITY_TS_FMT);
+        List<ClassAttendanceEntity> entities = new ArrayList<>();
+        for (int idx = 0; idx < seedTrainees.size(); idx++) {
+            AttendanceSeedTrainee trainee = seedTrainees.get(idx);
+            int[] profile = PRESET_ATTENDANCE_PROFILES[idx % PRESET_ATTENDANCE_PROFILES.length];
+            List<Map<String, Object>> logs = buildSeedAttendanceLogs(
+                    DEFAULT_CONDUCTED_SESSIONS, profile[0], profile[1], profile[2], sessionDates
+            );
+            int excused = countLogStatus(logs, "Excused", profile[0]);
+            int unexcused = countLogStatus(logs, "Unexcused", profile[1]);
+            int late = countLogStatus(logs, "Late", profile[2]);
+            int totalAbsent = excused + unexcused;
+            int attended = Math.max(0, DEFAULT_CONDUCTED_SESSIONS - totalAbsent);
+            double absentRate = Math.round(((totalAbsent * 100.0) / DEFAULT_CONDUCTED_SESSIONS) * 10.0) / 10.0;
+
+            entities.add(ClassAttendanceEntity.builder()
+                    .classId(classId)
+                    .traineeId(trainee.traineeId())
+                    .studentId(trainee.studentId())
+                    .fullName(trainee.fullName())
+                    .personalEmail(trainee.personalEmail())
+                    .conductedSessions(DEFAULT_CONDUCTED_SESSIONS)
+                    .plannedSessions(DEFAULT_PLANNED_SESSIONS)
+                    .attendedSessions(attended)
+                    .excusedAbsent(excused)
+                    .unexcusedAbsent(unexcused)
+                    .lateCount(late)
+                    .absentRate(absentRate)
+                    .attendanceStatus(resolveAttendanceStatusLabel(absentRate))
+                    .logsJson(serializeAttendanceLogs(logs))
+                    .updatedAt(nowTs)
+                    .build());
+        }
+
+        return attendanceRepository.saveAll(entities);
+    }
+
+    private List<AttendanceSeedTrainee> resolveSeedAttendanceTrainees(Long classId) {
+        List<ClassEnrollment> enrolled = enrollmentRepository.findByTrainingClass_IdAndIsActiveTrueOrderByIdAsc(classId);
+        if (!enrolled.isEmpty()) {
+            return enrolled.stream()
+                    .map(e -> new AttendanceSeedTrainee(
+                            e.getTraineeId(),
+                            e.getStudentId(),
+                            e.getFullName(),
+                            e.getPersonalEmail()
+                    ))
+                    .toList();
+        }
+        return masterTraineeDirectory.load().stream()
+                .filter(p -> "Active".equalsIgnoreCase(p.status()))
+                .limit(10)
+                .map(p -> new AttendanceSeedTrainee(p.id(), p.studentId(), p.fullName(), p.personalEmail()))
+                .toList();
+    }
+
+    private List<Map<String, Object>> buildSeedAttendanceLogs(
+            int totalSessions, int excused, int unexcused, int late, List<String> sessionDates) {
+        List<Map<String, Object>> logs = new ArrayList<>();
+        int remExcused = excused;
+        int remUnexcused = unexcused;
+        int remLate = late;
+
+        for (int i = 0; i < totalSessions; i++) {
+            String status = "Present";
+            String note = "Attended on time";
+            if (remUnexcused > 0 && i >= 3 && i % 4 == 3) {
+                status = "Unexcused";
+                note = "Absent without prior notice (Unexcused)";
+                remUnexcused--;
+            } else if (remExcused > 0 && i >= 5 && i % 5 == 0) {
+                status = "Excused";
+                note = "Approved leave request (Excused)";
+                remExcused--;
+            } else if (remLate > 0 && i >= 2 && i % 6 == 2) {
+                status = "Late";
+                note = "Arrived 15 minutes late";
+                remLate--;
+            }
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("sessionNumber", i + 1);
+            item.put("date", sessionDates.get(i));
+            item.put("topic", i < ATTENDANCE_SESSION_TOPICS.size()
+                    ? ATTENDANCE_SESSION_TOPICS.get(i)
+                    : String.format("Session %02d: Training Session", i + 1));
+            item.put("status", status);
+            item.put("note", note);
+            logs.add(item);
+        }
+
+        for (int i = logs.size() - 1; i >= 0 && (remUnexcused > 0 || remExcused > 0 || remLate > 0); i--) {
+            if (!"Present".equals(logs.get(i).get("status"))) continue;
+            if (remUnexcused > 0) {
+                logs.get(i).put("status", "Unexcused");
+                logs.get(i).put("note", "Absent without prior notice (Unexcused)");
+                remUnexcused--;
+            } else if (remExcused > 0) {
+                logs.get(i).put("status", "Excused");
+                logs.get(i).put("note", "Approved leave request (Excused)");
+                remExcused--;
+            } else if (remLate > 0) {
+                logs.get(i).put("status", "Late");
+                logs.get(i).put("note", "Arrived 15 minutes late");
+                remLate--;
+            }
+        }
+        return logs;
+    }
+
+    private int countLogStatus(List<Map<String, Object>> logs, String targetStatus, int fallback) {
+        if (logs == null || logs.isEmpty()) return fallback;
+        int count = 0;
+        for (Map<String, Object> logItem : logs) {
+            if (targetStatus.equals(String.valueOf(logItem.get("status")))) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private String resolveAttendanceStatusLabel(double absentRate) {
+        if (absentRate >= 20.0) return "Disqualified";
+        if (absentRate >= 10.0) return "At Risk";
+        return "Eligible";
+    }
+
+    private List<Map<String, Object>> parseAttendanceLogs(String logsJson) {
+        if (logsJson == null || logsJson.isBlank()) return List.of();
+        try {
+            return objectMapper.readValue(logsJson, new TypeReference<List<Map<String, Object>>>() {});
+        } catch (Exception e) {
+            log.error("Failed to parse logsJson", e);
+            return List.of();
+        }
+    }
+
+    private String serializeAttendanceLogs(List<Map<String, Object>> logs) {
+        try {
+            return objectMapper.writeValueAsString(logs != null ? logs : List.of());
+        } catch (Exception e) {
+            log.error("Failed to serialize attendance logs to JSON", e);
+            return "[]";
+        }
+    }
+
+    private int parseIntOrDefault(Object value, int fallback) {
+        if (value == null) return fallback;
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
+    private Long parseLongOrNull(Object value) {
+        if (value == null) return null;
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     // =========================================================================

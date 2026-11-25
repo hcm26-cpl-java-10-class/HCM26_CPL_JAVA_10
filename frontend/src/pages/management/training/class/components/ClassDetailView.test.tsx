@@ -802,4 +802,76 @@ describe("ClassDetailView & TraineeListTab", () => {
         await user.click(within(view).getByRole("button", { name: /back to trainee list/i }));
         expect(await screen.findByRole("table", { name: "Trainee List" })).toBeInTheDocument();
     }, 20000);
+
+    it("renders 360-degree Trainee Profile with Personal Info, Attendance, Academic Results tabs, peer switcher, Excel export, and view shortcuts", async () => {
+        const activeClass = {
+            ...MOCK_TRAINING_CLASSES[0],
+            startDate: "2026-05-23",
+            endDate: "2099-12-31",
+            expectedStartDate: "2026-05-23",
+            expectedEndDate: "2099-12-31",
+        };
+        fakeHttp.on("get", "/external/classes/2", activeClass);
+        fakeHttp.on("get", "/classes/2", activeClass);
+
+        const { user } = renderClassFlow("/classes/2");
+        await screen.findByText("Trần Việt Anh");
+
+        // 1. Open 360-degree Trainee Profile for Trần Việt Anh (index 1: 5% absent Eligible, Overall GPA 5.3 Not Qualified)
+        await user.click(screen.getByRole("button", { name: "Trần Việt Anh" }));
+        const profileDialog = await screen.findByRole("dialog", { name: "Trainee Profile" });
+
+        expect(within(profileDialog).getByTestId("hero-attendance-kpi")).toHaveTextContent("19/20");
+        expect(within(profileDialog).getByTestId("hero-attendance-kpi")).toHaveTextContent("Eligible");
+        expect(within(profileDialog).getByTestId("hero-gpa-kpi")).toHaveTextContent("5.3");
+        expect(within(profileDialog).getByTestId("hero-readiness-kpi")).toHaveTextContent("Not Qualified");
+
+        // Personal Info tab (default)
+        expect(within(profileDialog).getByText("anhviettran357@gmail.com")).toBeInTheDocument();
+        expect(within(profileDialog).getByText("anhtv2")).toBeInTheDocument();
+
+        // 2. Switch to Attendance tab & filter Non-Present sessions
+        await user.click(within(profileDialog).getByRole("tab", { name: /attendance/i }));
+        const attHistoryTable = await within(profileDialog).findByRole("table", {
+            name: "Trainee Profile Attendance History",
+        });
+        expect(within(attHistoryTable).getAllByRole("row").slice(1)).toHaveLength(20);
+        expect(within(profileDialog).getByText("19 / 20")).toBeInTheDocument();
+
+        await user.click(within(profileDialog).getByRole("button", { name: /Non-Present \(2\)/i }));
+        expect(within(attHistoryTable).getAllByRole("row").slice(1)).toHaveLength(2);
+
+        // 3. Switch to Academic Results tab & verify all 4 topics
+        await user.click(within(profileDialog).getByRole("tab", { name: /academic results/i }));
+        const academicTable = await within(profileDialog).findByRole("table", {
+            name: "Trainee Profile Academic Results",
+        });
+        for (const code of ["L1_AL_PSE", "L2_OOP_JAVA", "L3_SPRING_BOOT", "L4_DATABASE"]) {
+            expect(within(academicTable).getByText(code)).toBeInTheDocument();
+        }
+        expect(within(academicTable).getAllByText("Failed").length).toBe(4);
+
+        // 4. Switch to Previous trainee (Hoàng Phương Bình -> Qualified, 4 Passed topics) while staying on Academic tab
+        await user.click(within(profileDialog).getByRole("button", { name: "Previous trainee" }));
+        expect(within(profileDialog).getByTestId("profile-360-hero")).toHaveTextContent("Hoàng Phương Bình");
+        expect(within(profileDialog).getByTestId("hero-readiness-kpi")).toHaveTextContent("Qualified");
+        expect(within(academicTable).getAllByText("Passed").length).toBe(4);
+
+        // 5. Export 360-degree Excel Report (3 worksheets)
+        await user.click(within(profileDialog).getByRole("button", { name: /export 360° report/i }));
+        expect(XLSX.writeFile).toHaveBeenCalled();
+        const exportedBook = vi.mocked(XLSX.writeFile).mock.calls[
+            vi.mocked(XLSX.writeFile).mock.calls.length - 1
+        ][0];
+        expect(exportedBook.SheetNames).toEqual([
+            "Profile Overview",
+            "Attendance History",
+            "Academic Results",
+        ]);
+
+        // 6. Use Open Topic Marks shortcut -> closes modal & switches to Topic Mark view
+        await user.click(within(profileDialog).getByRole("button", { name: /open topic marks/i }));
+        expect(await screen.findByTestId("topic-mark-view")).toBeInTheDocument();
+        expect(screen.queryByRole("dialog", { name: "Trainee Profile" })).not.toBeInTheDocument();
+    }, 20000);
 });

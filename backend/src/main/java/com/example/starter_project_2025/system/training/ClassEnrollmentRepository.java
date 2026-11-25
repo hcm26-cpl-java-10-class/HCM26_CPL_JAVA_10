@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ClassEnrollmentRepository extends JpaRepository<ClassEnrollment, Long> {
+    long countByTrainingClass_Id(Long classId);
     List<ClassEnrollment> findByTrainingClass_IdAndIsActiveTrueOrderByIdAsc(Long classId);
     Optional<ClassEnrollment> findByTrainingClass_IdAndTraineeId(Long classId, Long traineeId);
     long countByTrainingClass_IdAndIsActiveTrueAndStatus(Long classId, ClassEnrollment.Status status);
