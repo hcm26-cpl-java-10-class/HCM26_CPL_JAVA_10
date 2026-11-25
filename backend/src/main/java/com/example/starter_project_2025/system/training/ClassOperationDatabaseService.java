@@ -213,17 +213,72 @@ public class ClassOperationDatabaseService {
 
             Map<String, Object> gpa = (Map<String, Object>) opInfo.get("gpaCalculation");
             if (gpa != null) {
-                if (gpa.get("topicMark") != null) entity.setTopicMark(Integer.parseInt(String.valueOf(gpa.get("topicMark"))));
-                if (gpa.get("disciplinePoint") != null) entity.setDisciplinePoint(Integer.parseInt(String.valueOf(gpa.get("disciplinePoint"))));
-                if (gpa.get("bonusPoint") != null) entity.setBonusPoint(Integer.parseInt(String.valueOf(gpa.get("bonusPoint"))));
-                if (gpa.get("penaltyPoint") != null) entity.setPenaltyPoint(Integer.parseInt(String.valueOf(gpa.get("penaltyPoint"))));
+                int topicMark = gpa.get("topicMark") != null
+                        ? parseIntOrDefault(gpa.get("topicMark"), -1)
+                        : (entity.getTopicMark() != null ? entity.getTopicMark() : 70);
+                int disciplinePoint = gpa.get("disciplinePoint") != null
+                        ? parseIntOrDefault(gpa.get("disciplinePoint"), -1)
+                        : (entity.getDisciplinePoint() != null ? entity.getDisciplinePoint() : 30);
+                int bonusPoint = gpa.get("bonusPoint") != null
+                        ? parseIntOrDefault(gpa.get("bonusPoint"), -1)
+                        : (entity.getBonusPoint() != null ? entity.getBonusPoint() : 10);
+                int penaltyPoint = gpa.get("penaltyPoint") != null
+                        ? parseIntOrDefault(gpa.get("penaltyPoint"), -1)
+                        : (entity.getPenaltyPoint() != null ? entity.getPenaltyPoint() : 20);
+
+                if (topicMark < 0 || topicMark > 100 || disciplinePoint < 0 || disciplinePoint > 100
+                        || bonusPoint < 0 || bonusPoint > 100 || penaltyPoint < 0 || penaltyPoint > 100) {
+                    throw new BadRequestException("Các giá trị GPA Calculation phải nằm trong khoảng 0 đến 100.");
+                }
+                if (topicMark + disciplinePoint != 100) {
+                    throw new BadRequestException("Tổng trọng số Topic Mark (" + topicMark
+                            + "%) + Discipline Point (" + disciplinePoint + "%) bắt buộc phải bằng 100%.");
+                }
+
+                entity.setTopicMark(topicMark);
+                entity.setDisciplinePoint(disciplinePoint);
+                entity.setBonusPoint(bonusPoint);
+                entity.setPenaltyPoint(penaltyPoint);
             }
         }
 
         Object milestones = body.get("milestones");
-        if (milestones != null) {
+        if (milestones instanceof List<?> milestoneList) {
+            for (Object item : milestoneList) {
+                if (!(item instanceof Map<?, ?> rawMilestone)) continue;
+                @SuppressWarnings("unchecked")
+                Map<String, Object> m = (Map<String, Object>) rawMilestone;
+
+                String rawStatus = m.get("status") != null ? String.valueOf(m.get("status")).trim() : "Baselined";
+                m.put("status", "Draft".equalsIgnoreCase(rawStatus) ? "Draft" : "Baselined");
+
+                String rawCheckpoint = m.get("checkpointType") != null
+                        ? String.valueOf(m.get("checkpointType")).trim().toUpperCase(Locale.ROOT)
+                        : "STANDARD";
+                m.put("checkpointType", "SPECIAL".equals(rawCheckpoint) ? "SPECIAL" : "STANDARD");
+
+                String rawSalaryPaid = m.get("salaryPaid") != null ? String.valueOf(m.get("salaryPaid")).trim() : "Yes";
+                m.put("salaryPaid", "No".equalsIgnoreCase(rawSalaryPaid) ? "No" : "Yes");
+
+                if (m.get("topics") instanceof List<?> topicList) {
+                    for (Object tItem : topicList) {
+                        if (!(tItem instanceof Map<?, ?> rawTopic)) continue;
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> tMap = (Map<String, Object>) rawTopic;
+                        double maxScore = parseDoubleOrDefault(tMap.get("maxScore"), 10.0);
+                        if (maxScore <= 0) maxScore = 10.0;
+                        double passingScore = parseDoubleOrDefault(tMap.get("passingScore"), 6.0);
+                        if (!Double.isFinite(passingScore) || passingScore < 0.0 || passingScore > maxScore) {
+                            String topicName = tMap.get("topic") != null ? String.valueOf(tMap.get("topic")) : "Topic";
+                            throw new BadRequestException("Passing Score của chuyên đề '" + topicName
+                                    + "' phải nằm trong khoảng 0 đến " + maxScore + ".");
+                        }
+                        tMap.put("passingScore", Math.round(passingScore * 10.0) / 10.0);
+                    }
+                }
+            }
             try {
-                entity.setMilestonesJson(objectMapper.writeValueAsString(milestones));
+                entity.setMilestonesJson(objectMapper.writeValueAsString(milestoneList));
             } catch (Exception e) {
                 log.error("Failed to serialize milestones to JSON", e);
             }

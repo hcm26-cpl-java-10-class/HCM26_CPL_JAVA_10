@@ -2,17 +2,23 @@ import {
     AlertCircle,
     ChevronDown,
     ChevronUp,
+    Download,
     Info,
+    Lock,
     Plus,
+    RotateCcw,
     Save,
     Trash2,
+    Unlock,
     X,
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
+import { utils, writeFile } from "xlsx";
 import {
     useAddClassActivity,
+    useClassActivities,
     useClassOperation,
     useSaveClassOperation,
     useSaveTopicAssessments,
@@ -22,6 +28,7 @@ import type {
     AssessmentItem,
     ClassOperationData,
     ExternalClass,
+    GpaCalculation,
     Milestone,
     TopicAssessment,
 } from "@/types";
@@ -57,6 +64,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/utils/session.utils";
+import { autoFitWorksheetColumns } from "@/utils/trainee-import.utils";
 
 function calculateTopicTotal(topic: TopicAssessment): number {
     return (topic.assessments || []).reduce((sum, a) => sum + (Number(a.weightedNumber) || 0), 0);
@@ -482,9 +490,18 @@ function TopicAssessmentModal({ open, onClose, classId, onActivityLog }: TopicAs
 }
 
 // ===================== MAIN TAB: BUDGET & OPERATION INFO =====================
+const DEFAULT_GPA_CALCULATION: GpaCalculation = {
+    topicMark: 70,
+    disciplinePoint: 30,
+    bonusPoint: 10,
+    penaltyPoint: 20,
+};
+
 export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
     const classId = String(classItem.id);
     const { data: serverOpData, isLoading } = useClassOperation(classId);
+    const { data: serverTopics = [] } = useTopicAssessments(classId);
+    const { data: serverActivities = [] } = useClassActivities(classId);
     const saveOpMutation = useSaveClassOperation(classId);
     const addActivityMutation = useAddClassActivity(classId);
 
@@ -495,12 +512,20 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
     // Form states
     const [actualEndDate, setActualEndDate] = useState<string>("");
     const [hasNoAllocationNeeds, setHasNoAllocationNeeds] = useState<boolean>(false);
+    const [gpaForm, setGpaForm] = useState<GpaCalculation>(DEFAULT_GPA_CALCULATION);
     const [milestones, setMilestones] = useState<Milestone[]>([]);
 
     useEffect(() => {
         if (serverOpData) {
             setActualEndDate(serverOpData.operatingInfo?.actualEndDate || "");
             setHasNoAllocationNeeds(Boolean(serverOpData.operatingInfo?.hasNoAllocationNeeds));
+            const serverGpa = serverOpData.operatingInfo?.gpaCalculation;
+            setGpaForm({
+                topicMark: serverGpa?.topicMark ?? 70,
+                disciplinePoint: serverGpa?.disciplinePoint ?? 30,
+                bonusPoint: serverGpa?.bonusPoint ?? 10,
+                penaltyPoint: serverGpa?.penaltyPoint ?? 20,
+            });
             setMilestones(serverOpData.milestones || []);
         }
     }, [serverOpData, classItem]);
@@ -516,20 +541,91 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
         return milestones.reduce((sum, m) => sum + (m.topics?.length || 0), 0);
     }, [milestones]);
 
+    const gpaBaseTotal = (Number(gpaForm.topicMark) || 0) + (Number(gpaForm.disciplinePoint) || 0);
+    const isGpaValid =
+        gpaBaseTotal === 100 &&
+        gpaForm.topicMark >= 0 &&
+        gpaForm.disciplinePoint >= 0 &&
+        gpaForm.bonusPoint >= 0 &&
+        gpaForm.bonusPoint <= 100 &&
+        gpaForm.penaltyPoint >= 0 &&
+        gpaForm.penaltyPoint <= 100;
+
+    const invalidPassingTopic = useMemo(() => {
+        for (const m of milestones) {
+            for (const t of m.topics || []) {
+                const max = Number(t.maxScore ?? 10) || 10;
+                const passing = Number(t.passingScore ?? 6);
+                if (!Number.isFinite(passing) || passing < 0 || passing > max) {
+                    return { milestoneName: m.name, topic: t.topic, max, passing };
+                }
+            }
+        }
+        return null;
+    }, [milestones]);
+
+    const handleToggleMilestoneStatus = (milestoneId: number) => {
+        setMilestones((prev) =>
+            prev.map((m) =>
+                m.id === milestoneId
+                    ? { ...m, status: m.status === "Draft" ? "Baselined" : "Draft" }
+                    : m
+            )
+        );
+    };
+
+    const handleUpdateMilestoneField = (
+        milestoneId: number,
+        field: "checkpointType" | "salaryPaid",
+        value: string
+    ) => {
+        setMilestones((prev) =>
+            prev.map((m) =>
+                m.id === milestoneId && m.status === "Draft" ? { ...m, [field]: value } : m
+            )
+        );
+    };
+
+    const handleUpdateTopicPassingScore = (
+        milestoneId: number,
+        topicId: number,
+        value: number
+    ) => {
+        setMilestones((prev) =>
+            prev.map((m) => {
+                if (m.id !== milestoneId || m.status !== "Draft") return m;
+                return {
+                    ...m,
+                    topics: (m.topics || []).map((t) =>
+                        t.id === topicId ? { ...t, passingScore: value } : t
+                    ),
+                };
+            })
+        );
+    };
+
     // 2.6: Save changes (persisted directly to H2 database)
     const handleSaveChanges = () => {
+        if (!isGpaValid) {
+            toast.error(
+                `Tổng trọng số Topic Mark (${gpaForm.topicMark}%) + Discipline Point (${gpaForm.disciplinePoint}%) bắt buộc phải bằng 100%!`
+            );
+            return;
+        }
+        if (invalidPassingTopic) {
+            toast.error(
+                `Passing Score của chuyên đề "${invalidPassingTopic.topic}" (${invalidPassingTopic.passing}) phải nằm trong khoảng 0 đến ${invalidPassingTopic.max}!`
+            );
+            return;
+        }
+
         const payload: ClassOperationData = {
             classId: classItem.id,
             operatingInfo: {
                 actualStartDate: serverOpData?.operatingInfo?.actualStartDate || classItem.startDate || "",
                 earlyGraduatedDate: serverOpData?.operatingInfo?.earlyGraduatedDate || classItem.endDate || "",
                 actualEndDate,
-                gpaCalculation: serverOpData?.operatingInfo?.gpaCalculation || {
-                    topicMark: 70,
-                    disciplinePoint: 30,
-                    bonusPoint: 10,
-                    penaltyPoint: 20,
-                },
+                gpaCalculation: gpaForm,
                 hasNoAllocationNeeds,
             },
             milestones,
@@ -538,16 +634,199 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
 
         saveOpMutation.mutate(payload, {
             onSuccess: () => {
-                toast.success("Lưu thông tin vận hành và milestone vào H2 thành công!");
+                toast.success("Lưu thông tin vận hành, GPA và milestone vào H2 thành công!");
                 addActivityMutation.mutate({
-                    content: "has updated class operating info and milestone configuration.",
+                    content: "has updated class operating info, GPA calculation and milestone configuration.",
                     type: "history",
                 });
             },
-            onError: () => {
-                toast.error("Không thể lưu thông tin vận hành vào cơ sở dữ liệu H2!");
+            onError: (err: unknown) => {
+                const msg =
+                    (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+                    "Không thể lưu thông tin vận hành vào cơ sở dữ liệu H2!";
+                toast.error(msg);
             },
         });
+    };
+
+    const handleExportOperationReport = () => {
+        const safeCode = (classItem.code || `CLASS_${classItem.id}`).replace(/[^a-zA-Z0-9_-]/g, "_");
+        const wb = utils.book_new();
+
+        // Sheet 1: Operating & GPA Info
+        const opSheetRows: Array<Array<string | number>> = [
+            ["Field", "Value", "Notes"],
+            ["Class Code", classItem.code || `CLASS_${classItem.id}`, "H2 TrainingClass"],
+            ["Class Name", classItem.name || "", ""],
+            ["Site", classItem.site || "TP. Hồ Chí Minh", ""],
+            ["Planned Size", classItem.plannedSize ?? 25, "Trainees"],
+            ["Actual Start Date", formatDate(serverOpData?.operatingInfo?.actualStartDate || classItem.startDate || ""), ""],
+            ["Early Graduated Date", formatDate(serverOpData?.operatingInfo?.earlyGraduatedDate || classItem.endDate || ""), ""],
+            ["Actual End Date", actualEndDate ? formatDate(actualEndDate) : "Not set", ""],
+            ["Has No Allocation Needs", hasNoAllocationNeeds ? "Yes" : "No", ""],
+            ["Total Weighted Number", totalWeightedNumber, "Across all milestones"],
+            ["Total Milestones", milestones.length, ""],
+            ["Total Topics", totalMilestoneTopics, ""],
+            ["", "", ""],
+            ["GPA Calculation Component", "Weight (%)", "Rule / Validation"],
+            ["Topic Mark", gpaForm.topicMark, "Topic Mark + Discipline Point must equal 100%"],
+            ["Discipline Point", gpaForm.disciplinePoint, "Topic Mark + Discipline Point must equal 100%"],
+            ["Base Total (Topic + Discipline)", gpaBaseTotal, isGpaValid ? "Valid (100%)" : "Invalid (!= 100%)"],
+            ["Bonus Point", gpaForm.bonusPoint, "0 - 100%"],
+            ["Penalty Point", gpaForm.penaltyPoint, "0 - 100%"],
+        ];
+        const ws1 = autoFitWorksheetColumns(utils.aoa_to_sheet(opSheetRows), {
+            Field: 32,
+            Value: 28,
+            Notes: 42,
+        });
+        utils.book_append_sheet(wb, ws1, "Operating & GPA Info");
+
+        // Sheet 2: Milestone Schedule
+        const msHeaders = [
+            "Milestone No.",
+            "Milestone Name",
+            "Status",
+            "Checkpoint Type",
+            "Salary Paid",
+            "Milestone Start",
+            "Milestone End",
+            "Topic No.",
+            "Topic",
+            "Topic Start Date",
+            "Topic End Date",
+            "Max Score",
+            "Passing Score",
+            "Weighted Number",
+        ];
+        const msRows: Array<Array<string | number>> = [];
+        milestones.forEach((m, mIdx) => {
+            const mTopics = m.topics || [];
+            if (mTopics.length === 0) {
+                msRows.push([
+                    mIdx + 1,
+                    m.name,
+                    m.status || "Baselined",
+                    m.checkpointType || "STANDARD",
+                    m.salaryPaid || "Yes",
+                    formatDate(m.startDate),
+                    formatDate(m.endDate),
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    0,
+                ]);
+                return;
+            }
+            mTopics.forEach((t, tIdx) => {
+                msRows.push([
+                    mIdx + 1,
+                    m.name,
+                    m.status || "Baselined",
+                    m.checkpointType || "STANDARD",
+                    m.salaryPaid || "Yes",
+                    formatDate(m.startDate),
+                    formatDate(m.endDate),
+                    tIdx + 1,
+                    t.topic,
+                    formatDate(t.startDate || m.startDate),
+                    formatDate(t.endDate || m.endDate),
+                    t.maxScore ?? 10,
+                    t.passingScore ?? 6,
+                    t.weightedNumber,
+                ]);
+            });
+        });
+        const ws2 = autoFitWorksheetColumns(utils.aoa_to_sheet([msHeaders, ...msRows]), {
+            "Milestone No.": 14,
+            "Milestone Name": 16,
+            Status: 12,
+            "Checkpoint Type": 16,
+            "Salary Paid": 12,
+            "Milestone Start": 15,
+            "Milestone End": 15,
+            "Topic No.": 10,
+            Topic: 44,
+            "Topic Start Date": 16,
+            "Topic End Date": 16,
+            "Max Score": 11,
+            "Passing Score": 14,
+            "Weighted Number": 16,
+        });
+        utils.book_append_sheet(wb, ws2, "Milestone Schedule");
+
+        // Sheet 3: Topic Assessments
+        const taHeaders = [
+            "Topic",
+            "Assessment Name",
+            "Weighted Number (%)",
+            "Quantity",
+            "Note",
+            "Action",
+            "Change Status",
+            "Topic Total (%)",
+        ];
+        const taRows: Array<Array<string | number>> = [];
+        (Array.isArray(serverTopics) ? serverTopics : []).forEach((topic) => {
+            const topicTotal = calculateTopicTotal(topic);
+            const items = topic.assessments || [];
+            if (items.length === 0) {
+                taRows.push([topic.title, "", 0, 0, "", "", "", topicTotal]);
+                return;
+            }
+            items.forEach((a) => {
+                taRows.push([
+                    topic.title,
+                    a.name,
+                    Number(a.weightedNumber) || 0,
+                    Number(a.quantity) || 1,
+                    a.note || "",
+                    a.action || "Keep",
+                    a.changeStatus || "none",
+                    topicTotal,
+                ]);
+            });
+        });
+        const ws3 = autoFitWorksheetColumns(utils.aoa_to_sheet([taHeaders, ...taRows]), {
+            Topic: 44,
+            "Assessment Name": 30,
+            "Weighted Number (%)": 20,
+            Quantity: 10,
+            Note: 28,
+            Action: 10,
+            "Change Status": 15,
+            "Topic Total (%)": 15,
+        });
+        utils.book_append_sheet(wb, ws3, "Topic Assessments");
+
+        // Sheet 4: Activities & Audit Log
+        const actHeaders = ["No.", "Type", "Author", "Initials", "Timestamp", "Content"];
+        const actRows: Array<Array<string | number>> = (Array.isArray(serverActivities) ? serverActivities : []).map(
+            (act, idx) => [
+                idx + 1,
+                (act.type || "history").toUpperCase(),
+                act.author || "",
+                act.initials || "",
+                act.timestamp || "",
+                act.content || "",
+            ]
+        );
+        const ws4 = autoFitWorksheetColumns(utils.aoa_to_sheet([actHeaders, ...actRows]), {
+            "No.": 6,
+            Type: 12,
+            Author: 24,
+            Initials: 10,
+            Timestamp: 22,
+            Content: 60,
+        });
+        utils.book_append_sheet(wb, ws4, "Activities & Audit Log");
+
+        const fileName = `${safeCode}_Budget_Operation_Report.xlsx`;
+        writeFile(wb, fileName);
+        toast.success(`Đã xuất báo cáo 4 sheet: ${fileName}`);
     };
 
     const handleLogActivity = (content: string) => {
@@ -566,16 +845,26 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
         );
     }
 
-    const gpa = serverOpData?.operatingInfo?.gpaCalculation || {
-        topicMark: 70,
-        disciplinePoint: 30,
-        bonusPoint: 10,
-        penaltyPoint: 20,
-    };
-
     return (
         <TooltipProvider>
             <div className="space-y-6 pb-8">
+                {/* Top Action Bar: Export Multi-Sheet Excel Report */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-muted-foreground">
+                        Quản lý thông tin vận hành, công thức GPA, cấu hình đánh giá chuyên đề &amp; các mốc đào tạo (H2 Database).
+                    </p>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleExportOperationReport}
+                        className="text-xs font-semibold gap-1.5 border-[#5944d3]/40 text-[#5944d3] hover:bg-[#5944d3]/10 dark:text-purple-300"
+                    >
+                        <Download className="size-3.5" />
+                        Export Budget &amp; Operation Report
+                    </Button>
+                </div>
+
                 {/* 2.1: Operating Info Section */}
                 <Collapsible
                     open={openOperating}
@@ -622,33 +911,142 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
                                 </div>
                             </div>
 
-                            {/* GPA Calculation Info */}
-                            <div className="flex flex-wrap items-center gap-x-8 gap-y-2 pt-1 text-xs">
-                                <div className="flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-300">
-                                    <span>GPA Calculation</span>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <button type="button" className="text-blue-600 hover:text-blue-800 focus:outline-none">
-                                                <Info className="size-3.5" />
-                                            </button>
-                                        </TooltipTrigger>
-                                        <TooltipContent className="text-xs max-w-xs p-2">
-                                            Công thức tính GPA theo trọng số chuyên đề và rèn luyện của hệ thống đào tạo FAMS.
-                                        </TooltipContent>
-                                    </Tooltip>
+                            {/* Editable GPA Calculation Block */}
+                            <div className="rounded-lg border bg-slate-50/70 dark:bg-slate-900/40 p-4 space-y-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                        <span>GPA Calculation</span>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <button type="button" className="text-blue-600 hover:text-blue-800 focus:outline-none">
+                                                    <Info className="size-3.5" />
+                                                </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="text-xs max-w-xs p-2">
+                                                Công thức tính GPA toàn khóa: Topic Mark (%) + Discipline Point (%) bắt buộc phải bằng 100%.
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Badge
+                                            variant="outline"
+                                            className={cn(
+                                                "text-[11px] font-bold px-2.5 py-0.5",
+                                                isGpaValid
+                                                    ? "bg-green-100 text-green-800 border-green-300 dark:bg-green-950/60 dark:text-green-300"
+                                                    : "bg-red-100 text-red-700 border-red-300 dark:bg-red-950/60 dark:text-red-300"
+                                            )}
+                                        >
+                                            Topic + Discipline: {gpaBaseTotal}/100%
+                                        </Badge>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setGpaForm(DEFAULT_GPA_CALCULATION)}
+                                            className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground gap-1"
+                                            title="Khôi phục mặc định 70 / 30 / 10 / 20"
+                                        >
+                                            <RotateCcw className="size-3" />
+                                            Mặc định (70/30)
+                                        </Button>
+                                    </div>
                                 </div>
-                                <div className="text-muted-foreground">
-                                    Topic Mark: <span className="font-semibold text-foreground">{gpa.topicMark}</span>
+
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                                    <div className="space-y-1">
+                                        <Label htmlFor="gpa-topic-mark" className="text-[11px] text-muted-foreground">
+                                            Topic Mark (%)
+                                        </Label>
+                                        <Input
+                                            id="gpa-topic-mark"
+                                            type="number"
+                                            min={0}
+                                            max={100}
+                                            value={gpaForm.topicMark}
+                                            onChange={(e) =>
+                                                setGpaForm((prev) => ({
+                                                    ...prev,
+                                                    topicMark: Math.max(0, Number(e.target.value) || 0),
+                                                }))
+                                            }
+                                            className={cn(
+                                                "h-8 text-xs font-semibold bg-white dark:bg-card",
+                                                gpaBaseTotal !== 100 && "border-red-400 text-red-600"
+                                            )}
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="gpa-discipline-point" className="text-[11px] text-muted-foreground">
+                                            Discipline Point (%)
+                                        </Label>
+                                        <Input
+                                            id="gpa-discipline-point"
+                                            type="number"
+                                            min={0}
+                                            max={100}
+                                            value={gpaForm.disciplinePoint}
+                                            onChange={(e) =>
+                                                setGpaForm((prev) => ({
+                                                    ...prev,
+                                                    disciplinePoint: Math.max(0, Number(e.target.value) || 0),
+                                                }))
+                                            }
+                                            className={cn(
+                                                "h-8 text-xs font-semibold bg-white dark:bg-card",
+                                                gpaBaseTotal !== 100 && "border-red-400 text-red-600"
+                                            )}
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="gpa-bonus-point" className="text-[11px] text-muted-foreground">
+                                            Bonus Point (%)
+                                        </Label>
+                                        <Input
+                                            id="gpa-bonus-point"
+                                            type="number"
+                                            min={0}
+                                            max={100}
+                                            value={gpaForm.bonusPoint}
+                                            onChange={(e) =>
+                                                setGpaForm((prev) => ({
+                                                    ...prev,
+                                                    bonusPoint: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                                                }))
+                                            }
+                                            className="h-8 text-xs font-semibold bg-white dark:bg-card"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="gpa-penalty-point" className="text-[11px] text-muted-foreground">
+                                            Penalty Point (%)
+                                        </Label>
+                                        <Input
+                                            id="gpa-penalty-point"
+                                            type="number"
+                                            min={0}
+                                            max={100}
+                                            value={gpaForm.penaltyPoint}
+                                            onChange={(e) =>
+                                                setGpaForm((prev) => ({
+                                                    ...prev,
+                                                    penaltyPoint: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                                                }))
+                                            }
+                                            className="h-8 text-xs font-semibold bg-white dark:bg-card"
+                                        />
+                                    </div>
                                 </div>
-                                <div className="text-muted-foreground">
-                                    Discipline Point: <span className="font-semibold text-foreground">{gpa.disciplinePoint}</span>
-                                </div>
-                                <div className="text-muted-foreground">
-                                    Bonus Point: <span className="font-semibold text-foreground">{gpa.bonusPoint}</span>
-                                </div>
-                                <div className="text-muted-foreground">
-                                    Penalty Point: <span className="font-semibold text-foreground">{gpa.penaltyPoint}</span>
-                                </div>
+
+                                {!isGpaValid && (
+                                    <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+                                        <AlertCircle className="size-4 shrink-0 text-red-600 dark:text-red-400" />
+                                        <span>
+                                            Tổng <strong>Topic Mark ({gpaForm.topicMark}%) + Discipline Point ({gpaForm.disciplinePoint}%)</strong> hiện là{" "}
+                                            <strong>{gpaBaseTotal}%</strong>. Bắt buộc phải bằng <strong>100%</strong> mới được phép lưu!
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Actions & Switch: 2.2 & 2.3 */}
@@ -721,6 +1119,7 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
                                                 (sum, t) => sum + (Number(t.weightedNumber) || 0),
                                                 0
                                             );
+                                            const isDraft = m.status === "Draft";
                                             return (
                                             <Fragment key={`milestone-block-${m.id}`}>
                                                 {/* Parent Milestone Row */}
@@ -729,13 +1128,68 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
                                                     <TableCell>
                                                         <div className="flex items-center gap-2">
                                                             <span className="font-bold text-slate-800 dark:text-slate-100">{m.name}</span>
-                                                            <Badge className="bg-[#c8f7d4] text-green-800 hover:bg-[#c8f7d4] border border-green-300 text-[10px] px-1.5 py-0">
-                                                                {m.status || "Baselined"}
-                                                            </Badge>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleToggleMilestoneStatus(m.id)}
+                                                                        className={cn(
+                                                                            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold transition-colors cursor-pointer",
+                                                                            isDraft
+                                                                                ? "bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200 dark:bg-amber-950/60 dark:text-amber-300"
+                                                                                : "bg-[#c8f7d4] text-green-800 border-green-300 hover:bg-green-200 dark:bg-green-950/60 dark:text-green-300"
+                                                                        )}
+                                                                    >
+                                                                        {isDraft ? (
+                                                                            <Unlock className="size-2.5" />
+                                                                        ) : (
+                                                                            <Lock className="size-2.5" />
+                                                                        )}
+                                                                        {m.status || "Baselined"}
+                                                                    </button>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent className="text-xs p-2">
+                                                                    {isDraft
+                                                                        ? "Đang ở chế độ Draft (cho phép sửa). Bấm để chốt Baselined."
+                                                                        : "Đã khóa Baselined. Bấm để chuyển sang Draft và chỉnh sửa."}
+                                                                </TooltipContent>
+                                                            </Tooltip>
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell>{m.checkpointType || "STANDARD"}</TableCell>
-                                                    <TableCell>{m.salaryPaid || "Yes"}</TableCell>
+                                                    <TableCell>
+                                                        {isDraft ? (
+                                                            <select
+                                                                aria-label={`Checkpoint Type ${m.name}`}
+                                                                value={m.checkpointType || "STANDARD"}
+                                                                onChange={(e) =>
+                                                                    handleUpdateMilestoneField(m.id, "checkpointType", e.target.value)
+                                                                }
+                                                                className="h-7 px-2 text-xs rounded border border-amber-300 bg-white dark:bg-card text-foreground font-medium"
+                                                            >
+                                                                <option value="STANDARD">STANDARD</option>
+                                                                <option value="SPECIAL">SPECIAL</option>
+                                                            </select>
+                                                        ) : (
+                                                            m.checkpointType || "STANDARD"
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {isDraft ? (
+                                                            <select
+                                                                aria-label={`Salary Paid ${m.name}`}
+                                                                value={m.salaryPaid || "Yes"}
+                                                                onChange={(e) =>
+                                                                    handleUpdateMilestoneField(m.id, "salaryPaid", e.target.value)
+                                                                }
+                                                                className="h-7 px-2 text-xs rounded border border-amber-300 bg-white dark:bg-card text-foreground font-medium"
+                                                            >
+                                                                <option value="Yes">Yes</option>
+                                                                <option value="No">No</option>
+                                                            </select>
+                                                        ) : (
+                                                            m.salaryPaid || "Yes"
+                                                        )}
+                                                    </TableCell>
                                                     <TableCell>{formatDate(m.startDate)}</TableCell>
                                                     <TableCell>{formatDate(m.endDate)}</TableCell>
                                                     <TableCell className="text-right pr-6 font-mono font-bold text-blue-700 dark:text-blue-400">
@@ -755,14 +1209,43 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
                                                 </TableRow>
 
                                                 {/* Subtopics List */}
-                                                {m.topics.map((t, tIdx) => (
+                                                {m.topics.map((t, tIdx) => {
+                                                    const maxScore = t.maxScore ?? 10;
+                                                    const passingScore = t.passingScore ?? 6;
+                                                    const isPassingInvalid = passingScore < 0 || passingScore > maxScore;
+                                                    return (
                                                     <TableRow key={`topic-${t.id}`} className="hover:bg-muted/30 text-xs">
                                                         <TableCell className="pl-6 text-muted-foreground">{tIdx + 1}</TableCell>
                                                         <TableCell className="font-medium text-slate-700 dark:text-slate-200">
                                                             {t.topic}
                                                         </TableCell>
-                                                        <TableCell>{t.maxScore ?? 10}</TableCell>
-                                                        <TableCell>{t.passingScore ?? 6}</TableCell>
+                                                        <TableCell>{maxScore}</TableCell>
+                                                        <TableCell>
+                                                            {isDraft ? (
+                                                                <Input
+                                                                    type="number"
+                                                                    min={0}
+                                                                    max={maxScore}
+                                                                    step={0.5}
+                                                                    value={passingScore}
+                                                                    onChange={(e) =>
+                                                                        handleUpdateTopicPassingScore(
+                                                                            m.id,
+                                                                            t.id,
+                                                                            Number(e.target.value)
+                                                                        )
+                                                                    }
+                                                                    className={cn(
+                                                                        "h-7 w-20 text-xs bg-white dark:bg-card",
+                                                                        isPassingInvalid
+                                                                            ? "border-red-400 text-red-600 font-bold"
+                                                                            : "border-amber-300"
+                                                                    )}
+                                                                />
+                                                            ) : (
+                                                                passingScore
+                                                            )}
+                                                        </TableCell>
                                                         <TableCell className="text-slate-600 dark:text-slate-300">
                                                             {formatDate(t.startDate || m.startDate)}
                                                         </TableCell>
@@ -773,7 +1256,8 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
                                                             {t.weightedNumber}
                                                         </TableCell>
                                                     </TableRow>
-                                                ))}
+                                                    );
+                                                })}
                                             </Fragment>
                                             );
                                         })}
@@ -800,7 +1284,7 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
                         type="button"
                         size="sm"
                         onClick={handleSaveChanges}
-                        disabled={saveOpMutation.isPending}
+                        disabled={!isGpaValid || Boolean(invalidPassingTopic) || saveOpMutation.isPending}
                         className="bg-[#5944d3] hover:bg-[#4b39b5] text-white text-xs px-5 shadow-sm gap-1.5"
                     >
                         <Save className="size-3.5" />
