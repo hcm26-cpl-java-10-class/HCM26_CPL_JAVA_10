@@ -271,6 +271,40 @@ public class ExternalApiController {
         return ResponseEntity.ok(classOperationDatabaseService.saveTopicAssessments(id, body));
     }
 
+    // ======================== DYNAMIC TOPIC MARKS (H2 DATABASE) ========================
+
+    @GetMapping("/classes/{id}/topic-marks")
+    @Operation(summary = "Fetch dynamic schema topic marks from H2 database")
+    public ResponseEntity<Object> getClassTopicMarks(@PathVariable Long id) {
+        return ResponseEntity.ok(classOperationDatabaseService.getClassTopicMarks(id));
+    }
+
+    @PutMapping("/classes/{id}/topic-marks")
+    @Operation(summary = "Save dynamic topic marks to H2 database")
+    public ResponseEntity<Object> saveClassTopicMarks(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(classOperationDatabaseService.saveClassTopicMarks(id, body));
+    }
+
+    @PostMapping("/classes/{id}/topic-marks/lock")
+    @Operation(summary = "Lock topic marks with a 4-digit security PIN")
+    public ResponseEntity<Object> lockClassTopicMarks(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(classOperationDatabaseService.lockClassTopicMarks(id, body));
+    }
+
+    @PostMapping("/classes/{id}/topic-marks/unlock")
+    @Operation(summary = "Unlock topic marks using 4-digit PIN (progressive cooldown after 3 failures)")
+    public ResponseEntity<Object> unlockClassTopicMarks(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        Map<String, Object> res = classOperationDatabaseService.unlockClassTopicMarks(id, body);
+        int status = res.get("httpStatus") instanceof Number n ? n.intValue() : 200;
+        return ResponseEntity.status(status).body(res);
+    }
+
     // ======================== ACTIVITIES (H2 DATABASE) ========================
 
     @GetMapping("/classes/{id}/activities")

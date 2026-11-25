@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.training;
 
+import com.example.starter_project_2025.exception.BadRequestException;
+import com.example.starter_project_2025.exception.ConflictException;
 import com.example.starter_project_2025.system.demo.session.Session;
 import com.example.starter_project_2025.system.demo.session.SessionRepository;
 import com.example.starter_project_2025.system.subject.Subject;
@@ -9,6 +11,8 @@ import com.example.starter_project_2025.system.training.entity.ClassActivityEnti
 import com.example.starter_project_2025.system.training.entity.ClassAttendanceEntity;
 import com.example.starter_project_2025.system.training.entity.ClassOperationEntity;
 import com.example.starter_project_2025.system.training.entity.ClassTopicAssessmentEntity;
+import com.example.starter_project_2025.system.training.entity.ClassTopicMarkEntity;
+import com.example.starter_project_2025.system.training.entity.ClassTopicMarkLockEntity;
 import com.example.starter_project_2025.system.training.entity.TrainingClass;
 import com.example.starter_project_2025.system.trainingprogram.ClassTrainingProgram;
 import com.example.starter_project_2025.system.trainingprogram.ClassTrainingProgramRepository;
@@ -17,10 +21,16 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -34,6 +44,8 @@ public class ClassOperationDatabaseService {
 
     private final ClassOperationRepository operationRepository;
     private final ClassTopicAssessmentRepository topicAssessmentRepository;
+    private final ClassTopicMarkRepository topicMarkRepository;
+    private final ClassTopicMarkLockRepository topicMarkLockRepository;
     private final ClassActivityEntityRepository activityRepository;
     private final ClassAttendanceRepository attendanceRepository;
     private final ClassEnrollmentRepository enrollmentRepository;
@@ -42,10 +54,27 @@ public class ClassOperationDatabaseService {
     private final SessionRepository sessionRepository;
     private final ClassTrainingProgramRepository classTrainingProgramRepository;
     private final SubjectRepository subjectRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final Clock trainingClassClock;
     private final ObjectMapper objectMapper;
 
     private static final DateTimeFormatter MONTH_LABEL_FMT = DateTimeFormatter.ofPattern("MMM - yyyy", Locale.ENGLISH);
     private static final DateTimeFormatter ACTIVITY_TS_FMT = DateTimeFormatter.ofPattern("dd-MMM-yyyy HH:mm:ss", Locale.ENGLISH);
+
+    private TrainingClass getTrainingClassOrFallback(Long classId) {
+        return trainingClassRepository.findById(classId)
+                .orElseGet(() -> {
+                    TrainingClass tc = new TrainingClass();
+                    tc.setId(classId);
+                    tc.setCode("CLASS_" + classId);
+                    tc.setName("Class " + classId);
+                    tc.setStatus("active");
+                    tc.setStartDate(LocalDate.now());
+                    tc.setEndDate(LocalDate.now().plusMonths(3));
+                    tc.setPlannedSize(25);
+                    return trainingClassRepository.save(tc);
+                });
+    }
 
     // =========================================================================
     // 0. BASELINE CLASSES & TRAINEE ENROLLMENTS SEED (H2 DATABASE)
@@ -163,14 +192,14 @@ public class ClassOperationDatabaseService {
 
     @Transactional
     public Map<String, Object> getOperation(Long classId) {
-        ClassOperationEntity entity = operationRepository.findByClassId(classId)
+        ClassOperationEntity entity = operationRepository.findByTrainingClass_Id(classId)
                 .orElseGet(() -> initializeOperationFromH2(classId));
         return toOperationMap(entity);
     }
 
     @Transactional
     public Map<String, Object> saveOperation(Long classId, Map<String, Object> body) {
-        ClassOperationEntity entity = operationRepository.findByClassId(classId)
+        ClassOperationEntity entity = operationRepository.findByTrainingClass_Id(classId)
                 .orElseGet(() -> initializeOperationFromH2(classId));
 
         Map<String, Object> opInfo = (Map<String, Object>) body.get("operatingInfo");
@@ -214,7 +243,7 @@ public class ClassOperationDatabaseService {
 
     @Transactional
     public List<Map<String, Object>> getTopicAssessments(Long classId) {
-        List<ClassTopicAssessmentEntity> list = topicAssessmentRepository.findByClassIdOrderByTopicIndexAsc(classId);
+        List<ClassTopicAssessmentEntity> list = topicAssessmentRepository.findByTrainingClass_IdOrderByTopicIndexAsc(classId);
         if (list.isEmpty()) {
             list = initializeTopicAssessmentsFromH2(classId);
         }
@@ -229,7 +258,7 @@ public class ClassOperationDatabaseService {
             return getTopicAssessments(classId);
         }
 
-        List<ClassTopicAssessmentEntity> existingList = topicAssessmentRepository.findByClassIdOrderByTopicIndexAsc(classId);
+        List<ClassTopicAssessmentEntity> existingList = topicAssessmentRepository.findByTrainingClass_IdOrderByTopicIndexAsc(classId);
         Map<Integer, ClassTopicAssessmentEntity> existingByIndex = new HashMap<>();
         for (ClassTopicAssessmentEntity existing : existingList) {
             if (existing.getTopicIndex() != null) {
@@ -239,6 +268,7 @@ public class ClassOperationDatabaseService {
 
         List<ClassTopicAssessmentEntity> updatedEntities = new ArrayList<>();
         int index = 1;
+        TrainingClass tc = getTrainingClassOrFallback(classId);
         for (Map<String, Object> t : incomingTopics) {
             String title = (String) t.get("title");
             List<Map<String, Object>> assessments = (List<Map<String, Object>>) t.get("assessments");
@@ -265,7 +295,7 @@ public class ClassOperationDatabaseService {
             ClassTopicAssessmentEntity entity = existingByIndex.get(index);
             if (entity == null) {
                 entity = ClassTopicAssessmentEntity.builder()
-                        .classId(classId)
+                        .trainingClass(tc)
                         .topicIndex(index)
                         .title(title)
                         .assessmentsJson(json)
@@ -282,12 +312,13 @@ public class ClassOperationDatabaseService {
         if ("confirm".equalsIgnoreCase(action)) {
             syncMilestoneWeightsWithTopicAssessments(classId, incomingTopics);
         }
+        recalculateTopicMarksForUpdatedSchema(classId);
 
         return updatedEntities.stream().map(this::toTopicMap).toList();
     }
 
     private void syncMilestoneWeightsWithTopicAssessments(Long classId, List<Map<String, Object>> incomingTopics) {
-        ClassOperationEntity opEntity = operationRepository.findByClassId(classId)
+        ClassOperationEntity opEntity = operationRepository.findByTrainingClass_Id(classId)
                 .orElseGet(() -> initializeOperationFromH2(classId));
         if (opEntity.getMilestonesJson() == null || opEntity.getMilestonesJson().isBlank()) {
             return;
@@ -359,7 +390,7 @@ public class ClassOperationDatabaseService {
 
     @Transactional
     public List<ClassActivityEntity> getActivities(Long classId) {
-        List<ClassActivityEntity> list = activityRepository.findByClassIdOrderByIdDesc(classId);
+        List<ClassActivityEntity> list = activityRepository.findByTrainingClass_IdOrderByIdDesc(classId);
         if (list.isEmpty()) {
             list = initializeActivitiesFromH2(classId);
         }
@@ -373,9 +404,10 @@ public class ClassOperationDatabaseService {
         String type = body.get("type") != null ? String.valueOf(body.get("type")) : "comment";
         String initials = buildInitials(author);
         String now = LocalDateTime.now().format(ACTIVITY_TS_FMT);
+        TrainingClass tc = getTrainingClassOrFallback(classId);
 
         ClassActivityEntity entity = ClassActivityEntity.builder()
-                .classId(classId)
+                .trainingClass(tc)
                 .author(author)
                 .initials(initials)
                 .content(content)
@@ -628,6 +660,655 @@ public class ClassOperationDatabaseService {
         return attendanceRepository.saveAll(entities);
     }
 
+    // =========================================================================
+    // 4B. DYNAMIC SCHEMA TOPIC MARKS (DERIVED FROM CLASS_TOPIC_ASSESSMENTS IN H2)
+    // =========================================================================
+
+    private static final double TOPIC_MARK_PASS_THRESHOLD = 6.0;
+    private static final double[] PRESET_TOPIC_MARK_BASES = {8.4, 5.2, 7.8, 8.9, 7.3, 4.8, 7.9, 6.8, 8.7, 5.2};
+
+    private record DynamicColumnSpec(String key, String name, double weight, int quantity) {}
+    private record DynamicTopicSpec(String code, String name, String title, double totalWeight, boolean weightValid, List<DynamicColumnSpec> columns) {}
+
+    @Transactional
+    public List<ClassTopicMarkEntity> initializeTopicMarksFromH2(Long classId) {
+        List<DynamicTopicSpec> specs = resolveDynamicTopicSpecs(classId);
+        List<AttendanceSeedTrainee> trainees = resolveSeedAttendanceTrainees(classId);
+        if (specs.isEmpty() || trainees.isEmpty()) {
+            return topicMarkRepository.findByClassIdOrderByTopicCodeAscTraineeIdAsc(classId);
+        }
+
+        List<ClassTopicMarkEntity> existing = topicMarkRepository.findByClassIdOrderByTopicCodeAscTraineeIdAsc(classId);
+        Map<String, ClassTopicMarkEntity> existingMap = new HashMap<>();
+        for (ClassTopicMarkEntity entity : existing) {
+            existingMap.put(entity.getTopicCode() + ":" + entity.getTraineeId(), entity);
+        }
+
+        String nowTs = LocalDateTime.now().format(ACTIVITY_TS_FMT);
+        List<ClassTopicMarkEntity> toSave = new ArrayList<>();
+        for (int tIdx = 0; tIdx < specs.size(); tIdx++) {
+            DynamicTopicSpec spec = specs.get(tIdx);
+            for (int rIdx = 0; rIdx < trainees.size(); rIdx++) {
+                AttendanceSeedTrainee trainee = trainees.get(rIdx);
+                String lookupKey = spec.code() + ":" + trainee.traineeId();
+                if (existingMap.containsKey(lookupKey)) {
+                    continue;
+                }
+
+                Map<String, Double> initialScores = buildInitialDynamicScores(rIdx, tIdx, spec.columns());
+                double gpa = calculateWeightedTopicGpa(initialScores, spec.columns());
+                toSave.add(ClassTopicMarkEntity.builder()
+                        .classId(classId)
+                        .topicCode(spec.code())
+                        .topicTitle(spec.title())
+                        .traineeId(trainee.traineeId())
+                        .studentId(trainee.studentId())
+                        .fullName(trainee.fullName())
+                        .personalEmail(trainee.personalEmail())
+                        .scoresJson(serializeScoresJson(initialScores))
+                        .totalGpa(gpa)
+                        .passed(gpa >= TOPIC_MARK_PASS_THRESHOLD)
+                        .updatedAt(nowTs)
+                        .build());
+            }
+        }
+
+        if (!toSave.isEmpty()) {
+            topicMarkRepository.saveAll(toSave);
+        }
+        return topicMarkRepository.findByClassIdOrderByTopicCodeAscTraineeIdAsc(classId);
+    }
+
+    @Transactional
+    public Map<String, Object> getClassTopicMarks(Long classId) {
+        List<DynamicTopicSpec> specs = resolveDynamicTopicSpecs(classId);
+        List<ClassTopicMarkEntity> allMarks = initializeTopicMarksFromH2(classId);
+
+        Map<String, List<ClassTopicMarkEntity>> marksByTopic = new HashMap<>();
+        for (ClassTopicMarkEntity entity : allMarks) {
+            marksByTopic.computeIfAbsent(entity.getTopicCode(), k -> new ArrayList<>()).add(entity);
+        }
+
+        Map<String, ClassTopicMarkLockEntity> locksByTopic = new HashMap<>();
+        for (ClassTopicMarkLockEntity lockEntity : topicMarkLockRepository.findByClassId(classId)) {
+            locksByTopic.put(lockEntity.getTopicCode(), lockEntity);
+        }
+        Instant now = Instant.now(trainingClassClock);
+
+        List<Map<String, Object>> topicPayloads = new ArrayList<>();
+        for (DynamicTopicSpec spec : specs) {
+            List<Map<String, Object>> columnPayloads = new ArrayList<>();
+            for (DynamicColumnSpec col : spec.columns()) {
+                Map<String, Object> colMap = new LinkedHashMap<>();
+                colMap.put("key", col.key());
+                colMap.put("name", col.name());
+                colMap.put("weight", col.weight());
+                colMap.put("quantity", col.quantity());
+                columnPayloads.add(colMap);
+            }
+
+            Map<String, Map<String, Object>> recordsByTraineeId = new LinkedHashMap<>();
+            List<ClassTopicMarkEntity> topicEntities = marksByTopic.getOrDefault(spec.code(), List.of());
+            for (ClassTopicMarkEntity entity : topicEntities) {
+                Map<String, Double> parsedScores = parseScoresJson(entity.getScoresJson());
+                Map<String, Double> alignedScores = new LinkedHashMap<>();
+                for (DynamicColumnSpec col : spec.columns()) {
+                    alignedScores.put(col.key(), parsedScores.getOrDefault(col.key(), 0.0));
+                }
+                double gpa = calculateWeightedTopicGpa(alignedScores, spec.columns());
+
+                Map<String, Object> rec = new LinkedHashMap<>();
+                rec.put("traineeId", entity.getTraineeId());
+                rec.put("studentId", entity.getStudentId());
+                rec.put("fullName", entity.getFullName());
+                rec.put("personalEmail", entity.getPersonalEmail());
+                rec.put("componentScores", alignedScores);
+                rec.put("totalGpa", gpa);
+                rec.put("passed", gpa >= TOPIC_MARK_PASS_THRESHOLD);
+                rec.put("updatedAt", entity.getUpdatedAt());
+                recordsByTraineeId.put(String.valueOf(entity.getTraineeId()), rec);
+            }
+
+            Map<String, Object> topicMap = new LinkedHashMap<>();
+            topicMap.put("code", spec.code());
+            topicMap.put("name", spec.name());
+            topicMap.put("title", spec.title());
+            topicMap.put("totalWeight", spec.totalWeight());
+            topicMap.put("weightValid", spec.weightValid());
+            topicMap.put("columns", columnPayloads);
+            topicMap.put("recordsByTraineeId", recordsByTraineeId);
+            topicMap.put("lock", toLockStatusMap(locksByTopic.get(spec.code()), now));
+            topicPayloads.add(topicMap);
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("classId", classId);
+        response.put("passThreshold", TOPIC_MARK_PASS_THRESHOLD);
+        response.put("topics", topicPayloads);
+        return response;
+    }
+
+    @Transactional
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> saveClassTopicMarks(Long classId, Map<String, Object> body) {
+        if (body == null || body.get("topicCode") == null) {
+            throw new BadRequestException("topicCode is required.");
+        }
+        String topicCode = String.valueOf(body.get("topicCode")).trim();
+        if (topicCode.isBlank()) {
+            throw new BadRequestException("topicCode is required.");
+        }
+
+        List<DynamicTopicSpec> specs = resolveDynamicTopicSpecs(classId);
+        DynamicTopicSpec targetSpec = specs.stream()
+                .filter(s -> s.code().equals(topicCode))
+                .findFirst()
+                .orElseThrow(() -> new BadRequestException("Unknown topicCode for class " + classId + ": " + topicCode));
+
+        topicMarkLockRepository.findByClassIdAndTopicCode(classId, topicCode)
+                .filter(l -> Boolean.TRUE.equals(l.getLocked()))
+                .ifPresent(l -> {
+                    throw new ConflictException("Topic Marks for [" + topicCode + "] are locked. Enter the 4-digit security PIN to unlock before modifying scores.");
+                });
+
+        Object rawRecordsMap = body.get("recordsByTraineeId");
+        if (!(rawRecordsMap instanceof Map<?, ?> recordsMap)) {
+            throw new BadRequestException("recordsByTraineeId object is required.");
+        }
+
+        Map<Long, Map<String, Object>> traineeMetaById = new HashMap<>();
+        if (body.get("trainees") instanceof List<?> traineeList) {
+            for (Object item : traineeList) {
+                if (item instanceof Map<?, ?> m) {
+                    Long id = parseLongOrNull(m.get("id"));
+                    if (id != null) {
+                        traineeMetaById.put(id, (Map<String, Object>) m);
+                    }
+                }
+            }
+        }
+
+        Map<Long, ClassTopicMarkEntity> existingByTraineeId = new HashMap<>();
+        for (ClassTopicMarkEntity existing : topicMarkRepository.findByClassIdAndTopicCodeOrderByTraineeIdAsc(classId, topicCode)) {
+            existingByTraineeId.put(existing.getTraineeId(), existing);
+        }
+
+        String nowTs = LocalDateTime.now().format(ACTIVITY_TS_FMT);
+        List<ClassTopicMarkEntity> toSave = new ArrayList<>();
+
+        for (Map.Entry<?, ?> entry : recordsMap.entrySet()) {
+            Long traineeId = parseLongOrNull(entry.getKey());
+            if (traineeId == null || !(entry.getValue() instanceof Map<?, ?> recordMap)) {
+                continue;
+            }
+            Object rawScoresObj = recordMap.get("componentScores");
+            if (!(rawScoresObj instanceof Map<?, ?> rawScoresMap)) {
+                throw new BadRequestException("componentScores map is required for trainee " + traineeId + ".");
+            }
+
+            Map<String, Double> cleanScores = new LinkedHashMap<>();
+            for (DynamicColumnSpec col : targetSpec.columns()) {
+                Object rawVal = rawScoresMap.get(col.key());
+                if (rawVal == null || String.valueOf(rawVal).trim().isEmpty()) {
+                    throw new BadRequestException("Score for '" + col.name() + "' cannot be empty.");
+                }
+                double parsed;
+                try {
+                    parsed = Double.parseDouble(String.valueOf(rawVal).trim());
+                } catch (NumberFormatException ex) {
+                    throw new BadRequestException("Score for '" + col.name() + "' must be a valid number.");
+                }
+                if (!Double.isFinite(parsed) || parsed < 0.0 || parsed > 10.0) {
+                    throw new BadRequestException("Score for '" + col.name() + "' must be between 0 and 10.");
+                }
+                cleanScores.put(col.key(), Math.round(parsed * 10.0) / 10.0);
+            }
+
+            double gpa = calculateWeightedTopicGpa(cleanScores, targetSpec.columns());
+            ClassTopicMarkEntity entity = existingByTraineeId.getOrDefault(
+                    traineeId,
+                    ClassTopicMarkEntity.builder()
+                            .classId(classId)
+                            .topicCode(topicCode)
+                            .traineeId(traineeId)
+                            .build()
+            );
+
+            entity.setTopicTitle(targetSpec.title());
+            Map<String, Object> meta = traineeMetaById.get(traineeId);
+            if (meta != null) {
+                if (meta.get("studentId") != null) entity.setStudentId(String.valueOf(meta.get("studentId")));
+                if (meta.get("fullName") != null) entity.setFullName(String.valueOf(meta.get("fullName")));
+                if (meta.get("personalEmail") != null) entity.setPersonalEmail(String.valueOf(meta.get("personalEmail")));
+            }
+            entity.setScoresJson(serializeScoresJson(cleanScores));
+            entity.setTotalGpa(gpa);
+            entity.setPassed(gpa >= TOPIC_MARK_PASS_THRESHOLD);
+            entity.setUpdatedAt(nowTs);
+            toSave.add(entity);
+        }
+
+        if (!toSave.isEmpty()) {
+            topicMarkRepository.saveAll(toSave);
+            String actor = resolveDefaultActor(classId);
+            String sourceRaw = body.get("source") != null ? String.valueOf(body.get("source")) : "inline_edit";
+            String sourceLabel = "excel_import".equalsIgnoreCase(sourceRaw) ? "Excel Import" : "Inline Edit";
+            activityRepository.save(ClassActivityEntity.builder()
+                    .trainingClass(getTrainingClassOrFallback(classId))
+                    .author(actor)
+                    .initials(buildInitials(actor))
+                    .content("saved Topic Marks for [" + topicCode + "] (" + toSave.size() + " trainees, source: " + sourceLabel + ").")
+                    .timestamp(nowTs)
+                    .type("history")
+                    .build());
+        }
+
+        return getClassTopicMarks(classId);
+    }
+
+    // =========================================================================
+    // 4C. TOPIC MARK SECURITY PIN LOCK & PROGRESSIVE COOLDOWN (H2 DATABASE)
+    // =========================================================================
+
+    private static final int MAX_PIN_ATTEMPTS = 3;
+    private static final int[] LOCKOUT_TIER_MINUTES = {1, 5, 15, 30};
+    private static final SecureRandom PIN_RANDOM = new SecureRandom();
+
+    @Transactional
+    public Map<String, Object> lockClassTopicMarks(Long classId, Map<String, Object> body) {
+        String topicCode = body != null && body.get("topicCode") != null
+                ? String.valueOf(body.get("topicCode")).trim()
+                : "";
+        if (topicCode.isBlank()) {
+            throw new BadRequestException("topicCode is required.");
+        }
+
+        List<DynamicTopicSpec> specs = resolveDynamicTopicSpecs(classId);
+        boolean validTopic = specs.stream().anyMatch(s -> s.code().equals(topicCode));
+        if (!validTopic) {
+            throw new BadRequestException("Unknown topicCode for class " + classId + ": " + topicCode);
+        }
+
+        ClassTopicMarkLockEntity entity = topicMarkLockRepository.findByClassIdAndTopicCode(classId, topicCode)
+                .orElseGet(() -> ClassTopicMarkLockEntity.builder()
+                        .classId(classId)
+                        .topicCode(topicCode)
+                        .locked(false)
+                        .failedAttempts(0)
+                        .lockoutTier(0)
+                        .build());
+
+        if (Boolean.TRUE.equals(entity.getLocked())) {
+            throw new ConflictException("Topic Marks for [" + topicCode + "] are already locked.");
+        }
+
+        String pin = String.format("%04d", PIN_RANDOM.nextInt(10_000));
+        Instant now = Instant.now(trainingClassClock);
+        String nowTs = LocalDateTime.now(trainingClassClock).format(ACTIVITY_TS_FMT);
+        String actor = resolveCurrentActor(classId);
+
+        entity.setLocked(true);
+        entity.setPinHash(passwordEncoder.encode(pin));
+        entity.setFailedAttempts(0);
+        entity.setLockoutTier(0);
+        entity.setCooldownUntil(null);
+        entity.setLockedBy(actor);
+        entity.setLockedAt(nowTs);
+        topicMarkLockRepository.save(entity);
+
+        activityRepository.save(ClassActivityEntity.builder()
+                .trainingClass(getTrainingClassOrFallback(classId))
+                .author(actor)
+                .initials(buildInitials(actor))
+                .content("locked Topic Marks for [" + topicCode + "] with a 4-digit security PIN.")
+                .timestamp(nowTs)
+                .type("history")
+                .build());
+
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("locked", true);
+        res.put("topicCode", topicCode);
+        res.put("pin", pin);
+        res.put("lock", toLockStatusMap(entity, now));
+        res.put("gradebook", getClassTopicMarks(classId));
+        return res;
+    }
+
+    @Transactional
+    public Map<String, Object> unlockClassTopicMarks(Long classId, Map<String, Object> body) {
+        String topicCode = body != null && body.get("topicCode") != null
+                ? String.valueOf(body.get("topicCode")).trim()
+                : "";
+        if (topicCode.isBlank()) {
+            throw new BadRequestException("topicCode is required.");
+        }
+        String pin = body.get("pin") != null ? String.valueOf(body.get("pin")).trim() : "";
+        if (!pin.matches("^\\d{4}$")) {
+            throw new BadRequestException("Please enter a valid 4-digit numeric PIN.");
+        }
+
+        Instant now = Instant.now(trainingClassClock);
+        Optional<ClassTopicMarkLockEntity> optEntity = topicMarkLockRepository.findByClassIdAndTopicCode(classId, topicCode);
+        if (optEntity.isEmpty() || !Boolean.TRUE.equals(optEntity.get().getLocked())) {
+            Map<String, Object> res = new LinkedHashMap<>();
+            res.put("unlocked", true);
+            res.put("httpStatus", 200);
+            res.put("topicCode", topicCode);
+            res.put("message", "Topic Marks are already unlocked.");
+            res.put("lock", toLockStatusMap(optEntity.orElse(null), now));
+            res.put("gradebook", getClassTopicMarks(classId));
+            return res;
+        }
+
+        ClassTopicMarkLockEntity entity = optEntity.get();
+        if (entity.getCooldownUntil() != null && now.isBefore(entity.getCooldownUntil())) {
+            Map<String, Object> res = new LinkedHashMap<>();
+            res.put("unlocked", false);
+            res.put("httpStatus", 429);
+            res.put("cooldownActive", true);
+            res.put("topicCode", topicCode);
+            res.put("message", "Too many failed attempts. Unlocking is temporarily locked.");
+            res.put("lock", toLockStatusMap(entity, now));
+            return res;
+        }
+
+        String actor = resolveCurrentActor(classId);
+        String nowTs = LocalDateTime.now(trainingClassClock).format(ACTIVITY_TS_FMT);
+
+        if (entity.getPinHash() != null && passwordEncoder.matches(pin, entity.getPinHash())) {
+            entity.setLocked(false);
+            entity.setPinHash(null);
+            entity.setFailedAttempts(0);
+            entity.setLockoutTier(0);
+            entity.setCooldownUntil(null);
+            entity.setUnlockedAt(nowTs);
+            topicMarkLockRepository.save(entity);
+
+            activityRepository.save(ClassActivityEntity.builder()
+                    .trainingClass(getTrainingClassOrFallback(classId))
+                    .author(actor)
+                    .initials(buildInitials(actor))
+                    .content("unlocked Topic Marks for [" + topicCode + "] using 4-digit security PIN.")
+                    .timestamp(nowTs)
+                    .type("history")
+                    .build());
+
+            Map<String, Object> res = new LinkedHashMap<>();
+            res.put("unlocked", true);
+            res.put("httpStatus", 200);
+            res.put("topicCode", topicCode);
+            res.put("message", "Unlocked Topic Marks for " + topicCode + ".");
+            res.put("lock", toLockStatusMap(entity, now));
+            res.put("gradebook", getClassTopicMarks(classId));
+            return res;
+        }
+
+        // Wrong PIN attempt -> commit failedAttempts / progressive lockout cleanly without exception rollback
+        if (entity.getCooldownUntil() != null) {
+            entity.setCooldownUntil(null);
+        }
+        int attempts = (entity.getFailedAttempts() != null ? entity.getFailedAttempts() : 0) + 1;
+        if (attempts >= MAX_PIN_ATTEMPTS) {
+            int nextTier = (entity.getLockoutTier() != null ? entity.getLockoutTier() : 0) + 1;
+            int penaltyMinutes = LOCKOUT_TIER_MINUTES[Math.min(nextTier - 1, LOCKOUT_TIER_MINUTES.length - 1)];
+            Instant until = now.plus(Duration.ofMinutes(penaltyMinutes));
+
+            entity.setFailedAttempts(0);
+            entity.setLockoutTier(nextTier);
+            entity.setCooldownUntil(until);
+            topicMarkLockRepository.save(entity);
+
+            activityRepository.save(ClassActivityEntity.builder()
+                    .trainingClass(getTrainingClassOrFallback(classId))
+                    .author(actor)
+                    .initials(buildInitials(actor))
+                    .content("SECURITY ALERT: 3 failed PIN attempts on Topic Marks [" + topicCode + "] — locked out for " + penaltyMinutes + " minute(s) (Tier " + nextTier + ").")
+                    .timestamp(nowTs)
+                    .type("history")
+                    .build());
+
+            Map<String, Object> res = new LinkedHashMap<>();
+            res.put("unlocked", false);
+            res.put("httpStatus", 429);
+            res.put("cooldownActive", true);
+            res.put("penaltyMinutes", penaltyMinutes);
+            res.put("topicCode", topicCode);
+            res.put("message", "Incorrect PIN entered 3 times. Locked for " + penaltyMinutes + " minute(s).");
+            res.put("lock", toLockStatusMap(entity, now));
+            return res;
+        }
+
+        int remaining = MAX_PIN_ATTEMPTS - attempts;
+        entity.setFailedAttempts(attempts);
+        topicMarkLockRepository.save(entity);
+
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("unlocked", false);
+        res.put("httpStatus", 400);
+        res.put("cooldownActive", false);
+        res.put("topicCode", topicCode);
+        res.put("message", "Incorrect 4-digit PIN. " + remaining + " attempt(s) remaining before temporary lockout.");
+        res.put("lock", toLockStatusMap(entity, now));
+        return res;
+    }
+
+    private Map<String, Object> toLockStatusMap(ClassTopicMarkLockEntity lockEntity, Instant now) {
+        Map<String, Object> status = new LinkedHashMap<>();
+        boolean isLocked = lockEntity != null && Boolean.TRUE.equals(lockEntity.getLocked());
+        Instant cooldownUntil = lockEntity != null ? lockEntity.getCooldownUntil() : null;
+        boolean cooldownActive = cooldownUntil != null && now.isBefore(cooldownUntil);
+        long cooldownSeconds = cooldownActive
+                ? Math.max(1L, (Duration.between(now, cooldownUntil).toMillis() + 999L) / 1000L)
+                : 0L;
+        int rawFailed = lockEntity != null && lockEntity.getFailedAttempts() != null ? lockEntity.getFailedAttempts() : 0;
+        int effectiveFailed = (cooldownUntil != null && !cooldownActive) ? 0 : rawFailed;
+        int remainingAttempts = cooldownActive ? 0 : Math.max(0, MAX_PIN_ATTEMPTS - effectiveFailed);
+        int tier = lockEntity != null && lockEntity.getLockoutTier() != null ? lockEntity.getLockoutTier() : 0;
+
+        status.put("locked", isLocked);
+        status.put("lockedBy", lockEntity != null && lockEntity.getLockedBy() != null ? lockEntity.getLockedBy() : "");
+        status.put("lockedAt", lockEntity != null && lockEntity.getLockedAt() != null ? lockEntity.getLockedAt() : "");
+        status.put("failedAttempts", effectiveFailed);
+        status.put("remainingAttempts", remainingAttempts);
+        status.put("maxAttempts", MAX_PIN_ATTEMPTS);
+        status.put("lockoutTier", tier);
+        status.put("cooldownUntilEpochMs", cooldownActive ? cooldownUntil.toEpochMilli() : null);
+        status.put("cooldownSecondsRemaining", cooldownSeconds);
+        return status;
+    }
+
+    private String resolveCurrentActor(Long classId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getName() != null
+                && !auth.getName().isBlank() && !"anonymousUser".equals(auth.getName())) {
+            return auth.getName();
+        }
+        return resolveDefaultActor(classId);
+    }
+
+    @Transactional
+    public void recalculateTopicMarksForUpdatedSchema(Long classId) {
+        List<DynamicTopicSpec> specs = resolveDynamicTopicSpecs(classId);
+        List<ClassTopicMarkEntity> existingMarks = topicMarkRepository.findByClassIdOrderByTopicCodeAscTraineeIdAsc(classId);
+        if (existingMarks.isEmpty() || specs.isEmpty()) {
+            return;
+        }
+
+        Map<String, DynamicTopicSpec> specByCode = new HashMap<>();
+        for (DynamicTopicSpec spec : specs) {
+            specByCode.put(spec.code(), spec);
+        }
+
+        String nowTs = LocalDateTime.now().format(ACTIVITY_TS_FMT);
+        List<ClassTopicMarkEntity> updated = new ArrayList<>();
+        for (ClassTopicMarkEntity mark : existingMarks) {
+            DynamicTopicSpec spec = specByCode.get(mark.getTopicCode());
+            if (spec == null) continue;
+
+            Map<String, Double> existingScores = parseScoresJson(mark.getScoresJson());
+            Map<String, Double> alignedScores = new LinkedHashMap<>();
+            for (DynamicColumnSpec col : spec.columns()) {
+                alignedScores.put(col.key(), existingScores.getOrDefault(col.key(), 0.0));
+            }
+            double gpa = calculateWeightedTopicGpa(alignedScores, spec.columns());
+            mark.setTopicTitle(spec.title());
+            mark.setScoresJson(serializeScoresJson(alignedScores));
+            mark.setTotalGpa(gpa);
+            mark.setPassed(gpa >= TOPIC_MARK_PASS_THRESHOLD);
+            mark.setUpdatedAt(nowTs);
+            updated.add(mark);
+        }
+
+        if (!updated.isEmpty()) {
+            topicMarkRepository.saveAll(updated);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<DynamicTopicSpec> resolveDynamicTopicSpecs(Long classId) {
+        List<ClassTopicAssessmentEntity> entities = topicAssessmentRepository.findByTrainingClass_IdOrderByTopicIndexAsc(classId);
+        if (entities.isEmpty()) {
+            entities = initializeTopicAssessmentsFromH2(classId);
+        }
+
+        List<DynamicTopicSpec> result = new ArrayList<>();
+        Set<String> usedCodes = new HashSet<>();
+        int fallbackIdx = 1;
+
+        for (ClassTopicAssessmentEntity entity : entities) {
+            String title = entity.getTitle() != null ? entity.getTitle().trim() : "Topic " + fallbackIdx;
+            String baseCode = extractTopicCode(title);
+            if (baseCode.isBlank()) {
+                baseCode = "TOPIC_" + (entity.getTopicIndex() != null ? entity.getTopicIndex() : fallbackIdx);
+            }
+            String code = baseCode;
+            if (!usedCodes.add(code)) {
+                int suffix = entity.getTopicIndex() != null ? entity.getTopicIndex() : fallbackIdx;
+                while (!usedCodes.add(baseCode + "_" + suffix)) {
+                    suffix++;
+                }
+                code = baseCode + "_" + suffix;
+            }
+            String cleanName = extractCleanTopicName(title, code);
+
+            List<DynamicColumnSpec> columns = new ArrayList<>();
+            Set<String> usedColKeys = new HashSet<>();
+            List<Map<String, Object>> parsedAssessments = List.of();
+            if (entity.getAssessmentsJson() != null && !entity.getAssessmentsJson().isBlank()) {
+                try {
+                    parsedAssessments = objectMapper.readValue(
+                            entity.getAssessmentsJson(),
+                            new TypeReference<List<Map<String, Object>>>() {}
+                    );
+                } catch (Exception e) {
+                    log.error("Failed to parse assessmentsJson for dynamic schema", e);
+                }
+            }
+
+            int colIdx = 0;
+            for (Map<String, Object> item : parsedAssessments) {
+                colIdx++;
+                if (item == null || "Delete".equalsIgnoreCase(String.valueOf(item.get("action")))) {
+                    continue;
+                }
+                Object rawId = item.get("id");
+                String baseKey = rawId != null && !String.valueOf(rawId).isBlank()
+                        ? "assessment_" + String.valueOf(rawId).trim()
+                        : "assessment_idx_" + colIdx;
+                String key = baseKey;
+                int keySuffix = colIdx;
+                while (!usedColKeys.add(key)) {
+                    key = baseKey + "_" + keySuffix++;
+                }
+                String name = item.get("name") != null && !String.valueOf(item.get("name")).isBlank()
+                        ? String.valueOf(item.get("name")).trim()
+                        : "Assessment " + colIdx;
+                double weight = parseDoubleOrDefault(item.get("weightedNumber"), 0.0);
+                int quantity = Math.max(1, parseIntOrDefault(item.get("quantity"), 1));
+                columns.add(new DynamicColumnSpec(key, name, weight, quantity));
+            }
+
+            if (columns.isEmpty()) {
+                columns.add(new DynamicColumnSpec("assessment_default", "Final Assessment", 100.0, 1));
+            }
+
+            double totalWeight = Math.round(columns.stream().mapToDouble(DynamicColumnSpec::weight).sum() * 10.0) / 10.0;
+            boolean weightValid = Math.abs(totalWeight - 100.0) < 0.01;
+            result.add(new DynamicTopicSpec(code, cleanName, title, totalWeight, weightValid, columns));
+            fallbackIdx++;
+        }
+
+        return result;
+    }
+
+    private Map<String, Double> buildInitialDynamicScores(int traineeIdx, int topicIdx, List<DynamicColumnSpec> columns) {
+        double base = PRESET_TOPIC_MARK_BASES[traineeIdx % PRESET_TOPIC_MARK_BASES.length];
+        double topicOffset = ((topicIdx % 3) - 1) * 0.2;
+        Map<String, Double> scores = new LinkedHashMap<>();
+        for (int cIdx = 0; cIdx < columns.size(); cIdx++) {
+            double colOffset = ((cIdx % 3) - 1) * 0.3;
+            double raw = base + topicOffset + colOffset;
+            double clamped = Math.round(Math.max(0.0, Math.min(10.0, raw)) * 10.0) / 10.0;
+            scores.put(columns.get(cIdx).key(), clamped);
+        }
+        return scores;
+    }
+
+    private double calculateWeightedTopicGpa(Map<String, Double> scores, List<DynamicColumnSpec> columns) {
+        if (columns == null || columns.isEmpty()) {
+            return 0.0;
+        }
+        double weightedSum = 0.0;
+        double totalWeight = 0.0;
+        double plainSum = 0.0;
+        for (DynamicColumnSpec col : columns) {
+            double score = scores.getOrDefault(col.key(), 0.0);
+            weightedSum += score * col.weight();
+            totalWeight += col.weight();
+            plainSum += score;
+        }
+        double raw = totalWeight > 0.0 ? (weightedSum / totalWeight) : (plainSum / columns.size());
+        double rounded = Math.round(raw * 10.0) / 10.0;
+        return Math.max(0.0, Math.min(10.0, rounded));
+    }
+
+    private Map<String, Double> parseScoresJson(String scoresJson) {
+        if (scoresJson == null || scoresJson.isBlank()) return new LinkedHashMap<>();
+        try {
+            Map<String, Double> parsed = objectMapper.readValue(scoresJson, new TypeReference<Map<String, Double>>() {});
+            return parsed != null ? new LinkedHashMap<>(parsed) : new LinkedHashMap<>();
+        } catch (Exception e) {
+            log.error("Failed to parse scoresJson", e);
+            return new LinkedHashMap<>();
+        }
+    }
+
+    private String serializeScoresJson(Map<String, Double> scores) {
+        try {
+            return objectMapper.writeValueAsString(scores != null ? scores : Map.of());
+        } catch (Exception e) {
+            log.error("Failed to serialize scoresJson", e);
+            return "{}";
+        }
+    }
+
+    private String extractCleanTopicName(String title, String fallbackCode) {
+        if (title == null || title.isBlank()) return fallbackCode;
+        String cleaned = title.replaceFirst("^\\d+\\.\\s*", "").trim();
+        cleaned = cleaned.replaceFirst("^\\[[^\\]]+]\\s*", "").trim();
+        return cleaned.isBlank() ? fallbackCode : cleaned;
+    }
+
+    private double parseDoubleOrDefault(Object value, double fallback) {
+        if (value == null) return fallback;
+        try {
+            double parsed = Double.parseDouble(String.valueOf(value).trim());
+            return Double.isFinite(parsed) ? parsed : fallback;
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
     private List<AttendanceSeedTrainee> resolveSeedAttendanceTrainees(Long classId) {
         List<ClassEnrollment> enrolled = enrollmentRepository.findByTrainingClass_IdAndIsActiveTrueOrderByIdAsc(classId);
         if (!enrolled.isEmpty()) {
@@ -833,14 +1514,14 @@ public class ClassOperationDatabaseService {
 
     @Transactional
     public ClassOperationEntity initializeOperationFromH2(Long classId) {
-        Optional<ClassOperationEntity> existing = operationRepository.findByClassId(classId);
+        Optional<ClassOperationEntity> existing = operationRepository.findByTrainingClass_Id(classId);
         if (existing.isPresent()) {
             return existing.get();
         }
 
-        TrainingClass tc = trainingClassRepository.findById(classId).orElse(null);
-        LocalDate startDate = tc != null && tc.getStartDate() != null ? tc.getStartDate() : LocalDate.now().withDayOfMonth(1);
-        LocalDate endDate = tc != null && tc.getEndDate() != null ? tc.getEndDate() : startDate.plusMonths(3).withDayOfMonth(28);
+        TrainingClass tc = getTrainingClassOrFallback(classId);
+        LocalDate startDate = tc.getStartDate() != null ? tc.getStartDate() : LocalDate.now().withDayOfMonth(1);
+        LocalDate endDate = tc.getEndDate() != null ? tc.getEndDate() : startDate.plusMonths(3).withDayOfMonth(28);
 
         List<Session> classSessions = sessionRepository.findByClassId(classId).stream()
                 .filter(s -> Boolean.TRUE.equals(s.getIsActive()) && s.getStartTime() != null)
@@ -851,6 +1532,8 @@ public class ClassOperationDatabaseService {
 
         // Group sessions by YearMonth from H2 `sessions` table, or distribute across class months
         Map<YearMonth, Map<String, Integer>> monthTopicHours = new LinkedHashMap<>();
+        Map<YearMonth, Map<String, LocalDate[]>> monthTopicDates = new LinkedHashMap<>();
+        Map<String, LocalDate[]> overallTopicDates = new LinkedHashMap<>();
         Map<String, String> topicDisplayMap = new LinkedHashMap<>();
         for (TopicDescriptor td : allTopics) {
             topicDisplayMap.put(td.code(), td.displayName());
@@ -868,6 +1551,11 @@ public class ClassOperationDatabaseService {
             }
             monthTopicHours.computeIfAbsent(ym, k -> new LinkedHashMap<>())
                     .merge(code, hours, Integer::sum);
+
+            LocalDate sStart = s.getStartTime().toLocalDate();
+            LocalDate sEnd = s.getEndTime() != null ? s.getEndTime().toLocalDate() : sStart;
+            updateDateRange(monthTopicDates.computeIfAbsent(ym, k -> new LinkedHashMap<>()), code, sStart, sEnd);
+            updateDateRange(overallTopicDates, code, sStart, sEnd);
         }
 
         // Ensure every month in the TrainingClass's [startDate, endDate] range has a Milestone
@@ -902,17 +1590,53 @@ public class ClassOperationDatabaseService {
 
             List<Map<String, Object>> topicRows = new ArrayList<>();
             int subIdx = 1;
+            int totalMonthHours = topicsInMonth.values().stream().mapToInt(Integer::intValue).sum();
+            long totalMonthDays = Math.max(1, java.time.temporal.ChronoUnit.DAYS.between(mStart, mEnd) + 1);
+            LocalDate fallbackCursor = mStart;
+            int processedCount = 0;
+            int topicCountInMonth = topicsInMonth.size();
+            Map<String, LocalDate[]> ymDateMap = monthTopicDates.getOrDefault(ym, Map.of());
+
             for (Map.Entry<String, Integer> e : topicsInMonth.entrySet()) {
                 String code = e.getKey();
                 int hours = e.getValue();
+                processedCount++;
                 // Weight derived from H2 session hours * planned class size (or standard factor 30)
                 int factor = tc != null && tc.getPlannedSize() != null ? tc.getPlannedSize() : 25;
                 int weight = hours * factor;
                 totalWeighted += weight;
 
+                LocalDate tStart;
+                LocalDate tEnd;
+                LocalDate[] exactRange = ymDateMap.get(code);
+                if (exactRange != null) {
+                    tStart = exactRange[0];
+                    tEnd = exactRange[1];
+                } else {
+                    LocalDate[] overallRange = overallTopicDates.get(code);
+                    if (overallRange != null && !overallRange[1].isBefore(mStart) && !overallRange[0].isAfter(mEnd)) {
+                        tStart = overallRange[0].isBefore(mStart) ? mStart : overallRange[0];
+                        tEnd = overallRange[1].isAfter(mEnd) ? mEnd : overallRange[1];
+                    } else {
+                        tStart = fallbackCursor;
+                        if (processedCount == topicCountInMonth) {
+                            tEnd = mEnd;
+                        } else {
+                            long span = totalMonthHours > 0
+                                    ? Math.max(1, Math.round((double) hours * totalMonthDays / totalMonthHours))
+                                    : Math.max(1, totalMonthDays / Math.max(1, topicCountInMonth));
+                            tEnd = tStart.plusDays(span - 1);
+                            if (tEnd.isAfter(mEnd)) tEnd = mEnd;
+                        }
+                        fallbackCursor = tEnd.isBefore(mEnd) ? tEnd.plusDays(1) : mEnd;
+                    }
+                }
+
                 Map<String, Object> tRow = new LinkedHashMap<>();
                 tRow.put("id", milestoneId * 100 + subIdx++);
                 tRow.put("topic", topicDisplayMap.getOrDefault(code, "[" + code + "] " + code));
+                tRow.put("startDate", tStart.toString());
+                tRow.put("endDate", tEnd.toString());
                 tRow.put("maxScore", 10);
                 tRow.put("passingScore", 6);
                 tRow.put("weightedNumber", weight);
@@ -940,7 +1664,7 @@ public class ClassOperationDatabaseService {
         }
 
         ClassOperationEntity entity = ClassOperationEntity.builder()
-                .classId(classId)
+                .trainingClass(tc)
                 .actualStartDate(startDate.toString())
                 .earlyGraduatedDate(endDate.toString())
                 .actualEndDate("")
@@ -958,11 +1682,12 @@ public class ClassOperationDatabaseService {
 
     @Transactional
     public List<ClassTopicAssessmentEntity> initializeTopicAssessmentsFromH2(Long classId) {
-        List<ClassTopicAssessmentEntity> existing = topicAssessmentRepository.findByClassIdOrderByTopicIndexAsc(classId);
+        List<ClassTopicAssessmentEntity> existing = topicAssessmentRepository.findByTrainingClass_IdOrderByTopicIndexAsc(classId);
         if (!existing.isEmpty()) {
             return existing;
         }
 
+        TrainingClass tc = getTrainingClassOrFallback(classId);
         List<TopicDescriptor> topics = resolveTopicsFromH2(classId);
         List<ClassTopicAssessmentEntity> savedList = new ArrayList<>();
         int index = 1;
@@ -1011,7 +1736,7 @@ public class ClassOperationDatabaseService {
             }
 
             ClassTopicAssessmentEntity entity = ClassTopicAssessmentEntity.builder()
-                    .classId(classId)
+                    .trainingClass(tc)
                     .topicIndex(index)
                     .title(title)
                     .assessmentsJson(json)
@@ -1026,27 +1751,27 @@ public class ClassOperationDatabaseService {
 
     @Transactional
     public List<ClassActivityEntity> initializeActivitiesFromH2(Long classId) {
-        List<ClassActivityEntity> existing = activityRepository.findByClassIdOrderByIdDesc(classId);
+        List<ClassActivityEntity> existing = activityRepository.findByTrainingClass_IdOrderByIdDesc(classId);
         if (!existing.isEmpty()) {
             return existing;
         }
 
-        TrainingClass tc = trainingClassRepository.findById(classId).orElse(null);
-        String classCode = tc != null && tc.getCode() != null ? tc.getCode() : "CLASS_" + classId;
-        String trainer = tc != null && tc.getMasterTrainer() != null ? tc.getMasterTrainer() : "Trainer";
-        String admin = tc != null && tc.getClassAdmin() != null ? tc.getClassAdmin() : "ClassAdmin";
-        String location = tc != null && tc.getLocation() != null ? tc.getLocation() : "Training Lab";
+        TrainingClass tc = getTrainingClassOrFallback(classId);
+        String classCode = tc.getCode() != null ? tc.getCode() : "CLASS_" + classId;
+        String trainer = tc.getMasterTrainer() != null ? tc.getMasterTrainer() : "Trainer";
+        String admin = tc.getClassAdmin() != null ? tc.getClassAdmin() : "ClassAdmin";
+        String location = tc.getLocation() != null ? tc.getLocation() : "Training Lab";
         long sessionCount = sessionRepository.findByClassId(classId).stream()
                 .filter(s -> Boolean.TRUE.equals(s.getIsActive()))
                 .count();
 
-        LocalDateTime baseTime = tc != null && tc.getStartDate() != null
+        LocalDateTime baseTime = tc.getStartDate() != null
                 ? tc.getStartDate().atTime(9, 0)
                 : LocalDateTime.now().minusDays(3);
 
         List<ClassActivityEntity> list = new ArrayList<>();
         list.add(ClassActivityEntity.builder()
-                .classId(classId)
+                .trainingClass(tc)
                 .author(admin)
                 .initials(buildInitials(admin))
                 .content("initialized class " + classCode + " at " + location + " in H2 database.")
@@ -1055,7 +1780,7 @@ public class ClassOperationDatabaseService {
                 .build());
 
         list.add(ClassActivityEntity.builder()
-                .classId(classId)
+                .trainingClass(tc)
                 .author(trainer)
                 .initials(buildInitials(trainer))
                 .content("synchronized " + sessionCount + " training sessions and milestone weights from H2 schedule.")
@@ -1064,7 +1789,7 @@ public class ClassOperationDatabaseService {
                 .build());
 
         list.add(ClassActivityEntity.builder()
-                .classId(classId)
+                .trainingClass(tc)
                 .author(trainer)
                 .initials(buildInitials(trainer))
                 .content("Class " + classCode + " curriculum and topic assessments are ready for review.")
@@ -1143,10 +1868,11 @@ public class ClassOperationDatabaseService {
 
         res.put("operatingInfo", opInfo);
 
-        List<Object> milestones = new ArrayList<>();
+        List<Map<String, Object>> milestones = new ArrayList<>();
         if (entity.getMilestonesJson() != null && !entity.getMilestonesJson().isBlank()) {
             try {
-                milestones = objectMapper.readValue(entity.getMilestonesJson(), new TypeReference<List<Object>>() {});
+                milestones = objectMapper.readValue(entity.getMilestonesJson(), new TypeReference<List<Map<String, Object>>>() {});
+                enrichMilestoneTopicDates(entity.getClassId(), milestones);
             } catch (Exception e) {
                 log.error("Failed to parse milestonesJson", e);
             }
@@ -1155,6 +1881,112 @@ public class ClassOperationDatabaseService {
         res.put("totalWeightedNumber", entity.getTotalWeightedNumber() != null ? entity.getTotalWeightedNumber() : 0);
 
         return res;
+    }
+
+    private void updateDateRange(Map<String, LocalDate[]> target, String code, LocalDate start, LocalDate end) {
+        target.compute(code, (k, existing) -> {
+            if (existing == null) {
+                return new LocalDate[]{start, end};
+            }
+            LocalDate min = start.isBefore(existing[0]) ? start : existing[0];
+            LocalDate max = end.isAfter(existing[1]) ? end : existing[1];
+            return new LocalDate[]{min, max};
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private void enrichMilestoneTopicDates(Long classId, List<Map<String, Object>> milestones) {
+        if (classId == null || milestones == null || milestones.isEmpty()) return;
+
+        Map<YearMonth, Map<String, LocalDate[]>> monthTopicDates = new LinkedHashMap<>();
+        Map<String, LocalDate[]> overallTopicDates = new LinkedHashMap<>();
+
+        List<Session> classSessions = sessionRepository.findByClassId(classId).stream()
+                .filter(s -> Boolean.TRUE.equals(s.getIsActive()) && s.getStartTime() != null)
+                .sorted(Comparator.comparing(Session::getStartTime))
+                .toList();
+
+        for (Session s : classSessions) {
+            YearMonth ym = YearMonth.from(s.getStartTime());
+            String code = extractTopicCode(s.getTitle());
+            if (code.isEmpty()) code = "TOPIC_" + s.getTopicId();
+            LocalDate sStart = s.getStartTime().toLocalDate();
+            LocalDate sEnd = s.getEndTime() != null ? s.getEndTime().toLocalDate() : sStart;
+            updateDateRange(monthTopicDates.computeIfAbsent(ym, k -> new LinkedHashMap<>()), code, sStart, sEnd);
+            updateDateRange(overallTopicDates, code, sStart, sEnd);
+        }
+
+        for (Map<String, Object> m : milestones) {
+            List<Map<String, Object>> topics = (List<Map<String, Object>>) m.get("topics");
+            if (topics == null || topics.isEmpty()) continue;
+
+            LocalDate mStart = parseLocalDateOrNull(m.get("startDate"));
+            LocalDate mEnd = parseLocalDateOrNull(m.get("endDate"));
+            YearMonth ym = mStart != null ? YearMonth.from(mStart) : null;
+            Map<String, LocalDate[]> ymDates = ym != null ? monthTopicDates.getOrDefault(ym, Map.of()) : Map.of();
+
+            int totalWeight = topics.stream()
+                    .mapToInt(t -> Math.max(1, parseIntOrDefault(t.get("weightedNumber"), 1)))
+                    .sum();
+            long totalDays = (mStart != null && mEnd != null)
+                    ? Math.max(1, java.time.temporal.ChronoUnit.DAYS.between(mStart, mEnd) + 1)
+                    : 30;
+            LocalDate cursor = mStart;
+
+            for (int i = 0; i < topics.size(); i++) {
+                Map<String, Object> t = topics.get(i);
+                String topicLabel = t.get("topic") != null ? String.valueOf(t.get("topic")) : "";
+                String code = extractTopicCode(topicLabel);
+
+                LocalDate[] exactRange = ymDates.get(code);
+                if (exactRange != null) {
+                    t.put("startDate", exactRange[0].toString());
+                    t.put("endDate", exactRange[1].toString());
+                    continue;
+                }
+
+                Object existingStart = t.get("startDate");
+                Object existingEnd = t.get("endDate");
+                if (existingStart != null && !String.valueOf(existingStart).isBlank()
+                        && existingEnd != null && !String.valueOf(existingEnd).isBlank()) {
+                    continue;
+                }
+
+                LocalDate[] overallRange = overallTopicDates.get(code);
+                if (overallRange != null && mStart != null && mEnd != null
+                        && !overallRange[1].isBefore(mStart) && !overallRange[0].isAfter(mEnd)) {
+                    LocalDate tStart = overallRange[0].isBefore(mStart) ? mStart : overallRange[0];
+                    LocalDate tEnd = overallRange[1].isAfter(mEnd) ? mEnd : overallRange[1];
+                    t.put("startDate", tStart.toString());
+                    t.put("endDate", tEnd.toString());
+                } else if (cursor != null && mEnd != null) {
+                    LocalDate tStart = cursor;
+                    LocalDate tEnd;
+                    if (i == topics.size() - 1) {
+                        tEnd = mEnd;
+                    } else {
+                        int w = Math.max(1, parseIntOrDefault(t.get("weightedNumber"), 1));
+                        long span = Math.max(1, Math.round((double) w * totalDays / Math.max(1, totalWeight)));
+                        tEnd = tStart.plusDays(span - 1);
+                        if (tEnd.isAfter(mEnd)) tEnd = mEnd;
+                    }
+                    cursor = tEnd.isBefore(mEnd) ? tEnd.plusDays(1) : mEnd;
+                    t.put("startDate", tStart.toString());
+                    t.put("endDate", tEnd.toString());
+                }
+            }
+        }
+    }
+
+    private LocalDate parseLocalDateOrNull(Object value) {
+        if (value == null) return null;
+        String s = String.valueOf(value).trim();
+        if (s.isEmpty()) return null;
+        try {
+            return LocalDate.parse(s.length() > 10 ? s.substring(0, 10) : s);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private Map<String, Object> toTopicMap(ClassTopicAssessmentEntity entity) {

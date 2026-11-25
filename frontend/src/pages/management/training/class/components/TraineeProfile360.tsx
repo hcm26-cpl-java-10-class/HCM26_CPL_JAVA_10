@@ -38,6 +38,7 @@ import {
     resolveTraineeStatusBadge,
 } from "./TraineeModal";
 import {
+    fetchAndHydrateClassTopicMarks,
     getTraineeTopicMarksSummary,
     resolveTraineeAccount,
     TOPIC_GPA_PASS_THRESHOLD,
@@ -199,6 +200,7 @@ export function TraineeProfile360({
     const [attendanceState, setAttendanceState] = useState<ClassAttendanceState>(() =>
         getOrInitClassAttendanceState(classId, traineesWithCurrent, expectedStartDate, expectedEndDate),
     );
+    const [topicVersion, setTopicVersion] = useState(0);
 
     useEffect(() => {
         const synced = getOrInitClassAttendanceState(
@@ -221,6 +223,16 @@ export function TraineeProfile360({
             ).then((hydrated) => {
                 if (!cancelled && hydrated) {
                     setAttendanceState(hydrated);
+                }
+            });
+
+            void fetchAndHydrateClassTopicMarks(
+                classId,
+                traineesWithCurrent,
+                () => !cancelled,
+            ).then((hydratedMarks) => {
+                if (!cancelled && hydratedMarks) {
+                    setTopicVersion((v) => v + 1);
                 }
             });
         }
@@ -277,7 +289,7 @@ export function TraineeProfile360({
 
     const topicSummary = useMemo(
         () => getTraineeTopicMarksSummary(classId, traineesWithCurrent, trainee.id),
-        [classId, traineesWithCurrent, trainee.id],
+        [classId, traineesWithCurrent, trainee.id, topicVersion],
     );
     const gpaRank = getGpaRankMeta(topicSummary.overallGpa);
     const readiness = getGraduationReadiness(enrollmentStatus, absentRate, topicSummary.failedCount);
@@ -347,22 +359,20 @@ export function TraineeProfile360({
         const academicRows = topicSummary.topics.map((item) => [
             item.code,
             item.name,
-            item.scores.quiz.toFixed(1),
-            item.scores.assignment.toFixed(1),
-            item.scores.practiceFinal.toFixed(1),
-            item.scores.totalGpa.toFixed(1),
+            item.columns
+                .map((col) => `${col.name} (${col.weight}%): ${(item.componentScores[col.key] ?? 0).toFixed(1)}`)
+                .join(" | "),
+            item.totalGpa.toFixed(1),
             item.isFailed ? `Failed (< ${TOPIC_GPA_PASS_THRESHOLD.toFixed(1)})` : "Passed",
         ]);
         const academicSheet = utils.aoa_to_sheet([
-            ["Topic Code", "Topic Name", "Quiz (20%)", "Assignment (30%)", "Practice / Final (50%)", "Topic GPA", "Evaluation"],
+            ["Topic Code", "Topic Name", "Component Assessments", "Topic GPA", "Evaluation"],
             ...academicRows,
         ]);
         autoFitWorksheetColumns(academicSheet, {
             "Topic Code": 18,
             "Topic Name": 38,
-            "Quiz (20%)": 12,
-            "Assignment (30%)": 16,
-            "Practice / Final (50%)": 22,
+            "Component Assessments": 52,
             "Topic GPA": 12,
             Evaluation: 18,
         });
@@ -746,7 +756,7 @@ export function TraineeProfile360({
                             <p className="text-[11px] font-medium text-muted-foreground">Best Topic</p>
                             <p className="mt-1 truncate text-sm font-bold text-foreground">
                                 {topicSummary.highestTopic
-                                    ? `${topicSummary.highestTopic.code} (${topicSummary.highestTopic.scores.totalGpa.toFixed(1)})`
+                                    ? `${topicSummary.highestTopic.code} (${topicSummary.highestTopic.totalGpa.toFixed(1)})`
                                     : "—"}
                             </p>
                             <p className="truncate text-xs text-muted-foreground">
@@ -757,7 +767,7 @@ export function TraineeProfile360({
 
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-xs text-muted-foreground">
-                            Quiz 20% • Assignment 30% • Practice/Final 50% (Pass &gt;= 6.0)
+                            Weighted dynamically per topic assessment configuration (Pass &gt;= 6.0)
                         </p>
                         {onNavigateToTopicMark ? (
                             <Button
@@ -778,11 +788,9 @@ export function TraineeProfile360({
                             <TableHeader className="bg-slate-50 dark:bg-slate-900">
                                 <TableRow>
                                     <TableHead className="px-2.5 py-2 text-xs">Topic</TableHead>
-                                    <TableHead className="px-2.5 py-2 text-right text-xs">Quiz (20%)</TableHead>
-                                    <TableHead className="px-2.5 py-2 text-right text-xs">Assignment (30%)</TableHead>
-                                    <TableHead className="px-2.5 py-2 text-right text-xs">Practice / Final (50%)</TableHead>
-                                    <TableHead className="px-2.5 py-2 text-right text-xs">Topic GPA</TableHead>
-                                    <TableHead className="px-2.5 py-2 text-center text-xs">Evaluation</TableHead>
+                                    <TableHead className="px-2.5 py-2 text-xs">Assessment Breakdown</TableHead>
+                                    <TableHead className="w-24 px-2.5 py-2 text-right text-xs">Topic GPA</TableHead>
+                                    <TableHead className="w-24 px-2.5 py-2 text-center text-xs">Evaluation</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -792,14 +800,22 @@ export function TraineeProfile360({
                                             <div className="text-xs font-semibold text-foreground">{item.code}</div>
                                             <div className="text-[11px] text-muted-foreground">{item.name}</div>
                                         </TableCell>
-                                        <TableCell className="px-2.5 py-2 text-right text-xs tabular-nums">
-                                            {item.scores.quiz.toFixed(1)}
-                                        </TableCell>
-                                        <TableCell className="px-2.5 py-2 text-right text-xs tabular-nums">
-                                            {item.scores.assignment.toFixed(1)}
-                                        </TableCell>
-                                        <TableCell className="px-2.5 py-2 text-right text-xs tabular-nums">
-                                            {item.scores.practiceFinal.toFixed(1)}
+                                        <TableCell className="px-2.5 py-2">
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {item.columns.map((col) => (
+                                                    <span
+                                                        key={col.key}
+                                                        className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                                                    >
+                                                        <span>
+                                                            {col.name} ({col.weight}%):
+                                                        </span>
+                                                        <strong className="tabular-nums text-foreground">
+                                                            {(item.componentScores[col.key] ?? 0).toFixed(1)}
+                                                        </strong>
+                                                    </span>
+                                                ))}
+                                            </div>
                                         </TableCell>
                                         <TableCell
                                             className={cn(
@@ -809,14 +825,14 @@ export function TraineeProfile360({
                                                     : "text-foreground",
                                             )}
                                         >
-                                            <div>{item.scores.totalGpa.toFixed(1)}</div>
+                                            <div>{item.totalGpa.toFixed(1)}</div>
                                             <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
                                                 <div
                                                     className={cn(
                                                         "h-full",
                                                         item.isFailed ? "bg-rose-500" : "bg-emerald-500",
                                                     )}
-                                                    style={{ width: `${Math.min(100, item.scores.totalGpa * 10)}%` }}
+                                                    style={{ width: `${Math.min(100, item.totalGpa * 10)}%` }}
                                                 />
                                             </div>
                                         </TableCell>

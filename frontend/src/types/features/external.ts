@@ -231,6 +231,8 @@ export interface OperatingInfo {
 export interface MilestoneTopic {
     id: number;
     topic: string;
+    startDate?: string;
+    endDate?: string;
     maxScore: number;
     passingScore: number;
     weightedNumber: number;

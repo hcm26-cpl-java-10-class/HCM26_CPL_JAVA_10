@@ -8,6 +8,6 @@ import java.util.Optional;
 
 @Repository
 public interface ClassOperationRepository extends JpaRepository<ClassOperationEntity, Long> {
-    Optional<ClassOperationEntity> findByClassId(Long classId);
+    Optional<ClassOperationEntity> findByTrainingClass_Id(Long classId);
 }
 

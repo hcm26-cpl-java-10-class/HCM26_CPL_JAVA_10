@@ -25,6 +25,50 @@ import {
 /** Asks the backend for records of every status instead of its default ("active"). */
 export const ALL_STATUSES = "all";
 
+export interface TopicMarkLockInfo {
+    locked: boolean;
+    lockedBy?: string;
+    lockedAt?: string;
+    failedAttempts: number;
+    remainingAttempts: number;
+    maxAttempts: number;
+    lockoutTier: number;
+    cooldownUntilEpochMs?: number | null;
+    cooldownSecondsRemaining: number;
+}
+
+export interface ClassTopicMarksGradebookResponse {
+    classId: number;
+    passThreshold: number;
+    topics: Array<{
+        code: string;
+        name: string;
+        title?: string;
+        totalWeight: number;
+        weightValid: boolean;
+        columns: Array<{
+            key: string;
+            name: string;
+            weight: number;
+            quantity?: number;
+        }>;
+        recordsByTraineeId: Record<
+            string,
+            {
+                traineeId: number;
+                studentId?: string;
+                fullName?: string;
+                personalEmail?: string;
+                componentScores: Record<string, number>;
+                totalGpa: number;
+                passed: boolean;
+                updatedAt?: string;
+            }
+        >;
+        lock?: TopicMarkLockInfo;
+    }>;
+}
+
 const useMockFallback = () => false;
 
 async function withFallback<T>(request: () => Promise<T>, fallback: () => T): Promise<T> {
@@ -335,6 +379,79 @@ export const externalApi = {
         const response = await axiosInstance.put<TopicAssessment[]>(
             `/external/classes/${classId}/topic-assessments`,
             { topics, action }
+        );
+        return response.data;
+    },
+
+    // ===================== DYNAMIC TOPIC MARKS =====================
+    getClassTopicMarks: async (
+        classId: string | number
+    ): Promise<ClassTopicMarksGradebookResponse> => {
+        const response = await axiosInstance.get<ClassTopicMarksGradebookResponse>(
+            `/external/classes/${classId}/topic-marks`
+        );
+        return response.data;
+    },
+
+    saveClassTopicMarks: async (
+        classId: string | number,
+        payload: {
+            topicCode: string;
+            source?: "inline_edit" | "excel_import";
+            trainees?: Array<{
+                id: number;
+                studentId?: string;
+                fullName?: string;
+                personalEmail?: string;
+            }>;
+            recordsByTraineeId: Record<
+                string,
+                {
+                    componentScores: Record<string, number>;
+                }
+            >;
+        }
+    ): Promise<ClassTopicMarksGradebookResponse> => {
+        const response = await axiosInstance.put<ClassTopicMarksGradebookResponse>(
+            `/external/classes/${classId}/topic-marks`,
+            payload
+        );
+        return response.data;
+    },
+
+    lockClassTopicMarks: async (
+        classId: string | number,
+        payload: { topicCode: string }
+    ): Promise<{
+        locked: boolean;
+        topicCode: string;
+        pin: string;
+        lock: TopicMarkLockInfo;
+        gradebook: ClassTopicMarksGradebookResponse;
+    }> => {
+        const response = await axiosInstance.post(
+            `/external/classes/${classId}/topic-marks/lock`,
+            payload
+        );
+        return response.data;
+    },
+
+    unlockClassTopicMarks: async (
+        classId: string | number,
+        payload: { topicCode: string; pin: string }
+    ): Promise<{
+        unlocked: boolean;
+        httpStatus: number;
+        cooldownActive?: boolean;
+        penaltyMinutes?: number;
+        topicCode: string;
+        message: string;
+        lock: TopicMarkLockInfo;
+        gradebook?: ClassTopicMarksGradebookResponse;
+    }> => {
+        const response = await axiosInstance.post(
+            `/external/classes/${classId}/topic-marks/unlock`,
+            payload
         );
         return response.data;
     },

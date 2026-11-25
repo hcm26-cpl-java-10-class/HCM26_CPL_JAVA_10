@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, type ComponentProps } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +9,15 @@ import type { ExternalClass, ExternalTrainer, UserDTO } from "@/types";
 import { clsApi } from "@/api/features/cls.api";
 import { userApi } from "@/api/features/rbac/user.api";
 import { classSetupApi } from "@/api/features/class-setup.api";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, ChevronDown, X } from "lucide-react";
+
+// Keep the select styling local to the class form.
+function ClassSelect(props: ComponentProps<"select">) {
+    return <div className="relative">
+        <NativeSelect {...props} className="appearance-none pr-9" />
+        <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+    </div>;
+}
 
 interface ClassModalProps {
     open: boolean;
@@ -25,9 +33,9 @@ const EDIT_TRANSITIONS: Record<string, string[]> = {
     active: ["completed", "cancelled"], completed: [], closed: [], cancelled: [],
 };
 const STATUS_LABELS: Record<string, string> = {
-    planning: "Planning (Kế hoạch)", assigned: "Assigned (Đã phân công)",
-    active: "In progress (Đang học)", completed: "Training completed (Hoàn thành)",
-    closed: "Closed (Đã đóng)", cancelled: "Cancelled (Đã hủy)",
+    planning: "Kế hoạch", assigned: "Đã phân công",
+    active: "Đang học", completed: "Hoàn thành",
+    closed: "Đã đóng", cancelled: "Đã hủy",
 };
 
 export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingClasses = [] }: ClassModalProps) {
@@ -53,11 +61,20 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
         staleTime: 0,
     });
 
+    const programsQuery = useQuery({
+        queryKey: ["class-setup", "active-programs"],
+        queryFn: classSetupApi.activePrograms,
+        enabled: open,
+        retry: false,
+        staleTime: 0,
+    });
+
     const [code, setCode] = useState("");
     const [name, setName] = useState("");
     const [site, setSite] = useState("HCM");
     const [traineeType, setTraineeType] = useState("Fresher");
     const [program, setProgram] = useState("");
+    const [programSelectionId, setProgramSelectionId] = useState<number | null>(null);
     const [deliveryType, setDeliveryType] = useState("Class");
     const [formatType, setFormatType] = useState("Offline");
     const [skills, setSkills] = useState("Java");
@@ -71,6 +88,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
     const [status, setStatus] = useState("planning");
 
     const [errorMsg, setErrorMsg] = useState("");
+    const [programError, setProgramError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Candidates calculation
@@ -83,6 +101,22 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
         return trainersQuery.isError ? [] : trainersQuery.data || [];
     }, [trainersQuery.data, trainersQuery.isError]);
 
+    const programCandidates = programsQuery.isError ? [] : programsQuery.data || [];
+    const isProgramLoading = programsQuery.isPending || programsQuery.isFetching;
+    const normalizeProgram = (value: string) => value.trim().toLowerCase();
+    const selectedProgram = programSelectionId != null
+        ? programCandidates.find(p => p.id === programSelectionId)
+        : programCandidates.find(p => [p.code, p.name].some(value => normalizeProgram(value) === normalizeProgram(program)));
+    const programStatusMessage = isProgramLoading
+        ? "Đang tải danh sách chương trình đào tạo..."
+        : programsQuery.isError
+            ? "Không thể tải danh sách chương trình đào tạo. Vui lòng thử lại."
+            : programCandidates.length === 0
+                ? "Chưa có chương trình đào tạo đang hoạt động."
+                : program && !selectedProgram
+                    ? "Chương trình đã lưu hiện không khả dụng. Vui lòng chọn chương trình đang hoạt động."
+                    : "";
+
     const getAdminValue = (u: UserDTO): string => {
         const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ") || (u as any).name;
         return fullName || u.username || u.email || String(u.id);
@@ -92,7 +126,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
         const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ") || (u as any).name;
         if (fullName && u.email) return `${fullName} (${u.email})`;
         if (u.username && u.email) return `${u.username} (${u.email})`;
-        return fullName || u.username || u.email || `User #${u.id}`;
+        return fullName || u.username || u.email || `Người dùng #${u.id}`;
     };
 
     const getTrainerValue = (t: ExternalTrainer): string => {
@@ -101,17 +135,17 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
 
     const getTrainerLabel = (t: ExternalTrainer): string => {
         if (t.name && t.email) return `${t.name} (${t.email})`;
-        return t.name || t.email || `Trainer #${t.id}`;
+        return t.name || t.email || `Giảng viên #${t.id}`;
     };
 
     // Diagnostics & errors
     const usersErrorStatus = (usersQuery.error as any)?.response?.status ?? (usersQuery.error as any)?.status;
     const usersErrorMessage = usersQuery.isError
         ? usersErrorStatus === 403
-            ? "Thiếu quyền truy cập danh mục User/Admin (Cần USER_READ)."
-            : "Lỗi kết nối API danh mục User/Admin."
+            ? "Bạn không có quyền xem danh sách quản lý lớp."
+            : "Không thể tải danh sách quản lý lớp. Vui lòng thử lại."
         : (!usersQuery.isLoading && usersQuery.data && usersQuery.data.length === 0)
-            ? "Không có dữ liệu User/Admin trong hệ thống."
+            ? "Chưa có người quản lý lớp trong hệ thống."
             : "";
 
     const isTrainerDirectoryLoading = trainersQuery.isPending || trainersQuery.isFetching;
@@ -120,12 +154,12 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
     );
     const trainerErrorMessage = isTrainerDirectoryLoading ? "" : trainersQuery.isError
         ? (trainersQuery.error as any)?.message?.includes("BLOCKED")
-            ? (trainersQuery.error as any).message
+            ? "Danh sách giảng viên nội bộ chưa được xác minh. Không thể chọn giảng viên."
             : ((trainersQuery.error as any)?.response?.status === 403 || (trainersQuery.error as any)?.status === 403)
-                ? "BLOCKED: Thiếu quyền truy cập danh mục Trainer."
-                : "BLOCKED: Lỗi kết nối API danh mục Trainer hoặc danh mục chưa được kết nối."
+                ? "Thiếu quyền truy cập danh sách giảng viên."
+                : "Không thể tải danh sách giảng viên. Vui lòng thử lại."
         : trainerCandidates.length === 0
-            ? "BLOCKED: Danh mục Trainer nội bộ chưa có giảng viên ACTIVE hợp lệ. Người có quyền TRAINER_CREATE cần bổ sung hồ sơ giảng viên thực tế tại Trainer Management (/trainers), hoặc người có quyền TRAINER_UPDATE kiểm tra trạng thái hồ sơ hiện có. Tên đã lưu trên lớp không xác nhận giảng viên tồn tại trong danh mục này."
+            ? "Chưa có giảng viên nội bộ đang hoạt động. Vui lòng bổ sung hoặc cập nhật hồ sơ tại mục Quản lý giảng viên. Giảng viên đã lưu trên lớp vẫn được giữ nguyên."
             : "";
 
     const isCodeLocked = isEdit && ["active", "completed", "closed"].includes(classItem?.status ?? "");
@@ -136,12 +170,14 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
     useEffect(() => {
         if (open) {
             setErrorMsg("");
+            setProgramError("");
             if (classItem) {
                 setCode(classItem.code || "");
                 setName(classItem.name || "");
                 setSite(classItem.site || "HCM");
                 setTraineeType(classItem.traineeType || "Fresher");
-                setProgram(classItem.program || classItem.trainingProgram || "");
+                setProgram(classItem.program || classItem.trainingProgram || String(classItem.programId ?? ""));
+                setProgramSelectionId(classItem.programId ?? null);
                 setDeliveryType(classItem.deliveryType || "Class");
                 setFormatType(classItem.formatType || "Offline");
                 setSkills(classItem.skills || "Java");
@@ -160,6 +196,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                 setSite("HCM");
                 setTraineeType("Fresher");
                 setProgram("");
+                setProgramSelectionId(null);
                 setDeliveryType("Class");
                 setFormatType("Offline");
                 setSkills("Java");
@@ -180,6 +217,22 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setErrorMsg("");
+        setProgramError("");
+
+        if (!program.trim()) {
+            setProgramError("Vui lòng chọn chương trình đào tạo.");
+            return;
+        }
+        if (isProgramLoading) {
+            setProgramError("Đang tải danh sách chương trình đào tạo. Vui lòng chờ trước khi lưu.");
+            return;
+        }
+        if (programsQuery.isError || !selectedProgram) {
+            setProgramError(programsQuery.isError
+                ? "Không thể xác minh chương trình đào tạo. Vui lòng tải lại danh sách."
+                : "Vui lòng chọn chương trình đào tạo đang hoạt động.");
+            return;
+        }
 
         if (!allowedStatuses.includes(status)) {
             setErrorMsg("Trạng thái không hợp lệ cho thao tác hiện tại.");
@@ -190,73 +243,80 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
         // Rule 1: Code validation
         const trimmedCode = code.trim().toUpperCase();
         if (!trimmedCode) {
-            setErrorMsg("Quy tắc 1: Mã lớp học (Class Code) không được để trống.");
+            setErrorMsg("Vui lòng nhập mã lớp học.");
             return;
         }
         if (!/^[A-Z0-9_-]{4,30}$/.test(trimmedCode)) {
-            setErrorMsg("Quy tắc 1: Mã lớp học chỉ chứa chữ hoa, số, gạch dưới và dài từ 4-30 ký tự (VD: HCM26_FR_JAVA_05).");
+            setErrorMsg("Mã lớp học phải dài từ 4 đến 30 ký tự, chỉ chứa chữ hoa, số, dấu gạch dưới hoặc gạch nối.");
             return;
         }
         if (!isEdit || trimmedCode !== classItem?.code) {
             const isDuplicate = existingClasses.some(c => c.code?.toUpperCase() === trimmedCode && c.id !== classItem?.id);
             if (isDuplicate) {
-                setErrorMsg(`Quy tắc 1: Mã lớp '${trimmedCode}' đã tồn tại trong hệ thống. Vui lòng chọn mã khác.`);
+                setErrorMsg(`Mã lớp '${trimmedCode}' đã tồn tại trong hệ thống. Vui lòng chọn mã khác.`);
                 return;
             }
         }
 
         // Rule 2: Dates validation
         if (!startDate || !endDate) {
-            setErrorMsg("Quy tắc 2: Vui lòng nhập cả ngày bắt đầu và ngày kết thúc khóa học.");
+            setErrorMsg("Vui lòng nhập ngày bắt đầu và ngày kết thúc.");
             return;
         }
         if (new Date(endDate) <= new Date(startDate)) {
-            setErrorMsg("Quy tắc 2: Ngày kết thúc (End Date) phải diễn ra sau ngày bắt đầu (Start Date).");
+            setErrorMsg("Ngày kết thúc phải diễn ra sau ngày bắt đầu.");
             return;
         }
 
         // Rule 3: Planned size validation
         if (!plannedSize || plannedSize < 1 || plannedSize > 50) {
-            setErrorMsg("Quy tắc 3: Sĩ số dự kiến phải từ 1 đến 50 học viên.");
+            setErrorMsg("Sĩ số dự kiến phải từ 1 đến 50 học viên.");
             return;
         }
 
         // Rule 4: Admin and Trainer validation
         if (!classAdmin.trim()) {
-            setErrorMsg("Quy tắc 4: Vui lòng chọn Quản lý lớp (Class Admin).");
+            setErrorMsg("Vui lòng chọn quản lý lớp.");
             return;
         }
         if (!masterTrainer.trim()) {
-            setErrorMsg("Quy tắc 4: Vui lòng chọn Master Trainer.");
+            setErrorMsg("Vui lòng chọn giảng viên chính.");
             return;
         }
         if (!isEdit && isMasterTrainerBlocked) {
-            setErrorMsg("Quy tắc 4: Danh mục Master Trainer đang bị khóa (BLOCKED). Không thể tạo lớp học khi chưa kết nối danh mục Trainer thực tế.");
+            setErrorMsg("Không thể tạo lớp học khi danh sách giảng viên chưa được xác minh.");
             return;
         }
         if (isEdit && isMasterTrainerBlocked && masterTrainer !== classItem?.masterTrainer) {
-            setErrorMsg("Quy tắc 4: Danh mục Master Trainer đang bị khóa (BLOCKED). Không thể đổi Master Trainer sang người chưa được xác minh.");
+            setErrorMsg("Không thể đổi giảng viên chính sang người chưa được xác minh.");
             return;
         }
         const trainerChanged = !isEdit || masterTrainerId !== (classItem?.masterTrainerId ?? null) || masterTrainer !== classItem?.masterTrainer;
         if (trainerChanged && isTrainerDirectoryLoading) {
-            setErrorMsg("Đang kiểm tra danh mục Trainer. Vui lòng chờ trước khi lưu giảng viên mới.");
+            setErrorMsg("Đang kiểm tra danh sách giảng viên. Vui lòng chờ trước khi lưu giảng viên mới.");
             return;
         }
         if (trainerChanged && (trainersQuery.isError || !masterTrainerId || !trainerCandidates.some(t => t.id === masterTrainerId))) {
-            setErrorMsg("BLOCKED: Vui lòng chọn giảng viên ACTIVE đã được xác minh từ danh mục nội bộ.");
+            setErrorMsg("Vui lòng chọn giảng viên nội bộ đang hoạt động và đã được xác minh.");
+            return;
+        }
+
+        if (!deliveryType.trim()) {
+            setErrorMsg("Vui lòng nhập loại hình triển khai.");
             return;
         }
 
         setIsSubmitting(true);
         try {
+            const programValue = [selectedProgram.code, selectedProgram.name].some(value => normalizeProgram(value) === normalizeProgram(program))
+                ? program : selectedProgram.code || selectedProgram.name;
             const payload: Partial<ExternalClass> = {
                 code: trimmedCode,
                 name: name.trim() || trimmedCode,
                 site,
                 traineeType,
-                program,
-                trainingProgram: program,
+                program: programValue,
+                trainingProgram: programValue,
                 deliveryType,
                 formatType,
                 skills,
@@ -288,8 +348,13 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
             onSuccess?.();
             onOpenChange(false);
         } catch (err: any) {
-            const serverMsg = err.response?.data?.message || err.message || "Đã xảy ra lỗi khi lưu lớp học.";
-            setErrorMsg(serverMsg);
+            const saveErrors: Record<number, string> = {
+                400: "Thông tin lớp học chưa hợp lệ. Vui lòng kiểm tra lại chương trình đào tạo, giảng viên, địa điểm và thời gian.",
+                403: "Bạn không có quyền thực hiện thao tác này.",
+                404: "Không tìm thấy lớp học hoặc dữ liệu liên quan. Vui lòng tải lại và thử lại.",
+                409: "Thông tin lớp học bị trùng hoặc đã thay đổi. Vui lòng kiểm tra lại trước khi lưu.",
+            };
+            setErrorMsg(saveErrors[err.response?.status] || "Không thể lưu lớp học. Vui lòng kiểm tra thông tin và thử lại.");
         } finally {
             setIsSubmitting(false);
         }
@@ -297,26 +362,31 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent lang="vi" showCloseButton={false} aria-describedby={undefined} className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogClose asChild>
+                    <Button type="button" variant="ghost" size="icon-sm" className="absolute top-2 right-2" aria-label="Đóng">
+                        <X aria-hidden="true" />
+                    </Button>
+                </DialogClose>
                 <DialogHeader>
-                    <DialogTitle className="text-xl font-bold">
-                        {isEdit ? `Chỉnh sửa lớp học: ${classItem?.code}` : "Tạo mới lớp học (Create Class)"}
+                    <DialogTitle className="pr-8 text-xl font-bold">
+                        {isEdit ? `Chỉnh sửa lớp học: ${classItem?.code}` : "Tạo mới lớp học"}
                     </DialogTitle>
                 </DialogHeader>
 
                 {errorMsg && (
-                    <div className="flex items-start gap-2 p-3 text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900">
+                    <div role="alert" className="flex items-start gap-2 p-3 text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900">
                         <AlertCircle className="size-4 shrink-0 mt-0.5" />
                         <div>{errorMsg}</div>
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-4 py-2">
+                <form noValidate onSubmit={handleSubmit} className="space-y-4 py-2">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Class Code */}
                         <div className="space-y-1.5">
                             <Label htmlFor="class-code" className="font-semibold text-xs">
-                                Mã lớp học (Class Code) <span className="text-red-500">*</span>
+                                Mã lớp học <span className="text-red-500">*</span>
                             </Label>
                             <Input
                                 id="class-code"
@@ -336,7 +406,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                         {/* Class Name */}
                         <div className="space-y-1.5">
                             <Label htmlFor="class-name" className="font-semibold text-xs">
-                                Tên hiển thị lớp học (Class Name)
+                                Tên hiển thị lớp học
                             </Label>
                             <Input
                                 id="class-name"
@@ -349,23 +419,42 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                         {/* Program */}
                         <div className="space-y-1.5">
                             <Label htmlFor="class-program" className="font-semibold text-xs">
-                                Chương trình đào tạo (Program) <span className="text-red-500">*</span>
+                                Chương trình đào tạo <span className="text-red-500">*</span>
                             </Label>
-                            <Input
+                            <ClassSelect
                                 id="class-program"
-                                value={program}
-                                onChange={(e) => setProgram(e.target.value)}
+                                value={selectedProgram ? String(selectedProgram.id) : program ? "saved" : ""}
+                                onChange={(e) => {
+                                    const selected = programCandidates.find(p => String(p.id) === e.target.value);
+                                    setProgram(selected ? selected.code || selected.name : "");
+                                    setProgramSelectionId(selected?.id ?? null);
+                                    setProgramError("");
+                                }}
+                                disabled={isProgramLoading || programsQuery.isError || programCandidates.length === 0}
+                                aria-busy={isProgramLoading}
+                                aria-invalid={Boolean(programError)}
+                                aria-describedby={programError ? "class-program-error" : programStatusMessage ? "class-program-status" : undefined}
                                 required
-                            />
-                            <p className="text-xs text-muted-foreground">Enter the exact code or name of an active Training Program. Saving this field does not create the program link.</p>
+                            >
+                                <option value="">-- Chọn Chương trình đào tạo --</option>
+                                {program && !selectedProgram && (
+                                    <option value="saved" disabled>{program} (Đã lưu{!isProgramLoading && !programsQuery.isError ? "; hiện không khả dụng" : ""})</option>
+                                )}
+                                {programCandidates.map(p => <option key={p.id} value={String(p.id)}>{p.code} — {p.name}{p.version ? ` · Phiên bản ${p.version}` : ""}</option>)}
+                            </ClassSelect>
+                            {programError && <p id="class-program-error" role="alert" className="text-xs text-red-600 dark:text-red-400">{programError}</p>}
+                            {programStatusMessage && <p id="class-program-status" role={isProgramLoading ? "status" : "alert"} className="text-xs text-muted-foreground">{programStatusMessage}</p>}
+                            {programsQuery.isError && (
+                                <Button type="button" variant="outline" size="sm" onClick={() => void programsQuery.refetch()}>Tải lại chương trình đào tạo</Button>
+                            )}
                         </div>
 
                         {/* Site */}
                         <div className="space-y-1.5">
                             <Label htmlFor="class-site" className="font-semibold text-xs">
-                                Khu vực (Site) <span className="text-red-500">*</span>
+                                Khu vực <span className="text-red-500">*</span>
                             </Label>
-                            <NativeSelect
+                            <ClassSelect
                                 id="class-site"
                                 value={site}
                                 onChange={(e) => setSite(e.target.value)}
@@ -374,44 +463,44 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                                 <option value="HN">HN (Hà Nội)</option>
                                 <option value="DN">DN (Đà Nẵng)</option>
                                 <option value="QNH">QNH (Quy Nhơn)</option>
-                            </NativeSelect>
+                            </ClassSelect>
                         </div>
 
                         {/* Trainee Type */}
                         <div className="space-y-1.5">
                             <Label htmlFor="class-trainee-type" className="font-semibold text-xs">
-                                Đối tượng (Trainee Type)
+                                Đối tượng
                             </Label>
-                            <NativeSelect
+                            <ClassSelect
                                 id="class-trainee-type"
                                 value={traineeType}
                                 onChange={(e) => setTraineeType(e.target.value)}
                             >
-                                <option value="Fresher">Fresher</option>
-                                <option value="Intern">Intern</option>
-                                <option value="Campus">Campus</option>
-                            </NativeSelect>
+                                <option value="Fresher">Nhân viên mới</option>
+                                <option value="Intern">Thực tập sinh</option>
+                                <option value="Campus">Sinh viên</option>
+                            </ClassSelect>
                         </div>
 
                         {/* Format Type */}
                         <div className="space-y-1.5">
-                            <Label htmlFor="class-delivery-type" className="font-semibold text-xs">Delivery Type</Label>
-                            <Input id="class-delivery-type" value={deliveryType} onChange={e => setDeliveryType(e.target.value)} required />
+                            <Label htmlFor="class-delivery-type" className="font-semibold text-xs">Loại hình triển khai <span className="text-red-500">*</span></Label>
+                            <Input id="class-delivery-type" value={deliveryType === "Class" ? "Lớp học" : deliveryType} onChange={e => setDeliveryType(e.target.value === "Lớp học" ? "Class" : e.target.value)} required />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="class-format-type" className="font-semibold text-xs">
                                 Hình thức đào tạo
                             </Label>
-                            <NativeSelect
+                            <ClassSelect
                                 id="class-format-type"
                                 value={formatType}
                                 onChange={(e) => setFormatType(e.target.value)}
                             >
-                                <option value="Offline">Offline</option>
-                                <option value="Online">Online</option>
-                                <option value="Hybrid">Hybrid</option>
-                                <option value="Blended">Blended (Kết hợp)</option>
-                            </NativeSelect>
+                                <option value="Offline">Trực tiếp</option>
+                                <option value="Online">Trực tuyến</option>
+                                <option value="Hybrid">Trực tiếp và trực tuyến đồng thời</option>
+                                <option value="Blended">Học kết hợp</option>
+                            </ClassSelect>
                         </div>
 
                         {/* Planned Size */}
@@ -425,7 +514,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                                 min={1}
                                 max={50}
                                 value={plannedSize === 0 || (plannedSize as any) === "" ? "" : plannedSize}
-                                placeholder="e.g. 25"
+                                placeholder="Ví dụ: 25"
                                 onChange={(e) => {
                                     const val = e.target.value;
                                     if (val === "") {
@@ -443,21 +532,21 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                         {/* Status */}
                         <div className="space-y-1.5">
                             <Label htmlFor="class-status" className="font-semibold text-xs">
-                                Trạng thái lớp học (Status) <span className="text-red-500">*</span>
+                                Trạng thái lớp học <span className="text-red-500">*</span>
                             </Label>
-                            <NativeSelect
+                            <ClassSelect
                                 id="class-status"
                                 value={status}
                                 onChange={(e) => setStatus(e.target.value)}
                             >
-                                {allowedStatuses.map(value => <option key={value} value={value}>{STATUS_LABELS[value] ?? value}</option>)}
-                            </NativeSelect>
+                                {allowedStatuses.map(value => <option key={value} value={value}>{STATUS_LABELS[value] ?? "Trạng thái đã lưu"}</option>)}
+                            </ClassSelect>
                         </div>
 
                         {/* Start Date */}
                         <div className="space-y-1.5">
                             <Label htmlFor="class-start-date" className="font-semibold text-xs">
-                                Ngày bắt đầu (Start Date) <span className="text-red-500">*</span>
+                                Ngày bắt đầu <span className="text-red-500">*</span>
                             </Label>
                             <Input
                                 id="class-start-date"
@@ -470,7 +559,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                         {/* End Date */}
                         <div className="space-y-1.5">
                             <Label htmlFor="class-end-date" className="font-semibold text-xs">
-                                Ngày kết thúc (End Date) <span className="text-red-500">*</span>
+                                Ngày kết thúc <span className="text-red-500">*</span>
                             </Label>
                             <Input
                                 id="class-end-date"
@@ -483,9 +572,9 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                         {/* Class Admin */}
                         <div className="space-y-1.5">
                             <Label htmlFor="class-admin" className="font-semibold text-xs">
-                                Quản lý lớp (Class Admin) <span className="text-red-500">*</span>
+                                Quản lý lớp <span className="text-red-500">*</span>
                             </Label>
-                            <NativeSelect
+                            <ClassSelect
                                 id="class-admin"
                                 value={classAdmin}
                                 onChange={(e) => setClassAdmin(e.target.value)}
@@ -494,8 +583,8 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                                 {classAdmin && !adminCandidates.some(u => getAdminValue(u) === classAdmin) && (
                                     <option value={classAdmin}>{classAdmin} (Đã lưu)</option>
                                 )}
-                                {!classAdmin && <option value="">-- Chọn Quản lý lớp (Class Admin) --</option>}
-                                {usersQuery.isLoading && <option value="">Đang tải danh sách Admin...</option>}
+                                {!classAdmin && <option value="">-- Chọn Quản lý lớp --</option>}
+                                {usersQuery.isLoading && <option value="">Đang tải danh sách quản lý lớp...</option>}
                                 {adminCandidates.map((u) => {
                                     const val = getAdminValue(u);
                                     return (
@@ -504,7 +593,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                                         </option>
                                     );
                                 })}
-                            </NativeSelect>
+                            </ClassSelect>
                             {usersErrorMessage && (
                                 <p role="alert" className="text-xs text-amber-600 dark:text-amber-400 font-medium">
                                     {usersErrorMessage}
@@ -515,9 +604,9 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                         {/* Master Trainer */}
                         <div className="space-y-1.5">
                             <Label htmlFor="class-trainer" className="font-semibold text-xs">
-                                Master Trainer <span className="text-red-500">*</span>
+                                Giảng viên chính <span className="text-red-500">*</span>
                             </Label>
-                            <NativeSelect
+                            <ClassSelect
                                 id="class-trainer"
                                 value={masterTrainerId != null ? String(masterTrainerId) : masterTrainer ? "legacy" : ""}
                                 onChange={(e) => {
@@ -529,14 +618,14 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                                 aria-describedby={isTrainerDirectoryLoading || trainerErrorMessage ? "class-trainer-status" : undefined}
                             >
                                 {masterTrainer && (masterTrainerId == null || !trainerCandidates.some(t => t.id === masterTrainerId)) && (
-                                    <option value={masterTrainerId != null ? String(masterTrainerId) : "legacy"}>{masterTrainer} (Đã lưu{masterTrainerId == null ? "; chưa có ID nội bộ" : ""})</option>
+                                    <option value={masterTrainerId != null ? String(masterTrainerId) : "legacy"}>{masterTrainer} (Đã lưu{masterTrainerId == null ? "; chưa có mã nội bộ" : ""})</option>
                                 )}
                                 {!masterTrainer && (
                                     <option value="">
-                                        {isMasterTrainerBlocked ? "BLOCKED: Không có giảng viên khả dụng" : "-- Chọn Master Trainer --"}
+                                        {isMasterTrainerBlocked ? "Không có giảng viên khả dụng" : "-- Chọn Giảng viên chính --"}
                                     </option>
                                 )}
-                                {isTrainerDirectoryLoading && !masterTrainer && <option value="" disabled>Đang kiểm tra danh mục Trainer...</option>}
+                                {isTrainerDirectoryLoading && !masterTrainer && <option value="" disabled>Đang kiểm tra danh sách giảng viên...</option>}
                                 {trainerCandidates.map((t) => {
                                     const val = getTrainerValue(t);
                                     return (
@@ -545,10 +634,10 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                                         </option>
                                     );
                                 })}
-                            </NativeSelect>
+                            </ClassSelect>
                             {isTrainerDirectoryLoading && (
                                 <p id="class-trainer-status" role="status" className="text-xs text-muted-foreground">
-                                    Đang kiểm tra danh mục Trainer...
+                                    Đang kiểm tra danh sách giảng viên...
                                 </p>
                             )}
                             {trainerErrorMessage && (
@@ -557,7 +646,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                                         {trainerErrorMessage}
                                     </p>
                                     <Button type="button" variant="outline" size="sm" onClick={() => void trainersQuery.refetch()}>
-                                        Tải lại danh mục Trainer
+                                        Tải lại danh sách giảng viên
                                     </Button>
                                 </div>
                             )}
@@ -566,15 +655,15 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                         {/* Location */}
                         <div className="space-y-1.5 md:col-span-2">
                             <Label htmlFor="class-location" className="font-semibold text-xs">
-                                Địa điểm cụ thể (Location)
+                                Địa điểm cụ thể
                             </Label>
                             <Input
                                 id="class-location"
                                 value={location}
                                 onChange={(e) => setLocation(e.target.value)}
-                                placeholder={formatType === "Online" ? "HTTP(S) meeting URL" : "Exact room name from the real room directory"}
+                                placeholder={formatType === "Online" ? "Đường dẫn họp trực tuyến (http:// hoặc https://)" : "Tên phòng trong danh sách phòng học"}
                             />
-                            <p className="text-xs text-muted-foreground">A building name is not a room. Offline/Hybrid/Blended needs a unique room with capacity at least Planned Size; Online needs an HTTP(S) meeting URL.</p>
+                            <p className="text-xs text-muted-foreground">Với hình thức trực tiếp hoặc kết hợp, hãy nhập tên phòng học cụ thể, có sức chứa tối thiểu bằng sĩ số dự kiến. Với hình thức trực tuyến, hãy nhập đường dẫn họp bắt đầu bằng http:// hoặc https://.</p>
                         </div>
                     </div>
 

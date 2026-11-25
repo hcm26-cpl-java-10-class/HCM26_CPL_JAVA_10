@@ -19,6 +19,7 @@ const cls = { id: 42, code: "CLASS_42", name: "Synthetic class", status: "planni
 
 beforeEach(() => {
     fakeHttp.reset(); vi.mocked(XLSX.writeFile).mockReset();
+    fakeHttp.on("get", "/programs", pageOf([{ id: 1, code: "PROGRAM", name: "Chương trình đào tạo", isActive: true, status: "ACTIVE" }]));
     fakeHttp.on("get", "/users", { content: [] });
     fakeHttp.on("get", "/trainers/options", pageOf([]));
     fakeHttp.on("get", "/trainers/data-source", { source: "INTERNAL", approved: true, sampleData: false });

@@ -8,6 +8,6 @@ import java.util.List;
 
 @Repository
 public interface ClassActivityEntityRepository extends JpaRepository<ClassActivityEntity, Long> {
-    List<ClassActivityEntity> findByClassIdOrderByIdDesc(Long classId);
+    List<ClassActivityEntity> findByTrainingClass_IdOrderByIdDesc(Long classId);
 }
 
