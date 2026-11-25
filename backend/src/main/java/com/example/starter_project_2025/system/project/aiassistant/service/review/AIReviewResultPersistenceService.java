@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project.aiassistant.service.review;
 
 import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
+import com.example.starter_project_2025.system.project.aiassistant.dto.ReviewContext;
 import com.example.starter_project_2025.system.project.aiassistant.dto.response.output.review.AIReviewOutput;
 import com.example.starter_project_2025.system.project.aiassistant.entity.AIReviewFinding;
 import com.example.starter_project_2025.system.project.aiassistant.entity.AIReviewReport;
@@ -27,7 +28,8 @@ public class AIReviewResultPersistenceService {
     public AIReviewReport persist(
             AIReviewOutput output,
             ProjectTemplate template,
-            Long snapshotId
+            Long snapshotId,
+            ReviewContext context
     ) {
         // 1. Lấy Snapshot gốc của Template
         ProjectTemplateSnapshot snapshot =
@@ -42,7 +44,7 @@ public class AIReviewResultPersistenceService {
 
         // 4. Mapping toàn bộ Findings, gắn với Report vừa lưu
         List<AIReviewFinding> findings =
-                resultMapper.toFindings(output, report);
+                resultMapper.toFindings(output, report, context);
 
         // 5. Lưu toàn bộ Findings
         findingRepository.saveAll(findings);

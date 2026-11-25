@@ -118,7 +118,16 @@ public class AIReviewSuggestionApplyService {
             return invalidate(suggestion, "The suggestion does not belong to the report snapshot");
         }
 
-        ReviewContext reviewContext = contextBuilder.build(template, report.getSnapshot().getId());
+        if (finding.getCategory() == com.example.starter_project_2025.system.project.aiassistant.enums.AIReviewFindingCategory.MODULE
+                && finding.getTargetSnapshotId() == null) {
+            return invalidate(suggestion,
+                    "This module finding predates snapshot-aware reviews. Run a new AI review before applying a suggestion");
+        }
+        Map<Long, Long> pinnedModuleSnapshots = finding.getTargetSnapshotId() == null
+                ? Map.of()
+                : Map.of(Long.valueOf(finding.getTargetId()), finding.getTargetSnapshotId());
+        ReviewContext reviewContext = contextBuilder.build(
+                template, report.getSnapshot().getId(), pinnedModuleSnapshots);
         ReviewFindingInput findingInput = toInput(finding);
         ResolvedReviewFindingTarget target = targetResolver.resolve(findingInput, reviewContext);
         if (!suggestion.getTargetType().equals(finding.getTargetType())

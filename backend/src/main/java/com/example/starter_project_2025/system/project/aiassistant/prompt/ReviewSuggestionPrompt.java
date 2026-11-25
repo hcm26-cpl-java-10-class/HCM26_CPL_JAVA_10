@@ -43,6 +43,9 @@ public class ReviewSuggestionPrompt {
             - If the available information is insufficient to propose a
               reliable change, return empty changes and explain the limitation
               in rationale.
+            - When referring to the target milestone in rationale, use its exact
+              title from the target context instead of its numeric ID. Keep IDs
+              only in the structured changes where the operation requires them.
 
             ==================================================
             2. PARTIAL UPDATE RULES

@@ -155,6 +155,8 @@ function SuggestionCard({
   });
   const busy = approve.isPending || reject.isPending || apply.isPending || regenerate.isPending;
   const canRegenerate = finding.status === "OPEN" || finding.status === "ACCEPTED";
+  const canRegenerateSuggestion = canRegenerate
+    && finding.suggestionCapability === "AUTO_EDITABLE";
 
   return (
     <article className="rounded-lg border bg-background p-3.5">
@@ -186,7 +188,7 @@ function SuggestionCard({
         <p className="mt-3 rounded-md bg-muted px-3 py-2 text-sm"><strong>Rejection reason:</strong> {suggestion.rejectionReason}</p>
       )}
       <div className="mt-3 flex flex-wrap gap-2">
-        {suggestion.status === "PENDING" && (
+        {suggestion.status === "PENDING" && finding.suggestionCapability === "AUTO_EDITABLE" && (
           <>
             <Button size="sm" onClick={() => approve.mutate()} disabled={busy}>
               {approve.isPending ? <Loader2 className="animate-spin" /> : <ThumbsUp />} Approve
@@ -210,12 +212,12 @@ function SuggestionCard({
             </div>
           </>
         )}
-        {suggestion.status === "APPROVED" && (
+        {suggestion.status === "APPROVED" && finding.suggestionCapability === "AUTO_EDITABLE" && (
           <Button size="sm" onClick={() => apply.mutate()} disabled={busy}>
             {apply.isPending ? <Loader2 className="animate-spin" /> : <Check />} Apply to new draft
           </Button>
         )}
-        {canRegenerate && (
+        {canRegenerateSuggestion && (
           <Button size="sm" variant="outline" onClick={() => regenerate.mutate()} disabled={busy}>
             {regenerate.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />} Regenerate
           </Button>
@@ -277,6 +279,7 @@ function FindingCard({
     onSuccess: async () => { toast.success("Finding marked as resolved."); await refresh(); },
     onError: error => toast.error(getErrorMessage(error)),
   });
+  const manualChangesRequired = finding.suggestionCapability !== "AUTO_EDITABLE";
   const generate = useMutation({
     mutationFn: () => aiTemplateReviewApi.createSuggestion(templateId, reportId, finding.findingId),
     onSuccess: async suggestion => {
@@ -290,7 +293,8 @@ function FindingCard({
     onError: error => toast.error(getErrorMessage(error)),
   });
   const findingBusy = accept.isPending || dismiss.isPending || resolve.isPending;
-  const canSuggest = finding.status === "OPEN" || finding.status === "ACCEPTED";
+  const canSuggest = (finding.status === "OPEN" || finding.status === "ACCEPTED")
+    && !manualChangesRequired;
 
   return (
     <Card className="overflow-hidden">
@@ -301,8 +305,16 @@ function FindingCard({
               <Badge className={severityStyles[finding.severity]}>{finding.severity}</Badge>
               <Badge variant="secondary">{finding.category.replaceAll("_", " ")}</Badge>
               <Badge className={statusStyles[finding.status]}>{statusLabel(finding.status)}</Badge>
+              <Badge variant={manualChangesRequired ? "destructive" : "outline"}>
+                {manualChangesRequired ? "Manual changes required" : "Suggestion supported"}
+              </Badge>
             </div>
             <CardTitle className="text-base leading-6">{finding.title}</CardTitle>
+            {finding.category === "MODULE" && (finding.targetCode || finding.targetName) && (
+              <p className="mt-1 text-sm font-medium text-muted-foreground">
+                Module: {[finding.targetCode, finding.targetName].filter(Boolean).join(" · ")}
+              </p>
+            )}
           </div>
           <span className="text-xs text-muted-foreground">Finding #{finding.findingId}</span>
         </div>
@@ -316,6 +328,17 @@ function FindingCard({
             <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold"><Sparkles className="size-4 text-indigo-600" />AI recommendation</h3>
             <p className="whitespace-pre-wrap text-sm leading-6">{finding.recommendation}</p>
           </div>
+        )}
+        {manualChangesRequired && (
+          <Alert>
+            <AlertCircle />
+            <AlertTitle>
+              {finding.category === "MODULE" && finding.targetSnapshotId == null
+                ? "Module snapshot unavailable"
+                : "Manual changes required"}
+            </AlertTitle>
+            <AlertDescription>{finding.suggestionCapabilityReason || "This finding needs a new review before a suggestion can be generated."}</AlertDescription>
+          </Alert>
         )}
         {(finding.targetType || finding.targetId) && (
           <p className="text-xs text-muted-foreground">
@@ -358,11 +381,13 @@ function FindingCard({
         <section className="grid gap-3 border-t pt-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="flex items-center gap-2 text-sm font-semibold"><Bot className="size-4 text-indigo-600" />Suggestions</h3>
-            <Button size="sm" variant="outline" onClick={() => generate.mutate()}
-              disabled={!canSuggest || generate.isPending}>
-              {generate.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />}
-              {generate.isPending ? "Generating..." : suggestions.data?.length ? "Generate another" : "Generate suggestion"}
-            </Button>
+            {!manualChangesRequired ? (
+              <Button size="sm" variant="outline" onClick={() => generate.mutate()}
+                disabled={!canSuggest || generate.isPending}>
+                {generate.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                {generate.isPending ? "Generating..." : suggestions.data?.length ? "Generate another" : "Generate suggestion"}
+              </Button>
+            ) : null}
           </div>
           {suggestions.isPending ? (
             <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground" role="status">

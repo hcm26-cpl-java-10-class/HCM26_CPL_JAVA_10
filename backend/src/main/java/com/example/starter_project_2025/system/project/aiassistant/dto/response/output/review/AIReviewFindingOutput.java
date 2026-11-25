@@ -6,6 +6,8 @@ public record AIReviewFindingOutput(
         String title,
         String description,
         String recommendation,
+        String suggestionCapability,
+        String suggestionCapabilityReason,
         String targetType,
         String targetId
 ) {

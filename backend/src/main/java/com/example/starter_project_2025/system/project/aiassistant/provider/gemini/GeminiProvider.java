@@ -6,6 +6,7 @@ import com.example.starter_project_2025.system.project.aiassistant.provider.LlmR
 import com.example.starter_project_2025.system.project.aiassistant.provider.LlmResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -18,8 +19,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 @Component
+@Slf4j
 public class GeminiProvider implements LlmProvider {
 
     private final GeminiProperties properties;
@@ -66,6 +70,10 @@ public class GeminiProvider implements LlmProvider {
                         "parts", List.of(Map.of("text", request.userPrompt()))
                 )
         ));
+        requestBody.put("generationConfig", Map.of(
+                "responseMimeType", "application/json",
+                "maxOutputTokens", properties.getMaxOutputTokens()
+        ));
 
         try {
             return restClient.post()
@@ -96,19 +104,43 @@ public class GeminiProvider implements LlmProvider {
                         }
 
                         JsonNode response = objectMapper.readTree(rawResponse);
-                        JsonNode textNode = response.at("/candidates/0/content/parts/0/text");
+                        JsonNode candidate = response.at("/candidates/0");
+                        String finishReason = candidate.path("finishReason").asText("UNKNOWN");
+                        JsonNode usage = response.path("usageMetadata");
+                        if ("MAX_TOKENS".equals(finishReason)) {
+                            throw new IllegalStateException(
+                                    "Gemini response reached the max output token limit ("
+                                            + properties.getMaxOutputTokens()
+                                            + "); increase app.ai.template-assistant.gemini.max-output-tokens"
+                            );
+                        }
 
-                        if (textNode.isMissingNode() || textNode.isNull() || textNode.asText().isBlank()) {
+                        JsonNode parts = candidate.path("content").path("parts");
+                        String generatedText = StreamSupport.stream(parts.spliterator(), false)
+                                .map(part -> part.path("text").asText(""))
+                                .filter(text -> !text.isBlank())
+                                .collect(Collectors.joining());
+
+                        if (generatedText.isBlank()) {
                             throw new IllegalStateException(
                                     "Gemini response does not contain generated text: " + rawResponse
                             );
                         }
 
+                        log.debug(
+                                "Gemini response completed: finishReason={}, promptTokenCount={}, "
+                                        + "candidatesTokenCount={}, responseCharacters={}",
+                                finishReason,
+                                usage.path("promptTokenCount").asInt(-1),
+                                usage.path("candidatesTokenCount").asInt(-1),
+                                generatedText.length()
+                        );
+
                         String actualModel = response.hasNonNull("modelVersion")
                                 ? response.get("modelVersion").asText()
                                 : properties.getModel();
 
-                        return new LlmResponse(textNode.asText(), actualModel);
+                        return new LlmResponse(generatedText, actualModel);
                     });
 
         } catch (ResourceAccessException ex) {

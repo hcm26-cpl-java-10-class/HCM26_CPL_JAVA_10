@@ -43,6 +43,7 @@ public class ReviewPromptBuilder {
                 2. Milestones:
                    - Completeness, ordering, scope and feasibility.
                    - Alignment with project objectives.
+                   - Review milestone planning fields and its rubric reference.
                 3. Backlog:
                    - Completeness, clarity and feasibility.
                    - Alignment with milestones.
@@ -50,6 +51,29 @@ public class ReviewPromptBuilder {
                    - Alignment with milestones and learning objectives.
                    - Criteria, weights, maximum scores and rating levels.
                    - Consistency and completeness of scoring structure.
+
+                Milestone and rubric data are related but are not interchangeable:
+                - A milestone's rubricVersionId references a Rubric Version.
+                - The canonical rubric criteria are supplied in the top-level
+                  rubrics list (or the current module's rubrics list), in the
+                  Rubric object whose rubricVersionId matches the milestone's
+                  rubricVersionId.
+                - Use that matched Rubric object's criteria to assess the
+                  milestone's rubric. Do not expect milestone.rubricCriteria
+                  to contain a duplicate copy of those criteria.
+                - An empty or missing inline milestone.rubricCriteria array by
+                  itself is not a defect and must not produce a finding.
+                - Report missing or incomplete rubric criteria only when the
+                  matched Rubric object actually has missing or incomplete
+                  criteria. If the milestone has a rubricVersionId but no
+                  matching Rubric object is supplied, do not assume the rubric
+                  has no criteria; report only a verifiable reference/context
+                  issue, if appropriate.
+                - Findings about milestone planning or a missing/invalid
+                  milestone reference must target the milestone using its id
+                  and TEMPLATE_MILESTONE. Findings about rubric criteria must
+                  target the matching Rubric Version using its rubricVersionId
+                  and RUBRIC_VERSION.
                 5. Documents and Resources:
                    - Relevance and usefulness to the project.
                    - Completeness of descriptions and resource information.
@@ -68,6 +92,19 @@ public class ReviewPromptBuilder {
                 - Do not create findings for aspects that have no identifiable issue.
                 - If no issues are found, return an empty findings array.
                 - Do not access or assume the content of resource URLs.
+                Suggestion capability classification:
+                Every finding must include a structured suggestionCapability and
+                suggestionCapabilityReason. Use AUTO_EDITABLE only when the finding
+                can be addressed by editing its existing target using operations
+                supported by the suggestion prompt. Use MANUAL_REQUIRED when the
+                recommendation requires creating a new high-level module or milestone,
+                or creating an independent Rubric Version. Explain the unsupported
+                operation in suggestionCapabilityReason.
+                A rubric criterion change on an existing rubric is AUTO_EDITABLE:
+                applying it creates a new Rubric Version internally. Do not mark it
+                MANUAL_REQUIRED merely because applying criteria changes versions.
+                Do not classify a finding as MANUAL_REQUIRED simply because it is
+                about a milestone, module, or rubric; classify by the operation needed.
 
                 Allowed category values:
                 PROJECT_TEMPLATE, MODULE, MILESTONE, BACKLOG, RUBRIC, DOCUMENT.
@@ -108,6 +145,8 @@ public class ReviewPromptBuilder {
                       "title": "Short issue title",
                       "description": "Detailed explanation",
                       "recommendation": "Concrete improvement recommendation",
+                      "suggestionCapability": "AUTO_EDITABLE",
+                      "suggestionCapabilityReason": "The existing target can be updated with supported suggestion operations.",
                       "targetType": "PROJECT_TEMPLATE",
                       "targetId": "123"
                     }
@@ -116,6 +155,9 @@ public class ReviewPromptBuilder {
 
                 All fields are required.
                 category, severity and targetType must use exact allowed values.
+                suggestionCapability must be AUTO_EDITABLE or MANUAL_REQUIRED.
+                suggestionCapabilityReason must be a concise, non-empty explanation
+                of why the recommendation is or is not supported by suggestion apply.
                 targetId must be a string.
                 """.formatted(
                 nodeType == ReviewNodeType.ROOT

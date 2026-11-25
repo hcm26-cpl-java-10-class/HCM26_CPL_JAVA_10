@@ -5,6 +5,7 @@ import com.example.starter_project_2025.system.project.aiassistant.dto.response.
 import com.example.starter_project_2025.system.project.aiassistant.dto.response.output.review.AIReviewOutput;
 import com.example.starter_project_2025.system.project.aiassistant.enums.AIReviewFindingCategory;
 import com.example.starter_project_2025.system.project.aiassistant.enums.AIReviewFindingSeverity;
+import com.example.starter_project_2025.system.project.aiassistant.enums.AIReviewSuggestionCapability;
 import com.example.starter_project_2025.system.project.aiassistant.enums.ReviewNodeType;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Component;
@@ -87,6 +88,7 @@ public class ReviewValidator {
             validateCategory(finding.category(),nodeType);
             validateSeverity(finding.severity());
             validateRequiredFields(finding);
+            validateSuggestionCapability(finding);
             validateTargetType(finding);
             validateTargetId(finding, context);
         }
@@ -113,6 +115,25 @@ public class ReviewValidator {
 
         if (finding.targetId() == null || finding.targetId().isBlank()) {
             throw new IllegalArgumentException("Finding targetId must not be empty");
+        }
+    }
+
+    private void validateSuggestionCapability(AIReviewFindingOutput finding) {
+        AIReviewSuggestionCapability capability;
+        try {
+            capability = AIReviewSuggestionCapability.valueOf(finding.suggestionCapability());
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            throw new IllegalArgumentException(
+                    "Invalid finding suggestionCapability: " + finding.suggestionCapability()
+            );
+        }
+
+        if (finding.suggestionCapabilityReason() == null
+                || finding.suggestionCapabilityReason().isBlank()) {
+            throw new IllegalArgumentException("Finding suggestionCapabilityReason must not be empty");
+        }
+        if (finding.suggestionCapabilityReason().length() > 2000) {
+            throw new IllegalArgumentException("Finding suggestionCapabilityReason must not exceed 2000 characters");
         }
     }
 

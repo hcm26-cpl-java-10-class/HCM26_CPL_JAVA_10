@@ -334,17 +334,18 @@ public class AIApplyService {
                 output.milestones()
         );
 
-        // 6. Apply Backlog
+        // 6. Apply Modules before the final root snapshot refresh so the
+        // snapshot can bind each module to its initial draft version.
+        applyModules(
+                masterTemplate.id(),
+                output.modules()
+        );
+
+        // 7. Apply Backlog (also refreshes the root snapshot after modules exist).
         ProjectTemplateResponse updatedTemplate = applyBacklog(
                 snapshotId,
                 lockVersion,
                 output.backlogItems()
-        );
-
-        // 7. Apply Modules
-        applyModules(
-                masterTemplate.id(),
-                output.modules()
         );
 
         // 8. Apply Resources

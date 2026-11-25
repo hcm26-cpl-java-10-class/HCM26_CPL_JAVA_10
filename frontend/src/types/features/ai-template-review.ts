@@ -11,6 +11,7 @@ export type AIReviewFindingCategory =
 
 export type AIReviewFindingSeverity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
 export type AIReviewFindingStatus = "OPEN" | "ACCEPTED" | "DISMISSED" | "RESOLVED";
+export type AIReviewSuggestionCapability = "AUTO_EDITABLE" | "MANUAL_REQUIRED";
 export type AIReviewSuggestionStatus = "PENDING" | "APPROVED" | "REJECTED" | "APPLIED" | "INVALID";
 
 export interface AIReviewFinding {
@@ -21,8 +22,13 @@ export interface AIReviewFinding {
   title: string;
   description: string;
   recommendation: string | null;
+  suggestionCapability: AIReviewSuggestionCapability;
+  suggestionCapabilityReason: string;
   targetType: string | null;
   targetId: string | null;
+  targetSnapshotId?: number | null;
+  targetCode?: string | null;
+  targetName?: string | null;
 }
 
 export interface AIReviewReportListItem {

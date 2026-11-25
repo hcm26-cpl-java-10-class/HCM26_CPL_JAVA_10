@@ -8,6 +8,11 @@ public record AIReviewFindingDetail(
         String title,
         String description,
         String recommendation,
+        String suggestionCapability,
+        String suggestionCapabilityReason,
         String targetType,
-        String targetId
+        String targetId,
+        Long targetSnapshotId,
+        String targetCode,
+        String targetName
 ) {}

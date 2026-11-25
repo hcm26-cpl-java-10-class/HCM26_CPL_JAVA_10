@@ -16,4 +16,6 @@ public class GeminiProperties {
     private String baseUrl;
 
     private int timeoutSeconds;
+
+    private int maxOutputTokens = 8192;
 }

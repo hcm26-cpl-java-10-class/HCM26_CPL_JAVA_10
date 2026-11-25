@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -36,6 +37,15 @@ public class ReviewContextBuilder {
 
     @Transactional(readOnly = true)
     public ReviewContext build(ProjectTemplate template, Long snapshotId) {
+        return build(template, snapshotId, Map.of());
+    }
+
+    @Transactional(readOnly = true)
+    public ReviewContext build(
+            ProjectTemplate template,
+            Long snapshotId,
+            Map<Long, Long> pinnedModuleSnapshotIds
+    ) {
 
         ProjectTemplateSnapshot snapshot =
                 snapshotRetrievalService.retrieve(template.getId(), snapshotId);
@@ -66,7 +76,7 @@ public class ReviewContextBuilder {
                 buildRubrics(rubricVersionIds, tenantId);
 
         List<ReviewTemplateNode> modules =
-                buildModuleNodes(snapshotData.modules(), tenantId);
+                buildModuleNodes(snapshotData.modules(), tenantId, pinnedModuleSnapshotIds);
 
         return new ReviewContext(
                 template.getId(),
@@ -115,20 +125,22 @@ public class ReviewContextBuilder {
 
     private List<ReviewTemplateNode> buildModuleNodes(
             JsonNode modules,
-            Long tenantId
+            Long tenantId,
+            Map<Long, Long> pinnedModuleSnapshotIds
     ) {
         if (modules == null || !modules.isArray()) {
             return List.of();
         }
 
         return StreamSupport.stream(modules.spliterator(), false)
-                .map(module -> buildModuleNode(module, tenantId))
+                .map(module -> buildModuleNode(module, tenantId, pinnedModuleSnapshotIds))
                 .toList();
     }
 
     private ReviewTemplateNode buildModuleNode(
             JsonNode module,
-            Long tenantId
+            Long tenantId,
+            Map<Long, Long> pinnedModuleSnapshotIds
     ) {
         Long moduleTemplateId = requiredPositiveLong(module, "templateId");
 
@@ -139,9 +151,20 @@ public class ReviewContextBuilder {
         }
 
         JsonNode versionIdNode = module.get("versionId");
+        Long pinnedSnapshotId = pinnedModuleSnapshotIds.get(moduleTemplateId);
+        Long moduleSnapshotId = pinnedSnapshotId;
+        if (versionIdNode != null && versionIdNode.isIntegralNumber()) {
+            moduleSnapshotId = Long.valueOf(versionIdNode.asLong());
+        }
 
-        // Module chưa từng Published: chỉ review metadata.
-        if (versionIdNode == null || versionIdNode.isNull()) {
+        if (moduleSnapshotId == null) {
+            moduleSnapshotId = snapshotRetrievalService
+                    .findLatestReviewableModuleSnapshot(moduleTemplateId)
+                    .map(ProjectTemplateSnapshot::getId)
+                    .orElse(null);
+        }
+
+        if (moduleSnapshotId == null) {
             return new ReviewTemplateNode(
                     moduleTemplateId,
                     null,
@@ -163,8 +186,6 @@ public class ReviewContextBuilder {
                     List.of()
             );
         }
-
-        Long moduleSnapshotId = versionIdNode.asLong();
 
         ProjectTemplateSnapshot moduleSnapshot =
                 snapshotRetrievalService.retrieveReferencedModuleSnapshot(
@@ -188,7 +209,7 @@ public class ReviewContextBuilder {
                 buildRubrics(extractRubricVersionIds(moduleData), tenantId);
 
         List<ReviewTemplateNode> children =
-                buildModuleNodes(moduleData.modules(), tenantId);
+                buildModuleNodes(moduleData.modules(), tenantId, pinnedModuleSnapshotIds);
 
         return new ReviewTemplateNode(
                 moduleTemplateId,

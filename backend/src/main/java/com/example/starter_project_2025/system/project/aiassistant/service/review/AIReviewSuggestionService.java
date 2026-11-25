@@ -10,6 +10,7 @@ import com.example.starter_project_2025.system.project.aiassistant.entity.AIRevi
 import com.example.starter_project_2025.system.project.aiassistant.entity.AIReviewReport;
 import com.example.starter_project_2025.system.project.aiassistant.entity.AIReviewSuggestion;
 import com.example.starter_project_2025.system.project.aiassistant.enums.AIReviewFindingStatus;
+import com.example.starter_project_2025.system.project.aiassistant.enums.AIReviewSuggestionCapability;
 import com.example.starter_project_2025.system.project.aiassistant.enums.SuggestionStatus;
 import com.example.starter_project_2025.system.project.aiassistant.prompt.ReviewSuggestionPrompt;
 import com.example.starter_project_2025.system.project.aiassistant.provider.LlmProvider;
@@ -32,11 +33,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.http.HttpStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -69,9 +73,18 @@ public class AIReviewSuggestionService {
                 || finding.getStatus() == AIReviewFindingStatus.RESOLVED) {
             throw new IllegalStateException("A dismissed or resolved finding cannot produce suggestions");
         }
+        requireAutoEditableFinding(finding);
+        if (finding.getCategory() == com.example.starter_project_2025.system.project.aiassistant.enums.AIReviewFindingCategory.MODULE
+                && finding.getTargetSnapshotId() == null) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "This module finding predates snapshot-aware reviews. Run a new AI review before generating a suggestion.");
+        }
 
         ProjectTemplateSnapshot source = report.getSnapshot();
-        ReviewContext context = contextBuilder.build(template, source.getId());
+        Map<Long, Long> pinnedModuleSnapshots = finding.getTargetSnapshotId() == null
+                ? Map.of()
+                : Map.of(Long.valueOf(finding.getTargetId()), finding.getTargetSnapshotId());
+        ReviewContext context = contextBuilder.build(template, source.getId(), pinnedModuleSnapshots);
         ReviewFindingInput input = toInput(finding);
         ResolvedReviewFindingTarget target = targetResolver.resolve(input, context);
         JsonNode targetContext = toSuggestionTarget(target, finding, template);
@@ -161,6 +174,7 @@ public class AIReviewSuggestionService {
     ) {
         AIReviewSuggestion suggestion = requireManageableSuggestion(
                 templateId, reportId, findingId, suggestionId);
+        requireAutoEditableFinding(suggestion.getFinding());
         if (!suggestion.getStatus().canTransitionTo(SuggestionStatus.APPROVED)) {
             throw new IllegalStateException("Only PENDING suggestions can be approved");
         }
@@ -210,10 +224,25 @@ public class AIReviewSuggestionService {
     ) {
         AIReviewSuggestion suggestion = requireManageableSuggestion(
                 templateId, reportId, findingId, suggestionId);
+        requireAutoEditableFinding(suggestion.getFinding());
         if (suggestion.getStatus() != SuggestionStatus.APPROVED) {
             throw new IllegalStateException("Only APPROVED suggestions can be applied");
         }
         return suggestion;
+    }
+
+    private void requireAutoEditableFinding(AIReviewFinding finding) {
+        if (finding.getSuggestionCapability() == AIReviewSuggestionCapability.AUTO_EDITABLE) {
+            return;
+        }
+        String reason = finding.getSuggestionCapabilityReason();
+        if (reason == null || reason.isBlank()) {
+            reason = "This finding predates suggestion capability classification. Run a new review before generating a suggestion.";
+        }
+        throw new ResponseStatusException(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "This recommendation requires manual changes because it is outside the supported suggestion operations. "
+                        + reason);
     }
 
     @Transactional

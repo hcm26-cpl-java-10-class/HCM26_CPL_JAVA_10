@@ -4,6 +4,7 @@ import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.system.project.aiassistant.enums.AIReviewFindingCategory;
 import com.example.starter_project_2025.system.project.aiassistant.enums.AIReviewFindingSeverity;
 import com.example.starter_project_2025.system.project.aiassistant.enums.AIReviewFindingStatus;
+import com.example.starter_project_2025.system.project.aiassistant.enums.AIReviewSuggestionCapability;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -62,10 +63,26 @@ public class AIReviewFinding extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     String recommendation;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 30)
+    AIReviewSuggestionCapability suggestionCapability;
+
+    @Column(columnDefinition = "TEXT")
+    String suggestionCapabilityReason;
+
     @Column(length = 50)
     String targetType;
 
     String targetId;
+
+    @Column(name = "target_snapshot_id")
+    Long targetSnapshotId;
+
+    @Column(name = "target_code", length = 100)
+    String targetCode;
+
+    @Column(name = "target_name", length = 255)
+    String targetName;
 
     LocalDateTime acceptedAt;
 

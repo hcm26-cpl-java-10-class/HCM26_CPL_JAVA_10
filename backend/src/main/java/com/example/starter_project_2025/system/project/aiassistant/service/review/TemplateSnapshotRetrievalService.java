@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 public class TemplateSnapshotRetrievalService {
@@ -35,13 +37,25 @@ public class TemplateSnapshotRetrievalService {
                 ));
 
         if (snapshot.getProjectId() != null
-                || (snapshot.getStatus() != ProjectTemplateVersionStatus.PUBLISHED
+                || (snapshot.getStatus() != ProjectTemplateVersionStatus.DRAFT
+                && snapshot.getStatus() != ProjectTemplateVersionStatus.PUBLISHED
                 && snapshot.getStatus() != ProjectTemplateVersionStatus.ARCHIVED)) {
             throw new IllegalArgumentException(
-                    "Referenced module snapshot must be a published or archived template snapshot"
+                    "Referenced module snapshot must be a reusable template snapshot"
             );
         }
 
         return snapshot;
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<ProjectTemplateSnapshot> findLatestReviewableModuleSnapshot(Long templateId) {
+        return snapshotRepository.findByTemplateIdOrderByCreatedAtDesc(templateId).stream()
+                .filter(snapshot -> snapshot.getProjectId() == null
+                        && Boolean.TRUE.equals(snapshot.getIsActive())
+                        && (snapshot.getStatus() == ProjectTemplateVersionStatus.DRAFT
+                        || snapshot.getStatus() == ProjectTemplateVersionStatus.PUBLISHED
+                        || snapshot.getStatus() == ProjectTemplateVersionStatus.ARCHIVED))
+                .findFirst();
     }
 }

@@ -50,7 +50,8 @@ public class ReviewService {
         return resultPersistenceService.persist(
                 output,
                 template,
-                snapshotId
+                snapshotId,
+                context
         );
     }
 

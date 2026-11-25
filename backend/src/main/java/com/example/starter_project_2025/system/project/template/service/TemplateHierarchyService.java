@@ -90,19 +90,30 @@ public class TemplateHierarchyService {
     public ArrayNode captureModules(ProjectTemplate template) {
         ArrayNode result = json.createArrayNode();
         for (ProjectTemplate child : children(template)) {
-            ProjectTemplateSnapshot published = published(child);
-            ObjectNode node = published == null ? json.createObjectNode() : content(published).deepCopy();
+            ProjectTemplateSnapshot snapshot = reviewableSnapshot(child);
+            ObjectNode node = snapshot == null ? json.createObjectNode() : content(snapshot).deepCopy();
             node.put("templateId", child.getId());
             node.put("parentTemplateId", template.getId());
             node.put("code", child.getCode());
             node.put("name", child.getName());
             node.put("status", child.getStatus().name());
             node.put("templateVersion", child.getTemplateVersion());
-            if (published != null) node.put("versionId", published.getId());
+            if (snapshot != null) node.put("versionId", snapshot.getId());
             inheritSnapshotCategory(node, masterCategory(template));
             result.add(node);
         }
         return result;
+    }
+
+    private ProjectTemplateSnapshot reviewableSnapshot(ProjectTemplate template) {
+        ProjectTemplateSnapshot published = published(template);
+        if (published != null) return published;
+        return versions.findByTemplateIdOrderByCreatedAtDesc(template.getId()).stream()
+                .filter(version -> version.getProjectId() == null
+                        && Boolean.TRUE.equals(version.getIsActive())
+                        && version.getStatus() == ProjectTemplateVersionStatus.DRAFT)
+                .findFirst()
+                .orElse(null);
     }
 
     private void inheritSnapshotCategory(ObjectNode node, String category) {
