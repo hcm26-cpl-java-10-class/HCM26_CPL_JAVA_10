@@ -13,7 +13,7 @@ public final class GradebookDTOs {
         }
 
         public record ColumnDto(Long id, String name, String type, BigDecimal weightPercent, Long examId,
-                        String examTitle, boolean published) {
+                        String examTitle, boolean published, String gradingState) {
         }
 
         public record StudentRow(Long id, String name, String email, String code,

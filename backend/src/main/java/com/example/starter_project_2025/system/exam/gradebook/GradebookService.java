@@ -139,7 +139,7 @@ public class GradebookService {
             Exam e = c.getSourceExam();
             colDtos.add(new ColumnDto(c.getId(), c.getName(), c.getType(), c.getWeightPercent(),
                     e == null ? null : e.getId(), e == null ? null : e.getTitle(),
-                    e == null || resultAccess.canStudentSeeScoreOnMyScores(e)));
+                    e == null || resultAccess.canStudentSeeScoreOnMyScores(e), gradingState(e)));
         }
         List<StudentRow> rows = new ArrayList<>();
         for (CourseEnrollment en : enrollmentRepository.findActiveStudentsByCourse(course.getId())) {
@@ -277,7 +277,7 @@ public class GradebookService {
                 com.example.starter_project_2025.system.exam.core.domain.ExamCategory.QUIZ,
                 com.example.starter_project_2025.system.exam.core.domain.ExamCategory.MIDTERM,
                 com.example.starter_project_2025.system.exam.core.domain.ExamCategory.FINAL_TEST);
-        List<Exam> exams = new ArrayList<>(examRepository.findByCourseLink(courseId, null, null, true));
+        List<Exam> exams = new ArrayList<>(examRepository.findByCourseLink(courseId, null, null, false));
         exams.sort(Comparator.comparingInt((Exam e) -> order.indexOf(e.getCategory())).thenComparing(Exam::getId));
         List<Exam> toCreate = new ArrayList<>();
         for (Exam e : exams) {
@@ -521,6 +521,18 @@ public class GradebookService {
      * So khop theo user id: co diem + co trong lop -> add; co diem nhung khong
      * trong lop -> thua; trong lop khong co diem -> thieu.
      */
+    /** NO_ATTEMPTS / PENDING_GRADING / GRADED for the linked exam (null when the column has no exam). */
+    private String gradingState(Exam exam) {
+        if (exam == null)
+            return null;
+        List<ExamAttempt> attempts = attemptRepository.findAllByExam_Id(exam.getId());
+        if (attempts.isEmpty())
+            return "NO_ATTEMPTS";
+        boolean pending = attempts.stream()
+                .anyMatch(a -> !com.example.starter_project_2025.system.demo.course.CourseAssessmentService.fullyGraded(a));
+        return pending ? "PENDING_GRADING" : "GRADED";
+    }
+
     private ImportReport compute(GradebookColumn c, Exam exam, boolean apply) {
         return compute(c, exam, apply, false);
     }

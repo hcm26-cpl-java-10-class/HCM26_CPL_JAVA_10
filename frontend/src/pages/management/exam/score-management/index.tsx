@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Download, Gift, History, Pencil, Plus, Save, ScanSearch, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, CircleDashed, Download, Gift, History, Pencil, Plus, Save, ScanSearch, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import {
   type SmColumn,
   type SmColumnType,
   type SmGradebook,
+  type SmStudentRow,
   type SmImportReport,
   type SmPerson,
   type SmSaveLog,
@@ -41,7 +42,19 @@ function exportCsv(g: SmGradebook) {
   URL.revokeObjectURL(url);
 }
 
-function BonusDialog({ data, open, onClose, onChanged }: { data: SmGradebook; open: boolean; onClose: () => void; onChanged: () => void }) {
+const BONUS_CAP = 1;
+const BONUS_REASONS = ["Participation", "Extra project", "Contest award", "Helped classmates", "Excellent work"];
+let lastBonusReason = "";
+
+type BonusPreset = { columnId: number; studentId: number } | null;
+
+function BonusDialog({ data, open, preset, onClose, onChanged }: {
+  data: SmGradebook;
+  open: boolean;
+  preset: BonusPreset;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
   const queryClient = useQueryClient();
   const courseId = data.courseId;
   const { data: log = [] } = useQuery<SmBonusLog[]>({
@@ -50,52 +63,100 @@ function BonusDialog({ data, open, onClose, onChanged }: { data: SmGradebook; op
     enabled: open,
   });
   const [columnId, setColumnId] = useState("");
-  const [studentId, setStudentId] = useState("");
+  const [selected, setSelected] = useState<number[]>([]);
   const [points, setPoints] = useState("0.5");
   const [reason, setReason] = useState("");
   const [q, setQ] = useState("");
-  const done = (rows: SmBonusLog[]) => {
-    queryClient.setQueryData(["sm-bonus", courseId], rows);
-    onChanged();
+  const [busy, setBusy] = useState(false);
+  const [logColumn, setLogColumn] = useState("");
+  const [logStudent, setLogStudent] = useState("");
+  const [logQ, setLogQ] = useState("");
+
+  // Open pre-filled when launched from a score cell; otherwise start clean.
+  useEffect(() => {
+    if (!open) return;
+    setColumnId(preset ? String(preset.columnId) : "");
+    setSelected(preset ? [preset.studentId] : []);
+    setReason(lastBonusReason);
+    setQ("");
+    setLogColumn("");
+    setLogStudent("");
+    setLogQ("");
+  }, [open, preset?.columnId, preset?.studentId]);
+
+  const pts = Number(points);
+  const pointsOk = pts >= 0.05 && pts <= BONUS_CAP;
+  // Bonus already granted to a student in this course (all columns): the cap is per student, not per column.
+  const used = (s: SmStudentRow) => Object.values(s.bonuses ?? {}).reduce((a, b) => a + b, 0);
+  const remaining = (s: SmStudentRow) => Math.max(0, +(BONUS_CAP - used(s)).toFixed(2));
+
+  const needle = q.trim().toLowerCase();
+  const rows = columnId
+    ? data.students
+        .filter((s) => s.scores[columnId] != null)
+        .filter((s) => !needle || `${s.name} ${s.email}`.toLowerCase().includes(needle))
+    : [];
+  const canReceive = (s: SmStudentRow) => remaining(s) >= (pointsOk ? pts : 0.05);
+  const eligible = rows.filter(canReceive);
+  const chosen = data.students.filter((s) => selected.includes(s.id) && s.scores[columnId] != null && canReceive(s));
+  const allEligibleSelected = eligible.length > 0 && eligible.every((s) => selected.includes(s.id));
+  const toggle = (id: number) => setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  const valid = columnId && chosen.length > 0 && pointsOk && reason.trim().length >= 5;
+
+  const submit = async () => {
+    setBusy(true);
+    let ok = 0;
+    const failed: string[] = [];
+    let rowsLog: SmBonusLog[] | null = null;
+    for (const s of chosen) {
+      try {
+        rowsLog = await scoreManagementApi.addBonus(courseId, { columnId: Number(columnId), studentId: s.id, points: pts, reason: reason.trim() });
+        ok++;
+      } catch (e) {
+        failed.push(`${s.name}: ${getErrorMessage(e, "failed")}`);
+      }
+    }
+    setBusy(false);
+    if (rowsLog) queryClient.setQueryData(["sm-bonus", courseId], rowsLog);
+    if (ok > 0) {
+      lastBonusReason = reason.trim();
+      onChanged();
+      setSelected([]);
+      toast.success(`Bonus +${fmt(pts)} added to ${ok} student(s)`);
+    }
+    if (failed.length > 0) toast.error(failed.slice(0, 3).join("\n"));
   };
-  const add = useMutation({
-    mutationFn: () => scoreManagementApi.addBonus(courseId, { columnId: Number(columnId), studentId: Number(studentId), points: Number(points), reason }),
-    onSuccess: (rows) => {
-      done(rows);
-      setReason("");
-      toast.success("Bonus added");
-    },
-    onError: (e) => toast.error(getErrorMessage(e, "Unable to add bonus")),
-  });
+
   const revoke = useMutation({
     mutationFn: (id: number) => scoreManagementApi.revokeBonus(id),
-    onSuccess: (rows) => {
-      done(rows);
+    onSuccess: (rowsLog) => {
+      queryClient.setQueryData(["sm-bonus", courseId], rowsLog);
+      onChanged();
       toast.success("Bonus revoked");
     },
     onError: (e) => toast.error(getErrorMessage(e, "Unable to revoke bonus")),
   });
-  const needle = q.trim().toLowerCase();
-  // Only students who already have a score in the chosen column can receive a bonus there.
-  const students = data.students
-    .filter((s) => !columnId || s.scores[columnId] != null)
-    .filter((s) => !needle || `${s.name} ${s.email}`.toLowerCase().includes(needle))
-    .slice(0, 100);
-  const valid = columnId && studentId && Number(points) >= 0.05 && Number(points) <= 1 && reason.trim().length >= 5;
+  const logNeedle = logQ.trim().toLowerCase();
+  const logStudents = Array.from(new Map(log.map((b) => [b.studentId, b.studentName])).entries());
+  const filteredLog = log.filter((b) =>
+    (!logColumn || String(b.columnId) === logColumn) &&
+    (!logStudent || String(b.studentId) === logStudent) &&
+    (!logNeedle || `${b.studentName} ${b.reason}`.toLowerCase().includes(logNeedle)));
+  const activeTotal = filteredLog.filter((b) => !b.revokedAt).reduce((sum, b) => sum + b.points, 0);
+  const filtering = Boolean(logColumn || logStudent || logNeedle);
   const selectCls = "h-9 w-full rounded-md border bg-background px-2 text-sm";
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[92vh] w-[96vw] overflow-y-auto sm:max-w-6xl">
         <DialogHeader>
-          <DialogTitle>Bonus points</DialogTitle>
-          <DialogDescription>
-            Added to the student's score in the chosen column (max 10). Up to +1.0 per student in this course. A reason is required and every change is logged.
-          </DialogDescription>
+          <DialogTitle className="text-xl">Bonus points</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <div className="space-y-5">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1">
             <label className="text-xs font-medium">Column</label>
-            <select className={selectCls} value={columnId} onChange={(e) => { setColumnId(e.target.value); setStudentId(""); }}>
+            <select className={selectCls} value={columnId} onChange={(e) => { setColumnId(e.target.value); setSelected([]); }}>
               <option value="">Select a column...</option>
               {data.columns.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -103,29 +164,108 @@ function BonusDialog({ data, open, onClose, onChanged }: { data: SmGradebook; op
             </select>
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-medium">Points (0.05 - 1)</label>
-            <Input type="number" min={0.05} max={1} step={0.05} value={points} onChange={(e) => setPoints(e.target.value)} />
+            <label className="text-xs font-medium">Points per student (0.05 - {BONUS_CAP})</label>
+            <Input type="number" min={0.05} max={BONUS_CAP} step={0.05} value={points} onChange={(e) => setPoints(e.target.value)} />
           </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium">Student</label>
-            <Input placeholder="Search name or email..." value={q} onChange={(e) => setQ(e.target.value)} />
-            <select className={selectCls} value={studentId} onChange={(e) => setStudentId(e.target.value)}>
-              <option value="">{columnId && students.length === 0 ? "No student has a score in this column" : "Select a student..."}</option>
-              {students.map((s) => (
-                <option key={s.id} value={s.id}>{s.name} ({s.email})</option>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-xs font-medium">Students ({chosen.length} selected)</label>
+            <Input className="h-8 w-48" placeholder="Search name or email..." value={q} onChange={(e) => setQ(e.target.value)} disabled={!columnId} />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ml-auto h-8"
+              disabled={eligible.length === 0}
+              onClick={() => setSelected(allEligibleSelected ? [] : eligible.map((s) => s.id))}
+            >
+              {allEligibleSelected ? "Clear selection" : `Select all with a score (${eligible.length})`}
+            </Button>
+          </div>
+          <div className="max-h-[320px] overflow-auto rounded-md border">
+            {!columnId ? (
+              <p className="p-3 text-sm text-muted-foreground">Select a column to see the students who have a score in it.</p>
+            ) : rows.length === 0 ? (
+              <p className="p-3 text-sm text-muted-foreground">No student has a score in this column.</p>
+            ) : (
+              <ul className="divide-y">
+                {rows.map((s) => {
+                  const rem = remaining(s);
+                  const ok = canReceive(s);
+                  return (
+                    <li key={s.id}>
+                      <label className={`flex items-center gap-3 px-3 py-2.5 text-sm ${ok ? "cursor-pointer hover:bg-muted/50" : "opacity-50"}`}>
+                        <input type="checkbox" className="size-4" disabled={!ok} checked={selected.includes(s.id) && ok} onChange={() => toggle(s.id)} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium leading-tight">{s.name}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{s.email}</span>
+                        </span>
+                        <span className="text-right text-xs tabular-nums text-muted-foreground">
+                          <span className="block">Score {fmt(s.scores[columnId])}</span>
+                          <span className={ok ? "" : "font-medium text-destructive"}>
+                            {ok ? `Bonus left +${fmt(rem)}` : rem <= 0 ? "Bonus limit reached" : `Only +${fmt(rem)} left`}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-medium">Reason (required)</label>
+          <div className="flex flex-wrap gap-1.5">
+            {BONUS_REASONS.map((r) => (
+              <Button key={r} type="button" size="sm" variant={reason === r ? "default" : "outline"} className="h-7 px-2 text-xs" onClick={() => setReason(r)}>
+                {r}
+              </Button>
+            ))}
+          </div>
+          <textarea className="min-h-20 w-full rounded-md border bg-background p-2 text-sm" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} placeholder="Pick a reason above or write your own (at least 5 characters)" />
+        </div>
+        <div className="flex items-center justify-end gap-3">
+          {chosen.length > 0 && pointsOk && (
+            <span className="text-xs text-muted-foreground">+{fmt(pts)} to {chosen.length} student(s) in this column</span>
+          )}
+          <Button size="sm" disabled={!valid || busy} onClick={() => void submit()}>
+            {busy ? "Adding..." : `Add bonus${chosen.length > 1 ? ` (${chosen.length})` : ""}`}
+          </Button>
+        </div>
+        </div>
+        <div className="space-y-2">
+          <h4 className="text-sm font-semibold">
+            Bonus history <Badge variant="outline">{filtering ? `${filteredLog.length} / ${log.length}` : log.length}</Badge>
+          </h4>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <select className={selectCls} value={logColumn} onChange={(e) => setLogColumn(e.target.value)}>
+              <option value="">All columns</option>
+              {data.columns.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <select className={selectCls} value={logStudent} onChange={(e) => setLogStudent(e.target.value)}>
+              <option value="">All students</option>
+              {logStudents.map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
               ))}
             </select>
           </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium">Reason (required)</label>
-            <textarea className="min-h-20 w-full rounded-md border bg-background p-2 text-sm" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
+          <div className="flex items-center gap-2">
+            <Input className="h-8" placeholder="Search name or reason..." value={logQ} onChange={(e) => setLogQ(e.target.value)} />
+            {filtering && (
+              <Button variant="ghost" size="sm" className="h-8 shrink-0" onClick={() => { setLogColumn(""); setLogStudent(""); setLogQ(""); }}>
+                Clear
+              </Button>
+            )}
           </div>
-        </div>
-        <div className="flex justify-end">
-          <Button size="sm" disabled={!valid || add.isPending} onClick={() => add.mutate()}>Add bonus</Button>
-        </div>
-        <div className="max-h-64 space-y-2 overflow-auto text-sm">
-          {log.length === 0 ? <p className="text-muted-foreground">No bonus given yet.</p> : log.map((b) => (
+          <p className="text-xs text-muted-foreground">Total active bonus{filtering ? " (filtered)" : ""}: +{fmt(+activeTotal.toFixed(2))}</p>
+        <div className="max-h-[560px] space-y-2 overflow-auto text-sm">
+          {log.length === 0 ? <p className="text-muted-foreground">No bonus given yet.</p> : filteredLog.length === 0 ? <p className="text-muted-foreground">No bonus matches the filter.</p> : filteredLog.map((b) => (
             <div key={b.id} className={`flex items-start justify-between gap-2 rounded-md border p-2 ${b.revokedAt ? "opacity-60" : ""}`}>
               <div>
                 <div className="font-medium">+{fmt(b.points)} · {b.studentName} · {b.columnName}{b.revokedAt ? " (revoked)" : ""}</div>
@@ -140,6 +280,8 @@ function BonusDialog({ data, open, onClose, onChanged }: { data: SmGradebook; op
               )}
             </div>
           ))}
+        </div>
+        </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -202,8 +344,8 @@ function CourseList({ onOpen }: { onOpen: (id: number) => void }) {
 
 /* ------------------------------------------------------------------ people tables */
 
-function PeopleTable({ title, description, rows, showScore }: { title: string; description: string; rows: SmPerson[]; showScore?: boolean }) {
-  const [open, setOpen] = useState(false);
+function PeopleTable({ title, description, rows, showScore, defaultOpen }: { title: string; description: string; rows: SmPerson[]; showScore?: boolean; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen ?? false);
   return (
     <div className="space-y-2">
       <div className="flex items-start justify-between gap-3">
@@ -214,7 +356,7 @@ function PeopleTable({ title, description, rows, showScore }: { title: string; d
           <p className="text-xs text-muted-foreground">{description}</p>
         </div>
         <Button variant="ghost" size="sm" className="shrink-0" onClick={() => setOpen((o) => !o)} disabled={rows.length === 0}>
-          {open ? "Show less" : "Show more"}
+          {open ? "Less" : "More"}
         </Button>
       </div>
       {open && (
@@ -253,7 +395,105 @@ function PeopleTable({ title, description, rows, showScore }: { title: string; d
 
 /* ------------------------------------------------------------------ gradebook */
 
-function ColumnHeader({ col, onEdit }: { col: SmColumn; onEdit: () => void }) {
+function ScanRowDetail({ column, scored, onClose }: { column: SmColumn; scored: number; onClose: () => void }) {
+  const { data: report, isLoading, isError } = useQuery<SmImportReport>({
+    queryKey: ["sm-report", column.id, scored],
+    queryFn: () => scoreManagementApi.report(column.id),
+    staleTime: 0,
+  });
+  return (
+    <div className="mt-3 space-y-4 border-t pt-3">
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading students...</p>
+      ) : isError || !report ? (
+        <p className="text-sm text-destructive">Failed to load the student list for this assessment.</p>
+      ) : !report.published ? (
+        <p className="text-sm text-amber-700">
+          Scores of this assessment are not published yet, so no student was imported. Publish the results, then scan again.
+        </p>
+      ) : (
+        <>
+          <p className="text-sm text-muted-foreground">{report.imported} student(s) matched by ID and received a score.</p>
+          <PeopleTable
+            title="Missing students"
+            description="Enrolled in this course but have no score in the assessment."
+            rows={report.missing}
+            defaultOpen
+          />
+          <PeopleTable
+            title="Extra students"
+            description="Took the assessment but are not in this course's student list. Their scores were skipped."
+            rows={report.extra}
+            showScore
+            defaultOpen
+          />
+        </>
+      )}
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={onClose}>
+          <ChevronUp className="size-4" /> Less
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ScanSummary({ data }: { data: SmGradebook }) {
+  const [openIds, setOpenIds] = useState<number[]>([]);
+  const linked = data.columns.filter((c) => c.examId != null);
+  if (linked.length === 0) return null;
+  const total = data.students.length;
+  const rows = linked.map((c) => {
+    const scored = data.students.filter((s) => s.scores[String(c.id)] != null).length;
+    const status: "unpublished" | "full" | "partial" | "empty" =
+      !c.published ? "unpublished" : scored === 0 ? "empty" : scored < total ? "partial" : "full";
+    return { c, scored, status };
+  });
+  const count = (st: string) => rows.filter((r) => r.status === st).length;
+  const unpublished = count("unpublished");
+  const empty = count("empty");
+  const toggle = (id: number) => setOpenIds((o) => (o.includes(id) ? o.filter((x) => x !== id) : [...o, id]));
+  return (
+    <div className="space-y-2 rounded-md border p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span className="font-semibold">Scan summary</span>
+        <span className="text-muted-foreground">
+          {linked.length} assessment column(s) · {rows.filter((r) => r.scored > 0).length} with scores
+        </span>
+        {unpublished > 0 && <Badge variant="outline" className="border-amber-400 bg-amber-50 text-amber-700">{unpublished} not published</Badge>}
+        {empty > 0 && <Badge variant="outline" className="text-muted-foreground">{empty} no scores yet</Badge>}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Click a row to see which students are missing a score and which students took the assessment but are not in this course.
+      </p>
+      <ul className="divide-y rounded-md border">
+        {rows.map(({ c, scored, status }) => {
+          const open = openIds.includes(c.id);
+          return (
+            <li key={c.id} className="px-3 py-2">
+              <button type="button" className="flex w-full flex-wrap items-center gap-2 text-left" onClick={() => toggle(c.id)} aria-expanded={open}>
+                {open ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />}
+                {status === "unpublished" ? <AlertTriangle className="size-4 shrink-0 text-amber-600" />
+                  : status === "empty" ? <CircleDashed className="size-4 shrink-0 text-muted-foreground" />
+                  : <CheckCircle2 className={`size-4 shrink-0 ${status === "full" ? "text-emerald-600" : "text-sky-600"}`} />}
+                <span className="font-medium">{c.name}</span>
+                <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={c.examTitle ?? undefined}>← {c.examTitle}</span>
+                <span className={`text-xs ${status === "unpublished" ? "font-medium text-amber-700" : "text-muted-foreground"}`}>
+                  {status === "unpublished" ? "Not published - nothing imported"
+                    : status === "empty" ? (c.gradingState === "PENDING_GRADING" ? "Pending grading - no scores yet" : c.gradingState === "NO_ATTEMPTS" ? "No attempts yet - no scores" : "No scores yet")
+                    : `${scored}/${total} students have a score`}
+                </span>
+              </button>
+              {open && <ScanRowDetail column={c} scored={scored} onClose={() => toggle(c.id)} />}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function ColumnHeader({ col, onEdit, noScores }: { col: SmColumn; onEdit: () => void; noScores?: boolean }) {
   return (
     <div className="flex w-24 flex-col gap-0.5">
       <div className="flex items-center justify-between gap-1">
@@ -266,6 +506,16 @@ function ColumnHeader({ col, onEdit }: { col: SmColumn; onEdit: () => void }) {
       <span className="truncate text-xs font-normal text-muted-foreground" title={col.examTitle ?? undefined}>
         {col.examTitle ?? "No assessment"}
       </span>
+      {col.examId != null && !col.published && (
+        <Badge variant="outline" className="w-fit border-amber-400 bg-amber-50 px-1.5 py-0 text-[10px] font-medium text-amber-700">
+          Not published
+        </Badge>
+      )}
+      {col.examId != null && col.published && noScores && col.gradingState !== "GRADED" && (
+        <Badge variant="outline" className="w-fit border-sky-300 bg-sky-50 px-1.5 py-0 text-[10px] font-medium text-sky-700">
+          {col.gradingState === "PENDING_GRADING" ? "Pending grading" : col.gradingState === "NO_ATTEMPTS" ? "No attempts" : "No scores yet"}
+        </Badge>
+      )}
     </div>
   );
 }
@@ -363,11 +613,12 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
   const { data, isLoading, isError } = useQuery({ queryKey: key, queryFn: () => scoreManagementApi.gradebook(courseId) });
   const [editId, setEditId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SmColumn | null>(null);
-  const [reports, setReports] = useState<SmImportReport[]>([]);
+  const [, setReports] = useState<SmImportReport[]>([]);
 
   const [confirmWarnings, setConfirmWarnings] = useState<string[] | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [bonusOpen, setBonusOpen] = useState(false);
+  const [bonusPreset, setBonusPreset] = useState<BonusPreset>(null);
   const [search, setSearch] = useState("");
   const apply = (g: SmGradebook) => {
     queryClient.setQueryData(key, g);
@@ -541,7 +792,7 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
           <Button size="sm" variant="outline" onClick={() => exportCsv(data)} title="Download the score table as CSV">
             <Download className="size-4" /> Export CSV
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setBonusOpen(true)} disabled={data.columns.length === 0}>
+          <Button size="sm" variant="outline" onClick={() => { setBonusPreset(null); setBonusOpen(true); }} disabled={data.columns.length === 0}>
             <Gift className="size-4" /> Bonus
           </Button>
           <Button size="sm" variant="outline" onClick={() => setHistoryOpen(true)}>
@@ -595,7 +846,7 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
               <TableHead className="sticky left-0 z-30 min-w-40 bg-background px-2">Student</TableHead>
               {data.columns.map((c) => (
                 <TableHead key={c.id} className="px-2 align-top">
-                  <ColumnHeader col={c} onEdit={() => setEditId(c.id)} />
+                  <ColumnHeader col={c} onEdit={() => setEditId(c.id)} noScores={!data.students.some((st) => st.scores[String(c.id)] != null)} />
                 </TableHead>
               ))}
               <TableHead className="sticky right-0 z-30 w-16 bg-background px-2 text-right">Final</TableHead>
@@ -618,8 +869,10 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
                   {data.columns.map((c) => (
                     <TableCell key={c.id} className="px-2 py-1">
                       <div
-                        className="relative flex h-8 w-16 items-center justify-center rounded-md border bg-muted/30 text-sm tabular-nums"
-                        title={s.bonuses?.[String(c.id)] ? `Includes +${fmt(s.bonuses[String(c.id)])} bonus` : undefined}
+                        className={`relative flex h-8 w-16 items-center justify-center rounded-md border bg-muted/30 text-sm tabular-nums ${s.scores[String(c.id)] != null ? "cursor-pointer hover:border-primary" : ""}`}
+                        title={s.scores[String(c.id)] == null ? undefined
+                          : s.bonuses?.[String(c.id)] ? `Includes +${fmt(s.bonuses[String(c.id)])} bonus. Click to give more bonus.` : "Click to give bonus points"}
+                        onClick={s.scores[String(c.id)] != null ? () => { setBonusPreset({ columnId: c.id, studentId: s.id }); setBonusOpen(true); } : undefined}
                       >
                         {fmt(s.scores[String(c.id)])}
                         {s.bonuses?.[String(c.id)] ? (
@@ -638,50 +891,7 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
         </table>
       </div>
 
-      {data.columns.some((c) => c.examId != null && !c.published) && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:bg-amber-950/20">
-          <p className="font-medium text-amber-700 dark:text-amber-400">Assessments whose scores are not published yet</p>
-          <p className="mb-2 text-xs text-muted-foreground">
-            Only published scores are imported. Publish the results of these assessments, then scan again.
-          </p>
-          <ul className="list-disc space-y-0.5 pl-5">
-            {data.columns.filter((c) => c.examId != null && !c.published).map((c) => (
-              <li key={c.id}>
-                <span className="font-medium">{c.name}</span> ← {c.examTitle}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {reports.map((report) => (
-        <div key={report.columnId} className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold">
-              Import result: {report.columnName} ← <span className="text-destructive">{report.examTitle}</span>
-            </h3>
-            <Button variant="ghost" size="sm" onClick={() => setReports((rs) => rs.filter((r) => r.columnId !== report.columnId))}>Hide</Button>
-          </div>
-          {!report.published ? (
-            <p className="text-sm text-amber-700">Scores of this assessment are not published yet, so none were imported.</p>
-          ) : (
-            <>
-          <p className="text-sm text-muted-foreground">{report.imported} student(s) matched by ID and received a score.</p>
-          <PeopleTable
-            title="Extra students"
-            description="Took the assessment but are not in this course's student list. Their scores were skipped."
-            rows={report.extra}
-            showScore
-          />
-          <PeopleTable
-            title="Missing students"
-            description="Enrolled in this course but have no score in the assessment."
-            rows={report.missing}
-          />
-            </>
-          )}
-        </div>
-      ))}
+      <ScanSummary data={data} />
 
       <Dialog open={deleteTarget != null} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <DialogContent>
@@ -729,6 +939,7 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
       <BonusDialog
         data={data}
         open={bonusOpen}
+        preset={bonusPreset}
         onClose={() => setBonusOpen(false)}
         onChanged={() => void queryClient.invalidateQueries({ queryKey: key })}
       />
