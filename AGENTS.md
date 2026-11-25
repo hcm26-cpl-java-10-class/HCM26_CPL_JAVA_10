@@ -458,6 +458,29 @@ Nếu phát hiện source code thực tế khác với tài liệu, phải ưu t
 
 Đối với những quyết định quan trọng, nên cập nhật tài liệu dự án để những lần làm việc tiếp theo không mất ngữ cảnh.
 
+## 12.1. Quy tắc tổ chức tài liệu Markdown (`docs/`)
+
+Khi tạo mới hoặc cập nhật tài liệu `.md`, **bắt buộc** tuân thủ cấu trúc thư mục tại `docs/README.md`:
+
+1. **Không đặt file `.md` trực tiếp ở gốc `docs/`** (ngoại trừ `docs/README.md`).
+2. **Không tạo file `.md` mới ở gốc repository** (chỉ giữ lại các file chuẩn như `README.md`, `AGENTS.md`, `CLAUDE.md`).
+3. **Đặt đúng thư mục chủ đề đã đánh số (`docs/01-`..`09-`):**
+
+| Thư mục | Nội dung lưu trữ |
+|---|---|
+| `docs/01-getting-started/` | Cài đặt môi trường, hướng dẫn chạy dự án, quy ước Git/Commit |
+| `docs/02-architecture/` | Kiến trúc hệ thống, class diagram, ERD |
+| `docs/03-exam-assessment/` | Module Exam, Question, Grading, Auth/Exam security, hướng dẫn kiểm thử Exam |
+| `docs/04-course-learning/` | Course, Syllabus, Progress, Analytics, Recommendations |
+| `docs/05-project-workspace/` | Mock Project Hub (`plans/` cho kế hoạch triển khai, `use-cases/` cho đặc tả, `fixtures/`, `images/`) |
+| `docs/06-testing-verification/` | Báo cáo fix bug, điều tra sự cố, test plan, evidence, nghiệm thu |
+| `docs/07-demo/` | Kịch bản demo, walkthrough, dữ liệu/quickstart demo |
+| `docs/08-training-operations/` | Quản lý đào tạo: Class, Class Setup, Training Calendar, Trainer, Session |
+| `docs/09-deployment-operations/` | Triển khai, cutover, rollback, safe startup, hạ tầng (SMTP, DB scripts) |
+
+4. **Không tự tạo thư mục cấp 1 ngoài chuẩn `01-`..`09-`.** Nếu thực sự phát sinh phân hệ mới chưa thuộc danh mục nào ở trên, phải đặt tên theo mẫu `NN-kebab-case` (ví dụ `10-ten-phan-he/`) và cập nhật bảng mục lục trong `docs/README.md`.
+5. **Đặt tên & liên kết:** Không dùng khoảng trắng trong tên file `.md`; dùng đường dẫn tương đối cho link nội bộ; lưu ảnh minh họa trong thư mục `images/` gần tài liệu (tuyệt đối không nhúng đường dẫn ổ đĩa cá nhân như `C:/...`, `D:/...`).
+
 ---
 
 # 13. QUY TẮC GIT VÀ AN TOÀN MÃ NGUỒN

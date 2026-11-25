@@ -55,14 +55,16 @@ docker/.env
 *.log
 
 /backend.zip
-# Ignore vscode AI rules & Codacy
-.github/
+# Ignore vscode AI rules & Codacy (keep GitHub workflows & PR template tracked)
+.github/*
+!.github/pull_request_template.md
+!.github/workflows/
 .codacy/
 
 /backend/compile.log
 /backend/compile_error.txt
 /test.txt
-/docs/
+/docs/UFR-PRJ-004-*.md
 /.playwright-mcp/
 
 # === Nested clone / local workspace folder ===

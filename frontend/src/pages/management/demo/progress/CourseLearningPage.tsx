@@ -336,7 +336,7 @@ export function CourseLearningPage() {
                       <div className="mt-3">
                         {["QUIZ", "EXAM", "ASSIGNMENT"].includes(currentLesson.contentType)
                           ? <div role="status" className="rounded-xl border p-5"><h1 className="text-xl font-semibold">{currentLesson.title}</h1><p>No linked assessment is currently available.</p></div>
-                          : <LessonPreview lesson={currentLesson} />}
+                          : <LessonPreview lesson={currentLesson} restrictSeeking />}
 
                         {canReport && (
                             <div className="mt-3 flex justify-end">

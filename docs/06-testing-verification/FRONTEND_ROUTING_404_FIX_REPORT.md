@@ -76,11 +76,11 @@ Internal session identity:
 
 Setup and regressions:
 
-- The backend/frontend Setup files, API contracts and business checks are listed in [CLASS_SETUP_IMPLEMENTATION.md](CLASS_SETUP_IMPLEMENTATION.md).
+- The backend/frontend Setup files, API contracts and business checks are listed in [CLASS_SETUP_IMPLEMENTATION.md](../08-training-operations/CLASS_SETUP_IMPLEMENTATION.md).
 - `ClassReadinessPanel.test.tsx` and `ClassReadinessNavigation.test.tsx` now test the actual Setup action rather than an unavailable-feature notice.
 - `ClassSetupForm.test.tsx` tests linking, MAIN create/update, reload, mismatch, date range, permissions, failures and no sample fallback.
 - `ClassModal.test.tsx` uses direct change events for its payload test instead of many individual key events; this removes a worker-contention timeout without weakening its save/trim/internal-endpoint assertions.
-- `docs/class-readiness-investigation.md` is marked historical; its initial snapshot is preserved.
+- `docs/06-testing-verification/class-readiness-investigation.md` is marked historical; its initial snapshot is preserved.
 
 Dashboard KPI, Import Trainees, backend Session Management, and Phase 1 security code were not rewritten. A concurrent auth-token source edit was preserved, copied only into isolated validation, and included in the final backend test run.
 

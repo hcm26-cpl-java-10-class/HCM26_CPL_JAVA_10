@@ -23,6 +23,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { performAppLogout } from "@/utils/auth-logout";
 import { useRoleSwitch } from "@/contexts/RoleSwitchContext";
+import { StudentExploreMenu } from "./StudentExploreMenu";
 
 const normalizePath = (path?: string) => {
   const trimmed = (path || "/").replace(/\/+$/, "");
@@ -281,6 +282,11 @@ export function StudentNavbar() {
             RBAC System
           </span>
           </Button>
+
+          <StudentExploreMenu
+              canBrowse={hasPermission("COURSE_READ")}
+              canRecommend={hasPermission("ENROLLMENT_CREATE")}
+          />
 
           {/* Measure menus in a clipped sizing row so visible navigation stays on one line. */}
           <nav

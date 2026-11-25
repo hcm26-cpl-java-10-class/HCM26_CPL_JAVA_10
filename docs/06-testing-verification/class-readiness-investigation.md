@@ -1,6 +1,6 @@
 # Class Readiness — HCM26_CA_JAVA_01
 
-> Historical snapshot before Class Setup implementation. Class Setup is now implemented; use [CLASS_SETUP_IMPLEMENTATION.md](CLASS_SETUP_IMPLEMENTATION.md) and [the current routing/runtime report](FRONTEND_ROUTING_404_FIX_REPORT.md). Statements below about missing Setup forms/APIs describe the earlier investigation, not the current source or later live backend.
+> Historical snapshot before Class Setup implementation. Class Setup is now implemented; use [CLASS_SETUP_IMPLEMENTATION.md](../08-training-operations/CLASS_SETUP_IMPLEMENTATION.md) and [the current routing/runtime report](FRONTEND_ROUTING_404_FIX_REPORT.md). Statements below about missing Setup forms/APIs describe the earlier investigation, not the current source or later live backend.
 
 Investigation date: 09/11/2026, Asia/Saigon. Sources: the running application on port 8080, authenticated GET requests, source inspection, and SELECT-only queries through the running application's H2 console. No live records were created or updated and no Git write operation was used.
 
