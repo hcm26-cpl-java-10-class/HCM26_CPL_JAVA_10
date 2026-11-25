@@ -1,5 +1,5 @@
 import type { Recommendation } from "@/api/features/recommendations.api";
-import type { CourseLevel } from "@/types";
+import type { CategoryTreeDTO, CourseLevel } from "@/types";
 
 export type DurationFilter = "under-2h" | "2h-10h" | "10h-plus";
 export type RatingFilter = "4.5-plus" | "4.0-4.49" | "under-4";
@@ -44,13 +44,29 @@ function ratingMatches(rating: number, reviews: number, filter: RatingFilter) {
   return rating < 4;
 }
 
-export function filterAndSortRecommendations(items: Recommendation[], search: string, filters: RecommendationFilters) {
+export function catalogCategoryNames(nodes: CategoryTreeDTO[]): string[] {
+  return nodes.flatMap(node => [node.name, ...catalogCategoryNames(node.children ?? [])]);
+}
+
+export function recommendationCategoryNames(course: Recommendation["course"], tree: CategoryTreeDTO[] = []): string[] {
+  const names = new Set([course.categoryName, ...(course.categoryNames ?? [])].filter((name): name is string => Boolean(name)));
+  const visit = (nodes: CategoryTreeDTO[], parents: string[]) => {
+    for (const node of nodes) {
+      if (names.has(node.name)) parents.forEach(name => names.add(name));
+      visit(node.children ?? [], [...parents, node.name]);
+    }
+  };
+  visit(tree, []);
+  return [...names];
+}
+
+export function filterAndSortRecommendations(items: Recommendation[], search: string, filters: RecommendationFilters, categoryTree: CategoryTreeDTO[] = []) {
   const keyword = search.trim().toLocaleLowerCase();
   const filtered = items.filter(item => {
     const course = item.course;
-    const matchesSearch = !keyword || [course.name, course.description, course.instructor, course.categoryName, item.reason]
+    const matchesSearch = !keyword || [course.name, course.description, course.instructor, ...recommendationCategoryNames(course, categoryTree), item.reason]
       .some(value => value?.toLocaleLowerCase().includes(keyword));
-    const matchesCategory = !filters.categories.length || (course.categoryName != null && filters.categories.includes(course.categoryName));
+    const matchesCategory = !filters.categories.length || recommendationCategoryNames(course, categoryTree).some(name => filters.categories.includes(name));
     const matchesLevel = !filters.levels.length || (course.level != null && filters.levels.includes(course.level));
     const matchesDuration = !filters.durations.length || filters.durations.some(filter => durationMatches(course.totalDuration, filter));
     const matchesRating = !filters.ratings.length || filters.ratings.some(filter => ratingMatches(course.averageRating, course.totalReviews, filter));

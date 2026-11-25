@@ -8,4 +8,6 @@ public interface CategoryService
         extends BaseCrudService<Long, CategoryDTO, CategoryFilter> {
 
     List<CategoryTreeDTO> getTree(boolean onlyActive);
+
+    List<CategoryTreeDTO> getCatalogTree();
 }
