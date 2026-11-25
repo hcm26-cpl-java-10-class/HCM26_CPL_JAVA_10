@@ -97,7 +97,7 @@ export function OverflowBadges({
 
   return (
     <TooltipWrapper content={fullText || "—"}>
-      <div ref={containerRef} className="relative overflow-hidden">
+      <div ref={containerRef} className="relative overflow-hidden" data-no-translate>
         <div
           ref={measureRef}
           className="flex gap-1 flex-nowrap absolute top-0 left-0 invisible pointer-events-none h-0"

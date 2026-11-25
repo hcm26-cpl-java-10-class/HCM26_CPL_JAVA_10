@@ -40,6 +40,7 @@ export * from "./features/score-appeal.api";
 export * from "./features/demo/lesson-report.api";
 export * from "./features/demo/course_review.api";
 export * from "./features/ai-question-generator.api";
+export * from "./features/i18n.api";
 
 export * from "./features/exam-supervisor.api";
 export * from "./features/demo/certificate-insights.api"

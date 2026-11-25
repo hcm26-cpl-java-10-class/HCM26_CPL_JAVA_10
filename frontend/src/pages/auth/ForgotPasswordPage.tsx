@@ -1,4 +1,5 @@
 import { authApi } from "@/api/features/auth.api";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ForgotEmailForm } from "@/components/auth/ForgotEmailForm";
 import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
 import type { ForgotPasswordEmailRequest, ResetPasswordData } from "@/types/features/auth";
@@ -48,6 +49,7 @@ export default function ForgotPasswordPage() {
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-[#f9fafb] p-6">
+            <div className="fixed right-4 top-4 z-50"><LanguageSwitcher /></div>
             <div className="w-full max-w-lg overflow-hidden bg-white shadow-2xl rounded-[32px] border border-gray-100">
                 {!token ? (
                     <ForgotEmailForm onSubmit={onForgotPasswordSubmit} loading={loading} />

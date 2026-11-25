@@ -8,6 +8,9 @@ Thư mục `docs/` được chia theo chủ đề. Mỗi mục có prefix số �
 | `02-architecture/` | Kiến trúc & class diagram | `CLASS_DIAGRAM.md` |
 | `03-exam-assessment/` | Module thi cử & bảo mật Auth/Exam: invitation, trọng số điểm, tích hợp Course ↔ Assessment, Phase 1–3 | `INVITATION_MODULE.md`, `assessment-weights-v1.md`, `course-assessment-integration-v1.md`, `PEER_REVIEW_WORKFLOW.md`, `AUTH_AND_EXAM_PHASE1_3_UPDATE_AND_TEST_GUIDE.md` |
 | `04-course-learning/` | Khóa học, gợi ý khóa học, liên kết khóa học ↔ bài thi, E2E workflow, student analytics | `course-recommendations.md`, `COURSE_EXAM_LINKING_TEST_PLAN.md`, `COURSE_EXAM_E2E_TEST_WORKFLOW.md`, `STUDENT_ANALYTICS.md` |
+| `02-architecture/` | Kiến trúc & class diagram | `CLASS_DIAGRAM.md`, `I18N_GUIDE.md` |
+| `03-exam-assessment/` | Module thi cửu: invitation, khối lượng điểm, tích hợp Course ↔ Assessment | `INVITATION_MODULE.md`, `assessment-weights-v1.md`, `course-assessment-integration-v1.md`, `PEER_REVIEW_WORKFLOW.md` |
+| `04-course-learning/` | Kiểm thử liên kết khóa học ↔ bài thi, E2E workflow, student analytics | `COURSE_EXAM_LINKING_TEST_PLAN.md`, `COURSE_EXAM_E2E_TEST_WORKFLOW.md`, `STUDENT_ANALYTICS.md` |
 | `05-project-workspace/` | Mock Project Hub: workspace, milestone, cảnh báo, báo cáo | `PROJECT_HUB.md`, `milestone-lifecycle.md`, `MILESTONE_BACKEND_GUIDE.md`, `MILESTONE_FRONTEND_GUIDE.md`, `project-alert-rules.md`, `project-report-rules.md` |
 | `05-project-workspace/plans/` | Kế hoạch triển khai & guide theo từng user story | `UFR-PRJ-005-backend-implementation-plan.md`, `US-PRJ-001-implementation-plan.md`, `MILESTONE_*_IMPLEMENTATION_PLAN.md`, … |
 | `05-project-workspace/use-cases/` | Đặc tả use case (UFR-PRJ-003-01/02/03, US-07/08/11/12) + `USE-CASES.md` tổng hợp | `USE-CASES.md` |

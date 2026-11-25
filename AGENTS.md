@@ -86,6 +86,8 @@ src/
 │       └── application.yml
 └── test/
     └── java/
+```
+
 ---
 
 # 3. QUY TRÌNH BẮT BUỘC TRƯỚC KHI CODE
@@ -454,7 +456,7 @@ Trước mỗi nhiệm vụ:
 
 Không tự ý thay đổi các quyết định kiến trúc hoặc nghiệp vụ đã được thống nhất.
 
-Nếu phát hiện source code thực tế khác với tài liệu, phải ưu tiên kiểm tra và báo cáo sự khác biệt, không tự động sửa source code để làm cho nó giống tài liệu.
+Nếu phát hiện source code thực tế khác với tài liệu, phải ưu tiên kiểm tra và báo cáo sự kết quả, không tự động sửa source code để làm cho nó giống tài liệu.
 
 Đối với những quyết định quan trọng, nên cập nhật tài liệu dự án để những lần làm việc tiếp theo không mất ngữ cảnh.
 

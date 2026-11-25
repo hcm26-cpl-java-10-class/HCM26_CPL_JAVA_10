@@ -1,3 +1,4 @@
+import { formatDateCustomNow } from "@/i18n/format";
 import { Button } from "@/components/ui/button";import {
   DropdownMenu,
   DropdownMenuContent,
@@ -101,7 +102,7 @@ const formatDueDate = (value: string) => {
     return value;
   }
 
-  return new Date(year, month - 1, day).toLocaleDateString("en-GB", {
+  return formatDateCustomNow(new Date(year, month - 1, day), {
     day: "numeric",
     month: "short",
   });

@@ -20,6 +20,7 @@ import { Bell, BookOpen, CheckCheck, ClipboardCheck, FolderKanban, Settings2, Tr
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 const CATEGORY_LABEL: Record<NotificationCategory, string> = {
   EXAM: "Exams",
@@ -42,8 +43,12 @@ function PreferencesDialog({ open, onClose }: { open: boolean; onClose: () => vo
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const account = user?.email ?? "signed-out";
+  const queryKey = notificationQueryKey(account);
+  const { user } = useAuth();
+  const account = user?.email ?? "signed-out";
   const preferencesKey = [...notificationQueryKey(account), "preferences"] as const;
   const preferences = useQuery({
+    queryKey: [...queryKey, "preferences"],
     queryKey: preferencesKey,
     queryFn: notificationApi.getPreferences,
     enabled: open && account !== "signed-out",
@@ -52,6 +57,7 @@ function PreferencesDialog({ open, onClose }: { open: boolean; onClose: () => vo
     mutationFn: (change: { category: NotificationCategory; inAppEnabled: boolean }) =>
       notificationApi.updatePreferences([change]),
     onSuccess: (rows) => {
+      queryClient.setQueryData([...queryKey, "preferences"], rows);
       queryClient.setQueryData(preferencesKey, rows);
     },
     onError: () => toast.error("Could not save the setting"),
@@ -95,6 +101,9 @@ export default function NotificationCenterPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const account = user?.email ?? "signed-out";
+  const queryKey = notificationQueryKey(account);
+  const { user } = useAuth();
+  const account = user?.email ?? "signed-out";
   const [category, setCategory] = useState<NotificationCategory | undefined>();
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [page, setPage] = useState(0);
@@ -102,12 +111,14 @@ export default function NotificationCenterPage() {
 
   const query = useQuery({
     queryKey: [...notificationQueryKey(account), "page", category ?? "ALL", unreadOnly, page],
+    queryKey: [...queryKey, "page", category ?? "ALL", unreadOnly, page],
     queryFn: () => notificationApi.getPage({ category, unreadOnly, page, size: PAGE_SIZE }),
     enabled: account !== "signed-out",
     refetchInterval: 10_000,
     placeholderData: (previous) => previous,
   });
 
+  const refresh = () => queryClient.invalidateQueries({ queryKey });
   const refresh = () => queryClient.invalidateQueries({ queryKey: notificationQueryKey(account) });
   const markRead = useMutation({ mutationFn: notificationApi.markRead, onSuccess: refresh });
   const markAllRead = useMutation({ mutationFn: notificationApi.markAllRead, onSuccess: refresh });

@@ -1,3 +1,4 @@
+import { formatDateCustomNow, formatDateTimeCustomNow } from "@/i18n/format";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, BookOpen, CalendarDays, ChevronDown, Clock3, Code2, FileText, GraduationCap, MapPin, RefreshCw, UserRound } from "lucide-react";
@@ -21,14 +22,14 @@ function displayDate(value?: string, long = false) {
     if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return "—";
     const date = new Date(`${value}T00:00:00Z`);
     if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) return "—";
-    return long ? date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
-        : date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).replace(/ /g, "-");
+    return long ? formatDateCustomNow(date, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
+        : formatDateCustomNow(date, { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).replace(/ /g, "-");
 }
 
 function displayDateTime(value?: string) {
     if (!value) return "—";
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+    return Number.isNaN(date.getTime()) ? "—" : formatDateTimeCustomNow(date, { dateStyle: "medium", timeStyle: "short" });
 }
 
 function normalized(value?: string) {

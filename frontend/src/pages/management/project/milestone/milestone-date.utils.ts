@@ -1,3 +1,5 @@
+import { getCurrentLocale } from "@/i18n/format";
+
 /* Calendar-date helpers working on timezone-free "YYYY-MM-DD" strings. */
 
 const DAY_MS = 86_400_000;
@@ -61,12 +63,12 @@ export function deviceToday(): string {
 }
 
 export function formatLongDate(ymd: string): string {
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(getCurrentLocale(), {
     weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: "UTC",
   }).format(new Date(ymdToUtc(ymd)));
 }
 
 export function formatMonth(ymd: string): string {
-  return new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric", timeZone: "UTC" })
+  return new Intl.DateTimeFormat(getCurrentLocale(), { month: "long", year: "numeric", timeZone: "UTC" })
     .format(new Date(ymdToUtc(ymd)));
 }

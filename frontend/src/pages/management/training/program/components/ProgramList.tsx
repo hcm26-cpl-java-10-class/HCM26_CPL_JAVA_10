@@ -1,3 +1,4 @@
+import { formatDateCustomNow } from "@/i18n/format";
 import { useState, useEffect, useCallback } from "react";
 import { programApi } from "@/api/features/program.api";
 import type { TrainingProgramItem, ProgramStatus } from "@/types/features/content";
@@ -342,7 +343,7 @@ export function ProgramList({ onOpenCreate, onEditProgram, onViewDetail }: Progr
                       />
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                      {p.updatedAt ? new Date(p.updatedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                      {p.updatedAt ? formatDateCustomNow(p.updatedAt, { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                     </td>
                     <td className="px-4 py-3">
                       {p.status === "ACTIVE" ? (

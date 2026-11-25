@@ -1,0 +1,1 @@
+﻿{"status":400,"code":"ERR_I18N_UNSUPPORTED_LANGUAGE","message":"Unsupported target language: de","timestamp":"2026-11-25T11:18:58.4120956","correlationId":"ffbd22b1-b6ec-4543-b452-f62403c15a83"}
