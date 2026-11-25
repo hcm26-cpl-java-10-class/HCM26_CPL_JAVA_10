@@ -868,6 +868,8 @@ public class ClassOperationDatabaseService {
 
         // Group sessions by YearMonth from H2 `sessions` table, or distribute across class months
         Map<YearMonth, Map<String, Integer>> monthTopicHours = new LinkedHashMap<>();
+        Map<YearMonth, Map<String, LocalDate[]>> monthTopicDates = new LinkedHashMap<>();
+        Map<String, LocalDate[]> overallTopicDates = new LinkedHashMap<>();
         Map<String, String> topicDisplayMap = new LinkedHashMap<>();
         for (TopicDescriptor td : allTopics) {
             topicDisplayMap.put(td.code(), td.displayName());
@@ -885,6 +887,11 @@ public class ClassOperationDatabaseService {
             }
             monthTopicHours.computeIfAbsent(ym, k -> new LinkedHashMap<>())
                     .merge(code, hours, Integer::sum);
+
+            LocalDate sStart = s.getStartTime().toLocalDate();
+            LocalDate sEnd = s.getEndTime() != null ? s.getEndTime().toLocalDate() : sStart;
+            updateDateRange(monthTopicDates.computeIfAbsent(ym, k -> new LinkedHashMap<>()), code, sStart, sEnd);
+            updateDateRange(overallTopicDates, code, sStart, sEnd);
         }
 
         // Ensure every month in the TrainingClass's [startDate, endDate] range has a Milestone
@@ -919,17 +926,53 @@ public class ClassOperationDatabaseService {
 
             List<Map<String, Object>> topicRows = new ArrayList<>();
             int subIdx = 1;
+            int totalMonthHours = topicsInMonth.values().stream().mapToInt(Integer::intValue).sum();
+            long totalMonthDays = Math.max(1, java.time.temporal.ChronoUnit.DAYS.between(mStart, mEnd) + 1);
+            LocalDate fallbackCursor = mStart;
+            int processedCount = 0;
+            int topicCountInMonth = topicsInMonth.size();
+            Map<String, LocalDate[]> ymDateMap = monthTopicDates.getOrDefault(ym, Map.of());
+
             for (Map.Entry<String, Integer> e : topicsInMonth.entrySet()) {
                 String code = e.getKey();
                 int hours = e.getValue();
+                processedCount++;
                 // Weight derived from H2 session hours * planned class size (or standard factor 30)
                 int factor = tc != null && tc.getPlannedSize() != null ? tc.getPlannedSize() : 25;
                 int weight = hours * factor;
                 totalWeighted += weight;
 
+                LocalDate tStart;
+                LocalDate tEnd;
+                LocalDate[] exactRange = ymDateMap.get(code);
+                if (exactRange != null) {
+                    tStart = exactRange[0];
+                    tEnd = exactRange[1];
+                } else {
+                    LocalDate[] overallRange = overallTopicDates.get(code);
+                    if (overallRange != null && !overallRange[1].isBefore(mStart) && !overallRange[0].isAfter(mEnd)) {
+                        tStart = overallRange[0].isBefore(mStart) ? mStart : overallRange[0];
+                        tEnd = overallRange[1].isAfter(mEnd) ? mEnd : overallRange[1];
+                    } else {
+                        tStart = fallbackCursor;
+                        if (processedCount == topicCountInMonth) {
+                            tEnd = mEnd;
+                        } else {
+                            long span = totalMonthHours > 0
+                                    ? Math.max(1, Math.round((double) hours * totalMonthDays / totalMonthHours))
+                                    : Math.max(1, totalMonthDays / Math.max(1, topicCountInMonth));
+                            tEnd = tStart.plusDays(span - 1);
+                            if (tEnd.isAfter(mEnd)) tEnd = mEnd;
+                        }
+                        fallbackCursor = tEnd.isBefore(mEnd) ? tEnd.plusDays(1) : mEnd;
+                    }
+                }
+
                 Map<String, Object> tRow = new LinkedHashMap<>();
                 tRow.put("id", milestoneId * 100 + subIdx++);
                 tRow.put("topic", topicDisplayMap.getOrDefault(code, "[" + code + "] " + code));
+                tRow.put("startDate", tStart.toString());
+                tRow.put("endDate", tEnd.toString());
                 tRow.put("maxScore", 10);
                 tRow.put("passingScore", 6);
                 tRow.put("weightedNumber", weight);
@@ -1161,10 +1204,11 @@ public class ClassOperationDatabaseService {
 
         res.put("operatingInfo", opInfo);
 
-        List<Object> milestones = new ArrayList<>();
+        List<Map<String, Object>> milestones = new ArrayList<>();
         if (entity.getMilestonesJson() != null && !entity.getMilestonesJson().isBlank()) {
             try {
-                milestones = objectMapper.readValue(entity.getMilestonesJson(), new TypeReference<List<Object>>() {});
+                milestones = objectMapper.readValue(entity.getMilestonesJson(), new TypeReference<List<Map<String, Object>>>() {});
+                enrichMilestoneTopicDates(entity.getClassId(), milestones);
             } catch (Exception e) {
                 log.error("Failed to parse milestonesJson", e);
             }
@@ -1173,6 +1217,112 @@ public class ClassOperationDatabaseService {
         res.put("totalWeightedNumber", entity.getTotalWeightedNumber() != null ? entity.getTotalWeightedNumber() : 0);
 
         return res;
+    }
+
+    private void updateDateRange(Map<String, LocalDate[]> target, String code, LocalDate start, LocalDate end) {
+        target.compute(code, (k, existing) -> {
+            if (existing == null) {
+                return new LocalDate[]{start, end};
+            }
+            LocalDate min = start.isBefore(existing[0]) ? start : existing[0];
+            LocalDate max = end.isAfter(existing[1]) ? end : existing[1];
+            return new LocalDate[]{min, max};
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private void enrichMilestoneTopicDates(Long classId, List<Map<String, Object>> milestones) {
+        if (classId == null || milestones == null || milestones.isEmpty()) return;
+
+        Map<YearMonth, Map<String, LocalDate[]>> monthTopicDates = new LinkedHashMap<>();
+        Map<String, LocalDate[]> overallTopicDates = new LinkedHashMap<>();
+
+        List<Session> classSessions = sessionRepository.findByClassId(classId).stream()
+                .filter(s -> Boolean.TRUE.equals(s.getIsActive()) && s.getStartTime() != null)
+                .sorted(Comparator.comparing(Session::getStartTime))
+                .toList();
+
+        for (Session s : classSessions) {
+            YearMonth ym = YearMonth.from(s.getStartTime());
+            String code = extractTopicCode(s.getTitle());
+            if (code.isEmpty()) code = "TOPIC_" + s.getTopicId();
+            LocalDate sStart = s.getStartTime().toLocalDate();
+            LocalDate sEnd = s.getEndTime() != null ? s.getEndTime().toLocalDate() : sStart;
+            updateDateRange(monthTopicDates.computeIfAbsent(ym, k -> new LinkedHashMap<>()), code, sStart, sEnd);
+            updateDateRange(overallTopicDates, code, sStart, sEnd);
+        }
+
+        for (Map<String, Object> m : milestones) {
+            List<Map<String, Object>> topics = (List<Map<String, Object>>) m.get("topics");
+            if (topics == null || topics.isEmpty()) continue;
+
+            LocalDate mStart = parseLocalDateOrNull(m.get("startDate"));
+            LocalDate mEnd = parseLocalDateOrNull(m.get("endDate"));
+            YearMonth ym = mStart != null ? YearMonth.from(mStart) : null;
+            Map<String, LocalDate[]> ymDates = ym != null ? monthTopicDates.getOrDefault(ym, Map.of()) : Map.of();
+
+            int totalWeight = topics.stream()
+                    .mapToInt(t -> Math.max(1, parseIntOrDefault(t.get("weightedNumber"), 1)))
+                    .sum();
+            long totalDays = (mStart != null && mEnd != null)
+                    ? Math.max(1, java.time.temporal.ChronoUnit.DAYS.between(mStart, mEnd) + 1)
+                    : 30;
+            LocalDate cursor = mStart;
+
+            for (int i = 0; i < topics.size(); i++) {
+                Map<String, Object> t = topics.get(i);
+                String topicLabel = t.get("topic") != null ? String.valueOf(t.get("topic")) : "";
+                String code = extractTopicCode(topicLabel);
+
+                LocalDate[] exactRange = ymDates.get(code);
+                if (exactRange != null) {
+                    t.put("startDate", exactRange[0].toString());
+                    t.put("endDate", exactRange[1].toString());
+                    continue;
+                }
+
+                Object existingStart = t.get("startDate");
+                Object existingEnd = t.get("endDate");
+                if (existingStart != null && !String.valueOf(existingStart).isBlank()
+                        && existingEnd != null && !String.valueOf(existingEnd).isBlank()) {
+                    continue;
+                }
+
+                LocalDate[] overallRange = overallTopicDates.get(code);
+                if (overallRange != null && mStart != null && mEnd != null
+                        && !overallRange[1].isBefore(mStart) && !overallRange[0].isAfter(mEnd)) {
+                    LocalDate tStart = overallRange[0].isBefore(mStart) ? mStart : overallRange[0];
+                    LocalDate tEnd = overallRange[1].isAfter(mEnd) ? mEnd : overallRange[1];
+                    t.put("startDate", tStart.toString());
+                    t.put("endDate", tEnd.toString());
+                } else if (cursor != null && mEnd != null) {
+                    LocalDate tStart = cursor;
+                    LocalDate tEnd;
+                    if (i == topics.size() - 1) {
+                        tEnd = mEnd;
+                    } else {
+                        int w = Math.max(1, parseIntOrDefault(t.get("weightedNumber"), 1));
+                        long span = Math.max(1, Math.round((double) w * totalDays / Math.max(1, totalWeight)));
+                        tEnd = tStart.plusDays(span - 1);
+                        if (tEnd.isAfter(mEnd)) tEnd = mEnd;
+                    }
+                    cursor = tEnd.isBefore(mEnd) ? tEnd.plusDays(1) : mEnd;
+                    t.put("startDate", tStart.toString());
+                    t.put("endDate", tEnd.toString());
+                }
+            }
+        }
+    }
+
+    private LocalDate parseLocalDateOrNull(Object value) {
+        if (value == null) return null;
+        String s = String.valueOf(value).trim();
+        if (s.isEmpty()) return null;
+        try {
+            return LocalDate.parse(s.length() > 10 ? s.substring(0, 10) : s);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private Map<String, Object> toTopicMap(ClassTopicAssessmentEntity entity) {

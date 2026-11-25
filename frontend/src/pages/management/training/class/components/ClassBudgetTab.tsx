@@ -707,15 +707,21 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
                                     <TableHeader className="bg-[#eef8fb] dark:bg-slate-900 border-b">
                                         <TableRow>
                                             <TableHead className="w-12 font-bold text-slate-700 dark:text-slate-300">No.</TableHead>
-                                            <TableHead className="w-56 font-bold text-slate-700 dark:text-slate-300">Milestone Name</TableHead>
+                                            <TableHead className="min-w-[260px] font-bold text-slate-700 dark:text-slate-300">Milestone Name</TableHead>
                                             <TableHead className="font-bold text-slate-700 dark:text-slate-300">Checkpoint Type</TableHead>
                                             <TableHead className="font-bold text-slate-700 dark:text-slate-300">Salary Paid</TableHead>
                                             <TableHead className="font-bold text-slate-700 dark:text-slate-300">Start Date</TableHead>
                                             <TableHead className="font-bold text-slate-700 dark:text-slate-300">End Date</TableHead>
+                                            <TableHead className="text-right pr-6 font-bold text-slate-700 dark:text-slate-300">Weighted Number</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {milestones.map((m, mIdx) => (
+                                        {milestones.map((m, mIdx) => {
+                                            const milestoneWeight = (m.topics || []).reduce(
+                                                (sum, t) => sum + (Number(t.weightedNumber) || 0),
+                                                0
+                                            );
+                                            return (
                                             <Fragment key={`milestone-block-${m.id}`}>
                                                 {/* Parent Milestone Row */}
                                                 <TableRow className="bg-slate-50/80 dark:bg-slate-900/60 font-semibold border-t">
@@ -732,14 +738,19 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
                                                     <TableCell>{m.salaryPaid || "Yes"}</TableCell>
                                                     <TableCell>{formatDate(m.startDate)}</TableCell>
                                                     <TableCell>{formatDate(m.endDate)}</TableCell>
+                                                    <TableCell className="text-right pr-6 font-mono font-bold text-blue-700 dark:text-blue-400">
+                                                        {milestoneWeight}
+                                                    </TableCell>
                                                 </TableRow>
 
                                                 {/* Subtopics Header */}
                                                 <TableRow className="bg-slate-100/50 dark:bg-slate-950/40 text-[11px] text-muted-foreground border-b">
                                                     <TableCell className="pl-6 font-semibold">No.</TableCell>
-                                                    <TableCell className="font-semibold" colSpan={2}>Topic</TableCell>
+                                                    <TableCell className="font-semibold">Topic</TableCell>
                                                     <TableCell className="font-semibold">Max Score</TableCell>
                                                     <TableCell className="font-semibold">Passing Score</TableCell>
+                                                    <TableCell className="font-semibold">Start Date</TableCell>
+                                                    <TableCell className="font-semibold">End Date</TableCell>
                                                     <TableCell className="font-semibold text-right pr-6">Weighted Number</TableCell>
                                                 </TableRow>
 
@@ -747,18 +758,25 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
                                                 {m.topics.map((t, tIdx) => (
                                                     <TableRow key={`topic-${t.id}`} className="hover:bg-muted/30 text-xs">
                                                         <TableCell className="pl-6 text-muted-foreground">{tIdx + 1}</TableCell>
-                                                        <TableCell colSpan={2} className="font-medium text-slate-700 dark:text-slate-200">
+                                                        <TableCell className="font-medium text-slate-700 dark:text-slate-200">
                                                             {t.topic}
                                                         </TableCell>
                                                         <TableCell>{t.maxScore ?? 10}</TableCell>
                                                         <TableCell>{t.passingScore ?? 6}</TableCell>
+                                                        <TableCell className="text-slate-600 dark:text-slate-300">
+                                                            {formatDate(t.startDate || m.startDate)}
+                                                        </TableCell>
+                                                        <TableCell className="text-slate-600 dark:text-slate-300">
+                                                            {formatDate(t.endDate || m.endDate)}
+                                                        </TableCell>
                                                         <TableCell className="text-right pr-6 font-mono font-medium text-slate-900 dark:text-slate-100">
                                                             {t.weightedNumber}
                                                         </TableCell>
                                                     </TableRow>
                                                 ))}
                                             </Fragment>
-                                        ))}
+                                            );
+                                        })}
                                     </TableBody>
                                 </Table>
                             </div>
