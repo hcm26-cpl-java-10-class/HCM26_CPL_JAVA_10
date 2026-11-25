@@ -12,7 +12,8 @@ public record TrainerDTO(
         TrainerStatus status,
         List<Topic> teachingTopics,
         String source,
-        List<TeachingHistoryItem> teachingHistory
+        List<TeachingHistoryItem> teachingHistory,
+        Workload workload
 ) {
     public TrainerDTO(
             Long id,
@@ -24,10 +25,28 @@ public record TrainerDTO(
             List<Topic> teachingTopics,
             String source
     ) {
-        this(id, trainerCode, fullName, email, specialization, status, teachingTopics, source, List.of());
+        this(id, trainerCode, fullName, email, specialization, status, teachingTopics, source, List.of(), Workload.EMPTY);
+    }
+
+    public TrainerDTO(
+            Long id,
+            String trainerCode,
+            String fullName,
+            String email,
+            String specialization,
+            TrainerStatus status,
+            List<Topic> teachingTopics,
+            String source,
+            List<TeachingHistoryItem> teachingHistory
+    ) {
+        this(id, trainerCode, fullName, email, specialization, status, teachingTopics, source, teachingHistory, Workload.EMPTY);
     }
 
     public record Topic(Long id, String code, String name, String version, boolean active) {}
+
+    public record Workload(long weeklySessions, long activeClasses) {
+        public static final Workload EMPTY = new Workload(0, 0);
+    }
 
     public record TeachingHistoryItem(
             String classCode,

@@ -275,6 +275,45 @@ class TrainerManagementIntegrationTest {
                 .contentType("application/json").content(mapper.writeValueAsBytes(input))).andExpect(status().isForbidden());
     }
 
+    @Test void filtersBySubjectExposesWorkloadAndBulkUpdatesStatus() throws Exception {
+        var withTopic = service.create(new CreateTrainerRequest(
+                "TR_SUBJ_1", "Subject Trainer", "subj1@test.example", "Java", TrainerStatus.ACTIVE, Set.of(topicId)
+        ));
+        var withoutTopic = service.create(new CreateTrainerRequest(
+                "TR_SUBJ_2", "Other Trainer", "subj2@test.example", "SQL", TrainerStatus.ACTIVE, Set.of()
+        ));
+
+        mvc.perform(get("/api/trainers").param("topicId", String.valueOf(topicId))
+                        .header("Authorization", "Bearer " + admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].trainerCode").value("TR_SUBJ_1"))
+                .andExpect(jsonPath("$.content[0].workload.weeklySessions").value(0))
+                .andExpect(jsonPath("$.content[0].workload.activeClasses").value(0));
+
+        mvc.perform(patch("/api/trainers/status/bulk")
+                        .header("Authorization", "Bearer " + admin)
+                        .contentType("application/json")
+                        .content(mapper.writeValueAsBytes(Map.of(
+                                "ids", List.of(withTopic.id(), withoutTopic.id()),
+                                "status", "INACTIVE"
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.updated").value(2));
+
+        assertEquals(TrainerStatus.INACTIVE, service.get(withTopic.id()).status());
+        assertEquals(TrainerStatus.INACTIVE, service.get(withoutTopic.id()).status());
+
+        mvc.perform(patch("/api/trainers/status/bulk")
+                        .header("Authorization", "Bearer " + token("student@example.com"))
+                        .contentType("application/json")
+                        .content(mapper.writeValueAsBytes(Map.of(
+                                "ids", List.of(withTopic.id()),
+                                "status", "ACTIVE"
+                        ))))
+                .andExpect(status().isForbidden());
+    }
+
     TrainingClassDTO classInput(TrainerDTO trainer) {
         var input = new TrainingClassDTO(); input.setCode("TR_CHANGE_CLASS"); input.setName("Trainer Change Class");
         input.setStatus("planning"); input.setProgram("PROGRAM"); input.setClassAdmin("Existing Admin"); input.setPlannedSize(20);

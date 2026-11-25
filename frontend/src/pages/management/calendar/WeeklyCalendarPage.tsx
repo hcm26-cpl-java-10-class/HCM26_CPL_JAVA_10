@@ -41,6 +41,7 @@ import {
 } from "./components/calendarLookup";
 import { SessionCard } from "./components/SessionCard";
 import { SessionDetailModal } from "./components/SessionDetailModal";
+import { buildCalendarIcs } from "./components/icsExport";
 
 const PAGE_SIZE = 200;
 
@@ -373,6 +374,37 @@ export default function WeeklyCalendarPage() {
     toast.success(`Đã xuất ${sessions.length} buổi học ra file CSV thành công!`);
   }
 
+  // Xuất file .ics (chỉ dành cho lịch cá nhân - Google Calendar / Outlook / Apple Calendar)
+  function handleExportIcs() {
+    if (scope !== "mine") {
+      return;
+    }
+    if (sessions.length === 0) {
+      toast.error("Không có buổi học cá nhân nào để xuất lịch (.ics)!");
+      return;
+    }
+
+    const icsContent = buildCalendarIcs(
+      sessions,
+      { getClassName, getClassCode, getTrainerName, getTopicName },
+      `Lịch cá nhân FAMS (${dateTitle})`,
+    );
+    const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `Lich_ca_nhan_${viewMode}_${selectedDate.format("YYYYMMDD")}.ics`,
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast.success(`Đã xuất ${sessions.length} buổi học cá nhân ra file .ics thành công!`);
+  }
+
 
 
   const weekDays = [
@@ -454,179 +486,196 @@ export default function WeeklyCalendarPage() {
 
   return (
     <CalendarLookupContext.Provider value={{ getClassName, getClassCode, getTrainerName, getTopicName, getTopicCode }}>
-      <MainLayout pathName={{ calendar: "Thời khoá biểu" }}>
-        <div className="w-full min-w-0 space-y-5 pb-16">
-          {/* Header hàng đầu: Tiêu đề & Nút xuất file */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b pb-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                  Thời khóa biểu & Lịch học
-                </h1>
-                <Badge variant="outline" className="text-xs font-semibold text-primary">
-                  FAMS Timetable
+      <MainLayout dense mainClassName="overflow-y-hidden pt-0 pb-1.5" pathName={{ calendar: "Thời khoá biểu" }}>
+        <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-1.5 pt-0 pb-0.5">
+          {/* Header 1 dòng gọn: Tiêu đề, khoảng ngày, số buổi & Nút xuất file */}
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b pb-1.5">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <h1 className="text-base font-bold tracking-tight text-foreground whitespace-nowrap">
+                Thời khóa biểu & Lịch học
+              </h1>
+              <span className="text-xs text-muted-foreground flex items-center gap-1 whitespace-nowrap">
+                <CalendarIcon className="h-3.5 w-3.5 text-primary shrink-0" />
+                {dateTitle}
+              </span>
+              {!loading && !error && (
+                <Badge variant="secondary" className="h-5 px-1.5 text-[11px] font-medium whitespace-nowrap">
+                  {sessions.length} buổi{keyword ? ` · "${keyword}"` : ""}
                 </Badge>
-                {scope === "mine" && (
-                  <Badge className="bg-primary/15 text-primary border-primary/30 text-xs font-semibold">
-                    <UserCheck className="mr-1 h-3 w-3" /> Lịch cá nhân
-                  </Badge>
-                )}
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground flex items-center gap-1.5">
-                <CalendarIcon className="h-4 w-4 text-primary" />
-                <span>{dateTitle}</span>
-              </p>
+              )}
+              {scope === "mine" && (
+                <Badge className="h-5 bg-primary/15 text-primary border-primary/30 px-1.5 text-[11px] font-semibold whitespace-nowrap">
+                  <UserCheck className="mr-1 h-3 w-3" /> Lịch cá nhân
+                </Badge>
+              )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="hidden xl:inline text-[11px] text-muted-foreground mr-1">UTC+7</span>
+              {scope === "mine" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportIcs}
+                  className="h-7 gap-1.5 px-2.5 text-xs font-medium"
+                  title="Xuất lịch cá nhân chuẩn .ics để nhập vào Google Calendar, Outlook hoặc Apple Calendar"
+                >
+                  <CalendarIcon className="h-3.5 w-3.5 text-blue-600" />
+                  Xuất lịch (.ics)
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={handleExportCsv}
-                className="gap-1.5 text-xs font-medium"
+                className="h-7 gap-1.5 px-2.5 text-xs font-medium"
                 title="Xuất danh sách buổi học ra file CSV"
               >
-                <Download className="h-4 w-4 text-emerald-600" />
+                <Download className="h-3.5 w-3.5 text-emerald-600" />
                 Xuất Excel (CSV)
               </Button>
             </div>
           </div>
 
-          {/* Thanh điều khiển thứ 2: Phạm vi (Tất cả / Của tôi), Chuyển View Mode & Điều hướng ngày */}
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 shadow-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Tab chuyển phạm vi: Tất cả lịch | Lịch của tôi */}
-              <div className="inline-flex rounded-lg border bg-muted/40 p-1">
+          {/* Thanh điều khiển: Phạm vi, Chuyển View Mode & Điều hướng ngày — gọn 1 hàng */}
+          <div className="flex shrink-0 flex-wrap lg:flex-nowrap items-center justify-between gap-2 rounded-lg border bg-card px-2 py-1 shadow-xs">
+            <div className="flex items-center gap-1.5 min-w-0">
+              {/* Tab chuyển phạm vi: Tất cả | Của tôi */}
+              <div className="inline-flex shrink-0 rounded-lg border bg-muted/40 p-0.5">
                 <button
                   type="button"
                   onClick={() => updateCalendarUrl({ scope: "all", page: "0" })}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${scope === "all"
+                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition-all ${scope === "all"
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
                     }`}
                 >
                   <Users className="h-3.5 w-3.5" />
-                  Tất cả lịch
+                  Tất cả
                 </button>
                 <button
                   type="button"
                   onClick={() => updateCalendarUrl({ scope: "mine", page: "0" })}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${scope === "mine"
+                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition-all ${scope === "mine"
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
                     }`}
                 >
                   <UserCheck className="h-3.5 w-3.5 text-primary" />
-                  Lịch của tôi
+                  Của tôi
                 </button>
               </div>
 
               {/* Tab chuyển chế độ xem: Tuần | Tháng | Danh sách */}
-              <div className="inline-flex rounded-lg border bg-muted/40 p-1">
+              <div className="inline-flex shrink-0 rounded-lg border bg-muted/40 p-0.5">
                 <button
                   type="button"
                   onClick={() => updateCalendarUrl({ view: "week" })}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${viewMode === "week"
+                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition-all ${viewMode === "week"
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
                     }`}
                 >
-                  <CalendarDays className="h-4 w-4" />
-                  Xem Tuần
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  Tuần
                 </button>
                 <button
                   type="button"
                   onClick={() => updateCalendarUrl({ view: "month" })}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${viewMode === "month"
+                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition-all ${viewMode === "month"
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
                     }`}
                 >
-                  <CalendarIcon className="h-4 w-4" />
-                  Xem Tháng
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  Tháng
                 </button>
                 <button
                   type="button"
                   onClick={() => updateCalendarUrl({ view: "list" })}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${viewMode === "list"
+                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition-all ${viewMode === "list"
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
                     }`}
                 >
-                  <ListIcon className="h-4 w-4" />
-                  Danh sách buổi
+                  <ListIcon className="h-3.5 w-3.5" />
+                  Danh sách
                 </button>
               </div>
             </div>
 
             {/* Cụm điều hướng: Trước, Hôm nay, Sau, Chọn ngày */}
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => changePeriod(-1)}
-                className="h-8 gap-1 px-2.5 text-xs"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                {viewMode === "month" ? "Tháng trước" : "Tuần trước"}
-              </Button>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <div className="inline-flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => changePeriod(-1)}
+                  aria-label={viewMode === "month" ? "Tháng trước" : "Tuần trước"}
+                  title={viewMode === "month" ? "Tháng trước" : "Tuần trước"}
+                  className="h-7 w-7"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  updateCalendarUrl({
-                    date: dayjs().tz(TIME_ZONE).format("YYYY-MM-DD"),
-                    page: "0",
-                  });
-                }}
-                className="h-8 px-3 text-xs font-semibold"
-              >
-                Hôm nay
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => changePeriod(1)}
-                className="h-8 gap-1 px-2.5 text-xs"
-              >
-                {viewMode === "month" ? "Tháng sau" : "Tuần sau"}
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-
-              <div className="relative">
-                <input
-                  type="date"
-                  value={selectedDate.format("YYYY-MM-DD")}
-                  onChange={(event) => {
-                    const val = event.target.value;
-                    if (val) {
-                      updateCalendarUrl({ date: val, page: "0" });
-                    }
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    updateCalendarUrl({
+                      date: dayjs().tz(TIME_ZONE).format("YYYY-MM-DD"),
+                      page: "0",
+                    });
                   }}
-                  className="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                />
+                  className="h-7 px-2.5 text-xs font-semibold whitespace-nowrap"
+                >
+                  Hôm nay
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => changePeriod(1)}
+                  aria-label={viewMode === "month" ? "Tháng sau" : "Tuần sau"}
+                  title={viewMode === "month" ? "Tháng sau" : "Tuần sau"}
+                  className="h-7 w-7"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
+
+              <input
+                type="date"
+                aria-label="Chọn ngày"
+                value={selectedDate.format("YYYY-MM-DD")}
+                onChange={(event) => {
+                  const val = event.target.value;
+                  if (val) {
+                    updateCalendarUrl({ date: val, page: "0" });
+                  }
+                }}
+                className="h-7 w-[132px] rounded-md border border-input bg-background px-2 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
             </div>
           </div>
 
           {/* Thanh Bộ lọc nâng cao & Tìm kiếm */}
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-[minmax(240px,1.6fr)_minmax(180px,1fr)_minmax(170px,1fr)_auto] rounded-xl border bg-card p-3 shadow-sm">
+          <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1.6fr)_minmax(160px,1fr)_minmax(150px,1fr)_auto] rounded-lg border bg-card px-2 py-1.5 shadow-xs">
             {/* Tìm kiếm từ khóa */}
             <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 type="text"
                 placeholder="Tìm theo tiêu đề, phòng học, giảng viên..."
                 maxLength={100}
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
-                className="h-8 pl-8 text-xs"
+                className="h-7 pl-8 text-xs"
               />
             </div>
 
@@ -639,7 +688,7 @@ export default function WeeklyCalendarPage() {
                 id="calendar-class"
                 value={classFilter}
                 onChange={(e) => updateCalendarUrl({ classId: e.target.value === "ALL" ? "" : e.target.value, page: "0" })}
-                className="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2 text-xs font-medium truncate"
+                className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-2 text-xs font-medium truncate"
               >
                 <option value="ALL">Tất cả lớp học</option>
                 {systemClasses.map((c) => (
@@ -666,7 +715,7 @@ export default function WeeklyCalendarPage() {
                 id="calendar-status"
                 value={statusFilter}
                 onChange={(e) => updateCalendarUrl({ status: e.target.value, page: "0" })}
-                className="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2 text-xs font-medium"
+                className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-2 text-xs font-medium"
               >
                 <option value="ALL">Tất cả trạng thái</option>
                 <option value="SCHEDULED">{STATUS_LABELS.SCHEDULED}</option>
@@ -682,10 +731,10 @@ export default function WeeklyCalendarPage() {
                 variant="outline"
                 size="sm"
                 onClick={resetFilters}
-                className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground whitespace-nowrap"
+                className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground whitespace-nowrap"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                Đặt lại bộ lọc
+                Đặt lại
               </Button>
             </div>
           </div>
@@ -721,24 +770,16 @@ export default function WeeklyCalendarPage() {
           {/* NỘI DUNG CHÍNH THEO VIEW MODE */}
           {!loading && !error && (
             <>
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>
-                  Hiển thị <strong>{sessions.length}</strong> buổi học phù hợp{" "}
-                  {keyword ? `(lọc theo "${keyword}")` : ""}
-                </span>
-                <span>Múi giờ chuẩn: <strong>Asia/Ho_Chi_Minh (UTC+7)</strong></span>
-              </div>
-
               {sessions.length === 0 && viewMode !== "list" && (
-                <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+                <div className="shrink-0 rounded-lg border border-dashed bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
                   Chưa có buổi học nào trong khoảng thời gian này.
                 </div>
               )}
 
-              {/* 1. CHẾ ĐỘ XEM TUẦN (WEEK VIEW - 1 HÀNG 7 CỘT, CUỘN NGANG TRONG KHUNG KHI HẸP) */}
+              {/* 1. CHẾ ĐỘ XEM TUẦN (WEEK VIEW - 1 HÀNG 7 CỘT, CUỘN NỘI BỘ TRONG KHUNG) */}
               {viewMode === "week" && (
-                <div data-testid="week-timetable-scroll" className="w-full min-w-0 overflow-x-auto pb-1">
-                  <div data-testid="week-timetable-grid" className="grid grid-cols-7 gap-2 min-w-[840px]">
+                <div data-testid="week-timetable-scroll" className="flex-1 min-h-0 w-full min-w-0 overflow-x-auto overflow-y-auto pr-0.5 pb-1">
+                  <div data-testid="week-timetable-grid" className="grid grid-cols-7 gap-1.5 min-w-[840px] min-h-full">
                     {weekDays.map((day) => {
                       const daySessions = sessions
                         .filter((s) => sessionIntersectsDay(s, day.dateKey))
@@ -752,31 +793,33 @@ export default function WeeklyCalendarPage() {
                         <section
                           key={day.dateKey}
                           data-testid={`week-day-${day.dateKey}`}
-                          className={`flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card shadow-xs ${day.isToday ? "border-primary/50 ring-1 ring-primary/20" : "border-border"
+                          className={`flex min-w-0 flex-col rounded-xl border bg-card shadow-xs ${day.isToday ? "border-primary/50 ring-1 ring-primary/20" : "border-border"
                             }`}
                         >
                           <header
-                            className={`border-b px-1.5 py-2 text-center ${day.isToday ? "bg-primary/10" : "bg-muted/40"
+                            className={`sticky top-0 z-10 rounded-t-xl border-b px-2 py-1.5 backdrop-blur-xs ${day.isToday ? "bg-primary/10" : "bg-muted/95"
                               }`}
                           >
-                            <p className="text-[11px] font-semibold text-muted-foreground truncate">{day.label}</p>
-                            <p className={`mt-0.5 text-sm font-bold ${day.isToday ? "text-primary" : "text-foreground"}`}>
-                              {day.dateLabel}
-                            </p>
-                            <div className="mt-1 flex flex-wrap items-center justify-center gap-1">
-                              {day.isToday && (
-                                <span className="text-[10px] font-bold text-primary whitespace-nowrap">● Hôm nay</span>
-                              )}
-                              <span className="rounded-full bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground border whitespace-nowrap">
+                            <div className="flex items-center justify-between gap-1">
+                              <p className="text-[11px] font-semibold text-muted-foreground truncate">{day.label}</p>
+                              <span className="rounded-full bg-background/80 px-1.5 py-0 text-[10px] font-medium text-muted-foreground border whitespace-nowrap">
                                 {daySessions.length} buổi
                               </span>
                             </div>
+                            <div className="mt-0.5 flex items-center justify-between gap-1">
+                              <span className={`text-xs font-bold ${day.isToday ? "text-primary" : "text-foreground"}`}>
+                                {day.dateLabel}
+                              </span>
+                              {day.isToday && (
+                                <span className="text-[10px] font-bold text-primary whitespace-nowrap">● Hôm nay</span>
+                              )}
+                            </div>
                           </header>
 
-                          <div className={`flex-1 p-1.5 space-y-2 min-h-[240px] ${day.isToday ? "bg-primary/[0.02]" : "bg-background"}`}>
+                          <div className={`flex-1 p-1.5 space-y-1.5 ${day.isToday ? "bg-primary/[0.02]" : "bg-background"}`}>
                             {daySessions.length === 0 ? (
-                              <div className="flex h-full min-h-[180px] flex-col items-center justify-center py-6 px-1 text-center text-muted-foreground/50">
-                                <CalendarIcon className="h-5 w-5 stroke-1 mb-1.5 opacity-40" />
+                              <div className="flex h-full min-h-[120px] flex-col items-center justify-center py-4 px-1 text-center text-muted-foreground/50">
+                                <CalendarIcon className="h-4 w-4 stroke-1 mb-1 opacity-40" />
                                 <span className="text-[11px] leading-tight">Không có buổi học</span>
                               </div>
                             ) : (
@@ -798,9 +841,9 @@ export default function WeeklyCalendarPage() {
 
               {/* 2. CHẾ ĐỘ XEM THÁNG (MONTH VIEW) */}
               {viewMode === "month" && (
-                <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
+                <div className="flex-1 min-h-0 overflow-auto rounded-xl border bg-card shadow-sm">
                   <div className="min-w-[760px]">
-                    <div className="grid grid-cols-7 border-b bg-muted/40 text-center text-xs font-semibold text-muted-foreground">
+                    <div className="sticky top-0 z-10 grid grid-cols-7 border-b bg-muted/95 backdrop-blur-xs text-center text-xs font-semibold text-muted-foreground">
                       <div className="p-2.5 border-r">Thứ Hai</div>
                       <div className="p-2.5 border-r">Thứ Ba</div>
                       <div className="p-2.5 border-r">Thứ Tư</div>
@@ -879,9 +922,9 @@ export default function WeeklyCalendarPage() {
 
               {/* 3. CHẾ ĐỘ XEM DANH SÁCH (LIST VIEW) */}
               {viewMode === "list" && (
-                <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
+                <div className="flex-1 min-h-0 overflow-auto rounded-xl border bg-card shadow-sm">
                   <table className="w-full text-left text-sm">
-                    <thead className="border-b bg-muted/40 text-xs font-semibold text-muted-foreground">
+                    <thead className="sticky top-0 z-10 border-b bg-muted/95 backdrop-blur-xs text-xs font-semibold text-muted-foreground">
                       <tr>
                         <th className="px-4 py-3">Thời gian</th>
                         <th className="px-4 py-3">Tiêu đề buổi học</th>

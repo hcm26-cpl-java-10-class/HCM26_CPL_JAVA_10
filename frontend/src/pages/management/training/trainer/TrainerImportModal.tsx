@@ -1,4 +1,5 @@
 import { useState } from "react";
+import * as XLSX from "xlsx";
 import { Download, FileSpreadsheet, Upload } from "lucide-react";
 import { trainerApi, type TrainerPreview } from "@/api/features/trainer.api";
 import { describeApiError } from "@/utils/api-error.utils";
@@ -53,6 +54,28 @@ export function TrainerImportModal({ close, saved }: { close: () => void; saved:
         }
     };
 
+    const downloadErrorReport = () => {
+        if (!preview) return;
+        const invalidRows = preview.rows.filter(row => !row.valid);
+        if (!invalidRows.length) return;
+        const rows = invalidRows.map(row => ({
+            "Row": row.rowNumber,
+            "Trainer ID*": row.cells[0] ?? "",
+            "Full Name*": row.cells[1] ?? "",
+            "Work Email*": row.cells[2] ?? "",
+            "Specialization": row.cells[3] ?? "",
+            "Teaching Topics": row.cells[4] ?? "",
+            "Status": row.cells[5] ?? "",
+            "Errors": row.errors.join("; "),
+        }));
+        const ws = XLSX.utils.json_to_sheet(rows);
+        ws["!cols"] = [{ wch: 8 }, { wch: 16 }, { wch: 24 }, { wch: 30 }, { wch: 22 }, { wch: 28 }, { wch: 12 }, { wch: 44 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Import Errors");
+        const today = new Date().toISOString().split("T")[0];
+        XLSX.writeFile(wb, `Trainer_Import_Errors_${today}.xlsx`);
+    };
+
     const commit = async () => {
         if (!file || !preview?.canImport || busy) return;
         setBusy(true);
@@ -75,7 +98,7 @@ export function TrainerImportModal({ close, saved }: { close: () => void; saved:
                 <DialogHeader>
                     <DialogTitle>Import Trainers</DialogTitle>
                     <DialogDescription className="text-xs">
-                        Trainer ID is the unique trainer code, not a database ID. Teaching Topics use CODE@version separated by semicolons. Blank Status defaults to ACTIVE.
+                        Code is the unique trainer code (template column "Trainer ID*"). Subjects use CODE@version separated by semicolons. Blank Status defaults to ACTIVE.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -140,17 +163,32 @@ export function TrainerImportModal({ close, saved }: { close: () => void; saved:
 
                 {preview && (
                     <div className="space-y-2">
-                        <p
-                            role="status"
-                            className={`text-xs font-medium ${preview.canImport ? "text-emerald-700" : "text-amber-700"}`}
-                        >
-                            {preview.validRows}/{preview.totalRows} valid rows. All rows must be valid before import.
-                        </p>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p
+                                role="status"
+                                className={`text-xs font-medium ${preview.canImport ? "text-emerald-700" : "text-amber-700"}`}
+                            >
+                                {preview.validRows}/{preview.totalRows} valid rows. All rows must be valid before import.
+                            </p>
+                            {!preview.canImport && preview.rows.some(row => !row.valid) && (
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive"
+                                    onClick={downloadErrorReport}
+                                    disabled={busy}
+                                >
+                                    <Download className="h-3.5 w-3.5" />
+                                    Download Error Report
+                                </Button>
+                            )}
+                        </div>
                         <div className="overflow-auto max-h-72 rounded-lg border">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        {["Row", "Trainer ID", "Full Name", "Work Email", "Specialization", "Teaching Topics", "Status", "Validation"].map(h => (
+                                        {["Row", "Code", "Full Name", "Work Email", "Specialization", "Subjects", "Status", "Validation"].map(h => (
                                             <TableHead key={h} className="text-xs whitespace-nowrap">{h}</TableHead>
                                         ))}
                                     </TableRow>

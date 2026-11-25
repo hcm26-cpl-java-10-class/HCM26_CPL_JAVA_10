@@ -30,7 +30,7 @@ it("creates a trainer with existing teaching topic IDs", async () => {
     const { user } = renderAt(<TrainerManagementPage />, { route: "/trainers" });
     await user.click(screen.getByRole("button", { name: "Add Trainer" }));
     const javaCheckbox = await screen.findByRole("checkbox", { name: /JAVA@1/ });
-    await user.type(screen.getByLabelText("Trainer ID *"), "TR_NEW");
+    await user.type(screen.getByLabelText("Code *"), "TR_NEW");
     await user.type(screen.getByLabelText("Full Name *"), "New Trainer");
     await user.type(screen.getByLabelText("Work Email *"), "new@example.test");
     await user.click(javaCheckbox);
@@ -195,7 +195,7 @@ it("uses a v-flag-compatible Trainer ID pattern and rejects domainless Work Emai
 
     await user.click(screen.getByRole("button", { name: "Add Trainer" }));
     await screen.findByRole("checkbox", { name: /JAVA@1/ });
-    const codeInput = screen.getByLabelText("Trainer ID *") as HTMLInputElement;
+    const codeInput = screen.getByLabelText("Code *") as HTMLInputElement;
     const pattern = codeInput.getAttribute("pattern") ?? "";
 
     // Must compile cleanly under HTML's unicodeSets (v) flag
@@ -275,4 +275,57 @@ it("preserves legacy over-length fields without silent truncation, clearly flags
     await waitFor(() => expect(fakeHttp.callsTo("put", "/trainers/9")).toHaveLength(1));
     expect((savedPayload as { fullName?: string; specialization?: string })?.fullName).toBe("Shortened Legacy Name");
     expect((savedPayload as { fullName?: string; specialization?: string })?.specialization).toBe("Java, Spring");
+});
+
+it("filters by subject, displays workload, supports bulk status update, and offers error report on invalid import", async () => {
+    const secondTrainer = {
+        ...trainer,
+        id: 13,
+        trainerCode: "TR_13",
+        fullName: "Trainer Thirteen",
+        email: "trainer13@example.test",
+        workload: { weeklySessions: 4, activeClasses: 2 },
+    };
+    fakeHttp.on("get", "/trainers", pageOf([{ ...trainer, workload: { weeklySessions: 0, activeClasses: 0 } }, secondTrainer]));
+    fakeHttp.on("patch", "/trainers/status/bulk", { updated: 2 });
+
+    const { user } = renderAt(<TrainerManagementPage />, { route: "/trainers" });
+    await screen.findByText("Trainer Thirteen");
+    expect(screen.getByText("4 / wk")).toBeInTheDocument();
+    expect(screen.getByText("· 2 cls")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Filter Trainer Subject"), "5");
+    await waitFor(() =>
+        expect(fakeHttp.callsTo("get", "/trainers").at(-1)?.params).toEqual({
+            search: "",
+            status: "all",
+            topicId: 5,
+            page: 0,
+            size: 20,
+        }),
+    );
+
+    await user.click(screen.getByLabelText("Select TR_12"));
+    await user.click(screen.getByLabelText("Select TR_13"));
+    expect(screen.getByText("2 trainers selected")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Deactivate Selected" }));
+    await screen.findByText("Deactivated 2 trainer(s).");
+    expect(fakeHttp.callsTo("patch", "/trainers/status/bulk")[0].data).toEqual({
+        ids: [12, 13],
+        status: "INACTIVE",
+    });
+
+    fakeHttp.on("post", "/trainers/import/preview", {
+        totalRows: 1,
+        validRows: 0,
+        canImport: false,
+        rows: [{ rowNumber: 2, cells: ["TR_BAD", "Bad", "bad", "", "", "ACTIVE"], valid: false, errors: ["Invalid Work Email"] }],
+    });
+    await user.click(screen.getByRole("button", { name: "Import" }));
+    await user.upload(
+        screen.getByLabelText("Upload Trainer Excel"),
+        new File(["fixture"], "bad.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+    );
+    expect(await screen.findByRole("button", { name: "Download Error Report" })).toBeInTheDocument();
 });

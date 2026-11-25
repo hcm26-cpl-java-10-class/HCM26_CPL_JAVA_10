@@ -21,7 +21,9 @@ export default function TrainerManagementPage() {
     const client = useQueryClient();
     const [search, setSearch] = useState("");
     const [status, setStatus] = useState("all");
+    const [topicId, setTopicId] = useState("");
     const [page, setPage] = useState(0);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [edit, setEdit] = useState<Trainer | null | undefined>();
     const [detail, setDetail] = useState<Trainer>();
     const [deleting, setDeleting] = useState<Trainer>();
@@ -30,9 +32,26 @@ export default function TrainerManagementPage() {
     const [message, setMessage] = useState("");
     const [error, setError] = useState("");
 
+    const canUpdate = hasPermission("TRAINER_UPDATE");
+
+    const topics = useQuery({
+        queryKey: ["trainers", "topics"],
+        queryFn: trainerApi.topics,
+        enabled: hasPermission("TRAINER_READ"),
+        retry: false,
+    });
+
+    const listParams = {
+        search,
+        status,
+        ...(topicId ? { topicId: Number(topicId) } : {}),
+        page,
+        size: 20,
+    };
+
     const list = useQuery({
-        queryKey: ["trainers", "list", search, status, page],
-        queryFn: () => trainerApi.list({ search, status, page, size: 20 }),
+        queryKey: ["trainers", "list", search, status, topicId, page],
+        queryFn: () => trainerApi.list(listParams),
         enabled: hasPermission("TRAINER_READ"),
         retry: false,
     });
@@ -44,6 +63,21 @@ export default function TrainerManagementPage() {
             setPage(lastValidPage);
         }
     }, [list.data, list.isFetching, page]);
+
+    const visibleIds = list.data?.content.map(t => t.id) ?? [];
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.includes(id));
+
+    const toggleSelectAll = () => {
+        if (allVisibleSelected) {
+            setSelectedIds(prev => prev.filter(id => !visibleIds.includes(id)));
+        } else {
+            setSelectedIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+        }
+    };
+
+    const toggleSelectOne = (id: number) => {
+        setSelectedIds(prev => (prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]));
+    };
 
     const refresh = async () => {
         await Promise.all([
@@ -58,10 +92,11 @@ export default function TrainerManagementPage() {
         setBusy(true);
         setError("");
         try {
-            const first = await trainerApi.list({ search, status, page: 0, size: 100 });
+            const exportFilter = { search, status, ...(topicId ? { topicId: Number(topicId) } : {}), size: 100 };
+            const first = await trainerApi.list({ ...exportFilter, page: 0 });
             const allRows: Trainer[] = [...first.content];
             for (let p = 1; p < first.totalPages; p += 1) {
-                const next = await trainerApi.list({ search, status, page: p, size: 100 });
+                const next = await trainerApi.list({ ...exportFilter, page: p });
                 allRows.push(...next.content);
             }
             const exportRows = allRows.map(t => ({
@@ -147,7 +182,7 @@ export default function TrainerManagementPage() {
                     <ApiErrorState kind="forbidden" error={undefined} resource="trainers" />
                 ) : (
                     <>
-                        <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-[minmax(220px,1fr)_180px]">
+                        <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-[minmax(220px,1fr)_220px_160px]">
                             <Input
                                 aria-label="Search Trainers"
                                 placeholder="Search code, name, email or specialization"
@@ -155,15 +190,33 @@ export default function TrainerManagementPage() {
                                 onChange={e => {
                                     setSearch(e.target.value);
                                     setPage(0);
+                                    setSelectedIds([]);
                                 }}
                                 maxLength={150}
                             />
+                            <NativeSelect
+                                aria-label="Filter Trainer Subject"
+                                value={topicId}
+                                onChange={e => {
+                                    setTopicId(e.target.value);
+                                    setPage(0);
+                                    setSelectedIds([]);
+                                }}
+                            >
+                                <option value="">All subjects</option>
+                                {(topics.data ?? []).map(topic => (
+                                    <option key={topic.id} value={String(topic.id)}>
+                                        {topic.code}@{topic.version} — {topic.name}
+                                    </option>
+                                ))}
+                            </NativeSelect>
                             <NativeSelect
                                 aria-label="Filter Trainer Status"
                                 value={status}
                                 onChange={e => {
                                     setStatus(e.target.value);
                                     setPage(0);
+                                    setSelectedIds([]);
                                 }}
                             >
                                 <option value="all">All statuses</option>
@@ -171,6 +224,49 @@ export default function TrainerManagementPage() {
                                 <option value="INACTIVE">INACTIVE</option>
                             </NativeSelect>
                         </div>
+
+                        {canUpdate && selectedIds.length > 0 && (
+                            <div
+                                role="region"
+                                aria-label="Bulk trainer actions"
+                                className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-sm"
+                            >
+                                <span className="font-medium text-foreground">
+                                    {selectedIds.length} trainer{selectedIds.length > 1 ? "s" : ""} selected
+                                </span>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={busy}
+                                        onClick={() =>
+                                            void action(async () => {
+                                                await trainerApi.bulkStatus(selectedIds, "ACTIVE");
+                                                setSelectedIds([]);
+                                            }, `Activated ${selectedIds.length} trainer(s).`)
+                                        }
+                                    >
+                                        Activate Selected
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={busy}
+                                        onClick={() =>
+                                            void action(async () => {
+                                                await trainerApi.bulkStatus(selectedIds, "INACTIVE");
+                                                setSelectedIds([]);
+                                            }, `Deactivated ${selectedIds.length} trainer(s).`)
+                                        }
+                                    >
+                                        Deactivate Selected
+                                    </Button>
+                                    <Button size="sm" variant="ghost" disabled={busy} onClick={() => setSelectedIds([])}>
+                                        Clear
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
 
                         {message && (
                             <p role="status" className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
@@ -191,47 +287,97 @@ export default function TrainerManagementPage() {
                             <ApiErrorState error={list.error} resource="trainers" onRetry={() => void list.refetch()} />
                         ) : (
                             <>
-                                <div className="flex-1 min-h-0 w-full min-w-0 rounded-xl border bg-card shadow-xs overflow-auto">
-                                    <table data-slot="table" aria-label="Trainer directory" className="w-full caption-bottom text-sm">
+                                <div className="flex-1 min-h-0 w-full min-w-0 rounded-xl border bg-card shadow-xs overflow-y-auto overflow-x-auto">
+                                    <table data-slot="table" aria-label="Trainer directory" className="w-full table-fixed caption-bottom text-sm">
                                         <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur-xs">
                                             <TableRow className="bg-muted/40 hover:bg-muted/40">
-                                                <TableHead className="w-24 px-3">Code</TableHead>
-                                                <TableHead className="px-3">Full Name</TableHead>
-                                                <TableHead className="px-3">Work Email</TableHead>
-                                                <TableHead className="px-3">Specialization</TableHead>
-                                                <TableHead className="w-24 px-3">Status</TableHead>
-                                                <TableHead className="w-36 px-3 text-right">Actions</TableHead>
+                                                {canUpdate && (
+                                                    <TableHead className="w-8 pl-2.5 pr-1">
+                                                        <input
+                                                            type="checkbox"
+                                                            aria-label="Select all trainers on this page"
+                                                            className="h-3.5 w-3.5 rounded border-input accent-primary cursor-pointer align-middle"
+                                                            checked={allVisibleSelected}
+                                                            disabled={busy || visibleIds.length === 0}
+                                                            onChange={toggleSelectAll}
+                                                        />
+                                                    </TableHead>
+                                                )}
+                                                <TableHead className="w-[84px] px-2">Code</TableHead>
+                                                <TableHead className="w-[18%] px-2">Full Name</TableHead>
+                                                <TableHead className="w-[23%] px-2">Work Email</TableHead>
+                                                <TableHead className="px-2">Specialization</TableHead>
+                                                <TableHead className="w-[108px] px-2">Workload</TableHead>
+                                                <TableHead className="w-[82px] px-2">Status</TableHead>
+                                                <TableHead className="w-[120px] pl-1 pr-2 text-right">Actions</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {list.data.content.map(t => (
+                                            {list.data.content.map(t => {
+                                                const weeklySessions = t.workload?.weeklySessions ?? 0;
+                                                const activeClasses = t.workload?.activeClasses ?? 0;
+                                                return (
                                                 <TableRow key={t.id} className="hover:bg-muted/30">
-                                                    <TableCell className="px-3 font-mono text-xs font-semibold text-foreground whitespace-nowrap">
+                                                    {canUpdate && (
+                                                        <TableCell className="pl-2.5 pr-1">
+                                                            <input
+                                                                type="checkbox"
+                                                                aria-label={`Select ${t.trainerCode}`}
+                                                                className="h-3.5 w-3.5 rounded border-input accent-primary cursor-pointer align-middle"
+                                                                checked={selectedIds.includes(t.id)}
+                                                                disabled={busy}
+                                                                onChange={() => toggleSelectOne(t.id)}
+                                                            />
+                                                        </TableCell>
+                                                    )}
+                                                    <TableCell className="px-2 font-mono text-xs font-semibold text-foreground truncate" title={t.trainerCode}>
                                                         {t.trainerCode}
                                                     </TableCell>
-                                                    <TableCell className="px-3 max-w-[180px] truncate font-medium text-foreground" title={t.fullName}>
+                                                    <TableCell className="px-2 truncate font-medium text-foreground" title={t.fullName}>
                                                         {t.fullName}
                                                     </TableCell>
-                                                    <TableCell className="px-3 max-w-[220px] truncate text-muted-foreground" title={t.email}>
+                                                    <TableCell className="px-2 truncate text-muted-foreground" title={t.email}>
                                                         {t.email}
                                                     </TableCell>
-                                                    <TableCell className="px-3 max-w-[180px] truncate text-muted-foreground" title={t.specialization || undefined}>
+                                                    <TableCell className="px-2 truncate text-muted-foreground" title={t.specialization || undefined}>
                                                         {t.specialization || "—"}
                                                     </TableCell>
-                                                    <TableCell className="px-3 whitespace-nowrap">
+                                                    <TableCell className="px-2 whitespace-nowrap">
+                                                        <div className="flex items-center gap-1 text-xs">
+                                                            <Badge
+                                                                variant="outline"
+                                                                className={`px-1.5 py-0 text-[11px] ${
+                                                                    weeklySessions >= 10
+                                                                        ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                                                                        : weeklySessions > 0
+                                                                            ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300"
+                                                                            : "border-border bg-muted/50 text-muted-foreground"
+                                                                }`}
+                                                                title={`${weeklySessions} scheduled session(s) this week, ${activeClasses} assigned class(es)`}
+                                                            >
+                                                                {weeklySessions} / wk
+                                                            </Badge>
+                                                            {activeClasses > 0 && (
+                                                                <span className="text-[11px] text-muted-foreground">
+                                                                    · {activeClasses} cls
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="px-2 whitespace-nowrap">
                                                         <Badge
                                                             variant="outline"
-                                                            className={
+                                                            className={`px-1.5 py-0 text-[11px] ${
                                                                 t.status === "ACTIVE"
                                                                     ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
                                                                     : "border-border bg-muted text-muted-foreground"
-                                                            }
+                                                            }`}
                                                         >
                                                             {t.status}
                                                         </Badge>
                                                     </TableCell>
-                                                    <TableCell className="px-3 whitespace-nowrap">
-                                                        <div className="flex items-center justify-end gap-0.5">
+                                                    <TableCell className="pl-1 pr-2 whitespace-nowrap">
+                                                        <div className="flex items-center justify-end gap-0">
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
@@ -297,10 +443,11 @@ export default function TrainerManagementPage() {
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>
-                                            ))}
+                                                );
+                                            })}
                                             {!list.data.content.length && (
                                                 <TableRow>
-                                                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                                                    <TableCell colSpan={canUpdate ? 8 : 7} className="py-8 text-center text-muted-foreground">
                                                         No trainers match the current filters.
                                                     </TableCell>
                                                 </TableRow>
@@ -403,6 +550,10 @@ export default function TrainerManagementPage() {
                                         ["Work Email", detail.email],
                                         ["Specialization", detail.specialization || "—"],
                                         ["Status", detail.status],
+                                        [
+                                            "Workload",
+                                            `${detail.workload?.weeklySessions ?? 0} scheduled session(s) this week · ${detail.workload?.activeClasses ?? 0} assigned class(es)`,
+                                        ],
                                     ].map(([label, value]) => (
                                         <div key={label} className="grid grid-cols-[140px_minmax(0,1fr)] gap-2 p-2.5">
                                             <dt className="font-semibold text-muted-foreground">{label}</dt>

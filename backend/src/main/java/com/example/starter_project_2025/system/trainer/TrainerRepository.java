@@ -1,12 +1,15 @@
 package com.example.starter_project_2025.system.trainer;
 
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
+import com.example.starter_project_2025.system.demo.session.Session;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -43,4 +46,31 @@ public interface TrainerRepository extends BaseCrudRepository<Trainer, Long> {
             order by a.effectiveFrom desc, a.id desc
             """)
     List<TrainerDTO.TeachingHistoryItem> findTeachingHistory(@Param("id") Long id);
+
+    @Query("""
+            select s.trainerId, count(s)
+            from Session s
+            where s.trainerId in :trainerIds
+              and s.isActive = true
+              and s.status = :status
+              and s.startTime >= :weekStart
+              and s.startTime < :weekEnd
+            group by s.trainerId
+            """)
+    List<Object[]> countScheduledSessionsInRange(
+            @Param("trainerIds") Collection<Long> trainerIds,
+            @Param("status") Session.SessionStatus status,
+            @Param("weekStart") LocalDateTime weekStart,
+            @Param("weekEnd") LocalDateTime weekEnd
+    );
+
+    @Query("""
+            select a.trainerId, count(distinct a.classId)
+            from TeachingAssignment a
+            where a.trainerId in :trainerIds
+              and a.trainerSource = 'INTERNAL'
+              and a.isActive = true
+            group by a.trainerId
+            """)
+    List<Object[]> countActiveClasses(@Param("trainerIds") Collection<Long> trainerIds);
 }

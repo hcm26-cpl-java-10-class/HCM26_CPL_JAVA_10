@@ -11,10 +11,15 @@ export interface TeachingHistoryItem {
     effectiveFrom: string;
     effectiveTo?: string | null;
 }
+export interface TrainerWorkload {
+    weeklySessions: number;
+    activeClasses: number;
+}
 export interface Trainer {
     id: number; trainerCode: string; fullName: string; email: string; specialization: string;
     status: "ACTIVE" | "INACTIVE"; teachingTopics: TeachingTopic[]; source: "INTERNAL";
     teachingHistory?: TeachingHistoryItem[];
+    workload?: TrainerWorkload;
 }
 export interface TrainerInput {
     trainerCode: string; fullName: string; email: string; specialization: string;
@@ -27,12 +32,14 @@ export interface TrainerPreview {
 }
 const upload = (file: File) => { const body = new FormData(); body.append("file", file); return body; };
 export const trainerApi = {
-    list: async (params: { search?: string; status?: string; page?: number; size?: number }) =>
+    list: async (params: { search?: string; status?: string; topicId?: number; page?: number; size?: number }) =>
         (await axios.get<TrainerPage>("/trainers", { params })).data,
     get: async (id: number) => (await axios.get<Trainer>(`/trainers/${id}`)).data,
     create: async (data: TrainerInput) => (await axios.post<Trainer>("/trainers", data)).data,
     update: async (id: number, data: TrainerInput) => (await axios.put<Trainer>(`/trainers/${id}`, data)).data,
     status: async (id: number, status: Trainer["status"]) => (await axios.patch<Trainer>(`/trainers/${id}/status`, { status })).data,
+    bulkStatus: async (ids: number[], status: Trainer["status"]) =>
+        (await axios.patch<{ updated: number }>("/trainers/status/bulk", { ids, status })).data,
     delete: async (id: number) => { await axios.delete(`/trainers/${id}`); },
     topics: async () => (await axios.get<TeachingTopic[]>("/trainers/teaching-topics")).data,
     template: async () => (await axios.get<Blob>("/trainers/import/template", { responseType: "blob" })).data,

@@ -356,4 +356,73 @@ describe("WeeklyCalendarPage", () => {
     expect(actualLabels).toEqual(expectedLabels);
     expect(screen.getAllByText("Không có buổi học")).toHaveLength(6);
   });
+
+  it("exports .ics only in personal scope (mine) and hides it in all-sessions scope", async () => {
+    fakeHttp.on("get", "/calendar/my-sessions", {
+      content: [
+        {
+          id: 101,
+          isActive: true,
+          classId: 1,
+          topicId: 1,
+          trainerId: 1,
+          title: "[JAVA_CORE] OOP Lab",
+          startTime: "2026-10-01T08:00:00",
+          endTime: "2026-10-01T12:00:00",
+          location: "Phòng Lab 201 (F-Town 2)",
+          status: "SCHEDULED",
+        },
+      ],
+      totalElements: 1,
+      totalPages: 1,
+      number: 0,
+      size: 200,
+      first: true,
+      last: true,
+    });
+
+    const capturedBlobs: Blob[] = [];
+    const origCreateObjectURL = URL.createObjectURL;
+    const origRevokeObjectURL = URL.revokeObjectURL;
+    URL.createObjectURL = vi.fn((blob: Blob | MediaSource) => {
+      if (blob instanceof Blob) {
+        capturedBlobs.push(blob);
+      }
+      return "blob:mock-ics";
+    });
+    URL.revokeObjectURL = vi.fn();
+
+    try {
+      const allView = renderAt(<WeeklyCalendarPage />, { route: "/calendar/preview?date=2026-10-01" });
+      expect(await screen.findByText("[JAVA_CORE] OOP Lab")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Xuất lịch \(\.ics\)/i })).not.toBeInTheDocument();
+      allView.unmount();
+
+      const { user } = renderAt(<WeeklyCalendarPage />, { route: "/calendar/preview?scope=mine&date=2026-10-01" });
+      expect(await screen.findByText("[JAVA_CORE] OOP Lab")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: /Xuất lịch \(\.ics\)/i }));
+      expect(capturedBlobs).toHaveLength(1);
+
+      const icsText = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ""));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(capturedBlobs[0]);
+      });
+
+      expect(icsText).toContain("BEGIN:VCALENDAR");
+      expect(icsText).toContain("TZID:Asia/Ho_Chi_Minh");
+      expect(icsText).toContain("BEGIN:VEVENT");
+      expect(icsText).toContain("DTSTART;TZID=Asia/Ho_Chi_Minh:20261001T080000");
+      expect(icsText).toContain("DTEND;TZID=Asia/Ho_Chi_Minh:20261001T120000");
+      expect(icsText).toContain("SUMMARY:[EXT_JAVA_01] [JAVA_CORE] OOP Lab");
+      expect(icsText).toContain("LOCATION:Phòng Lab 201 (F-Town 2)");
+      expect(icsText).toContain("External Trainer One");
+      expect(icsText).toContain("END:VCALENDAR");
+    } finally {
+      URL.createObjectURL = origCreateObjectURL;
+      URL.revokeObjectURL = origRevokeObjectURL;
+    }
+  });
 });

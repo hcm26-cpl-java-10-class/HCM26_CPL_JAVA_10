@@ -45,7 +45,7 @@ export function TrainerForm({ trainer, close, saved }: { trainer?: Trainer; clos
 
     const overLimitMessages = {
         trainerCode: form.trainerCode.trim().length > MAX_CODE_LENGTH
-            ? `Trainer ID exceeds the ${MAX_CODE_LENGTH}-character limit (${form.trainerCode.trim().length}/${MAX_CODE_LENGTH}). Shorten it before saving.`
+            ? `Code exceeds the ${MAX_CODE_LENGTH}-character limit (${form.trainerCode.trim().length}/${MAX_CODE_LENGTH}). Shorten it before saving.`
             : "",
         fullName: form.fullName.trim().length > MAX_FULL_NAME_LENGTH
             ? `Full Name exceeds the ${MAX_FULL_NAME_LENGTH}-character limit (${form.fullName.trim().length}/${MAX_FULL_NAME_LENGTH}). Shorten it before saving.`
@@ -72,11 +72,11 @@ export function TrainerForm({ trainer, close, saved }: { trainer?: Trainer; clos
 
         const validationErrors: string[] = [];
         if (!input.trainerCode) {
-            validationErrors.push("Trainer ID is required.");
+            validationErrors.push("Code is required.");
         } else if (input.trainerCode.length > MAX_CODE_LENGTH) {
-            validationErrors.push(`Trainer ID must not exceed ${MAX_CODE_LENGTH} characters.`);
+            validationErrors.push(`Code must not exceed ${MAX_CODE_LENGTH} characters.`);
         } else if (!TRAINER_CODE_REGEX.test(input.trainerCode)) {
-            validationErrors.push("Trainer ID must start with a letter or digit and use only letters, digits, '_' or '-'.");
+            validationErrors.push("Code must start with a letter or digit and use only letters, digits, '_' or '-'.");
         }
         if (!input.fullName) {
             validationErrors.push("Full Name is required.");
@@ -123,14 +123,14 @@ export function TrainerForm({ trainer, close, saved }: { trainer?: Trainer; clos
                 <DialogHeader>
                     <DialogTitle>{trainer ? "Edit Trainer" : "Add Trainer"}</DialogTitle>
                     <DialogDescription className="text-xs">
-                        Enter trainer profile information and assign eligible teaching topics.
+                        Enter trainer profile information and assign eligible subjects.
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={e => void submit(e)} className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between gap-2">
-                                <Label htmlFor="trainer-trainerCode">Trainer ID *</Label>
+                                <Label htmlFor="trainer-trainerCode">Code *</Label>
                                 <span className={`text-[11px] ${overLimitMessages.trainerCode ? "text-destructive font-medium" : "text-muted-foreground"}`}>
                                     {form.trainerCode.length}/{MAX_CODE_LENGTH}
                                 </span>
@@ -236,7 +236,7 @@ export function TrainerForm({ trainer, close, saved }: { trainer?: Trainer; clos
 
                         <div className="space-y-1.5 sm:col-span-2">
                             <div className="flex items-center justify-between gap-2">
-                                <Label id="trainer-topics-label">Teaching Topics</Label>
+                                <Label id="trainer-topics-label">Subjects</Label>
                                 <span className="text-xs text-muted-foreground">
                                     {form.teachingTopicIds.length} selected
                                 </span>
@@ -247,9 +247,9 @@ export function TrainerForm({ trainer, close, saved }: { trainer?: Trainer; clos
                                 className="max-h-36 overflow-y-auto rounded-md border border-input bg-background p-1.5 space-y-1"
                             >
                                 {topics.isPending ? (
-                                    <p className="px-2 py-3 text-xs text-muted-foreground">Loading topics…</p>
+                                    <p className="px-2 py-3 text-xs text-muted-foreground">Loading subjects…</p>
                                 ) : available.length === 0 ? (
-                                    <p className="px-2 py-3 text-xs text-muted-foreground">No active topics available.</p>
+                                    <p className="px-2 py-3 text-xs text-muted-foreground">No active subjects available.</p>
                                 ) : (
                                     available.map(t => {
                                         const checked = form.teachingTopicIds.includes(t.id);
@@ -286,7 +286,7 @@ export function TrainerForm({ trainer, close, saved }: { trainer?: Trainer; clos
                                 )}
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                Click any topic to select or unselect multiple subjects.
+                                Click any subject to select or unselect multiple subjects.
                             </p>
                             {topics.isError && (
                                 <p role="alert" className="text-xs text-destructive">

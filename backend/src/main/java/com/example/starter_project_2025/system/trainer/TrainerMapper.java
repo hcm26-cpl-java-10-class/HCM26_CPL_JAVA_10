@@ -10,10 +10,18 @@ import java.util.List;
 public class TrainerMapper {
 
     public TrainerDTO toDTO(Trainer trainer) {
-        return toDTO(trainer, List.of());
+        return toDTO(trainer, List.of(), TrainerDTO.Workload.EMPTY);
     }
 
     public TrainerDTO toDTO(Trainer trainer, List<TrainerDTO.TeachingHistoryItem> teachingHistory) {
+        return toDTO(trainer, teachingHistory, TrainerDTO.Workload.EMPTY);
+    }
+
+    public TrainerDTO toDTO(
+            Trainer trainer,
+            List<TrainerDTO.TeachingHistoryItem> teachingHistory,
+            TrainerDTO.Workload workload
+    ) {
         List<TrainerDTO.Topic> topics = trainer.getTeachingTopics().stream()
                 .sorted(Comparator.comparing(Subject::getId))
                 .map(subject -> new TrainerDTO.Topic(
@@ -34,7 +42,8 @@ public class TrainerMapper {
                 trainer.getStatus(),
                 topics,
                 "INTERNAL",
-                teachingHistory == null ? List.of() : teachingHistory
+                teachingHistory == null ? List.of() : teachingHistory,
+                workload == null ? TrainerDTO.Workload.EMPTY : workload
         );
     }
 }

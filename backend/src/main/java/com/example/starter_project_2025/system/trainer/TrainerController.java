@@ -2,8 +2,10 @@ package com.example.starter_project_2025.system.trainer;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -16,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URI;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @Validated
@@ -30,6 +33,13 @@ public class TrainerController {
 
     public record StatusRequest(@NotNull TrainerStatus status) {}
 
+    public record BulkStatusRequest(
+            @NotEmpty @Size(max = 100) Set<@NotNull @Positive Long> ids,
+            @NotNull TrainerStatus status
+    ) {}
+
+    public record BulkStatusResponse(int updated) {}
+
     // Approval is recorded in docs/TRAINER_MANAGEMENT.md. This endpoint describes ONLY this internal catalog.
     public record Source(String source, boolean approved, boolean sampleData) {}
 
@@ -38,10 +48,11 @@ public class TrainerController {
     public Page<TrainerDTO> list(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) @Positive Long topicId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return trainerService.list(search, status, page, size);
+        return trainerService.list(search, status, topicId, page, size);
     }
 
     @GetMapping("/{id}")
@@ -73,6 +84,12 @@ public class TrainerController {
             @Valid @RequestBody StatusRequest request
     ) {
         return trainerService.changeStatus(id, request.status());
+    }
+
+    @PatchMapping("/status/bulk")
+    @PreAuthorize("hasAuthority('TRAINER_UPDATE')")
+    public BulkStatusResponse bulkStatus(@Valid @RequestBody BulkStatusRequest request) {
+        return new BulkStatusResponse(trainerService.bulkChangeStatus(request.ids(), request.status()));
     }
 
     @DeleteMapping("/{id}")
