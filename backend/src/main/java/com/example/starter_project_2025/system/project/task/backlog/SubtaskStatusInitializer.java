@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.task.backlog;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
@@ -10,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @Order(4)
 @RequiredArgsConstructor
+@StartupMutation
 public class SubtaskStatusInitializer implements CommandLineRunner {
     private final JdbcTemplate jdbc;
 

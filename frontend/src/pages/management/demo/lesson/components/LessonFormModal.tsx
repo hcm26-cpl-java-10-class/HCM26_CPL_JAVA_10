@@ -1,3 +1,4 @@
+import { AssessmentLessonDialog } from "./AssessmentLessonDialog";
 import { lessonApi } from "@/api";
 import { aiCourseBuilderApi } from "@/api/features/demo/ai-course-builder.api";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { LessonContentType, LessonDTO, ValidationErrorResponse } from "@/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -46,19 +48,23 @@ interface FormState {
   textContent: string;
   duration: string;
   orderIndex: string;
+  allowSeeking: boolean;
 }
 
 const LESSON_CONTENT_TYPE_OPTIONS: { value: LessonContentType; label: string }[] = [
   { value: "VIDEO", label: "Video" },
   { value: "AUDIO", label: "Audio" },
   { value: "TEXT", label: "Text" },
+  { value: "QUIZ", label: "Quiz" },
+  { value: "EXAM", label: "Exam" },
+  { value: "ASSIGNMENT", label: "Assignment" },
   { value: "DOCUMENT", label: "Document" },
   { value: "LINK", label: "Link" },
 ];
 
 type FieldErrors = Partial<Record<keyof FormState, string>>;
 
-const needsUrl = (type: LessonContentType) => type !== "TEXT";
+const needsUrl = (type: LessonContentType) => ["VIDEO", "AUDIO", "DOCUMENT", "LINK"].includes(type);
 
 function buildInitialState(lesson?: LessonDTO | null, defaultOrderIndex = 0): FormState {
   return {
@@ -68,6 +74,7 @@ function buildInitialState(lesson?: LessonDTO | null, defaultOrderIndex = 0): Fo
     textContent: lesson?.textContent ?? "",
     duration: lesson?.duration != null ? String(lesson.duration) : "",
     orderIndex: String(lesson?.orderIndex ?? defaultOrderIndex),
+    allowSeeking: lesson?.allowSeeking ?? false,
   };
 }
 
@@ -94,7 +101,7 @@ function validate(form: FormState, outlineEditable: boolean): FieldErrors {
     else if (url.length > 500) errors.contentUrl = "Content URL must not exceed 500 characters";
     else if (!isHttpUrl(url)) errors.contentUrl = "Content URL must start with http:// or https://";
   } else if (!form.textContent.trim() && !outlineEditable) {
-    errors.textContent = "Text content is required for TEXT lessons";
+    errors.textContent = "Lesson content or assessment instructions are required";
   }
 
   if (form.duration !== "") {
@@ -242,6 +249,7 @@ export function LessonFormModal({
     if (form.duration !== "") payload.duration = Number(form.duration);
 
     // Chỉ gửi field có ý nghĩa với loại nội dung đang chọn
+    if (form.contentType === "VIDEO" || form.contentType === "AUDIO") payload.allowSeeking = form.allowSeeking;
     if (needsUrl(form.contentType)) payload.contentUrl = form.contentUrl.trim();
     else payload.textContent = form.textContent;
 
@@ -325,6 +333,12 @@ export function LessonFormModal({
   };
 
   const isBusy = mutation.isPending || audioUploadStatus === "uploading" || documentUploadStatus === "uploading";
+
+  if (!isEdit && (form.contentType === "QUIZ" || form.contentType === "EXAM" || form.contentType === "ASSIGNMENT")) {
+    return <AssessmentLessonDialog key={`${open}-${sectionId}-${form.contentType}`} open={open} onOpenChange={onOpenChange}
+      sectionId={sectionId} type={form.contentType} initialTitle={form.title} initialInstructions={form.textContent}
+      initialOrder={form.orderIndex} onBack={() => setField("contentType", "TEXT")} onSuccess={onSuccess} />;
+  }
 
   return (
     <Dialog open={open} onOpenChange={(next) => !isBusy && onOpenChange(next)}>
@@ -519,6 +533,21 @@ export function LessonFormModal({
                 Required · must start with http:// or https:// · max 500 characters
               </p>
               <FieldMessage message={errors.contentUrl} />
+              {(form.contentType === "VIDEO" || form.contentType === "AUDIO") && (
+                <div className="mt-2 flex items-center justify-between gap-4 rounded-md border px-3 py-2">
+                  <div>
+                    <Label htmlFor="lesson-allow-seeking">Allow learners to skip ahead</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Off: learners cannot fast-forward past what they have watched (rewinding is allowed).
+                    </p>
+                  </div>
+                  <Switch
+                    id="lesson-allow-seeking"
+                    checked={form.allowSeeking}
+                    onCheckedChange={(checked) => setField("allowSeeking", checked)}
+                  />
+                </div>
+              )}
               {form.contentType === "AUDIO" && isHttpUrl(form.contentUrl) && (
                 <audio
                   key={form.contentUrl.trim()}
@@ -533,12 +562,12 @@ export function LessonFormModal({
           ) : (
             <div className="grid gap-1.5">
               <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="lesson-text">Text content</Label>
+                <Label htmlFor="lesson-text">{form.contentType === "TEXT" ? "Text content" : "Assessment instructions"}</Label>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={aiLoading}
+                  disabled={aiLoading || form.contentType !== "TEXT"}
                   onClick={handleGenerateWithAi}
                 >
                   {aiLoading ? (
@@ -560,7 +589,7 @@ export function LessonFormModal({
               <p className="text-xs text-muted-foreground">
                 {lesson?.outlineEditable
                   ? "You can save this outline while the course is Draft. Add content before publishing."
-                  : "Required for Text lessons"}
+                  : "Enter lesson content or assessment instructions. Attach the assessment through Exam Management using this lesson."}
               </p>
               <FieldMessage message={errors.textContent} />
             </div>

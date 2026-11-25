@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.project_template_version;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.rbac.permission.Permission;
 import com.example.starter_project_2025.system.rbac.permission.PermissionRepository;
 import com.example.starter_project_2025.system.rbac.role.Role;
@@ -35,6 +37,7 @@ import java.util.Set;
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@StartupMutation
 public class ProjectTemplateVersionAccessInitializer implements CommandLineRunner {
 
     private static final List<String> SNAPSHOT_ROLES = List.of("STUDENT", "PROGRAM_MANAGER", "TEACHER", "MENTOR", "TRAINER");

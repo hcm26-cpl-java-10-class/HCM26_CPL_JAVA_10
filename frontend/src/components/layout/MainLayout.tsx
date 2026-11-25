@@ -21,21 +21,26 @@ export function MainLayout({
                                mainClassName,
                                pathLinks,
                                contentClassName,
+                               compactHeader = false,
                                ignorePaths,
                                dense = false,
                                focusMode = false,
+                               headerActions,
                            }: {
     children: ReactNode;
     pathName?: Record<string, string>;
     mainClassName?: string;
     contentClassName?: string;
     pathLinks?: Record<string, string>;
+    compactHeader?: boolean;
     /** URL segments to leave out of the breadcrumb, typically ones that have no page of their own. */
     ignorePaths?: string[];
     /** Tighter header / content padding (Course Online pages). */
     dense?: boolean;
     /** Hide the navbar / breadcrumbs / sidebar (e.g. while taking an exam). */
     focusMode?: boolean;
+    /** Optional per-page control beside the breadcrumb (e.g. Student Syllabus translation). */
+    headerActions?: ReactNode;
 }) {
     const isEmbedded = useContext(EmbeddedLayoutContext);
     // Hooks must run before any early return so hook order stays stable.
@@ -62,7 +67,8 @@ export function MainLayout({
                 <StudentNavbar />
 
                 <header className="flex min-h-14 shrink-0 items-center border-b px-6 py-2">
-                    <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} ignorePaths={ignorePaths} variant="student" />
+                    <div className="min-w-0 flex-1"><DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} ignorePaths={ignorePaths} variant="student" /></div>
+                    {headerActions && <div className="ml-auto shrink-0 pl-3">{headerActions}</div>}
                 </header>
 
                 <main className={cn("flex-1 px-6 pb-6 pt-4", mainClassName, contentClassName)}>
@@ -76,12 +82,17 @@ export function MainLayout({
         <SidebarProvider defaultOpen={readSidebarOpenCookie()}>
             <SidebarMenu />
             <SidebarInset className="h-screen min-w-0 flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
-                <header className={`flex shrink-0 items-center gap-2 ${dense ? "min-h-11 py-0.5" : "min-h-16 py-3"}`}>
+                <header className={cn(
+                    "flex shrink-0 items-center gap-2",
+                    dense ? "min-h-11 py-0.5" : compactHeader ? "h-14 min-h-14 py-2" : "min-h-16 py-3",
+                )}>
                     <div className="flex items-center gap-2 px-4 w-full justify-between">
                         <div className="flex min-w-0 flex-1 items-center gap-2">
                             <SidebarTrigger aria-label="Toggle navigation sidebar" />
-                            <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} ignorePaths={ignorePaths} />
+                            {compactHeader ? <div className="hidden min-w-0 xl:block"><DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} ignorePaths={ignorePaths} /></div>
+                                : <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} ignorePaths={ignorePaths} />}
                         </div>
+                        {headerActions && <div className="shrink-0">{headerActions}</div>}
                         <div className="shrink-0"><HeaderRight /></div>
                     </div>
                 </header>

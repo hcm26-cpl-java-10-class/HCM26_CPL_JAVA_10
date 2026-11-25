@@ -1,6 +1,5 @@
 package com.example.starter_project_2025.system.demo.analytics;
 
-import com.example.starter_project_2025.system.demo.analytics.CourseAnalyticsDTO.*;
 import com.example.starter_project_2025.system.demo.analytics.CourseComparisonDTO.CourseComparisonResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 import java.util.List;
+import com.example.starter_project_2025.system.demo.analytics.CourseAnalyticsDTO.*;
 
 @RestController
 @RequestMapping("/api/reports")

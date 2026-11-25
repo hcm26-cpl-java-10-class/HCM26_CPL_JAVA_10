@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 
 import com.example.starter_project_2025.security.UserPrincipal;

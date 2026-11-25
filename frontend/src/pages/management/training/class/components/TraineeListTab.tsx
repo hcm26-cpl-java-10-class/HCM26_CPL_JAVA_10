@@ -1,0 +1,1028 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { classEnrollmentApi, classEnrollmentKey } from "@/api/features/class-enrollment.api";
+import { usePermissions } from "@/hooks/usePermissions";
+import { paginate } from "@/utils/class.utils";
+import { autoFitWorksheetColumns } from "@/utils/trainee-import.utils";
+import { TraineeImportModal } from "./TraineeImportModal";
+import {
+    ChevronDown,
+    Download,
+    Eye,
+    MoreVertical,
+    Pencil,
+    RotateCcw,
+    Save,
+    Search,
+    Trash2,
+    UserCheck,
+    Users,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
+import { utils, writeFile } from "xlsx";
+import {
+    type TraineeBatchPayload,
+    type TraineeFormInput,
+    traineeService,
+} from "@/api/features/trainee.api";
+import { ApiErrorState } from "@/components/common/ApiErrorState";
+import { NativeSelect } from "@/components/common/NativeSelect";
+import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { externalKeys, useClassTrainees } from "@/hooks/useExternalLookups";
+import { cn } from "@/lib/utils";
+import type { ExternalClass, Trainee } from "@/types";
+import { formatDate, splitLocalDateTime } from "@/utils/session.utils";
+import { TraineeAttendanceView } from "./TraineeAttendanceView";
+import { TraineeTopicMarkView } from "./TraineeTopicMarkView";
+import {
+    formatFptStudentIdForSite as legacyStudentId,
+    normalizeTraineeGender,
+    normalizeTraineeStatus,
+    resolveTraineeStatusBadge,
+    TraineeModal,
+    type TraineeModalMode,
+} from "./TraineeModal";
+
+function formatDob(dob?: string) {
+    if (!dob || !dob.trim()) return "";
+    return formatDate(dob);
+}
+
+const TRAINEE_CHECKBOX_CLASS =
+    "size-[18px] rounded-[4px] border-2 border-[#94a3b8] bg-white shadow-xs transition-all hover:border-[#2563eb] hover:bg-blue-50/70 data-[state=checked]:border-[#2563eb] data-[state=checked]:bg-[#2563eb] data-[state=checked]:text-white data-[state=indeterminate]:border-[#2563eb] data-[state=indeterminate]:bg-[#2563eb] data-[state=indeterminate]:text-white focus-visible:border-[#2563eb] focus-visible:ring-[#2563eb]/30 dark:border-slate-500 dark:bg-slate-900 dark:hover:border-blue-400 dark:hover:bg-blue-950/50 dark:data-[state=checked]:border-blue-500 dark:data-[state=checked]:bg-blue-600 dark:data-[state=indeterminate]:border-blue-500 dark:data-[state=indeterminate]:bg-blue-600";
+
+const STICKY_HEADER_CELL_CLASS =
+    "sticky top-0 z-20 bg-slate-50 px-3 font-semibold text-foreground shadow-[inset_0_-1px_0_#e2e8f0] dark:bg-slate-900 dark:shadow-[inset_0_-1px_0_#334155]";
+
+function isSameTrainee(baseline: Trainee | undefined, candidate: Trainee, site?: string): boolean {
+    if (!baseline) return false;
+
+    const baseDob = baseline.dob ? splitLocalDateTime(baseline.dob).date : "";
+    const candDob = candidate.dob ? splitLocalDateTime(candidate.dob).date : "";
+    const baseStudentId = legacyStudentId(
+        baseline.fptAccount ?? baseline.code,
+        site,
+        baseline.id,
+    );
+    const candStudentId = legacyStudentId(
+        candidate.fptAccount ?? candidate.code,
+        site,
+        candidate.id,
+    );
+
+    return (
+        (baseline.fullName ?? "").trim() === (candidate.fullName ?? "").trim() &&
+        baseStudentId === candStudentId &&
+        (baseline.personalEmail ?? baseline.email ?? "").trim() ===
+            (candidate.personalEmail ?? candidate.email ?? "").trim() &&
+        (baseline.nationalId ?? "").trim() === (candidate.nationalId ?? "").trim() &&
+        (baseline.employeeId ?? "").trim() === (candidate.employeeId ?? "").trim() &&
+        (baseline.accessCardId ?? "").trim() === (candidate.accessCardId ?? "").trim() &&
+        baseDob === candDob &&
+        normalizeTraineeGender(baseline.gender) === normalizeTraineeGender(candidate.gender) &&
+        normalizeTraineeStatus(baseline.status) === normalizeTraineeStatus(candidate.status)
+    );
+}
+
+function toFormInput(trainee: Trainee, site?: string, canonical = false): TraineeFormInput {
+    return {
+        fullName: (trainee.fullName ?? "").trim(),
+        fptAccount: canonical ? (trainee.fptAccount ?? trainee.code ?? "").trim().toUpperCase() : legacyStudentId(trainee.fptAccount ?? trainee.code, site, trainee.id),
+        personalEmail: (trainee.personalEmail ?? trainee.email ?? "").trim(),
+        nationalId: (trainee.nationalId ?? "").trim(),
+        employeeId: (trainee.employeeId ?? "").trim(),
+        accessCardId: (trainee.accessCardId ?? "").trim(),
+        dob: trainee.dob ? splitLocalDateTime(trainee.dob).date : "",
+        gender: normalizeTraineeGender(trainee.gender),
+        status: normalizeTraineeStatus(trainee.status),
+    };
+}
+
+export interface TraineeListTabProps {
+    classItem: ExternalClass;
+    onDirtyChange?: (isDirty: boolean) => void;
+}
+
+export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps) {
+    const queryClient = useQueryClient();
+    const classId = String(classItem.id);
+    const classSite = classItem.site;
+    const internal = classItem.traineeSource === "internal";
+    const { hasPermission } = usePermissions();
+    const canRead = !internal || hasPermission("ENROLLMENT_READ");
+    const canUpdate = !internal || hasPermission("ENROLLMENT_UPDATE");
+    const canCreate = !internal || hasPermission("ENROLLMENT_CREATE");
+    const canDelete = !internal || hasPermission("ENROLLMENT_DELETE");
+    const externalQuery = useClassTrainees(classId, !internal);
+    const internalQuery = useQuery({ queryKey: classEnrollmentKey(classId), queryFn: () => classEnrollmentApi.list(classId), enabled: internal && canRead });
+    const { data: serverTrainees = [], isPending, isError, error, refetch } = internal ? internalQuery : externalQuery;
+    // Canonical directory identities must never be rewritten or invented for a site.
+    const formatFptStudentIdForSite = useCallback((raw?: string, site?: string, id?: number) => internal
+        ? (raw ?? "").trim().toUpperCase() : legacyStudentId(raw, site, id), [internal]);
+    const [importOpen, setImportOpen] = useState(false);
+    const [page, setPage] = useState(0);
+
+    // Local staging state: null means synchronized with serverTrainees
+    const [draftTrainees, setDraftTrainees] = useState<Trainee[] | null>(null);
+    const [search, setSearch] = useState("");
+    const [statusFilter, setStatusFilter] = useState("");
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+    // Modal state for Create / Edit / View Profile
+    const [modalState, setModalState] = useState<{
+        open: boolean;
+        mode: TraineeModalMode;
+        trainee: Trainee | null;
+    }>({
+        open: false,
+        mode: "create",
+        trainee: null,
+    });
+
+    // Confirmation dialog state for single row Delete & Bulk Delete
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [deleteTarget, setDeleteTarget] = useState<Trainee | null>(null);
+    const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+    const [isAttendanceView, setIsAttendanceView] = useState(
+        () => searchParams.get("view") === "attendance" || searchParams.get("subview") === "attendance",
+    );
+    const [isTopicMarkView, setIsTopicMarkView] = useState(
+        () => searchParams.get("view") === "topic-mark" || searchParams.get("subview") === "topic-mark",
+    );
+
+    useEffect(() => {
+        const viewParam = searchParams.get("view") ?? searchParams.get("subview");
+        if (viewParam === "topic-mark") {
+            setIsTopicMarkView(true);
+            setIsAttendanceView(false);
+        } else if (viewParam === "attendance") {
+            setIsAttendanceView(true);
+            setIsTopicMarkView(false);
+        }
+    }, [searchParams]);
+
+    const activeTrainees = draftTrainees ?? serverTrainees;
+
+    const selectedTrainees = useMemo(
+        () => activeTrainees.filter((trainee) => selectedIds.has(trainee.id)),
+        [activeTrainees, selectedIds],
+    );
+    const selectedCount = selectedTrainees.length;
+
+    const pendingChanges = useMemo(() => {
+        if (draftTrainees === null) {
+            return {
+                created: [] as TraineeFormInput[],
+                updated: [] as Trainee[],
+                deletedIds: [] as number[],
+                updatedIdSet: new Set<number>(),
+                total: 0,
+            };
+        }
+
+        const baselineById = new Map(serverTrainees.map((item) => [item.id, item]));
+        const draftIdSet = new Set(draftTrainees.map((item) => item.id));
+
+        const created = draftTrainees.filter((item) => item.id < 0).map((item) => toFormInput(item, classSite, internal));
+        const updated = draftTrainees
+            .filter((item) => item.id > 0 && !isSameTrainee(baselineById.get(item.id), item, classSite))
+            .map((item) => {
+                const studentId = formatFptStudentIdForSite(item.fptAccount ?? item.code, classSite, item.id);
+                return {
+                    ...item,
+                    code: studentId,
+                    fptAccount: studentId,
+                };
+            });
+        const deletedIds = serverTrainees
+            .filter((item) => !draftIdSet.has(item.id))
+            .map((item) => item.id);
+
+        return {
+            created,
+            updated,
+            deletedIds,
+            updatedIdSet: new Set(updated.map((item) => item.id)),
+            total: created.length + updated.length + deletedIds.length,
+        };
+    }, [classSite, draftTrainees, serverTrainees, internal, formatFptStudentIdForSite]);
+
+    const hasUnsavedChanges = pendingChanges.total > 0;
+
+    useEffect(() => {
+        onDirtyChange?.(hasUnsavedChanges);
+    }, [hasUnsavedChanges, onDirtyChange]);
+
+    useEffect(() => {
+        return () => {
+            onDirtyChange?.(false);
+        };
+    }, [onDirtyChange]);
+
+    useEffect(() => {
+        if (!hasUnsavedChanges) return;
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = "";
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [hasUnsavedChanges]);
+
+    const saveMutation = useMutation({
+        mutationFn: (payload: TraineeBatchPayload) => internal ? classEnrollmentApi.batch(classId, payload) : traineeService.batchUpdate(classId, payload),
+        onSuccess: (response) => {
+            if (internal) {
+                queryClient.setQueryData(classEnrollmentKey(classId), response.trainees);
+                void queryClient.invalidateQueries({ queryKey: classEnrollmentKey(classId) });
+                void queryClient.invalidateQueries({ queryKey: ["classes"] });
+            }
+            queryClient.setQueryData(externalKeys.classTrainees(classId), response.trainees);
+            void queryClient.invalidateQueries({ queryKey: externalKeys.classTrainees(classId) });
+            void queryClient.invalidateQueries({ queryKey: externalKeys.class(classId) });
+            void queryClient.invalidateQueries({ queryKey: externalKeys.classes });
+            setDraftTrainees(null);
+            setSelectedIds(new Set());
+            toast.success("Trainee changes saved successfully!");
+        },
+        onError: (err: unknown) => {
+            const message =
+                (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+                "Failed to save trainee changes. Please try again.";
+            toast.error(message);
+        },
+    });
+
+    const filteredTrainees = useMemo(() => {
+        const keyword = search.trim().toLowerCase();
+
+        return activeTrainees.filter((trainee) => {
+            if (statusFilter && normalizeTraineeStatus(trainee.status) !== statusFilter) {
+                return false;
+            }
+
+            if (!keyword) return true;
+
+            const studentId = formatFptStudentIdForSite(
+                trainee.fptAccount ?? trainee.code,
+                classSite,
+                trainee.id,
+            );
+            return [
+                trainee.fullName,
+                studentId,
+                trainee.fptAccount ?? trainee.code,
+                trainee.personalEmail ?? trainee.email,
+                formatDob(trainee.dob),
+                trainee.gender,
+                trainee.status,
+            ].some((field) => String(field ?? "").toLowerCase().includes(keyword));
+        });
+    }, [activeTrainees, classSite, search, statusFilter, formatFptStudentIdForSite]);
+
+    const traineePage = paginate(filteredTrainees, page, 10);
+    const visibleTrainees = traineePage.items;
+
+    const selectedFilteredCount = useMemo(
+        () => filteredTrainees.filter((trainee) => selectedIds.has(trainee.id)).length,
+        [filteredTrainees, selectedIds],
+    );
+
+    const selectAllState: boolean | "indeterminate" =
+        filteredTrainees.length > 0 && selectedFilteredCount === filteredTrainees.length
+            ? true
+            : selectedFilteredCount > 0
+              ? "indeterminate"
+              : false;
+
+    const handleToggleAll = (checked: boolean) => {
+        setSelectedIds((prev) => {
+            if (!checked && !search.trim() && !statusFilter) {
+                return new Set();
+            }
+            const next = new Set(prev);
+            for (const trainee of filteredTrainees) {
+                if (checked) next.add(trainee.id);
+                else next.delete(trainee.id);
+            }
+            return next;
+        });
+    };
+
+    const handleToggleRow = (id: number, checked: boolean) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (checked) next.add(id);
+            else next.delete(id);
+            return next;
+        });
+    };
+
+    const handleOpenCreate = () => {
+        setModalState({ open: true, mode: "create", trainee: null });
+    };
+
+    const handleOpenEdit = (trainee: Trainee) => {
+        setModalState({ open: true, mode: "edit", trainee });
+    };
+
+    const handleOpenView = (trainee: Trainee) => {
+        setModalState({ open: true, mode: "view", trainee });
+    };
+
+    const handleModalSubmit = (values: TraineeFormInput) => {
+        const currentList = draftTrainees ?? serverTrainees;
+        const normalizedStudentId = values.fptAccount.trim().toUpperCase();
+
+        if (modalState.mode === "create") {
+            const tempId = Math.min(0, ...currentList.map((item) => item.id)) - 1;
+            const stagedTrainee: Trainee = {
+                id: tempId,
+                code: normalizedStudentId,
+                fptAccount: normalizedStudentId,
+                fullName: values.fullName,
+                personalEmail: values.personalEmail,
+                email: values.personalEmail,
+                nationalId: values.nationalId,
+                employeeId: values.employeeId ?? "",
+                accessCardId: values.accessCardId ?? "",
+                dob: values.dob ?? "",
+                gender: values.gender,
+                status: values.status,
+            };
+            setDraftTrainees([stagedTrainee, ...currentList]);
+            setPage(0);
+        } else if (modalState.mode === "edit" && modalState.trainee) {
+            const targetId = modalState.trainee.id;
+            setDraftTrainees(
+                currentList.map((item) =>
+                    item.id === targetId
+                        ? {
+                              ...item,
+                              code: normalizedStudentId,
+                              fptAccount: normalizedStudentId,
+                              fullName: values.fullName,
+                              personalEmail: values.personalEmail,
+                              email: values.personalEmail,
+                              nationalId: values.nationalId,
+                              employeeId: values.employeeId ?? "",
+                              accessCardId: values.accessCardId ?? "",
+                              dob: values.dob ?? "",
+                              gender: values.gender,
+                              status: values.status,
+                          }
+                        : item,
+                ),
+            );
+        }
+
+        setModalState((prev) => ({ ...prev, open: false }));
+    };
+
+    const handleConfirmDelete = () => {
+        if (!deleteTarget) return;
+        const currentList = draftTrainees ?? serverTrainees;
+        const removedId = deleteTarget.id;
+
+        setDraftTrainees(currentList.filter((item) => item.id !== removedId));
+        setSelectedIds((prev) => {
+            if (!prev.has(removedId)) return prev;
+            const next = new Set(prev);
+            next.delete(removedId);
+            return next;
+        });
+        setDeleteTarget(null);
+    };
+
+    const handleConfirmBulkDelete = () => {
+        if (selectedCount === 0) return;
+        const currentList = draftTrainees ?? serverTrainees;
+        setDraftTrainees(currentList.filter((item) => !selectedIds.has(item.id)));
+        setSelectedIds(new Set());
+        setBulkDeleteOpen(false);
+        toast.info(
+            `Removed ${selectedCount} selected ${selectedCount === 1 ? "trainee" : "trainees"} (staged). Click Save Changes to persist.`,
+        );
+    };
+
+    const handleExportSelected = () => {
+        if (selectedCount === 0) return;
+
+        const rows = selectedTrainees.map((trainee, index) => ({
+            "No.": index + 1,
+            "Full Name": trainee.fullName ?? "",
+            "Student ID": formatFptStudentIdForSite(
+                trainee.fptAccount || trainee.code,
+                classSite,
+                trainee.id,
+            ),
+            "Personal Email": trainee.personalEmail || trainee.email || "",
+            DOB: formatDob(trainee.dob),
+            Gender: trainee.gender ?? "",
+            Status: resolveTraineeStatusBadge(trainee.status).label,
+        }));
+
+        const worksheet = autoFitWorksheetColumns(utils.json_to_sheet(rows));
+        const workbook = utils.book_new();
+        utils.book_append_sheet(workbook, worksheet, "Selected Trainees");
+        const fileName = `${classItem.code ?? `Class_${classId}`}_Selected_Trainees.xlsx`;
+        writeFile(workbook, fileName);
+        toast.success(`Exported ${selectedCount} selected ${selectedCount === 1 ? "trainee" : "trainees"} to ${fileName}`);
+    };
+
+    const handleBulkChangeStatus = (newStatus: "Active" | "Inactive" | "Dropped") => {
+        if (selectedCount === 0) return;
+        const currentList = draftTrainees ?? serverTrainees;
+        const count = selectedCount;
+        setDraftTrainees(
+            currentList.map((trainee) =>
+                selectedIds.has(trainee.id)
+                    ? { ...trainee, status: newStatus }
+                    : trainee,
+            ),
+        );
+        toast.success(
+            `Updated status of ${count} ${count === 1 ? "trainee" : "trainees"} to ${newStatus}. Click Save Changes to persist.`,
+        );
+    };
+
+    const handleDiscardChanges = () => {
+        setDraftTrainees(null);
+        setSelectedIds((prev) => {
+            const validIds = new Set(serverTrainees.map((item) => item.id));
+            const next = new Set<number>();
+            for (const id of prev) {
+                if (validIds.has(id)) next.add(id);
+            }
+            return next;
+        });
+        toast.info("Unsaved trainee changes discarded.");
+    };
+
+    const handleSaveChanges = () => {
+        if (!hasUnsavedChanges || saveMutation.isPending || !canUpdate
+            || (pendingChanges.created.length > 0 && !canCreate) || (pendingChanges.deletedIds.length > 0 && !canDelete)) return;
+        saveMutation.mutate({
+            created: pendingChanges.created,
+            updated: pendingChanges.updated,
+            deletedIds: pendingChanges.deletedIds,
+        });
+    };
+
+    const clearSubViewSearchParams = () => {
+        if (searchParams.has("view") || searchParams.has("subview")) {
+            const next = new URLSearchParams(searchParams);
+            next.delete("view");
+            next.delete("subview");
+            setSearchParams(next, { replace: true });
+        }
+    };
+
+    const handleTopicMark = () => {
+        setIsAttendanceView(false);
+        setIsTopicMarkView(true);
+    };
+
+    const handleBackFromTopicMark = () => {
+        setIsTopicMarkView(false);
+        clearSubViewSearchParams();
+    };
+
+    const handleAttendance = () => {
+        setIsTopicMarkView(false);
+        setIsAttendanceView(true);
+    };
+
+    const handleBackFromAttendance = () => {
+        setIsAttendanceView(false);
+        clearSubViewSearchParams();
+    };
+
+    if (!canRead) return <p role="alert">You do not have permission to view trainee profiles.</p>;
+    if (isError) {
+        return <ApiErrorState error={error} resource="trainee list" onRetry={() => void refetch()} />;
+    }
+
+    if (isTopicMarkView) {
+        return (
+            <TraineeTopicMarkView
+                classItem={classItem}
+                trainees={activeTrainees}
+                onBack={handleBackFromTopicMark}
+            />
+        );
+    }
+
+    if (isAttendanceView) {
+        return (
+            <TraineeAttendanceView
+                classItem={classItem}
+                trainees={activeTrainees}
+                onBack={handleBackFromAttendance}
+            />
+        );
+    }
+
+    return (
+        <div className="flex flex-1 min-h-0 flex-col gap-3">
+            {/* Top Action Bar */}
+            <div className="flex shrink-0 flex-col gap-2.5 2xl:flex-row 2xl:items-center 2xl:justify-between">
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative w-full sm:w-52">
+                        <Search
+                            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                            aria-hidden
+                        />
+                        <Input
+                            aria-label="Search trainees"
+                            placeholder="Search trainees"
+                            value={search}
+                            onChange={(event) => { setSearch(event.target.value); setPage(0); }}
+                            className="h-8.5 pl-9"
+                        />
+                    </div>
+
+                    <div className="w-full sm:w-32">
+                        <NativeSelect
+                            aria-label="Filter by Status"
+                            value={statusFilter}
+                            onChange={(event) => { setStatusFilter(event.target.value); setPage(0); }}
+                            className="h-8.5"
+                        >
+                            <option value="">All Statuses</option>
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                            <option value="Dropped">Dropped</option>
+                        </NativeSelect>
+                    </div>
+
+                    {hasUnsavedChanges ? (
+                        <Badge
+                            variant="secondary"
+                            className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                        >
+                            {pendingChanges.total} unsaved {pendingChanges.total === 1 ? "change" : "changes"}
+                        </Badge>
+                    ) : null}
+
+                    {selectedCount > 0 ? (
+                        <Badge
+                            variant="secondary"
+                            className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-950/60 dark:text-blue-300"
+                        >
+                            {selectedCount} {selectedCount === 1 ? "Trainee" : "Trainees"} Selected
+                        </Badge>
+                    ) : null}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 self-end sm:self-auto">
+                    {internal && (
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={isPending || saveMutation.isPending || hasUnsavedChanges || !canCreate}
+                            title={hasUnsavedChanges ? "Save or discard staged changes before importing." : undefined}
+                            onClick={() => setImportOpen(true)}
+                            className="h-8.5 gap-1.5 px-2.5 whitespace-nowrap bg-[#283593] text-white hover:bg-[#1a237e] dark:bg-blue-600 dark:hover:bg-blue-500"
+                        >
+                            Import Excel
+                        </Button>
+                    )}
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={handleOpenCreate}
+                        disabled={isPending || saveMutation.isPending || !canCreate || !canUpdate}
+                        className="h-8.5 gap-1.5 px-2.5 whitespace-nowrap"
+                    >
+                        + Add Trainee
+                    </Button>
+
+                    {/* Bulk Action: Change Status Dropdown */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={selectedCount === 0 || isPending || saveMutation.isPending}
+                                className={cn(
+                                    "h-8.5 gap-1.5 px-2.5 whitespace-nowrap",
+                                    selectedCount > 0 &&
+                                        "border-blue-600 text-blue-700 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-950/40",
+                                )}
+                            >
+                                <UserCheck className="size-3.5" aria-hidden />
+                                <span>Change Status</span>
+                                <ChevronDown className="size-3.5 opacity-60" aria-hidden />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuItem onClick={() => handleBulkChangeStatus("Active")}>
+                                <span className="mr-2 inline-block size-2 rounded-full bg-emerald-500" />
+                                <span>Active</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleBulkChangeStatus("Inactive")}>
+                                <span className="mr-2 inline-block size-2 rounded-full bg-gray-400" />
+                                <span>Inactive</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleBulkChangeStatus("Dropped")}>
+                                <span className="mr-2 inline-block size-2 rounded-full bg-rose-500" />
+                                <span>Dropped</span>
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={selectedCount === 0 || isPending || saveMutation.isPending}
+                        onClick={handleExportSelected}
+                        className={cn(
+                            "h-8.5 gap-1.5 px-2.5 whitespace-nowrap",
+                            selectedCount > 0 &&
+                                "border-blue-600 text-blue-700 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-950/40",
+                        )}
+                    >
+                        <Download className="size-3.5" aria-hidden />
+                        <span>Export Selected</span>
+                        {selectedCount > 0 ? (
+                            <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-blue-100 px-1.5 text-[11px] font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                {selectedCount}
+                            </span>
+                        ) : null}
+                    </Button>
+
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant={selectedCount > 0 ? "destructive" : "outline"}
+                        disabled={selectedCount === 0 || isPending || saveMutation.isPending || !canDelete || !canUpdate}
+                        onClick={() => setBulkDeleteOpen(true)}
+                        className="h-8.5 gap-1.5 px-2.5 whitespace-nowrap"
+                    >
+                        <Trash2 className="size-3.5" aria-hidden />
+                        <span>Delete Selected</span>
+                        {selectedCount > 0 ? (
+                            <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-[11px] font-semibold">
+                                {selectedCount}
+                            </span>
+                        ) : null}
+                    </Button>
+
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={handleTopicMark}
+                        className="h-8.5 px-2.5 whitespace-nowrap"
+                    >
+                        Topic Mark
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={handleAttendance}
+                        className="h-8.5 px-2.5 whitespace-nowrap"
+                    >
+                        Attendance
+                    </Button>
+                </div>
+            </div>
+
+            {/* Trainee Table */}
+            <div className="flex-1 min-h-[200px] w-full overflow-x-auto overflow-y-auto rounded-md border">
+                <table
+                    aria-label="Trainee List"
+                    className="w-full min-w-[960px] caption-bottom border-separate border-spacing-0 text-sm [&_td]:border-r [&_td]:border-b [&_td:last-child]:border-r-0 [&_tbody_tr:last-child_td]:border-b-0 [&_th]:border-r [&_th:last-child]:border-r-0"
+                >
+                    <TableHeader className="sticky top-0 z-20 bg-slate-50 dark:bg-slate-900">
+                        <TableRow className="hover:bg-transparent">
+                            <TableHead className={cn(STICKY_HEADER_CELL_CLASS, "w-11 text-center")}>
+                                <Checkbox
+                                    aria-label="Select all trainees"
+                                    className={TRAINEE_CHECKBOX_CLASS}
+                                    checked={selectAllState}
+                                    disabled={isPending || filteredTrainees.length === 0}
+                                    onCheckedChange={(checked) => handleToggleAll(checked === true)}
+                                />
+                            </TableHead>
+                            <TableHead className={cn(STICKY_HEADER_CELL_CLASS, "w-12")}>No.</TableHead>
+                            <TableHead className={STICKY_HEADER_CELL_CLASS}>Full Name</TableHead>
+                            <TableHead className={STICKY_HEADER_CELL_CLASS}>Student ID</TableHead>
+                            <TableHead className={STICKY_HEADER_CELL_CLASS}>Personal Email</TableHead>
+                            <TableHead className={STICKY_HEADER_CELL_CLASS}>DOB</TableHead>
+                            <TableHead className={STICKY_HEADER_CELL_CLASS}>Gender</TableHead>
+                            <TableHead className={STICKY_HEADER_CELL_CLASS}>Status</TableHead>
+                            <TableHead className={cn(STICKY_HEADER_CELL_CLASS, "w-16 text-center")}>Action</TableHead>
+                        </TableRow>
+                    </TableHeader>
+
+                    <TableBody>
+                        {isPending ? (
+                            Array.from({ length: 6 }, (_, rowIdx) => (
+                                <TableRow key={rowIdx}>
+                                    {Array.from({ length: 9 }, (_, colIdx) => (
+                                        <TableCell key={colIdx} className="px-3 py-3">
+                                            <Skeleton className="h-4 w-full" />
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            ))
+                        ) : filteredTrainees.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
+                                    <div className="flex flex-col items-center gap-2">
+                                        <Users className="size-7 text-muted-foreground/70" aria-hidden />
+                                        <p className="text-sm">
+                                            {search.trim()
+                                                ? "No trainees match your search."
+                                                : "No trainees enrolled in this class yet."}
+                                        </p>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            visibleTrainees.map((trainee, index) => {
+                                const isSelected = selectedIds.has(trainee.id);
+                                const isNewRow = trainee.id < 0;
+                                const isEditedRow = pendingChanges.updatedIdSet.has(trainee.id);
+                                const studentId = formatFptStudentIdForSite(
+                                    trainee.fptAccount || trainee.code,
+                                    classSite,
+                                    trainee.id,
+                                );
+                                const personalEmail = trainee.personalEmail || trainee.email || "";
+                                const statusBadge = resolveTraineeStatusBadge(trainee.status);
+
+                                return (
+                                    <TableRow
+                                        key={trainee.id}
+                                        data-state={isSelected ? "selected" : undefined}
+                                        className={cn(
+                                            "data-[state=selected]:bg-blue-50/50 dark:data-[state=selected]:bg-blue-950/20",
+                                            isNewRow && "bg-emerald-50/40 dark:bg-emerald-950/15",
+                                            isEditedRow && "bg-amber-50/40 dark:bg-amber-950/15",
+                                        )}
+                                    >
+                                        <TableCell className="px-3 py-3 text-center">
+                                            <Checkbox
+                                                aria-label={`Select ${trainee.fullName ?? studentId ?? trainee.id}`}
+                                                className={TRAINEE_CHECKBOX_CLASS}
+                                                checked={isSelected}
+                                                onCheckedChange={(checked) =>
+                                                    handleToggleRow(trainee.id, checked === true)
+                                                }
+                                            />
+                                        </TableCell>
+                                        <TableCell className="px-3 py-3 text-sm text-foreground">{traineePage.from + index}</TableCell>
+                                        <TableCell className="px-3 py-3 text-sm font-medium text-[#3b4cb8] dark:text-blue-300">
+                                            <div className="flex items-center gap-2">
+                                                <TooltipWrapper
+                                                    content="View Profile"
+                                                    side="bottom"
+                                                    portal={false}
+                                                    contentClassName="z-10"
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleOpenView(trainee)}
+                                                        className="cursor-pointer text-left font-medium text-[#3b4cb8] transition-colors hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring dark:text-blue-300"
+                                                        title="View Profile"
+                                                    >
+                                                        {trainee.fullName || "—"}
+                                                    </button>
+                                                </TooltipWrapper>
+                                                {isNewRow ? (
+                                                    <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                                                        New
+                                                    </span>
+                                                ) : isEditedRow ? (
+                                                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                                                        Edited
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="px-3 py-3 text-sm text-foreground">
+                                            {studentId}
+                                        </TableCell>
+                                        <TableCell className="px-3 py-3 text-sm text-foreground">
+                                            {personalEmail}
+                                        </TableCell>
+                                        <TableCell className="px-3 py-3 text-sm whitespace-nowrap text-foreground">
+                                            {formatDob(trainee.dob)}
+                                        </TableCell>
+                                        <TableCell className="px-3 py-3 text-sm text-foreground">
+                                            {trainee.gender ?? ""}
+                                        </TableCell>
+                                        <TableCell className="px-3 py-3">
+                                            <Badge
+                                                variant="secondary"
+                                                className={cn(
+                                                    "rounded-full px-3 py-0.5 text-xs font-medium",
+                                                    statusBadge.className,
+                                                )}
+                                            >
+                                                {statusBadge.label}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="px-3 py-3 text-center">
+                                            <DropdownMenu modal={false}>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon-sm"
+                                                        aria-label={`Actions for ${trainee.fullName ?? studentId ?? trainee.id}`}
+                                                    >
+                                                        <MoreVertical className="size-4 text-muted-foreground" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-44">
+                                                    <DropdownMenuItem onClick={() => handleOpenView(trainee)}>
+                                                        <Eye className="size-4" /> View Profile
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem disabled={!canUpdate} onClick={() => handleOpenEdit(trainee)}>
+                                                        <Pencil className="size-4" /> Edit
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                        variant="destructive"
+                                                        disabled={!canDelete || !canUpdate}
+                                                        onClick={() => setDeleteTarget(trainee)}
+                                                    >
+                                                        <Trash2 className="size-4" /> Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })
+                        )}
+                    </TableBody>
+                </table>
+            </div>
+
+            {/* Bottom Actions Bar */}
+            <nav aria-label="Trainee pagination" className="flex shrink-0 flex-wrap items-center justify-between gap-3 text-sm">
+                <span>Showing {traineePage.from}–{traineePage.to} of {filteredTrainees.length} trainees</span>
+                <div className="flex gap-2"><Button variant="outline" size="sm" aria-label="Previous trainees" disabled={traineePage.page === 0} onClick={() => setPage(traineePage.page - 1)}>Previous</Button>
+                    <Button variant="outline" size="sm" aria-label="Next trainees" disabled={traineePage.page >= traineePage.totalPages - 1} onClick={() => setPage(traineePage.page + 1)}>Next</Button></div>
+            </nav>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2.5 pt-1">
+                {hasUnsavedChanges ? (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        disabled={saveMutation.isPending}
+                        onClick={handleDiscardChanges}
+                    >
+                        <RotateCcw className="size-4" aria-hidden /> Discard
+                    </Button>
+                ) : null}
+
+                <Button
+                    type="button"
+                    disabled={!hasUnsavedChanges || saveMutation.isPending || !canUpdate
+                        || (pendingChanges.created.length > 0 && !canCreate) || (pendingChanges.deletedIds.length > 0 && !canDelete)}
+                    onClick={handleSaveChanges}
+                    className={cn(
+                        hasUnsavedChanges
+                            ? "bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                            : "",
+                    )}
+                >
+                    <Save className="size-4" aria-hidden />
+                    <span>{saveMutation.isPending ? "Saving..." : "Save Changes"}</span>
+                    {hasUnsavedChanges ? (
+                        <span className="ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold">
+                            {pendingChanges.total}
+                        </span>
+                    ) : null}
+                </Button>
+            </div>
+
+            {/* Add / Edit / View Profile Modal */}
+            <TraineeModal
+                membershipOnly={internal}
+                open={modalState.open}
+                mode={modalState.mode}
+                site={classSite}
+                trainee={modalState.trainee}
+                existingTrainees={activeTrainees}
+                onOpenChange={(open) => setModalState((prev) => ({ ...prev, open }))}
+                onSubmit={handleModalSubmit}
+                onSwitchToEdit={
+                    modalState.trainee && canUpdate
+                        ? () => setModalState((prev) => ({ ...prev, mode: "edit" }))
+                        : undefined
+                }
+            />
+
+            {importOpen && <TraineeImportModal open classId={classItem.id} onOpenChange={setImportOpen} />}
+            {/* Single Row Delete Confirmation Modal */}
+            <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Remove Trainee</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to remove this trainee from class?
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {deleteTarget ? (
+                        <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                            <p className="font-medium text-foreground">{deleteTarget.fullName || "—"}</p>
+                            <p className="text-xs text-muted-foreground">
+                                {formatFptStudentIdForSite(
+                                    deleteTarget.fptAccount || deleteTarget.code,
+                                    classSite,
+                                    deleteTarget.id,
+                                ) || "—"}{" "}
+                                • {deleteTarget.personalEmail || deleteTarget.email || "—"}
+                            </p>
+                        </div>
+                    ) : null}
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>
+                            Cancel
+                        </Button>
+                        <Button type="button" variant="destructive" onClick={handleConfirmDelete}>
+                            Delete
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Bulk Delete Selected Confirmation Modal */}
+            <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Remove Selected Trainees</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to remove {selectedCount} selected{" "}
+                            {selectedCount === 1 ? "trainee" : "trainees"} from class?
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {selectedCount > 0 ? (
+                        <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-md border bg-muted/30 p-3 text-sm">
+                            {selectedTrainees.map((trainee) => (
+                                <div key={trainee.id} className="flex items-center justify-between gap-2">
+                                    <span className="truncate font-medium text-foreground">
+                                        {trainee.fullName || "—"}
+                                    </span>
+                                    <span className="shrink-0 text-xs text-muted-foreground">
+                                        {formatFptStudentIdForSite(
+                                            trainee.fptAccount || trainee.code,
+                                            classSite,
+                                            trainee.id,
+                                        )}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : null}
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setBulkDeleteOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button type="button" variant="destructive" onClick={handleConfirmBulkDelete}>
+                            Delete Selected ({selectedCount})
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+}
+
+export default TraineeListTab;

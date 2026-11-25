@@ -18,6 +18,17 @@ public class ProjectReportController {
     private final ProjectReportExportService exports;
     @GetMapping("/options") public Options options(){return reports.options();}
     @GetMapping public Dashboard dashboard(@ModelAttribute Filter filter){return reports.dashboard(filter);}
+    @GetMapping("/activities") public ActivityPage activities(@ModelAttribute Filter filter,
+            @RequestParam(defaultValue="0") int offset, @RequestParam(defaultValue="10") int limit,
+            @RequestParam(required=false) java.time.Instant before) { return reports.activities(filter, offset, limit, before); }
+    @GetMapping("/activities/history") public ActivityHistory activityHistory(@ModelAttribute Filter filter,
+            @RequestParam(defaultValue="0", name="historyPage") int page,
+            @RequestParam(defaultValue="20", name="historySize") int size,
+            @RequestParam(required=false) @org.springframework.format.annotation.DateTimeFormat(iso=org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate activityFrom,
+            @RequestParam(required=false) @org.springframework.format.annotation.DateTimeFormat(iso=org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate activityTo,
+            @RequestParam(required=false) java.time.Instant before) {
+        return reports.activityHistory(filter, page, size, activityFrom, activityTo, before);
+    }
     @PostMapping("/exports") public ResponseEntity<ExportView> request(@RequestHeader(value="Idempotency-Key",required=false)UUID key,@RequestBody ExportRequest request){
         return ResponseEntity.accepted().body(exports.request(key,request));}
     @GetMapping("/exports") public List<ExportView> list(){return exports.list();}

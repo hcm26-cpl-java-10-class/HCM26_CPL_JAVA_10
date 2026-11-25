@@ -1,5 +1,5 @@
 import React from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 
 import { useSelector } from "react-redux";
 import type { RootState } from "@/store/store";
@@ -14,16 +14,22 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
-  children,
-  requiredPermission,
-  requiredPermissions,
-  requireAll = false,
-}) => {
+                                                                children,
+                                                                requiredPermission,
+                                                                requiredPermissions,
+                                                                requireAll = false,
+                                                              }) => {
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
-  const { hasPermission, hasAnyPermission, hasAllPermissions, user } = usePermissions();
+  const { activeRole, hasPermission, hasAnyPermission, hasAllPermissions, user } = usePermissions();
+
+  const { pathname } = useLocation();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (activeRole === "STUDENT" && (/^\/exams(?:\/|$)/.test(pathname) || /^\/management\/exam(?:\/|$)/.test(pathname))) {
+    return <Navigate to="/student/exams" replace />;
   }
 
   if (requiredPermission && !hasPermission(requiredPermission)) {
@@ -32,18 +38,15 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   if (requiredPermissions?.length) {
     const hasAccess = requireAll
-      ? hasAllPermissions(requiredPermissions)
-      : hasAnyPermission(requiredPermissions);
+        ? hasAllPermissions(requiredPermissions)
+        : hasAnyPermission(requiredPermissions);
 
     if (!hasAccess) {
       return <Navigate to="/unauthorized" replace />;
     }
   }
 
-  if (
-    window.location.pathname === "/admin/audit-log" &&
-    !isAuditAdmin(user.roles)
-  ) {
+  if (pathname === "/admin/audit-log" && !isAuditAdmin(user.roles)) {
     return <Navigate to="/unauthorized" replace />;
   }
 

@@ -1,12 +1,15 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Eye, RefreshCcw } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { BookOpen, Eye, Link2, RefreshCcw, Unlink2 } from "lucide-react";
 
-import { syllabusExtrasApi } from "@/api/features/demo/syllabus-extras.api";
+import { syllabusExtrasApi, type LinkedCourse, type SyllabusCourseUsage } from "@/api/features/demo/syllabus-extras.api";
+import { CourseUsageLinkDialog } from "./CourseUsageLinkDialog";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -15,7 +18,22 @@ import { SyllabusStatFilterCard } from "./SyllabusStatFilterCard";
 
 export default function CourseUsagePage() {
   const { hasPermission } = usePermissions();
-  const canReadCourses = hasPermission("COURSE_READ");
+  const canReadCourses = hasPermission("COURSE_READ") && hasPermission("SYLLABUS_READ");
+  const canLinkCourses = canReadCourses && hasPermission("COURSE_UPDATE");
+  const queryClient = useQueryClient();
+  const [linkTarget, setLinkTarget] = useState<SyllabusCourseUsage | null>(null);
+  const [unlinkTarget, setUnlinkTarget] = useState<{ syllabusId: number; course: LinkedCourse } | null>(null);
+  const unlinkMutation = useMutation({
+    mutationFn: ({ syllabusId, courseId }: { syllabusId: number; courseId: number }) =>
+      syllabusExtrasApi.unlinkCourse(syllabusId, courseId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["syllabus-course-usage"] });
+      await queryClient.invalidateQueries({ queryKey: ["syllabus-link-candidates"] });
+      toast.success("Course unlinked. Course content has not been deleted.");
+      setUnlinkTarget(null);
+    },
+    onError: () => toast.error("Unable to unlink Course. Published Courses must be unpublished first."),
+  });
   const [search, setSearch] = useState("");
   const [usage, setUsage] = useState("all");
   const [status, setStatus] = useState("all");
@@ -62,7 +80,7 @@ export default function CourseUsagePage() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Course Usage</h1>
-            <p className="text-sm text-muted-foreground">Track which Courses use each Syllabus.</p>
+            <p className="text-sm text-muted-foreground">Track which Courses use each Syllabus. Use Link to attach an existing Course.</p>
           </div>
           <Button asChild variant="outline" size="sm"><Link to="/syllabuses"><BookOpen className="size-4" /> Syllabuses</Link></Button>
         </div>
@@ -129,7 +147,7 @@ export default function CourseUsagePage() {
         />
 
         {!canReadCourses ? (
-          <div role="alert" className="rounded-md border bg-card p-8 text-center text-sm text-muted-foreground">Course Usage requires COURSE_READ permission.</div>
+          <div role="alert" className="rounded-md border bg-card p-8 text-center text-sm text-muted-foreground">Course Usage requires SYLLABUS_READ and COURSE_READ permissions.</div>
         ) : query.isPending ? (
           <div className="rounded-md border bg-card p-8 text-center text-sm text-muted-foreground">Loading course usage...</div>
         ) : query.isError ? (
@@ -148,7 +166,7 @@ export default function CourseUsagePage() {
                   <TableHead className="w-28">Status</TableHead>
                   <TableHead className="w-24 text-center">Courses</TableHead>
                   <TableHead>Used by</TableHead>
-                  <TableHead className="w-24 text-right">Actions</TableHead>
+                  <TableHead className="w-40 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -166,15 +184,28 @@ export default function CourseUsagePage() {
                     <TableCell className="whitespace-normal">
                       {item.courses.length ? <div className="flex flex-wrap gap-x-2 gap-y-1">
                         {item.courses.map((course) => (
-                          <Link key={course.id} to={`/courses/${course.id}`} title={`${course.status}${course.active ? "" : " · Inactive"}`}
-                            className="inline-block max-w-48 truncate text-sm text-primary hover:underline">{course.name}</Link>
+                          <span key={course.id} className="inline-flex max-w-full items-center gap-1">
+                            <Link to={`/courses/${course.id}`} title={`${course.status}${course.active ? "" : " · Inactive"}`}
+                              className="inline-block max-w-48 truncate text-sm text-primary hover:underline">{course.name}</Link>
+                            {canLinkCourses && <Button type="button" size="icon-sm" variant="ghost" className="size-6 shrink-0"
+                              title={course.status === "PUBLISHED" ? "Unpublish Course before unlinking" : `Unlink ${course.name}`}
+                              aria-label={`Unlink ${course.name}`} disabled={course.status === "PUBLISHED"}
+                              onClick={() => setUnlinkTarget({ syllabusId: item.syllabusId, course })}>
+                              <Unlink2 className="size-3.5" />
+                            </Button>}
+                          </span>
                         ))}
                       </div> : <span className="text-muted-foreground">Not linked</span>}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button asChild size="icon-sm" variant="outline" title="View Syllabus">
-                        <Link to={`/syllabuses/${item.syllabusId}`} aria-label={`View ${item.syllabusName}`}><Eye className="size-4" /></Link>
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        {canLinkCourses && <Button type="button" size="sm" variant="outline" title="Link Existing Course"
+                          aria-label={`Link Course to ${item.syllabusName}`} disabled={item.syllabusStatus !== "PUBLISHED" || !item.syllabusActive}
+                          onClick={() => setLinkTarget(item)}><Link2 className="size-4" /> Link</Button>}
+                        <Button asChild size="icon-sm" variant="outline" title="View Syllabus">
+                          <Link to={`/syllabuses/${item.syllabusId}`} aria-label={`View ${item.syllabusName}`}><Eye className="size-4" /></Link>
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -188,9 +219,14 @@ export default function CourseUsagePage() {
               <article key={item.syllabusId} className="flex min-h-56 flex-col gap-3 rounded-md border bg-card p-4">
                 <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                   <span>#{current * pageSize + idx + 1}</span>
-                  <Button asChild size="icon-sm" variant="outline" title="View Syllabus">
-                    <Link to={`/syllabuses/${item.syllabusId}`} aria-label={`View ${item.syllabusName}`}><Eye className="size-4" /></Link>
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    {canLinkCourses && <Button type="button" size="sm" variant="outline" title="Link Existing Course"
+                      aria-label={`Link Course to ${item.syllabusName}`} disabled={item.syllabusStatus !== "PUBLISHED" || !item.syllabusActive}
+                      onClick={() => setLinkTarget(item)}><Link2 className="size-4" /> Link</Button>}
+                    <Button asChild size="icon-sm" variant="outline" title="View Syllabus">
+                      <Link to={`/syllabuses/${item.syllabusId}`} aria-label={`View ${item.syllabusName}`}><Eye className="size-4" /></Link>
+                    </Button>
+                  </div>
                 </div>
                 <dl className="grid grid-cols-[90px_1fr] gap-x-2 gap-y-2 text-xs">
                   <dt className="text-muted-foreground">Code</dt><dd className="break-all font-medium">{item.syllabusCode}</dd>
@@ -201,7 +237,14 @@ export default function CourseUsagePage() {
                 <div className="mt-auto border-t pt-3 text-xs">
                   <p className="mb-2 text-muted-foreground">Used by</p>
                   {item.courses.length ? <div className="flex flex-col gap-1">
-                    {item.courses.map((course) => <Link key={course.id} className="truncate text-primary hover:underline" to={`/courses/${course.id}`}>{course.name} · {course.status === "PUBLISHED" ? "Published" : "Draft"}{!course.active ? " · Inactive" : ""}</Link>)}
+                    {item.courses.map((course) => <div key={course.id} className="flex items-center gap-1">
+                      <Link className="min-w-0 flex-1 truncate text-primary hover:underline" to={`/courses/${course.id}`}>{course.name} · {course.status === "PUBLISHED" ? "Published" : course.status}{!course.active ? " · Inactive" : ""}</Link>
+                      {canLinkCourses && <Button type="button" size="icon-sm" variant="ghost" className="size-6 shrink-0"
+                        aria-label={`Unlink ${course.name}`} title={course.status === "PUBLISHED" ? "Unpublish Course before unlinking" : `Unlink ${course.name}`}
+                        disabled={course.status === "PUBLISHED"} onClick={() => setUnlinkTarget({ syllabusId: item.syllabusId, course })}>
+                        <Unlink2 className="size-3.5" />
+                      </Button>}
+                    </div>)}
                   </div> : <p className="text-muted-foreground">Not linked to a Course</p>}
                 </div>
               </article>
@@ -211,6 +254,24 @@ export default function CourseUsagePage() {
         )}
         {canReadCourses && !query.isPending && !query.isError && <SyllabusListFooter count={filtered.length} page={current} pageSize={pageSize}
           onPageChange={setPage} onPageSizeChange={(size) => { setPage(0); setPageSize(size); }} />}
+
+        <CourseUsageLinkDialog syllabus={linkTarget} onClose={() => setLinkTarget(null)} />
+        <Dialog open={unlinkTarget !== null} onOpenChange={(open) => { if (!open && !unlinkMutation.isPending) setUnlinkTarget(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Unlink Course?</DialogTitle>
+              <DialogDescription>
+                Remove the Syllabus relationship for {unlinkTarget?.course.name}? The Course, Sections and Lessons will remain unchanged.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" disabled={unlinkMutation.isPending} onClick={() => setUnlinkTarget(null)}>Cancel</Button>
+              <Button disabled={!unlinkTarget || unlinkMutation.isPending} onClick={() => {
+                if (unlinkTarget) unlinkMutation.mutate({ syllabusId: unlinkTarget.syllabusId, courseId: unlinkTarget.course.id });
+              }}>{unlinkMutation.isPending ? "Unlinking..." : "Unlink Course"}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   );

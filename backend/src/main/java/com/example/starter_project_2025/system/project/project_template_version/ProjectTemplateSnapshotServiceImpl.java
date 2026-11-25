@@ -8,17 +8,17 @@ import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.ProjectRepository;
-import com.example.starter_project_2025.system.project.ProjectTemplate;
-import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.repository.ProjectTemplateRepository;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.project_template_version.audit.ProjectTemplateSnapshotAuditLogDTO;
 import com.example.starter_project_2025.system.project.project_template_version.audit.ProjectTemplateSnapshotAuditService;
 import com.example.starter_project_2025.system.project.project_template_version.event.ProjectTemplateSnapshotOutboxService;
-import com.example.starter_project_2025.system.project.template.TemplateConfigurationService;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateAccessService;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateValidator;
-import com.example.starter_project_2025.system.project.template.assignment.TemplateBriefSnapshotWriter;
+import com.example.starter_project_2025.system.project.template.service.TemplateConfigurationService;
+import com.example.starter_project_2025.system.project.template.service.ProjectTemplateAccessService;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplateStatus;
+import com.example.starter_project_2025.system.project.template.validation.ProjectTemplateValidator;
+import com.example.starter_project_2025.system.project.template.service.assignment.TemplateBriefSnapshotWriter;
 import com.example.starter_project_2025.system.rbac.user.User;
 import org.springframework.data.jpa.domain.Specification;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -132,7 +132,7 @@ public class ProjectTemplateSnapshotServiceImpl
     ProjectRepository projectRepository;
     ObjectMapper objectMapper;
     TemplateConfigurationService configurations;
-    com.example.starter_project_2025.system.project.template.version.TemplateVersionConfigurationService versionConfigurations;
+    com.example.starter_project_2025.system.project.template.service.version.TemplateVersionConfigurationService versionConfigurations;
     ProjectTemplateAccessService templateAccess;
     TemplateVersionLifecycleService lifecycle;
     com.example.starter_project_2025.system.project.resources.template_resources.TemplateResourceCopyService templateResourceCopies;
@@ -588,7 +588,7 @@ public class ProjectTemplateSnapshotServiceImpl
         versionConfigurations.synchronizeDraft(saved);
         if (publish) {
             var owner = requireOwnedTemplate(saved.getTemplateId());
-            versionConfigurations.publish(saved.getId(), new com.example.starter_project_2025.system.project.template.TemplateActivationRequest(
+            versionConfigurations.publish(saved.getId(), new com.example.starter_project_2025.system.project.template.dto.TemplateActivationRequest(
                     java.math.BigDecimal.valueOf(owner.getLockVersion())));
         }
 
@@ -1153,4 +1153,111 @@ public class ProjectTemplateSnapshotServiceImpl
                 .collect(Collectors.toMap(
                         Project::getId, Project::getName, (left, right) -> left));
     }
+
+    @Override
+    public ProjectTemplateSnapshotDTO createNewVersionForSuggestion(Long sourceVersionId) {
+        checkPermission(CrudAction.CREATE);
+
+        ProjectTemplateSnapshot source = findSnapshot(sourceVersionId);
+        requireOwnedTemplate(source.getTemplateId());
+        requireTemplateVersion(source);
+
+        Map<String, List<String>> errors = new LinkedHashMap<>();
+
+        validateTemplateId(source.getTemplateId(), errors);
+        validateContentJson(source.getContentJson(), errors);
+
+        throwIfInvalid(errors);
+
+        String nextVersion = nextVersionLabel(source.getTemplateId());
+
+        ProjectTemplateSnapshot created = ProjectTemplateSnapshot.builder()
+                .templateId(source.getTemplateId())
+                .projectId(null)
+                .parentTemplateId(source.getId())
+                .version(nextVersion)
+                .contentJson(source.getContentJson())
+                .status(ProjectTemplateVersionStatus.DRAFT)
+                .isActive(true)
+                .build();
+
+        ProjectTemplateSnapshot saved = snapshotRepository.save(created);
+
+        syncTemplateVersion(saved.getTemplateId(), nextVersion);
+        versionConfigurations.synchronizeDraft(saved);
+
+        templateResourceCopies.copy(
+                source.getId(),
+                saved.getId(),
+                saved.getTemplateId()
+        );
+
+        return toResponse(saved);
+    }
+
+    @Override
+    public void recordSuggestionVersionCreated(
+            Long snapshotId,
+            Long sourceVersionId
+    ) {
+        ProjectTemplateSnapshot saved = findSnapshot(snapshotId);
+        ProjectTemplateSnapshot source = findSnapshot(sourceVersionId);
+
+        Map<String, Object> after = snapshot(saved);
+
+        after.put("sourceVersionId", source.getId());
+        after.put("sourceVersion", source.getVersion());
+        after.put(
+                "sourceStatus",
+                source.getStatus() == null ? null : source.getStatus().name()
+        );
+
+        snapshotAuditService.record(
+                ACTION_NEW_VERSION,
+                saved.getId(),
+                saved.getTemplateId(),
+                saved.getProjectId(),
+                null,
+                after
+        );
+
+        snapshotOutboxService.enqueue(
+                EVENT_CREATED,
+                saved.getId(),
+                saved.getTemplateId(),
+                saved.getProjectId(),
+                currentActorEmail(),
+                after
+        );
+    }
+
+    @Override
+    public void updateContentJsonForSuggestion(
+            Long snapshotId,
+            String contentJson
+    ) {
+        checkPermission(CrudAction.UPDATE);
+
+        ProjectTemplateSnapshot snapshot = findSnapshot(snapshotId);
+
+        requireOwnedTemplate(snapshot.getTemplateId());
+        requireTemplateVersion(snapshot);
+
+        if (snapshot.getStatus() != ProjectTemplateVersionStatus.DRAFT) {
+            throw new IllegalStateException(
+                    "Only DRAFT snapshots can be updated by AI suggestions"
+            );
+        }
+
+        Map<String, List<String>> errors = new LinkedHashMap<>();
+
+        validateContentJson(contentJson, errors);
+
+        throwIfInvalid(errors);
+
+        snapshot.setContentJson(contentJson);
+
+        snapshotRepository.saveAndFlush(snapshot);
+    }
+
 }

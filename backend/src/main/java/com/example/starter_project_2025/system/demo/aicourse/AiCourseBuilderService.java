@@ -2,7 +2,6 @@ package com.example.starter_project_2025.system.demo.aicourse;
 
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.security.UserPrincipal;
-import com.example.starter_project_2025.system.demo.aicourse.AiCourseBuilderDTO.*;
 import com.example.starter_project_2025.system.demo.category.Category;
 import com.example.starter_project_2025.system.demo.category.CategoryRepository;
 import com.example.starter_project_2025.system.demo.course.Course;
@@ -34,6 +33,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import com.example.starter_project_2025.system.demo.aicourse.AiCourseBuilderDTO.*;
 
 /**
  * AI-assisted course creation:

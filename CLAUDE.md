@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-FAMS LMS — a training & exam management system (team HCM26_CPL_JAVA_10). Monorepo with a Spring Boot backend (`backend/`) and a React + Vite + TypeScript frontend (`frontend/`). Feature specs, implementation plans and verification notes live in `docs/` (e.g. `MILESTONE_BACKEND_GUIDE.md`, `MILESTONE_FRONTEND_GUIDE.md`, `PROJECT_HUB.md`) — check there before designing a feature in the project/milestone area.
+FAMS LMS — a training & exam management system (team HCM26_CPL_JAVA_10). Monorepo with a Spring Boot backend (`backend/`) and a React + Vite + TypeScript frontend (`frontend/`). Feature specs, implementation plans and verification notes live in `docs/` (e.g. `05-project-workspace/MILESTONE_BACKEND_GUIDE.md`, `05-project-workspace/MILESTONE_FRONTEND_GUIDE.md`, `05-project-workspace/PROJECT_HUB.md`) — check there before designing a feature in the project/milestone area. The `docs/` folder is organised by topic; see `docs/README.md` for the index.
 
 ## Commands
 
@@ -51,8 +51,27 @@ npx tsc --noEmit -p tsconfig.app.json  # type-check app sources
 - **Routing is partly data-driven**: `router/build-router.ts` globs `pages/management/**/index.tsx`. A page that exports `entityConfig` gets a route at `entityConfig.path` (its default export, or the generic `AutoCrudPage` if there is none), plus optional create/edit/detail action routes. `App.tsx` only mounts those module-driven routes for URLs that appear in the backend menu (`useActiveModuleGroups`), wrapped in `ProtectedRoute` with the module's permission. Other pages are registered as static routes in `router/component-registry.ts`.
 - Permissions/role: `hooks/usePermissions` + `utils/rbac.utils`. Students get `StudentNavbar`; other roles get the sidebar layout (`components/layout/MainLayout`). Each page renders its own `MainLayout`, so the sidebar remounts on every navigation; any sidebar UI state that must survive navigation has to be persisted (cookie / local/session storage).
 
-## Conventions (from `docs/COMMIT_GUIDE.md`)
+## Conventions (from `docs/01-getting-started/COMMIT_GUIDE.md`)
 
 - Branches: `feature/*`, `fix/*`, `hotfix/*`, `chore/*` off `dev`; PRs target `dev` (`main` is release only).
 - Conventional Commits: `type(scope): subject` (no trailing period); one logical change per commit; stage specific files rather than `git add .`.
 - Before committing: backend `./mvnw test` passes, frontend type-check and `npm run lint` show no new errors, and no new `console.log` / `System.out.println`.
+
+## Documentation Rules (`docs/`)
+
+Enforced by `.github/workflows/docs-structure-check.yml` and indexed in `docs/README.md`:
+
+- **Never place `.md` files directly in `docs/`** (only `docs/README.md` is allowed at the root of `docs/`).
+- **Never add new `.md` files at the repository root** (keep only standard root files such as `README.md`, `AGENTS.md`, `CLAUDE.md`).
+- **Place every doc inside the matching numbered topic folder:**
+  - `docs/01-getting-started/` — setup, run guides, commit/git conventions
+  - `docs/02-architecture/` — architecture, class diagrams, ERDs
+  - `docs/03-exam-assessment/` — exam, question, grading, auth/exam security & test guides
+  - `docs/04-course-learning/` — courses, syllabus, progress, analytics, recommendations
+  - `docs/05-project-workspace/` — Mock Project Hub (`plans/`, `use-cases/`, `fixtures/`, `images/`)
+  - `docs/06-testing-verification/` — bug fix reports, investigations, test plans, acceptance evidence
+  - `docs/07-demo/` — demo scripts, walkthroughs, review kits
+  - `docs/08-training-operations/` — classes, class setup, training calendar, trainers, sessions
+  - `docs/09-deployment-operations/` — deployment, cutover, rollback, safe startup, infrastructure (SMTP/DB)
+- **New topic folder:** Only when no existing folder fits; must follow `NN-kebab-case` (e.g. `10-<topic>/`) and be added to `docs/README.md`.
+- **Naming & links:** No spaces in `.md` filenames; use relative paths for internal links; never commit local absolute paths (`C:/...`, `D:/...`, `file:///...`).

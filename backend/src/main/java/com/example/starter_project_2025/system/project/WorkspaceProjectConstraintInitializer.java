@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
@@ -11,6 +13,7 @@ import java.util.List;
 
 /** Recheck after demo replacement: an old shared-project fixture may have blocked Hibernate's DDL. */
 @Component @Order(21) @RequiredArgsConstructor
+@StartupMutation
 public class WorkspaceProjectConstraintInitializer implements CommandLineRunner {
     private final DataSource dataSource;
 

@@ -149,15 +149,19 @@ export function CourseCard({
           </span>
         </div>
 
-        <div className="mt-auto flex gap-2 pt-2">
-          {showDetailAction && (
-            <Button type="button" variant="outline" className="flex-1" onClick={handleSelect}>
+        <div className="mt-auto flex flex-col gap-2 pt-2">
+          {showDetailAction && (disableNavigation ? (
+            <Button type="button" variant="outline" className="w-full" onClick={handleSelect}>
               <Eye className="size-4" /> View detail
             </Button>
-          )}
+          ) : (
+            <Button asChild variant="outline" className="w-full"><Link to={detailPath}>
+              <Eye className="size-4" /> View detail
+            </Link></Button>
+          ))}
           {showEnrollmentAction && (course.enrolled && enrollmentId !== undefined ? (
             certificateToken ? (
-              <Button asChild className="flex-1">
+              <Button asChild className="flex-1 bg-green-600 text-white hover:bg-green-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700">
                 <Link to={`/my-certificates/${encodeURIComponent(certificateToken)}`}>
                   <Award className="size-4" /> View certificate
                 </Link>

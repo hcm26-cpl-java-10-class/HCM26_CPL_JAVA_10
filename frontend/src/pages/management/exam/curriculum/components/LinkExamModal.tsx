@@ -14,6 +14,7 @@ import { EXAM_CATEGORY_LABEL } from "@/types";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check, ClipboardList, Clock, HelpCircle, Plus, Search } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 interface LinkExamModalProps {
@@ -138,9 +139,9 @@ export function LinkExamModal({
                   Create a new assessment in Assessment Management to attach it here.
                 </p>
                 <Button asChild size="sm" variant="outline" className="mt-2 text-xs">
-                  <a href="/exams" target="_blank" rel="noopener noreferrer">
+                  <Link to="/exams">
                     <Plus className="mr-1 size-3.5" /> Go to Assessments
-                  </a>
+                  </Link>
                 </Button>
               </div>
             ) : (

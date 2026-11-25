@@ -45,7 +45,7 @@ import java.util.List;
 )
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("WORKSPACE")
-@ResourceMenu(title = "Workspace", group = "Project Management", icon = "folder", url = "/management/workspaces/candidates", order = 3, permission = "WORKSPACE_READ")
+@ResourceMenu(title = "Workspaces", group = "Project Management", icon = "folder", url = "/management/workspaces/candidates", order = 3, permission = "WORKSPACE_READ")
 public class Workspace extends BaseEntity {
 
     @Column(nullable = false, length = 100)

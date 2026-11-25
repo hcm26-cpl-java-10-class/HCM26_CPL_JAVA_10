@@ -46,6 +46,9 @@ public class LessonDTO extends BaseDTO {
             message = "Duration must not be negative")
     Integer duration;
 
+    /** true = người học được tua video; false/null = bị khóa tua. Chỉ người có quyền LESSON_UPDATE mới đổi được. */
+    Boolean allowSeeking;
+
     @NotNull(groups = OnCreate.class, message = "Order index is required")
     @Min(value = 0, groups = {OnCreate.class, OnUpdate.class},
             message = "Order index must not be negative")

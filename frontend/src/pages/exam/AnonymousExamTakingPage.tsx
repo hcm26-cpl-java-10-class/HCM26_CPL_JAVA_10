@@ -95,10 +95,18 @@ export default function AnonymousExamTakingPage() {
     const integrity = useExamIntegrity({
         attemptId: attempt?.id,
         config: attempt?.integrity,
-        active: attempt?.status === 'IN_PROGRESS',
-        send: (id, payload) => sendAnonymousIntegrityEvents(id, sessionToken, payload),
-        sendEntryPhoto: (id, imageData) => sendAnonymousEntryPhoto(id, sessionToken, imageData),
+        active: attempt?.status === "IN_PROGRESS",
+
+        send: (id, payload) =>
+            sendAnonymousIntegrityEvents(id, sessionToken, payload),
+
+        sendEntryPhoto: (id, imageData) =>
+            sendAnonymousEntryPhoto(id, sessionToken, imageData),
+
         onEntryPhotoSaved: () => void attemptQuery.refetch(),
+
+        // Cho phép Student chia sẻ màn hình với Exam Supervisor.
+        supervisorStreaming: true,
     });
     const questionFont = useQuestionFontSize();
     const [confirmOpen, setConfirmOpen] = useState(false);
@@ -221,6 +229,17 @@ export default function AnonymousExamTakingPage() {
         const interval = window.setInterval(() => setNow(Date.now()), 1000);
         return () => window.clearInterval(interval);
     }, [attempt?.status]);
+
+    useEffect(() => {
+        if (!attempt || attempt.status !== 'IN_PROGRESS') return;
+        const autosaveId = window.setInterval(() => {
+            if (pendingAnswersRef.current.size > 0) {
+                void flushPendingAnswers(attempt.id);
+            }
+        }, 15000);
+        return () => window.clearInterval(autosaveId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [attempt?.id, attempt?.status]);
 
     useEffect(() => {
         if (attempt?.status !== 'IN_PROGRESS') return;

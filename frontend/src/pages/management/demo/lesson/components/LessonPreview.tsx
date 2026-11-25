@@ -1,6 +1,13 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ExternalLink, FileText, Link2, Music2, PlayCircle } from "lucide-react";
+import {
+  LockedAudio,
+  LockedFileVideo,
+  LockedVimeoVideo,
+  LockedYouTubeVideo,
+  SeekLockedNotice,
+} from "./SeekLockedPlayers";
 
 type LessonDTO = {
   title?: string | null;
@@ -8,6 +15,8 @@ type LessonDTO = {
   contentUrl?: string | null;
   textContent?: string | null;
   duration?: number | null;
+  /** true = học viên được tua video. */
+  allowSeeking?: boolean | null;
 };
 
 /** "125" -> "2:05", "3725" -> "1:02:05" */
@@ -33,7 +42,7 @@ function toSafeUrl(raw?: string | null): URL | null {
 }
 
 type VideoSource =
-  | { kind: "embed"; src: string }
+  | { kind: "embed"; src: string; provider: "youtube" | "vimeo"; id: string }
   | { kind: "file"; src: string }
   | { kind: "unknown"; src: string };
 
@@ -42,18 +51,18 @@ function resolveVideoSource(url: URL): VideoSource {
 
   if (host === "youtu.be") {
     const id = url.pathname.split("/").filter(Boolean)[0];
-    if (id) return { kind: "embed", src: `https://www.youtube.com/embed/${id}` };
+    if (id) return { kind: "embed", provider: "youtube", id, src: `https://www.youtube.com/embed/${id}` };
   }
   if (host === "youtube.com" || host === "m.youtube.com") {
     const parts = url.pathname.split("/").filter(Boolean);
     const id =
       url.searchParams.get("v") ??
       (["embed", "shorts", "live"].includes(parts[0]) ? parts[1] : undefined);
-    if (id) return { kind: "embed", src: `https://www.youtube.com/embed/${id}` };
+    if (id) return { kind: "embed", provider: "youtube", id, src: `https://www.youtube.com/embed/${id}` };
   }
   if (host === "vimeo.com" || host === "player.vimeo.com") {
     const id = url.pathname.split("/").filter(Boolean).find((p) => /^\d+$/.test(p));
-    if (id) return { kind: "embed", src: `https://player.vimeo.com/video/${id}` };
+    if (id) return { kind: "embed", provider: "vimeo", id, src: `https://player.vimeo.com/video/${id}` };
   }
   if (/\.(mp4|webm|ogg|mov)$/i.test(url.pathname)) {
     return { kind: "file", src: url.toString() };
@@ -79,11 +88,35 @@ function InvalidContent({ message }: { message: string }) {
   );
 }
 
-function VideoPreview({ lesson }: { lesson: LessonDTO }) {
+function VideoPreview({ lesson, restrictSeeking }: { lesson: LessonDTO; restrictSeeking: boolean }) {
   const url = toSafeUrl(lesson.contentUrl);
   if (!url) return <InvalidContent message="Video URL is missing or invalid." />;
 
   const source = resolveVideoSource(url);
+  const locked = restrictSeeking && lesson.allowSeeking !== true;
+  const title = lesson.title || "Lesson video";
+
+  if (locked && source.kind === "embed") {
+    return (
+      <div>
+        {source.provider === "youtube" ? (
+          <LockedYouTubeVideo videoId={source.id} title={title} />
+        ) : (
+          <LockedVimeoVideo videoId={source.id} title={title} />
+        )}
+        <SeekLockedNotice />
+      </div>
+    );
+  }
+
+  if (locked && source.kind === "file") {
+    return (
+      <div>
+        <LockedFileVideo src={source.src} />
+        <SeekLockedNotice />
+      </div>
+    );
+  }
 
   if (source.kind === "embed") {
     return (
@@ -134,20 +167,28 @@ function TextPreview({ lesson }: { lesson: LessonDTO }) {
   );
 }
 
-function AudioPreview({ lesson }: { lesson: LessonDTO }) {
+function AudioPreview({ lesson, restrictSeeking }: { lesson: LessonDTO; restrictSeeking: boolean }) {
   const url = toSafeUrl(lesson.contentUrl);
   if (!url) return <InvalidContent message="Audio URL is missing or invalid." />;
+  const locked = restrictSeeking && lesson.allowSeeking !== true;
 
   return (
-    <div className="flex items-center gap-4 rounded-xl border bg-muted/30 p-4">
-      <Music2 className="size-8 shrink-0 text-muted-foreground" />
-      <audio
-        key={url.toString()}
-        src={url.toString()}
-        controls
-        preload="metadata"
-        className="w-full"
-      />
+    <div>
+      <div className="flex items-center gap-4 rounded-xl border bg-muted/30 p-4">
+        <Music2 className="size-8 shrink-0 text-muted-foreground" />
+        {locked ? (
+          <LockedAudio src={url.toString()} />
+        ) : (
+          <audio
+            key={url.toString()}
+            src={url.toString()}
+            controls
+            preload="metadata"
+            className="w-full"
+          />
+        )}
+      </div>
+      {locked && <SeekLockedNotice />}
     </div>
   );
 }
@@ -193,16 +234,21 @@ interface LessonPreviewProps {
   lesson: LessonDTO;
   /** Ẩn tiêu đề/badge nếu nơi dùng đã tự hiển thị. */
   hideHeader?: boolean;
+  /**
+   * Áp dụng khóa tua video (khi lesson.allowSeeking !== true).
+   * Chỉ bật ở trang học của học viên; preview của admin/teacher để mặc định (không khóa).
+   */
+  restrictSeeking?: boolean;
 }
 
 /**
  * Preview nội dung bài học theo contentType:
  * - VIDEO            -> video (YouTube/Vimeo embed hoặc file mp4/webm)
- * - AUDIO            -> native audio player
+ * - AUDIO            -> native audio player (có thể khóa tua)
  * - TEXT             -> nội dung văn bản
  * - DOCUMENT / LINK  -> resource link
  */
-export function LessonPreview({ lesson, hideHeader = false }: LessonPreviewProps) {
+export function LessonPreview({ lesson, hideHeader = false, restrictSeeking = false }: LessonPreviewProps) {
   return (
     <div className="space-y-4">
       {!hideHeader && (
@@ -215,9 +261,9 @@ export function LessonPreview({ lesson, hideHeader = false }: LessonPreviewProps
         </div>
       )}
 
-      {lesson.contentType === "VIDEO" && <VideoPreview lesson={lesson} />}
-      {lesson.contentType === "AUDIO" && <AudioPreview lesson={lesson} />}
-      {lesson.contentType === "TEXT" && <TextPreview lesson={lesson} />}
+      {lesson.contentType === "VIDEO" && <VideoPreview lesson={lesson} restrictSeeking={restrictSeeking} />}
+      {lesson.contentType === "AUDIO" && <AudioPreview lesson={lesson} restrictSeeking={restrictSeeking} />}
+      {["TEXT", "QUIZ", "EXAM", "ASSIGNMENT"].includes(lesson.contentType || "") && <TextPreview lesson={lesson} />}
       {(lesson.contentType === "DOCUMENT" || lesson.contentType === "LINK") && (
         <ResourcePreview lesson={lesson} />
       )}

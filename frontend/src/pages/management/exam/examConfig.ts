@@ -1,6 +1,9 @@
-import { EXAM_CATEGORY_LABEL, type ExamCategory, type ExamDTO, type ExamType, type LatePolicy, type ResultVisibility } from "@/types";
+import { EXAM_CATEGORY_LABEL, type ExamCategory, type ExamDTO, type ExamStatus, type ExamType, type LatePolicy, type ResultVisibility } from "@/types";
 
 export interface ExamConfigForm {
+  status: ExamStatus;
+  startTime: string;
+  endTime: string;
   maxAttempts: string;
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
@@ -9,6 +12,7 @@ export interface ExamConfigForm {
   category: ExamCategory | "";
   passScore: string;
   maxScore: string;
+  courseWeight: string;
   latePolicy: LatePolicy;
   latePenaltyPercent: string;
   lateGraceMinutes: string;
@@ -35,9 +39,18 @@ export interface ExamConfigForm {
   courseName?: string;
   sectionTitle?: string;
   lessonTitle?: string;
+  // Tu danh gia / danh gia cheo (UFR-EXM-012)
+  selfReviewEnabled: boolean;
+  peerReviewEnabled: boolean;
+  peerReviewCount: string;
+  peerReviewAnonymous: boolean;
+  peerReviewShowReference: boolean;
 }
 
 export const DEFAULT_CONFIG: ExamConfigForm = {
+  status: "PUBLISHED",
+  startTime: "",
+  endTime: "",
   maxAttempts: "",
   shuffleQuestions: false,
   shuffleOptions: false,
@@ -45,6 +58,7 @@ export const DEFAULT_CONFIG: ExamConfigForm = {
   category: "",
   passScore: "",
   maxScore: "",
+  courseWeight: "",
   latePolicy: "NOT_ALLOWED",
   latePenaltyPercent: "",
   lateGraceMinutes: "0",
@@ -67,6 +81,11 @@ export const DEFAULT_CONFIG: ExamConfigForm = {
   courseName: "",
   sectionTitle: "",
   lessonTitle: "",
+  selfReviewEnabled: false,
+  peerReviewEnabled: false,
+  peerReviewCount: "2",
+  peerReviewAnonymous: true,
+  peerReviewShowReference: false,
 };
 
 export const LATE_POLICY_LABEL: Record<LatePolicy, string> = {
@@ -107,19 +126,22 @@ const pickEnum = <T extends string, F extends string = T>(
 ): T | F => (value && value in allowed ? (value as T) : fallback);
 
 export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
+  status: exam.status ?? "PUBLISHED",
+  startTime: exam.startTime ? exam.startTime.slice(0, 16) : "",
+  endTime: exam.endTime ? exam.endTime.slice(0, 16) : "",
   maxAttempts: String(exam.maxAttempts ?? 1),
   shuffleQuestions: exam.shuffleQuestions ?? false,
   shuffleOptions: exam.shuffleOptions ?? false,
   showAnswersAfterExam: exam.showAnswersAfterExam ?? false,
   category: pickEnum(exam.category, EXAM_CATEGORY_LABEL, ""),
   passScore: exam.passScore != null ? String(exam.passScore) : "",
+  courseWeight: exam.courseWeight != null ? String(exam.courseWeight) : "",
   maxScore: exam.maxScore != null ? String(exam.maxScore) : "",
   latePolicy: pickEnum(exam.latePolicy, LATE_POLICY_LABEL, "NOT_ALLOWED"),
   latePenaltyPercent: exam.latePenaltyPercent != null ? String(exam.latePenaltyPercent) : "",
   lateGraceMinutes: String(exam.lateGraceMinutes ?? 0),
-  // AFTER_EXAM_CLOSED is a legacy value (exams no longer have a close time): treated as manual release.
   resultVisibility: pickEnum(
-    exam.resultVisibility === "AFTER_EXAM_CLOSED" ? "MANUAL_RELEASE" : exam.resultVisibility,
+    exam.resultVisibility,
     RESULT_VISIBILITY_LABEL,
     "IMMEDIATE",
   ),
@@ -141,6 +163,11 @@ export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   courseName: exam.courseName ?? "",
   sectionTitle: exam.sectionTitle ?? "",
   lessonTitle: exam.lessonTitle ?? "",
+  selfReviewEnabled: exam.selfReviewEnabled ?? false,
+  peerReviewEnabled: exam.peerReviewEnabled ?? false,
+  peerReviewCount: exam.peerReviewCount != null ? String(exam.peerReviewCount) : "2",
+  peerReviewAnonymous: exam.peerReviewAnonymous ?? true,
+  peerReviewShowReference: exam.peerReviewShowReference ?? false,
 });
 
 /** Required selects that must be chosen by the teacher (no default value). */
@@ -153,13 +180,26 @@ export function getRequiredFieldErrors(cfg: ExamConfigForm): { examType?: string
   return errors;
 }
 
-export function validateConfig(_duration: number, cfg: ExamConfigForm): string | null {
+export function validateConfig(duration: number, cfg: ExamConfigForm): string | null {
   const required = getRequiredFieldErrors(cfg);
   if (required.examType) return required.examType;
   if (required.category) return required.category;
   if (required.maxAttempts) return required.maxAttempts;
 
+  if (cfg.startTime && cfg.endTime) {
+    const startMs = Date.parse(cfg.startTime);
+    const endMs = Date.parse(cfg.endTime);
+    if (!Number.isNaN(startMs) && !Number.isNaN(endMs)) {
+      if (endMs <= startMs) return "End time must be after start time.";
+      const windowMinutes = Math.floor((endMs - startMs) / 60000);
+      if (Number.isFinite(duration) && duration > 0 && duration > windowMinutes) {
+        return `Duration (${duration} mins) cannot exceed the open window (${windowMinutes} mins).`;
+      }
+    }
+  }
+
   if (cfg.maxAttempts.trim() !== "" && !(Number(cfg.maxAttempts) >= 1)) return "Maximum attempts must be at least 1.";
+  if (cfg.courseWeight !== "" && (!Number.isFinite(Number(cfg.courseWeight)) || Number(cfg.courseWeight)<0 || Number(cfg.courseWeight)>100 || !/^\d+(\.\d{1,2})?$/.test(cfg.courseWeight))) return "Course weight must be 0–100 with at most two decimal places.";
   if (cfg.maxScore !== "" && !(Number(cfg.maxScore) > 0 && Number(cfg.maxScore) <= 1000)) return "Max score must be greater than 0 and at most 1000.";
   if (cfg.passScore !== "" && Number(cfg.passScore) < 0) return "Passing score must be >= 0.";
   if (cfg.passScore !== "" && Number(cfg.passScore) > (cfg.maxScore !== "" ? Number(cfg.maxScore) : 10)) return "Passing score cannot exceed the max score.";
@@ -169,6 +209,10 @@ export function validateConfig(_duration: number, cfg: ExamConfigForm): string |
   }
   if (Number(cfg.lateGraceMinutes) < 0) return "Grace period minutes must be >= 0.";
   if (cfg.latePolicy === "NOT_ALLOWED" && Number(cfg.lateGraceMinutes) > 0) return "Grace period can only be set when late submissions are allowed.";
+  if (cfg.peerReviewEnabled && cfg.peerReviewCount.trim() !== "") {
+    const count = Number(cfg.peerReviewCount);
+    if (!Number.isInteger(count) || count < 1 || count > 5) return "Number of peer reviewers must be between 1 and 5.";
+  }
   return null;
 }
 
@@ -184,6 +228,9 @@ export function buildExamRequest(title: string, duration: string, cfg: ExamConfi
   return {
     title: title.trim(),
     durationMinutes: Number(duration),
+    status: cfg.status || "PUBLISHED",
+    startTime: cfg.startTime ? (cfg.startTime.length === 16 ? `${cfg.startTime}:00` : cfg.startTime) : null,
+    endTime: cfg.endTime ? (cfg.endTime.length === 16 ? `${cfg.endTime}:00` : cfg.endTime) : null,
     isActive,
     maxAttempts: cfg.maxAttempts.trim() === "" ? 1 : Number(cfg.maxAttempts),
     shuffleQuestions: cfg.shuffleQuestions,
@@ -192,6 +239,7 @@ export function buildExamRequest(title: string, duration: string, cfg: ExamConfi
     category: cfg.category || undefined,
     // blank = 5 (capped at the max score when that is lower)
     passScore: cfg.passScore !== "" ? Number(cfg.passScore) : Math.min(5, cfg.maxScore !== "" ? Number(cfg.maxScore) : 10),
+    courseWeight: cfg.courseWeight !== "" ? Number(cfg.courseWeight) : null,
     maxScore: cfg.maxScore !== "" ? Number(cfg.maxScore) : undefined,
     latePolicy: cfg.latePolicy || undefined,
     latePenaltyPercent:
@@ -217,5 +265,11 @@ export function buildExamRequest(title: string, duration: string, cfg: ExamConfi
     courseId: cfg.courseId ? Number(cfg.courseId) : null,
     sectionId: cfg.sectionId ? Number(cfg.sectionId) : null,
     lessonId: cfg.lessonId ? Number(cfg.lessonId) : null,
+    // Tu danh gia / danh gia cheo
+    selfReviewEnabled: cfg.selfReviewEnabled,
+    peerReviewEnabled: cfg.peerReviewEnabled,
+    peerReviewCount: cfg.peerReviewCount.trim() === "" ? 2 : Number(cfg.peerReviewCount),
+    peerReviewAnonymous: cfg.peerReviewAnonymous,
+    peerReviewShowReference: cfg.peerReviewShowReference,
   };
 }

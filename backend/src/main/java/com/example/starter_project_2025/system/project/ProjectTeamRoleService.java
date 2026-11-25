@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
@@ -54,6 +55,7 @@ public class ProjectTeamRoleService {
     private final ProjectTeamMemberHistoryService historyService;
     private final EntityManager entityManager;
     private final ObjectMapper objectMapper;
+    private final com.example.starter_project_2025.system.project.charter.TeamCharterIntegrity charterIntegrity;
 
     // ------------------------------------------------------------------
     // Mentor / Program Manager
@@ -243,6 +245,7 @@ public class ProjectTeamRoleService {
                         assignment.getClassMember().getId()))));
         if (leaderToAssign != null) team.setLeaderMemberId(leaderToAssign);
         memberRepository.saveAllAndFlush(changedAssignments);
+        charterIntegrity.rosterChanged(team, currentUserId(authentication));
         String afterState = serialize(snapshot(team, assignments));
 
         // US-11: history is written for every role change, including DRAFT

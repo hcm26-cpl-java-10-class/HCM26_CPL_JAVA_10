@@ -100,15 +100,15 @@ type ExamAttemptStatistics = {
 const policies: { value: ReleasePolicy; label: string }[] = [
     {
         value: "MY_SCORES_ONLY",
-        label: "Show scores on My Scores only",
+        label: "Show scores",
     },
     {
         value: "MY_SCORES_AND_EMAIL",
-        label: "Show scores on My Scores and send email",
+        label: "Show scores and send email",
     },
     {
         value: "HIDDEN",
-        label: "Do not disclose scores to students",
+        label: "Hide scores",
     },
 ];
 
@@ -1048,6 +1048,115 @@ export default function ResultStatisticsPage() {
                     </>
                 )}
 
+                    {tab === "attempts" && (
+                        <section className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
+                            <h2 className="text-lg font-semibold">
+                                Result Publication
+                            </h2>
+
+                            {publicationQuery.isLoading && (
+                                <p className="mt-4 text-sm text-muted-foreground">
+                                    Loading publication status...
+                                </p>
+                            )}
+
+                            {publicationQuery.isError && (
+                                <p className="mt-4 text-sm text-red-600 dark:text-red-400">
+                                    Failed to load publication status:{" "}
+                                    {getErrorMessage(publicationQuery.error)}
+                                </p>
+                            )}
+
+                            {publication && (
+                                <div className="mt-4 rounded-lg bg-muted p-4 text-sm text-foreground">
+                                    <p>
+                                        Status:{" "}
+                                        <strong
+                                            className={
+                                                publication.published
+                                                    ? "text-green-700 dark:text-green-400"
+                                                    : "text-foreground"
+                                            }
+                                        >
+                                            {publication.published
+                                                ? "Published"
+                                                : "Not Published"}
+                                        </strong>
+                                    </p>
+                                    <p className="mt-1">
+                                        Current Policy:{" "}
+                                        {policies.find(
+                                            (policy) =>
+                                                policy.value === publication.releasePolicy,
+                                        )?.label ?? "Not configured"}
+                                    </p>
+                                    {publication.publishedAt && (
+                                        <p className="mt-1">
+                                            Published At:{" "}
+                                            {new Date(publication.publishedAt).toLocaleString()}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="mt-5 space-y-3">
+                                <label
+                                    htmlFor="release-policy"
+                                    className="block text-sm font-medium text-foreground"
+                                >
+                                    Result Release Policy
+                                </label>
+                                <select
+                                    id="release-policy"
+                                    value={releasePolicy}
+                                    onChange={(event) =>
+                                        setReleasePolicy(event.target.value as ReleasePolicy)
+                                    }
+                                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-indigo-500 sm:max-w-xl"
+                                >
+                                    {policies.map((policy) => (
+                                        <option key={policy.value} value={policy.value}>
+                                            {policy.label}
+                                        </option>
+                                    ))}
+                                </select>
+
+                                <div className="flex flex-wrap gap-3">
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            publishMutation.isPending ||
+                                            unpublishMutation.isPending ||
+                                            !validExamId
+                                        }
+                                        onClick={() => setPublishPreviewOpen(true)}
+                                        className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {publishMutation.isPending
+                                            ? "Processing..."
+                                            : "Preview & Publish Results (Xem trước & Đẩy điểm)"}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            publishMutation.isPending ||
+                                            unpublishMutation.isPending ||
+                                            !validExamId ||
+                                            !publication?.published
+                                        }
+                                        onClick={() => unpublishMutation.mutate()}
+                                        className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {unpublishMutation.isPending
+                                            ? "Processing..."
+                                            : "Unpublish Results"}
+                                    </button>
+                                </div>
+                            </div>
+                        </section>
+                    )}
+
                 {tab === "attempts" && (
                 <section className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -1739,114 +1848,6 @@ export default function ResultStatisticsPage() {
                     </div>
                 )}
 
-                {tab === "overview" && (
-                <section className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
-                    <h2 className="text-lg font-semibold">
-                        Result Publication
-                    </h2>
-
-                    {publicationQuery.isLoading && (
-                        <p className="mt-4 text-sm text-muted-foreground">
-                            Loading publication status...
-                        </p>
-                    )}
-
-                    {publicationQuery.isError && (
-                        <p className="mt-4 text-sm text-red-600 dark:text-red-400">
-                            Failed to load publication status:{" "}
-                            {getErrorMessage(publicationQuery.error)}
-                        </p>
-                    )}
-
-                    {publication && (
-                        <div className="mt-4 rounded-lg bg-muted p-4 text-sm text-foreground">
-                            <p>
-                                Status:{" "}
-                                <strong
-                                    className={
-                                        publication.published
-                                            ? "text-green-700 dark:text-green-400"
-                                            : "text-foreground"
-                                    }
-                                >
-                                    {publication.published
-                                        ? "Published"
-                                        : "Not Published"}
-                                </strong>
-                            </p>
-                            <p className="mt-1">
-                                Current Policy:{" "}
-                                {policies.find(
-                                    (policy) =>
-                                        policy.value === publication.releasePolicy,
-                                )?.label ?? "Not configured"}
-                            </p>
-                            {publication.publishedAt && (
-                                <p className="mt-1">
-                                    Published At:{" "}
-                                    {new Date(publication.publishedAt).toLocaleString()}
-                                </p>
-                            )}
-                        </div>
-                    )}
-
-                    <div className="mt-5 space-y-3">
-                        <label
-                            htmlFor="release-policy"
-                            className="block text-sm font-medium text-foreground"
-                        >
-                            Result Release Policy
-                        </label>
-                        <select
-                            id="release-policy"
-                            value={releasePolicy}
-                            onChange={(event) =>
-                                setReleasePolicy(event.target.value as ReleasePolicy)
-                            }
-                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-indigo-500 sm:max-w-xl"
-                        >
-                            {policies.map((policy) => (
-                                <option key={policy.value} value={policy.value}>
-                                    {policy.label}
-                                </option>
-                            ))}
-                        </select>
-
-                        <div className="flex flex-wrap gap-3">
-                            <button
-                                type="button"
-                                disabled={
-                                    publishMutation.isPending ||
-                                    unpublishMutation.isPending ||
-                                    !validExamId
-                                }
-                                onClick={() => setPublishPreviewOpen(true)}
-                                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {publishMutation.isPending
-                                    ? "Processing..."
-                                    : "Preview & Publish Results (Xem trước & Đẩy điểm)"}
-                            </button>
-
-                            <button
-                                type="button"
-                                disabled={
-                                    publishMutation.isPending ||
-                                    unpublishMutation.isPending ||
-                                    !validExamId ||
-                                    !publication?.published
-                                }
-                                onClick={() => unpublishMutation.mutate()}
-                                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {unpublishMutation.isPending
-                                    ? "Processing..."
-                                    : "Unpublish Results"}
-                            </button>
-                        </div>
-                    </div>
-                </section>
-                )}
 
                 {validExamId && tab === "questions" && <ItemAnalysisSection examId={examId} />}
 

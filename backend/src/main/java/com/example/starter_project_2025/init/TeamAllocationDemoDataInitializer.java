@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.trainingclass.ClassMember;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberRepository;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
@@ -40,6 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
         havingValue = "true",
         matchIfMissing = true
 )
+@StartupMutation
 public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
 
     private static final int MEMBERS_PER_CLASS = 35;

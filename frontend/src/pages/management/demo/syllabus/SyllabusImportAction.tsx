@@ -96,8 +96,7 @@ export function SyllabusImportAction() {
             summary.syllabuses +
             summary.clos +
             summary.sections +
-            summary.topics +
-            summary.materials;
+            summary.topics;
 
         // Adapt M3 summary to the shared Base ImportResult.
         return {
@@ -119,8 +118,7 @@ export function SyllabusImportAction() {
                     `Syllabuses: ${summary.syllabuses} · ` +
                     `CLOs: ${summary.clos} · ` +
                     `Sections: ${summary.sections} · ` +
-                    `Topics: ${summary.topics} · ` +
-                    `Materials: ${summary.materials}`,
+                    `Topics: ${summary.topics}`,
             });
         }
     }

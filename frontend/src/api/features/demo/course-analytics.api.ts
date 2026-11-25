@@ -2,6 +2,7 @@ import axiosInstance from "@/api/axios";
 import { downloadBlob, getFilenameFromHeader } from "@/components/datatable/util/dataio.utils";
 import type {
   ActivityResponse,
+  BottleneckResponse,
   ContentQualityResponse,
   CourseAnalyticsGranularity,
   CourseComparisonResponse,
@@ -11,6 +12,12 @@ import type {
   CourseReviewAnalyticsResponse,
   DepartmentAnalyticsResponse,
   LessonFunnelResponse,
+  NudgeRequest,
+  NudgeResult,
+  ProblemLearnersResponse,
+  ProblemType,
+  TopLearnerSortBy,
+  TopLearnersResponse,
   StudyTimeResponse,
   TrendResponse,
 } from "@/types";
@@ -155,6 +162,61 @@ export const courseAnalyticsApi = {
   ): Promise<CourseComparisonResponse> => {
     const response = await axiosInstance.get<CourseComparisonResponse>(
       `${path}/course-comparison`,
+      { params },
+    );
+    return response.data;
+  },
+
+  // =====================================================================
+  // Learner engagement
+  // =====================================================================
+
+  /** 11. Bottlenecks: where learners get stuck / drop out, lesson by lesson. */
+  getBottlenecks: async (
+    courseId: number,
+    params: { inactiveDays?: number } = {},
+  ): Promise<BottleneckResponse> => {
+    const response = await axiosInstance.get<BottleneckResponse>(
+      `${path}/courses/${courseId}/bottlenecks`,
+      { params },
+    );
+    return response.data;
+  },
+
+  /** 12. Learners with problems (never started, dropped out, inactive, low exam score). */
+  getProblemLearners: async (
+    courseId: number,
+    params: { inactiveDays?: number; problemType?: ProblemType } = {},
+  ): Promise<ProblemLearnersResponse> => {
+    const response = await axiosInstance.get<ProblemLearnersResponse>(
+      `${path}/courses/${courseId}/problem-learners`,
+      { params },
+    );
+    return response.data;
+  },
+
+  /** 13. Send an in-app reminder to selected learners (Duolingo-style nudge). */
+  sendNudges: async (
+    courseId: number,
+    body: NudgeRequest,
+  ): Promise<NudgeResult> => {
+    const response = await axiosInstance.post<NudgeResult>(
+      `${path}/courses/${courseId}/nudges`,
+      body,
+    );
+    return response.data;
+  },
+
+  /** 14. Most diligent learners per department and across the system. */
+  getTopLearners: async (
+    params: {
+      courseId?: number;
+      limit?: number;
+      sortBy?: TopLearnerSortBy;
+    } = {},
+  ): Promise<TopLearnersResponse> => {
+    const response = await axiosInstance.get<TopLearnersResponse>(
+      `${path}/department-top-learners`,
       { params },
     );
     return response.data;

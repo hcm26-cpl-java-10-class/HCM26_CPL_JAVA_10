@@ -13,6 +13,12 @@ import java.util.Optional;
 public interface CourseEnrollmentRepository
         extends BaseCrudRepository<CourseEnrollment, Long> {
 
+    @Query("select distinct e from CourseEnrollment e join fetch e.course c left join fetch c.categories where e.user.id = :userId")
+    List<CourseEnrollment> findRecommendationHistory(@Param("userId") Long userId);
+
+    @Query("select e.course.id, count(e.id) from CourseEnrollment e group by e.course.id")
+    List<Object[]> recommendationPopularity();
+
     boolean existsByUser_IdAndCourse_Id(Long userId, Long courseId);
 
     Optional<CourseEnrollment> findByUser_IdAndCourse_Id(Long userId, Long courseId);

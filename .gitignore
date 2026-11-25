@@ -27,9 +27,20 @@ backend/.env.local
 backend/.env.*.local
 !backend/.env.example
 
-# === Frontend (Node) ===
+# === Frontend / Node ===
+/node_modules/
+node_modules/
+/package.json
 frontend/node_modules/
 frontend/dist/
+frontend/.env
+
+# === Test artifacts & Playwright reports ===
+playwright-report/
+test-results/
+frontend/playwright-report/
+frontend/test-results/
+/routes_dump.txt
 
 # === Frontend .env (secrets/local config) ===
 # .env.example được commit để người mới biết cần đặt biến nào.
@@ -44,6 +55,12 @@ docker/.env
 *.log
 
 /backend.zip
+# Ignore vscode AI rules & Codacy (keep GitHub workflows & PR template tracked)
+.github/*
+!.github/pull_request_template.md
+!.github/workflows/
+.codacy/
+
 /backend/compile.log
 /backend/compile_error.txt
 /test.txt
@@ -59,3 +76,12 @@ backend/portability-test.log
 
 # === Runtime uploaded files (khong commit) ===
 uploads/
+
+# === Local test tools & docx scratch files ===
+*.docx
+/swagger_*.png
+/swagger_rendered.png
+/swagger_test.png
+/extracted_images/
+/extracted_minh_hoang/
+/tools/

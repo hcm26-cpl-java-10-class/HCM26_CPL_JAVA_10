@@ -106,10 +106,8 @@ export default function DynamicBreadcrumbs({
     // Hrefs are built from the full path; ignored segments (e.g. ones without a page of their own) are only hidden.
     const pathnameSegments = location.pathname.split("/").filter(Boolean);
 
-    const rawSegments =
-        isStudentVariant && pathnameSegments[0]?.toLowerCase() === "student"
-            ? pathnameSegments.slice(1)
-            : pathnameSegments;
+    const rawSegments = pathnameSegments;
+    if (isStudentVariant) ignoredPaths.add("student");
 
     const crumbs: BreadcrumbNode[] = rawSegments.flatMap((segment, index) => {
         const routeHref = `/${rawSegments.slice(0, index + 1).join("/")}`;
