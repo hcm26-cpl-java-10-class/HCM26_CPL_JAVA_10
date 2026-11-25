@@ -6,7 +6,9 @@ import com.example.starter_project_2025.system.demo.session.SessionDTO;
 import com.example.starter_project_2025.system.demo.session.SessionService;
 import com.example.starter_project_2025.system.rbac.user.User;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -27,11 +29,12 @@ import java.util.Locale;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/calendar")
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Training Calendar", description = "APIs for weekly timetable queries")
 public class CalendarController {
 
-    private final SessionService sessionService;
-    private final CalendarPersonalScopeResolver personalScopeResolver;
+    SessionService sessionService;
+    CalendarPersonalScopeResolver personalScopeResolver;
 
     private void validateDateRange(LocalDateTime from, LocalDateTime to, int page, int size) {
         if (!from.isBefore(to)) {

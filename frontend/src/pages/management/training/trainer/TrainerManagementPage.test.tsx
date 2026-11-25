@@ -29,11 +29,11 @@ it("creates a trainer with existing teaching topic IDs", async () => {
     fakeHttp.on("post", "/trainers", trainer);
     const { user } = renderAt(<TrainerManagementPage />, { route: "/trainers" });
     await user.click(screen.getByRole("button", { name: "Add Trainer" }));
-    await screen.findByRole("option", { name: /JAVA@1/ });
+    const javaCheckbox = await screen.findByRole("checkbox", { name: /JAVA@1/ });
     await user.type(screen.getByLabelText("Trainer ID *"), "TR_NEW");
     await user.type(screen.getByLabelText("Full Name *"), "New Trainer");
     await user.type(screen.getByLabelText("Work Email *"), "new@example.test");
-    await user.selectOptions(screen.getByLabelText("Teaching Topics"), "5");
+    await user.click(javaCheckbox);
     await user.click(screen.getByRole("button", { name: "Save Trainer" }));
     await screen.findByText("Trainer saved.");
     expect(fakeHttp.callsTo("post", "/trainers")[0].data).toMatchObject({ trainerCode: "TR_NEW", fullName: "New Trainer", email: "new@example.test", teachingTopicIds: [5], status: "ACTIVE" });
@@ -45,7 +45,7 @@ it("edits, views and changes status without changing the identity", async () => 
     await user.click(await screen.findByRole("button", { name: "View TR_12" }));
     await screen.findByRole("dialog", { name: /Trainer Details/ }); await user.click(screen.getByRole("button", { name: "Close Details" }));
     await user.click(screen.getByRole("button", { name: "Edit TR_12" }));
-    await screen.findByRole("option", { name: /JAVA@1/ });
+    await screen.findByRole("checkbox", { name: /JAVA@1/ });
     await user.clear(screen.getByLabelText("Full Name *")); await user.type(screen.getByLabelText("Full Name *"), "Updated Name");
     await user.click(screen.getByRole("button", { name: "Save Trainer" })); await screen.findByText("Trainer saved.");
     expect(fakeHttp.callsTo("put", "/trainers/12")[0].data).toMatchObject({ fullName: "Updated Name" });
@@ -153,7 +153,7 @@ it("uses a v-flag-compatible Trainer ID pattern and rejects domainless Work Emai
     await screen.findByText("Trainer Twelve");
 
     await user.click(screen.getByRole("button", { name: "Add Trainer" }));
-    await screen.findByRole("option", { name: /JAVA@1/ });
+    await screen.findByRole("checkbox", { name: /JAVA@1/ });
     const codeInput = screen.getByLabelText("Trainer ID *") as HTMLInputElement;
     const pattern = codeInput.getAttribute("pattern") ?? "";
 
@@ -211,7 +211,7 @@ it("preserves legacy over-length fields without silent truncation, clearly flags
     await user.click(screen.getByRole("button", { name: "Edit TR_LEGACY" }));
 
     const nameInput = await screen.findByLabelText("Full Name *") as HTMLInputElement;
-    await screen.findByRole("option", { name: /JAVA@1/ });
+    await screen.findByRole("checkbox", { name: /JAVA@1/ });
     const specInput = screen.getByLabelText("Specialization") as HTMLInputElement;
 
     // Legacy values are NOT silently truncated

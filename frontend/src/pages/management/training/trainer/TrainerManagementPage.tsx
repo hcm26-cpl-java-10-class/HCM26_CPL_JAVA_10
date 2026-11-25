@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, Eye, Pencil, Plus, Power, Upload } from "lucide-react";
+import * as XLSX from "xlsx";
+import { Archive, Download, Eye, Pencil, Plus, Power, Upload } from "lucide-react";
 import { trainerApi, type Trainer } from "@/api/features/trainer.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { NativeSelect } from "@/components/common/NativeSelect";
 import { ApiErrorState } from "@/components/common/ApiErrorState";
-import { Table, TableHeader, TableHead, TableRow, TableBody, TableCell } from "@/components/ui/table";
+import { TableHeader, TableHead, TableRow, TableBody, TableCell } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { describeApiError } from "@/utils/api-error.utils";
@@ -52,6 +53,39 @@ export default function TrainerManagementPage() {
         ]);
     };
 
+    const handleExportExcel = async () => {
+        if (busy) return;
+        setBusy(true);
+        setError("");
+        try {
+            const first = await trainerApi.list({ search, status, page: 0, size: 100 });
+            const allRows: Trainer[] = [...first.content];
+            for (let p = 1; p < first.totalPages; p += 1) {
+                const next = await trainerApi.list({ search, status, page: p, size: 100 });
+                allRows.push(...next.content);
+            }
+            const exportRows = allRows.map(t => ({
+                "Trainer ID*": t.trainerCode,
+                "Full Name*": t.fullName,
+                "Work Email*": t.email,
+                "Specialization": t.specialization ?? "",
+                "Teaching Topics": t.teachingTopics.map(topic => `${topic.code}@${topic.version}`).join(";"),
+                "Status": t.status,
+            }));
+            const ws = XLSX.utils.json_to_sheet(exportRows);
+            ws["!cols"] = [{ wch: 16 }, { wch: 24 }, { wch: 32 }, { wch: 24 }, { wch: 32 }, { wch: 12 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Trainers");
+            const today = new Date().toISOString().split("T")[0];
+            XLSX.writeFile(wb, `Trainers_${today}.xlsx`);
+            setMessage(`Exported ${allRows.length} trainers to Excel.`);
+        } catch (err) {
+            setError(describeApiError(err).message);
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const action = async (operation: () => Promise<unknown>, success: string) => {
         setBusy(true);
         setError("");
@@ -69,32 +103,52 @@ export default function TrainerManagementPage() {
     };
 
     return (
-        <MainLayout>
-            <div className="space-y-5 p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+        <MainLayout dense mainClassName="overflow-y-hidden">
+            <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-3 pt-1 pb-2">
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight">Trainer Management</h1>
                         <p className="text-sm text-muted-foreground">Manage the approved internal trainer directory.</p>
                     </div>
-                    {hasPermission("TRAINER_CREATE") && (
-                        <div className="flex items-center gap-2">
-                            <Button variant="outline" className="gap-1.5" onClick={() => setImporting(true)}>
-                                <Upload className="h-4 w-4" />
-                                Import Trainers
+                    <div className="flex items-center gap-2">
+                        {hasPermission("TRAINER_READ") && (
+                            <Button
+                                variant="outline"
+                                className="gap-1.5"
+                                disabled={busy || !list.data?.totalElements}
+                                title="Export trainers to Excel"
+                                onClick={() => void handleExportExcel()}
+                            >
+                                <Download className="h-4 w-4 text-emerald-600" />
+                                Export
                             </Button>
-                            <Button className="gap-1.5" onClick={() => setEdit(null)}>
-                                <Plus className="h-4 w-4" />
-                                Add Trainer
-                            </Button>
-                        </div>
-                    )}
+                        )}
+                        {hasPermission("TRAINER_CREATE") && (
+                            <>
+                                <Button
+                                    variant="outline"
+                                    className="gap-1.5"
+                                    disabled={busy}
+                                    title="Import trainers from Excel"
+                                    onClick={() => setImporting(true)}
+                                >
+                                    <Upload className="h-4 w-4 text-blue-600" />
+                                    Import
+                                </Button>
+                                <Button className="gap-1.5" disabled={busy} onClick={() => setEdit(null)}>
+                                    <Plus className="h-4 w-4" />
+                                    Add Trainer
+                                </Button>
+                            </>
+                        )}
+                    </div>
                 </div>
 
                 {!hasPermission("TRAINER_READ") ? (
                     <ApiErrorState kind="forbidden" error={undefined} resource="trainers" />
                 ) : (
                     <>
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(220px,1fr)_180px]">
+                        <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-[minmax(220px,1fr)_180px]">
                             <Input
                                 aria-label="Search Trainers"
                                 placeholder="Search code, name, email or specialization"
@@ -138,30 +192,34 @@ export default function TrainerManagementPage() {
                             <ApiErrorState error={list.error} resource="trainers" onRetry={() => void list.refetch()} />
                         ) : (
                             <>
-                                <div className="rounded-xl border bg-card shadow-xs overflow-x-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow className="bg-muted/40">
-                                                <TableHead className="w-32">Trainer ID</TableHead>
-                                                <TableHead>Full Name</TableHead>
-                                                <TableHead>Work Email</TableHead>
-                                                <TableHead>Specialization</TableHead>
-                                                <TableHead className="w-28">Status</TableHead>
-                                                <TableHead className="w-40 text-right">Actions</TableHead>
+                                <div className="flex-1 min-h-0 w-full min-w-0 rounded-xl border bg-card shadow-xs overflow-auto">
+                                    <table data-slot="table" className="w-full caption-bottom text-sm">
+                                        <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur-xs">
+                                            <TableRow className="bg-muted/40 hover:bg-muted/40">
+                                                <TableHead className="w-24 px-3">Code</TableHead>
+                                                <TableHead className="px-3">Full Name</TableHead>
+                                                <TableHead className="px-3">Work Email</TableHead>
+                                                <TableHead className="px-3">Specialization</TableHead>
+                                                <TableHead className="w-24 px-3">Status</TableHead>
+                                                <TableHead className="w-36 px-3 text-right">Actions</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
                                             {list.data.content.map(t => (
                                                 <TableRow key={t.id} className="hover:bg-muted/30">
-                                                    <TableCell className="font-mono text-xs font-semibold text-foreground">
+                                                    <TableCell className="px-3 font-mono text-xs font-semibold text-foreground whitespace-nowrap">
                                                         {t.trainerCode}
                                                     </TableCell>
-                                                    <TableCell className="font-medium text-foreground">{t.fullName}</TableCell>
-                                                    <TableCell className="text-muted-foreground">{t.email}</TableCell>
-                                                    <TableCell className="max-w-[260px] truncate text-muted-foreground" title={t.specialization || undefined}>
+                                                    <TableCell className="px-3 max-w-[180px] truncate font-medium text-foreground" title={t.fullName}>
+                                                        {t.fullName}
+                                                    </TableCell>
+                                                    <TableCell className="px-3 max-w-[220px] truncate text-muted-foreground" title={t.email}>
+                                                        {t.email}
+                                                    </TableCell>
+                                                    <TableCell className="px-3 max-w-[180px] truncate text-muted-foreground" title={t.specialization || undefined}>
                                                         {t.specialization || "—"}
                                                     </TableCell>
-                                                    <TableCell>
+                                                    <TableCell className="px-3 whitespace-nowrap">
                                                         <Badge
                                                             variant="outline"
                                                             className={
@@ -173,12 +231,12 @@ export default function TrainerManagementPage() {
                                                             {t.status}
                                                         </Badge>
                                                     </TableCell>
-                                                    <TableCell>
-                                                        <div className="flex items-center justify-end gap-1">
+                                                    <TableCell className="px-3 whitespace-nowrap">
+                                                        <div className="flex items-center justify-end gap-0.5">
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                                                className="h-7 w-7 text-muted-foreground hover:text-primary"
                                                                 disabled={busy}
                                                                 aria-label={`View ${t.trainerCode}`}
                                                                 title="View details"
@@ -191,7 +249,7 @@ export default function TrainerManagementPage() {
                                                                     <Button
                                                                         variant="ghost"
                                                                         size="icon"
-                                                                        className="h-8 w-8 text-muted-foreground hover:text-blue-600"
+                                                                        className="h-7 w-7 text-muted-foreground hover:text-blue-600"
                                                                         disabled={busy}
                                                                         aria-label={`Edit ${t.trainerCode}`}
                                                                         title="Edit trainer"
@@ -204,8 +262,8 @@ export default function TrainerManagementPage() {
                                                                         size="icon"
                                                                         className={
                                                                             t.status === "ACTIVE"
-                                                                                ? "h-8 w-8 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950/40"
-                                                                                : "h-8 w-8 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/40"
+                                                                                ? "h-7 w-7 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950/40"
+                                                                                : "h-7 w-7 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/40"
                                                                         }
                                                                         disabled={busy}
                                                                         aria-label={`${t.status === "ACTIVE" ? "Deactivate" : "Activate"} ${t.trainerCode}`}
@@ -225,7 +283,7 @@ export default function TrainerManagementPage() {
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="icon"
-                                                                    className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                                    className="h-7 w-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                                                                     disabled={busy}
                                                                     aria-label={`Archive ${t.trainerCode}`}
                                                                     title="Archive trainer"
@@ -249,13 +307,10 @@ export default function TrainerManagementPage() {
                                                 </TableRow>
                                             )}
                                         </TableBody>
-                                    </Table>
+                                    </table>
                                 </div>
 
-                                <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-                                    <span>
-                                        {list.data.totalElements} trainers · Page {page + 1} / {Math.max(1, list.data.totalPages)}
-                                    </span>
+                                <div className="flex shrink-0 flex-wrap items-center justify-start gap-4 text-sm text-muted-foreground">
                                     <div className="flex items-center gap-2">
                                         <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
                                             Previous
@@ -269,6 +324,9 @@ export default function TrainerManagementPage() {
                                             Next
                                         </Button>
                                     </div>
+                                    <span>
+                                        {list.data.totalElements} trainers · Page {page + 1} / {Math.max(1, list.data.totalPages)}
+                                    </span>
                                 </div>
                             </>
                         )}
@@ -298,35 +356,90 @@ export default function TrainerManagementPage() {
                     />
                 )}
 
-                {detail && (
-                    <Dialog open onOpenChange={open => { if (!open) setDetail(undefined); }}>
-                        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-                            <DialogHeader>
-                                <DialogTitle>Trainer Details — {detail.trainerCode}</DialogTitle>
-                                <DialogDescription className="text-xs">
-                                    Approved internal trainer profile and assigned teaching topics.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <dl className="divide-y rounded-lg border text-sm">
-                                {[
-                                    ["Full Name", detail.fullName],
-                                    ["Work Email", detail.email],
-                                    ["Specialization", detail.specialization || "—"],
-                                    ["Status", detail.status],
-                                    ["Teaching Topics", detail.teachingTopics.map(t => `${t.code}@${t.version} — ${t.name}`).join("; ") || "—"],
-                                ].map(([label, value]) => (
-                                    <div key={label} className="grid grid-cols-[130px_minmax(0,1fr)] gap-2 p-2.5">
-                                        <dt className="font-semibold text-muted-foreground">{label}</dt>
-                                        <dd className="break-words">{value}</dd>
+                {detail && (() => {
+                    const taughtByKey = new Map<string, string[]>();
+                    (detail.teachingHistory ?? []).forEach(item => {
+                        const key = `${item.subjectCode}@${item.subjectVersion}`.toLowerCase();
+                        const label = item.classCode || item.className || "Assigned";
+                        const existing = taughtByKey.get(key) ?? [];
+                        if (!existing.includes(label)) existing.push(label);
+                        taughtByKey.set(key, existing);
+                    });
+
+                    const mergedSubjects: Array<{ key: string; label: string; classes: string[] }> = [];
+                    const seen = new Set<string>();
+                    detail.teachingTopics.forEach(t => {
+                        const key = `${t.code}@${t.version}`.toLowerCase();
+                        seen.add(key);
+                        mergedSubjects.push({
+                            key,
+                            label: `${t.code}@${t.version} — ${t.name}`,
+                            classes: taughtByKey.get(key) ?? [],
+                        });
+                    });
+                    (detail.teachingHistory ?? []).forEach(item => {
+                        const key = `${item.subjectCode}@${item.subjectVersion}`.toLowerCase();
+                        if (!seen.has(key)) {
+                            seen.add(key);
+                            mergedSubjects.push({
+                                key,
+                                label: `${item.subjectCode}@${item.subjectVersion} — ${item.subjectName}`,
+                                classes: taughtByKey.get(key) ?? [],
+                            });
+                        }
+                    });
+
+                    return (
+                        <Dialog open onOpenChange={open => { if (!open) setDetail(undefined); }}>
+                            <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
+                                <DialogHeader>
+                                    <DialogTitle>Trainer Details — {detail.trainerCode}</DialogTitle>
+                                    <DialogDescription className="text-xs">
+                                        Approved internal trainer profile and teaching subjects.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <dl className="divide-y rounded-lg border text-sm">
+                                    {[
+                                        ["Full Name", detail.fullName],
+                                        ["Work Email", detail.email],
+                                        ["Specialization", detail.specialization || "—"],
+                                        ["Status", detail.status],
+                                    ].map(([label, value]) => (
+                                        <div key={label} className="grid grid-cols-[140px_minmax(0,1fr)] gap-2 p-2.5">
+                                            <dt className="font-semibold text-muted-foreground">{label}</dt>
+                                            <dd className="break-words">{value}</dd>
+                                        </div>
+                                    ))}
+
+                                    <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-2 p-2.5">
+                                        <dt className="font-semibold text-muted-foreground">Subjects</dt>
+                                        <dd>
+                                            {mergedSubjects.length === 0 ? (
+                                                <span className="text-muted-foreground">No subjects assigned.</span>
+                                            ) : (
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {mergedSubjects.map(subject => (
+                                                        <Badge key={subject.key} variant="secondary" className="font-normal text-xs gap-1">
+                                                            <span>{subject.label}</span>
+                                                            {subject.classes.length > 0 && (
+                                                                <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+                                                                    · Taught ({subject.classes.join(", ")})
+                                                                </span>
+                                                            )}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </dd>
                                     </div>
-                                ))}
-                            </dl>
-                            <DialogFooter>
-                                <Button onClick={() => setDetail(undefined)}>Close Details</Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
-                )}
+                                </dl>
+                                <DialogFooter>
+                                    <Button onClick={() => setDetail(undefined)}>Close Details</Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+                    );
+                })()}
 
                 {deleting && (
                     <Dialog open onOpenChange={open => { if (!open && !busy) setDeleting(undefined); }}>

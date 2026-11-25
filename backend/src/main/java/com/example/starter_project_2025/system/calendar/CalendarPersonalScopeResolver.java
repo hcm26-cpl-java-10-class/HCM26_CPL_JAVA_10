@@ -5,7 +5,9 @@ import com.example.starter_project_2025.system.external_api.dto.ExternalTrainerD
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.training.ClassEnrollment;
 import com.example.starter_project_2025.system.training.ClassEnrollmentRepository;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -23,10 +25,11 @@ import java.util.Set;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class CalendarPersonalScopeResolver {
 
-    private final ExternalApiService externalApiService;
-    private final ClassEnrollmentRepository classEnrollmentRepository;
+    ExternalApiService externalApiService;
+    ClassEnrollmentRepository classEnrollmentRepository;
 
     public record PersonalScope(Set<Long> trainerIds, Set<Long> classIds) {
         public static PersonalScope empty() {

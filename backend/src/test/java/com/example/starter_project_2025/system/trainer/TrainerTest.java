@@ -100,8 +100,10 @@ class TrainerTest {
         assertEquals(TrainerStatus.INACTIVE, trainer.getStatus());
         assertFalse(trainer.isActiveTrainer());
 
-        // Cannot reactivate archived trainer via domain methods OR inherited BaseEntity.setIsActive(true)
+        // Cannot reactivate archived trainer via domain methods OR inherited BaseEntity.setIsActive(true/null)
         assertThrows(ConflictException.class, () -> trainer.setIsActive(true));
+        assertThrows(BadRequestException.class, () -> trainer.setIsActive(null));
+        assertTrue(trainer.isArchived());
         assertThrows(ConflictException.class, trainer::activate);
         assertThrows(ConflictException.class, () -> trainer.changeStatus(TrainerStatus.ACTIVE));
         assertThrows(ConflictException.class, () -> trainer.updateProfile(

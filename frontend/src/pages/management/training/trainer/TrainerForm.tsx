@@ -236,32 +236,57 @@ export function TrainerForm({ trainer, close, saved }: { trainer?: Trainer; clos
 
                         <div className="space-y-1.5 sm:col-span-2">
                             <div className="flex items-center justify-between gap-2">
-                                <Label htmlFor="trainer-topics">Teaching Topics</Label>
+                                <Label id="trainer-topics-label">Teaching Topics</Label>
                                 <span className="text-xs text-muted-foreground">
                                     {form.teachingTopicIds.length} selected
                                 </span>
                             </div>
-                            <NativeSelect
-                                id="trainer-topics"
-                                multiple
-                                className="h-28 w-full py-1.5 text-sm"
-                                disabled={busy || topics.isPending || topics.isError}
-                                value={form.teachingTopicIds.map(String)}
-                                onChange={e =>
-                                    setForm({
-                                        ...form,
-                                        teachingTopicIds: Array.from(e.target.selectedOptions).map(o => Number(o.value)),
-                                    })
-                                }
+                            <div
+                                role="group"
+                                aria-labelledby="trainer-topics-label"
+                                className="max-h-36 overflow-y-auto rounded-md border border-input bg-background p-1.5 space-y-1"
                             >
-                                {available.map(t => (
-                                    <option key={t.id} value={t.id} className="py-1">
-                                        {t.code}@{t.version} — {t.name}{!t.active ? " (inactive, saved)" : ""}
-                                    </option>
-                                ))}
-                            </NativeSelect>
+                                {topics.isPending ? (
+                                    <p className="px-2 py-3 text-xs text-muted-foreground">Loading topics…</p>
+                                ) : available.length === 0 ? (
+                                    <p className="px-2 py-3 text-xs text-muted-foreground">No active topics available.</p>
+                                ) : (
+                                    available.map(t => {
+                                        const checked = form.teachingTopicIds.includes(t.id);
+                                        const toggle = () => {
+                                            setForm(prev => ({
+                                                ...prev,
+                                                teachingTopicIds: checked
+                                                    ? prev.teachingTopicIds.filter(id => id !== t.id)
+                                                    : [...prev.teachingTopicIds, t.id],
+                                            }));
+                                        };
+                                        return (
+                                            <label
+                                                key={t.id}
+                                                className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
+                                                    busy || topics.isError
+                                                        ? "cursor-not-allowed opacity-60"
+                                                        : "cursor-pointer hover:bg-muted/60"
+                                                } ${checked ? "bg-primary/10 text-foreground font-medium" : "text-foreground/90"}`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    className="h-4 w-4 rounded border-input accent-primary shrink-0"
+                                                    checked={checked}
+                                                    disabled={busy || topics.isError}
+                                                    onChange={toggle}
+                                                />
+                                                <span className="truncate">
+                                                    {t.code}@{t.version} — {t.name}{!t.active ? " (inactive, saved)" : ""}
+                                                </span>
+                                            </label>
+                                        );
+                                    })
+                                )}
+                            </div>
                             <p className="text-xs text-muted-foreground">
-                                Select existing topics; hold Ctrl/Cmd to select multiple.
+                                Click any topic to select or unselect multiple subjects.
                             </p>
                             {topics.isError && (
                                 <p role="alert" className="text-xs text-destructive">

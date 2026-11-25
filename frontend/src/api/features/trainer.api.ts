@@ -1,9 +1,20 @@
 import axios from "@/api/axios";
 
 export interface TeachingTopic { id: number; code: string; name: string; version: string; active: boolean }
+export interface TeachingHistoryItem {
+    classCode?: string | null;
+    className?: string | null;
+    subjectCode: string;
+    subjectName: string;
+    subjectVersion: string;
+    role: string;
+    effectiveFrom: string;
+    effectiveTo?: string | null;
+}
 export interface Trainer {
     id: number; trainerCode: string; fullName: string; email: string; specialization: string;
     status: "ACTIVE" | "INACTIVE"; teachingTopics: TeachingTopic[]; source: "INTERNAL";
+    teachingHistory?: TeachingHistoryItem[];
 }
 export interface TrainerInput {
     trainerCode: string; fullName: string; email: string; specialization: string;

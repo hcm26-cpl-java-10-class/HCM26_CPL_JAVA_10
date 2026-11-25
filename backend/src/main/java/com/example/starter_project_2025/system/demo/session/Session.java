@@ -114,11 +114,6 @@ public class Session extends BaseEntity {
 
     private static final class SessionBuilderImpl extends SessionBuilder<Session, SessionBuilderImpl> {
         @Override
-        protected SessionBuilderImpl self() {
-            return this;
-        }
-
-        @Override
         public Session build() {
             Session session = new Session(this);
             session.validateStateInvariants();
