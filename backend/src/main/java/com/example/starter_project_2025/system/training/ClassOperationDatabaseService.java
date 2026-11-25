@@ -48,6 +48,116 @@ public class ClassOperationDatabaseService {
     private static final DateTimeFormatter ACTIVITY_TS_FMT = DateTimeFormatter.ofPattern("dd-MMM-yyyy HH:mm:ss", Locale.ENGLISH);
 
     // =========================================================================
+    // 0. BASELINE CLASSES & TRAINEE ENROLLMENTS SEED (H2 DATABASE)
+    // =========================================================================
+
+    @Transactional
+    public List<TrainingClass> ensureDefaultTrainingClassesInH2() {
+        if (trainingClassRepository.count() > 0) {
+            return trainingClassRepository.findAll();
+        }
+        List<TrainingClass> defaults = List.of(
+                buildDefaultTrainingClass(
+                        "LOCAL_JAVA_01",
+                        "Lớp Chuyên sâu Java Backend (K26)",
+                        LocalDate.of(2026, 10, 1),
+                        LocalDate.of(2027, 1, 31),
+                        25,
+                        "LOCAL_JAVA",
+                        "Nguyễn Ngọc Tân (Trainer)",
+                        "Offline",
+                        "Java, Spring Boot",
+                        "Phòng Lab 201 (F-Town 2)"
+                ),
+                buildDefaultTrainingClass(
+                        "LOCAL_JAVA_02",
+                        "Lớp Lập trình Fullstack Java Web (K26)",
+                        LocalDate.of(2026, 11, 15),
+                        LocalDate.of(2027, 3, 15),
+                        30,
+                        "LOCAL_FULLSTACK",
+                        "Nguyễn Mạnh Hoàng (Trainer)",
+                        "Hybrid",
+                        "Java, React",
+                        "Phòng 304 (Innovation Hall)"
+                )
+        );
+        return trainingClassRepository.saveAll(defaults);
+    }
+
+    @Transactional
+    public List<ClassEnrollment> initializeEnrollmentsFromH2(TrainingClass tc) {
+        if (tc == null || tc.getId() == null) {
+            return List.of();
+        }
+        if (enrollmentRepository.countByTrainingClass_Id(tc.getId()) > 0) {
+            return enrollmentRepository.findByTrainingClass_IdAndIsActiveTrueOrderByIdAsc(tc.getId());
+        }
+
+        List<MasterTraineeDirectory.Profile> seedProfiles = switch (tc.getCode() != null ? tc.getCode() : "") {
+            case "LOCAL_JAVA_01" -> MasterTraineeDirectory.CLASS_1_SEED_PROFILES;
+            case "LOCAL_JAVA_02" -> MasterTraineeDirectory.CLASS_2_SEED_PROFILES;
+            default -> List.of();
+        };
+        if (seedProfiles.isEmpty()) {
+            return List.of();
+        }
+
+        int cap = tc.getPlannedSize() != null && tc.getPlannedSize() > 0
+                ? tc.getPlannedSize()
+                : seedProfiles.size();
+
+        List<ClassEnrollment> toSave = new ArrayList<>();
+        for (int i = 0; i < Math.min(cap, seedProfiles.size()); i++) {
+            MasterTraineeDirectory.Profile p = seedProfiles.get(i);
+            ClassEnrollment enrollment = new ClassEnrollment();
+            enrollment.setTrainingClass(tc);
+            enrollment.setTraineeId(p.id());
+            enrollment.setStudentId(p.studentId());
+            enrollment.setFullName(p.fullName());
+            enrollment.setPersonalEmail(p.personalEmail());
+            enrollment.setDob(p.dob());
+            enrollment.setGender(p.gender());
+            enrollment.setStatus(ClassEnrollment.Status.ACTIVE);
+            enrollment.setIsActive(true);
+            toSave.add(enrollment);
+        }
+        return enrollmentRepository.saveAll(toSave);
+    }
+
+    private TrainingClass buildDefaultTrainingClass(
+            String code,
+            String name,
+            LocalDate startDate,
+            LocalDate endDate,
+            int plannedSize,
+            String program,
+            String masterTrainer,
+            String formatType,
+            String skills,
+            String location
+    ) {
+        TrainingClass tc = new TrainingClass();
+        tc.setCode(code);
+        tc.setName(name);
+        tc.setStatus("active");
+        tc.setStartDate(startDate);
+        tc.setEndDate(endDate);
+        tc.setPlannedSize(plannedSize);
+        tc.setSite("TP. Hồ Chí Minh");
+        tc.setTraineeType("Fresher");
+        tc.setProgram(program);
+        tc.setClassAdmin("admin@example.com");
+        tc.setMasterTrainer(masterTrainer);
+        tc.setDeliveryType("Class");
+        tc.setFormatType(formatType);
+        tc.setSkills(skills);
+        tc.setLocation(location);
+        tc.setIsActive(true);
+        return tc;
+    }
+
+    // =========================================================================
     // 1. OPERATION & MILESTONES (QUERYING & PERSISTING IN H2 DATABASE)
     // =========================================================================
 
