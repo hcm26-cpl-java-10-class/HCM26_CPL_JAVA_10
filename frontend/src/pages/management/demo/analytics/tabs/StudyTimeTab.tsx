@@ -47,6 +47,12 @@ const formatHours = (value?: number | null): string =>
     ? `${value.toLocaleString("en-US", { maximumFractionDigits: 1 })} h`
     : "—";
 
+/** Formats seconds as whole minutes, e.g. "85 min". */
+const formatMinutes = (seconds?: number | null): string =>
+  typeof seconds === "number" && Number.isFinite(seconds)
+    ? `${Math.round(seconds / 60).toLocaleString("en-US")} min`
+    : "—";
+
 /** Converts seconds into "1 h 25 min" for extra detail. */
 const formatDuration = (seconds?: number | null): string => {
   if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) {
@@ -267,7 +273,6 @@ function CourseStudyTime({ courseId }: Props) {
                   <TableHead>Learner</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead className="text-right">Total study time</TableHead>
-                  <TableHead className="text-right">Duration</TableHead>
                   <TableHead className="text-right">Lessons completed</TableHead>
                   <TableHead className="text-right">Completion rate</TableHead>
                   <TableHead className="text-right">Last accessed</TableHead>
@@ -277,7 +282,7 @@ function CourseStudyTime({ courseId }: Props) {
                 {pagedLearners.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={8}
+                      colSpan={7}
                       className="py-6 text-center text-muted-foreground"
                     >
                       No learner matches the current search.
@@ -297,10 +302,7 @@ function CourseStudyTime({ courseId }: Props) {
                       </TableCell>
                       <TableCell>{item.departmentName ?? "—"}</TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatHours(item.studyHours)}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {formatDuration(item.studySeconds)}
+                        {formatMinutes(item.studySeconds)}
                       </TableCell>
                       <TableCell className="text-right">
                         {formatNumber(item.completedLessons)}/{formatNumber(item.totalLessons)}
