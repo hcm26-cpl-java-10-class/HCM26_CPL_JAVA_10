@@ -1,9 +1,3 @@
-import { PersonalProfilePage } from "@/pages/management/profile";
-import { MyLearningPage } from "@/pages/management/learning";
-import { ModuleGroupsPage } from "@/pages/management/fams/ModuleGroupsPage";
-import { ModulesPage } from "@/pages/management/fams/ModulesPage";
-import { LocationPage } from "@/pages/management/rbac/location";
-import AuditLogPage from "@/pages/management/audit-log";
 import NotificationCenterPage from "@/pages/notifications/NotificationCenterPage";
 import EmailHistoryPage from "@/pages/communications/EmailHistoryPage";
 import EmailComposePage from "@/pages/communications/EmailComposePage";
@@ -92,8 +86,6 @@ import AiSuggestionDetailPage from "@/pages/management/ai-assistant/pages/AiSugg
 import ProjectTemplateListPage from "@/pages/management/project-template";
 import ExamSupervisorPage from "@/pages/management/exam/supervisor";
 import { ProjectTemplateFormPage } from "@/pages/management/project-template/pages/ProjectTemplateFormPage";
-import LearningPerformancePage from "@/pages/management/learning/reports/LearningPerformancePage";
-import GoalsHabitsReportPage from "@/pages/management/learning/reports/GoalsHabitsReportPage";
 import { ProjectTemplateDetailPage } from "@/pages/management/project-template/pages/ProjectTemplateDetailPage";
 import ProjectTemplateReviewPage from "@/pages/management/project-template-review/ProjectTemplateReviewPage";
 import ArtifactDraftPage from "@/pages/student/ArtifactDraftPage";
@@ -151,22 +143,6 @@ export const ROLE_HOME_PATHS = [
 ] as const;
 
 export const routes: RouteConfig[] = [
-  { path: "/fams/ho-so-ca-nhan-oi-mat-khau", component: PersonalProfilePage },
-  { path: "/fams/ho-so-ca-nhan-doi-mat-khau", component: PersonalProfilePage },
-  { path: "/fams/profile", component: PersonalProfilePage },
-  { path: "/profile", component: PersonalProfilePage },
-  { path: "/my-learning", component: MyLearningPage },
-  { path: "/my-learning/reports/performance", component: LearningPerformancePage },
-  { path: "/my-learning/reports/goals-habits", component: GoalsHabitsReportPage },
-  { path: "/fams/my-learning", component: MyLearningPage },
-  { path: "/learning", component: MyLearningPage },
-  { path: "/menu-groups", component: ModuleGroupsPage, requiredPermission: "MENU_READ" },
-  { path: "/menus", component: ModulesPage, requiredPermission: "MENU_READ" },
-  { path: "/module-groups", component: ModuleGroupsPage, requiredPermission: "MENU_READ" },
-  { path: "/modules", component: ModulesPage, requiredPermission: "MENU_READ" },
-  { path: "/locations", component: LocationPage, requiredPermission: "LOCATION_READ" },
-  { path: "/management/rbac/locations", component: LocationPage, requiredPermission: "LOCATION_READ" },
-  { path: "/admin/audit-log", component: AuditLogPage, isModuleDriven: true },
   { path: "/trainers", component: TrainerManagementPage, requiredPermission: "TRAINER_READ" },
   // TRAINING OPERATIONS & LMS
   { path: "/training/audit", component: AuditPage, isModuleDriven: true },
@@ -208,10 +184,22 @@ export const routes: RouteConfig[] = [
   { path: "/project-templates/:templateId/reviews/:reportId", component: ProjectTemplateReviewPage, requiredPermission: "PROJECT_TEMPLATE_REVIEW" },
 
   // FAMS MODULE GROUP MODULE
-  { path: "/fams/module-group-module", component: ModuleGroupModulePage, requiredPermission: "MENU_READ" },
-  { path: "/module-group-module", component: ModuleGroupModulePage, requiredPermission: "MENU_READ" },
+  {
+    path: "/fams/module-group-module",
+    component: ModuleGroupModulePage,
+    isPublic: true,
+  },
+  {
+    path: "/module-group-module",
+    component: ModuleGroupModulePage,
+    isPublic: true,
+  },
 
   // ROLE HOME
+  {
+    path: "/dashboard",
+    component: Dashboard,
+  },
   {
     path: "/student",
     component: StudentLandingPage,
@@ -222,7 +210,11 @@ export const routes: RouteConfig[] = [
   },
 
   // DASHBOARD
-  { path: "/dashboard", component: Dashboard, requiredPermission: "USER_READ", isModuleDriven: false },
+  {
+    path: "/dashboard",
+    component: Dashboard,
+    isModuleDriven: true,
+  },
 
   // RBAC
   {
@@ -357,8 +349,6 @@ export const routes: RouteConfig[] = [
     requiredPermission: "SESSION_READ",
     isModuleDriven: false,
   },
-
-  // TOPIC MARKS
   {
     path: "/topic-marks/gradebook-demo",
     component: TopicMarkGradebookDemoPage,
@@ -552,6 +542,11 @@ export const routes: RouteConfig[] = [
   { path: "/student/recommendations", component: RecommendedCoursesPage, requiredPermission: "ENROLLMENT_CREATE", isModuleDriven: false },
   // STUDENT
   {
+    path: "/student",
+    component: StudentLandingPage,
+    requiredPermission: "BOOK_READ",
+  },
+  {
     path: "/student/exams",
     component: StudentExamList,
     requiredPermission: "EXAM_READ",
@@ -627,6 +622,11 @@ export const routes: RouteConfig[] = [
   },
 
   // TEACHER
+  {
+    path: "/teacher",
+    component: TeacherLandingPage,
+    requiredPermission: "BOOK_UPDATE",
+  },
 
   // DYNAMIC ENTITY ROUTES
   ...buildEntityRoutes(),

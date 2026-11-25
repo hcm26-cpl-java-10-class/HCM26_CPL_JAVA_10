@@ -1199,7 +1199,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/trainers') { return json(res, 200, trainers); }
   if (pathname === '/api/rooms') { return json(res, 200, rooms); }
 
-
+  
   // ======== FAMS BUDGET & OPERATION INFO ========
   if (req.method === 'GET' && classOperationMatch) {
     const classId = parseInt(classOperationMatch[1], 10);

@@ -10,8 +10,6 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Field;
-import java.util.List;
-import java.util.ArrayList;
 import java.util.Map;
 
 @Component
@@ -24,15 +22,11 @@ public class GenericImportMapper {
     ValueConverter converter;
 
     public <T> T map(Map<String, String> rowData, Class<T> clazz) {
-        return map(rowData, clazz, null);
-    }
-
-    public <T> T map(Map<String, String> rowData, Class<T> clazz, T existingEntity) {
 
         try {
-            T entity = existingEntity != null ? existingEntity : clazz.getDeclaredConstructor().newInstance();
+            T entity = clazz.getDeclaredConstructor().newInstance();
 
-            for (Field field : getAllFields(clazz)) {
+            for (Field field : clazz.getDeclaredFields()) {
 
                 field.setAccessible(true);
 
@@ -61,7 +55,6 @@ public class GenericImportMapper {
                         converter.convert(field.getType(), raw));
             }
 
-            // ⭐ NEW: run PostImport lifecycle
             runPostImportHooks(entity);
 
             return entity;
@@ -71,25 +64,6 @@ public class GenericImportMapper {
         }
     }
 
-    /**
-     * Enterprise lifecycle hook runner
-     */
-
-    private List<Field> getAllFields(Class<?> type) {
-
-    List<Field> fields = new ArrayList<>();
-
-    while (type != null && type != Object.class) {
-
-        fields.addAll(
-                java.util.Arrays.asList(type.getDeclaredFields())
-        );
-
-        type = type.getSuperclass();
-    }
-
-    return fields;
-}
     private void runPostImportHooks(Object entity) {
 
         for (var method : entity.getClass().getDeclaredMethods()) {

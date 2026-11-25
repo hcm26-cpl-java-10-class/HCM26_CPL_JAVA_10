@@ -241,3 +241,4 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
     </div>
   );
 }
+

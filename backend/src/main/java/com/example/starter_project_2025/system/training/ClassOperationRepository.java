@@ -10,3 +10,4 @@ import java.util.Optional;
 public interface ClassOperationRepository extends JpaRepository<ClassOperationEntity, Long> {
     Optional<ClassOperationEntity> findByClassId(Long classId);
 }
+

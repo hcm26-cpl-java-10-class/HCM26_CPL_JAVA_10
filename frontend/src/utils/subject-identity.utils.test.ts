@@ -21,3 +21,4 @@ describe("normalizeSubjectIdentity", () => {
     expect(normalizeSubjectIdentity({ code: "spring" })).toEqual({ code: "SPRING" });
   });
 });
+

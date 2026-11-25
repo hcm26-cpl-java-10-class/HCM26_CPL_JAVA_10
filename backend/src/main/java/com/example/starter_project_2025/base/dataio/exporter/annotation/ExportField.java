@@ -20,8 +20,4 @@ public @interface ExportField {
     boolean relation() default false;
 
     String separator() default ", ";
-
-    String hint() default "";
-
-    int order() default Integer.MAX_VALUE;
 }

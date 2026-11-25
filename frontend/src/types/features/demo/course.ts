@@ -7,11 +7,6 @@ export type CourseLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
 export type CourseStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
 export interface CourseDTO extends BaseDTO {
-  categoryName?: string;
-  category?: string;
-  courseLevel?: string;
-  publicationStatus?: string;
-  instructorEmail?: string;
   courseType?: CourseType;
   name?: string;
   description?: string;

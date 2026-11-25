@@ -25,7 +25,7 @@ export function CardFieldValue({
   disableBooleanToggle = false,
 }: CardFieldValueProps) {
   const { t } = useTranslation();
-  const { formatDate, formatDateTime } = useLocaleFormat();
+  const { formatDateTime } = useLocaleFormat();
 
   if (field.type === "boolean") {
     const labels = field.booleanLabels || { true: "Yes", false: "No" };
@@ -119,7 +119,7 @@ export function CardFieldValue({
   if (field.type === "date" && value) {
     return (
       <TruncatedText
-        content={field.name === "dateOfBirth" ? formatDate(value) : formatDateTime(value)}
+        content={formatDateTime(value)}
         bold={field.bold}
         className="text-sm"
       />

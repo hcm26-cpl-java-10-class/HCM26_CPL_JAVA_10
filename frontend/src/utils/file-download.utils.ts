@@ -11,3 +11,4 @@ export function triggerBlobDownload(blob: Blob, filename: string): void {
   anchor.remove();
   window.URL.revokeObjectURL(url);
 }
+

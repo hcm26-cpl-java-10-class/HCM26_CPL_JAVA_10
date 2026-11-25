@@ -1,5 +1,4 @@
 import axiosInstance from "../axios";
-import { getDeviceDescription } from "@/utils/device.utils";
 import { normalizeAuthRolePayload } from "@/utils/rbac.utils";
 import {
     type ChangePasswordRequest,
@@ -12,9 +11,7 @@ import {
 } from "../../types/features/auth";
 
 interface BackendAuthenticationResponse {
-    accessToken?: string;
-    passwordChangeRequired?: boolean;
-    setupToken?: string;
+    accessToken: string;
     email: string;
     firstName: string;
     lastName: string;
@@ -45,9 +42,7 @@ export const mapAuthResponse = (data: BackendAuthenticationResponse): LoginRespo
     });
 
     return {
-        token: data.accessToken ?? "",
-        passwordChangeRequired: data.passwordChangeRequired,
-        setupToken: data.setupToken,
+        token: data.accessToken,
         email: data.email,
         firstName: data.firstName,
         lastName: data.lastName,
@@ -64,14 +59,10 @@ export const clearAuthStorage = () => {
 
 export const authApi = {
     login: async (credentials: LoginRequest): Promise<LoginResponse> => {
-        const device = credentials.device || (await getDeviceDescription());
         const response = await axiosInstance.post<BackendAuthenticationResponse>("/auth/login", {
-            device,
             email: credentials.email,
             password: credentials.password,
             rememberMe: Boolean(credentials.isRememberedMe),
-        }, {
-            headers: { "X-Device-Info": device },
         });
         return mapAuthResponse(response.data);
     },

@@ -77,9 +77,6 @@ backend/portability-test.log
 # === Runtime uploaded files (khong commit) ===
 uploads/
 
-# Local H2 database
-/data/
-
 # === Local test tools & docx scratch files ===
 *.docx
 /swagger_*.png

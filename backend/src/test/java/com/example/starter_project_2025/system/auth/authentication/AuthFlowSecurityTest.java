@@ -52,8 +52,6 @@ class AuthFlowSecurityTest {
     @Mock TenantRepository tenantRepository;
     @Mock PasswordEncoder passwordEncoder;
     @Mock AuthAuditService authAuditService;
-    @Mock SsoAccessPolicy ssoAccessPolicy;
-    @Mock com.example.starter_project_2025.system.audit.AuditLogService auditLogService;
 
     @Mock JwtEncoder jwtEncoder;
     @Mock JwtDecoder jwtDecoder;
@@ -74,8 +72,6 @@ class AuthFlowSecurityTest {
                 roleRepository,
                 tenantRepository,
                 passwordEncoder,
-                ssoAccessPolicy,
-                auditLogService,
                 authAuditService
         );
         ReflectionTestUtils.setField(authService, "ssoJitProvisioningEnabled", true);
@@ -89,7 +85,7 @@ class AuthFlowSecurityTest {
                 .locked(false)
                 .build();
         disabled.setId(10L);
-        when(userRepository.findByEmailIgnoreCase("disabled@example.com")).thenReturn(Optional.of(disabled));
+        when(userRepository.findByEmail("disabled@example.com")).thenReturn(Optional.of(disabled));
 
         assertThrows(DisabledException.class,
                 () -> authService.loginWithGoogle("disabled@example.com", "Disabled", "User", "127.0.0.1", "JUnit"));
@@ -100,7 +96,7 @@ class AuthFlowSecurityTest {
     @Test
     void loginWithGoogle_rejectsUnknownUserWhenJitProvisioningDisabled() {
         ReflectionTestUtils.setField(authService, "ssoJitProvisioningEnabled", false);
-        when(userRepository.findByEmailIgnoreCase("new@example.com")).thenReturn(Optional.empty());
+        when(userRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
 
         assertThrows(DisabledException.class,
                 () -> authService.loginWithGoogle("new@example.com", "New", "User", "127.0.0.1", "JUnit"));

@@ -77,11 +77,6 @@ public class DepartmentServiceImpl
 
     @Override
     protected void beforeDelete(Department department) {
-        if (userRepository.existsByDepartmentCodeOrName(department.getCode(), department.getName())) {
-            ValidationContext ctx = new ValidationContext();
-            ctx.add("id", "Cannot delete a department referenced by a legacy user assignment");
-            ctx.throwIfErrors();
-        }
         var members = userRepository.findAllByDepartments_Id(department.getId());
         members.forEach(member -> member.getDepartments().remove(department));
         userRepository.saveAll(members);

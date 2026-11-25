@@ -39,8 +39,6 @@ export function useCourseEnrollment() {
       queryClient.invalidateQueries({ queryKey: ["course-catalog"] }),
       queryClient.invalidateQueries({ queryKey: ["course-recommendations"] }),
       queryClient.invalidateQueries({ queryKey: ["course-detail"] }),
-      queryClient.invalidateQueries({ queryKey: ["personal-learning"] }),
-      queryClient.invalidateQueries({ queryKey: ["personal-learning-roadmap"] }),
       queryClient.invalidateQueries({ queryKey: notificationQueryKey(user?.email ?? "signed-out") }),
     ]);
 

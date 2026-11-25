@@ -11,8 +11,6 @@ public record ExportFieldMeta(
         String dateFormat,
         String path,
         boolean relation,
-        String separator,
-        String hint,
-        int order
+        String separator
 ) {
 }
