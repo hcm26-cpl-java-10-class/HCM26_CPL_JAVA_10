@@ -218,6 +218,60 @@ export const externalApi = {
         return response.data;
     },
 
+    getClassAttendance: async (
+        classId: string | number
+    ): Promise<{
+        classId: number;
+        conductedSessions: number;
+        plannedSessions: number;
+        recordsByTraineeId: Record<
+            string,
+            {
+                traineeId: number;
+                excusedAbsent: number;
+                unexcusedAbsent: number;
+                lateCount: number;
+                logs: Array<{
+                    sessionNumber: number;
+                    date: string;
+                    topic: string;
+                    status: "Present" | "Excused" | "Unexcused" | "Late";
+                    note?: string;
+                    auditTrail?: Array<{
+                        previousStatus: "Present" | "Excused" | "Unexcused" | "Late";
+                        newStatus: "Present" | "Excused" | "Unexcused" | "Late";
+                        modifiedBy: string;
+                        modifiedAt: string;
+                        reason: string;
+                    }>;
+                }>;
+            }
+        >;
+    }> => {
+        const response = await axiosInstance.get(`/external/classes/${classId}/attendance`);
+        return response.data;
+    },
+
+    saveClassAttendance: async (
+        classId: string | number,
+        data: {
+            conductedSessions: number;
+            plannedSessions: number;
+            expectedStartDate?: string;
+            expectedEndDate?: string;
+            trainees?: Array<{
+                id: number;
+                studentId?: string;
+                fullName?: string;
+                personalEmail?: string;
+            }>;
+            recordsByTraineeId: Record<string, unknown>;
+        }
+    ): Promise<unknown> => {
+        const response = await axiosInstance.put(`/external/classes/${classId}/attendance`, data);
+        return response.data;
+    },
+
     // ===================== BUDGET =====================
     getClassBudget: async (classId: string | number): Promise<ClassBudget> => {
         return withFallback(

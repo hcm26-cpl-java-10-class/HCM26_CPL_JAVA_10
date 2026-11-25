@@ -161,6 +161,56 @@ function ensureTopicScoresForClass(
     return next;
 }
 
+export interface TraineeTopicScoreItem {
+    code: string;
+    name: string;
+    scores: TopicComponentScores;
+    isFailed: boolean;
+}
+
+/**
+ * Aggregates topic scores and calculates overall GPA summary for a single trainee across all topics.
+ */
+export function getTraineeTopicMarksSummary(
+    classKey: string,
+    trainees: Trainee[],
+    traineeId: number,
+): {
+    topics: TraineeTopicScoreItem[];
+    overallGpa: number;
+    passedCount: number;
+    failedCount: number;
+    highestTopic: TraineeTopicScoreItem | null;
+} {
+    const topics: TraineeTopicScoreItem[] = TOPIC_OPTIONS.map((topic) => {
+        const scoresMap = ensureTopicScoresForClass(classKey, topic.code, trainees);
+        const scores = scoresMap[traineeId] ?? buildDefaultScoresForTrainee(0, topic.code);
+        return {
+            code: topic.code,
+            name: topic.name,
+            scores,
+            isFailed: scores.totalGpa < TOPIC_GPA_PASS_THRESHOLD,
+        };
+    });
+
+    const sumGpa = topics.reduce((acc, item) => acc + item.scores.totalGpa, 0);
+    const overallGpa = topics.length > 0 ? Math.round((sumGpa / topics.length) * 10) / 10 : 0;
+    const failedCount = topics.filter((item) => item.isFailed).length;
+    const passedCount = topics.length - failedCount;
+    const highestTopic = topics.reduce<TraineeTopicScoreItem | null>(
+        (best, item) => (!best || item.scores.totalGpa > best.scores.totalGpa ? item : best),
+        null,
+    );
+
+    return {
+        topics,
+        overallGpa,
+        passedCount,
+        failedCount,
+        highestTopic,
+    };
+}
+
 const STICKY_HEADER_CELL_CLASS =
     "sticky top-0 z-20 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-700 shadow-[inset_0_-1px_0_#e2e8f0] dark:bg-slate-900 dark:text-slate-200 dark:shadow-[inset_0_-1px_0_#334155]";
 

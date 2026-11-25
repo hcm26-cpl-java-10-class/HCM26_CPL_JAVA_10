@@ -14,9 +14,10 @@ import {
     ShieldAlert,
     Users,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { utils, writeFile } from "xlsx";
+import { externalApi } from "@/api/features/external.api";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { NativeSelect } from "@/components/common/NativeSelect";
 import { Badge } from "@/components/ui/badge";
@@ -305,7 +306,7 @@ const AUTO_DEFAULT_NOTES = new Set([
     "Arrived late",
 ]);
 
-function recalculateRecordFromLogs(
+export function recalculateRecordFromLogs(
     traineeId: number,
     logs: TraineeAttendanceLogItem[],
     todayIso: string = getTodayLocalIsoDate(),
@@ -339,7 +340,7 @@ export function resetClassAttendanceStoreForTest() {
     classAttendanceStore.clear();
 }
 
-function getOrInitClassAttendanceState(
+export function getOrInitClassAttendanceState(
     classId: string,
     trainees: Trainee[],
     expectedStartDate = "2026-10-01",
@@ -424,6 +425,68 @@ function getOrInitClassAttendanceState(
     };
     classAttendanceStore.set(classId, nextState);
     return nextState;
+}
+
+/**
+ * Fetches class attendance from the backend API and merges it into the in-memory store.
+ * Fails silently when the endpoint is unavailable (e.g. unmocked offline environments).
+ */
+export async function fetchAndHydrateClassAttendance(
+    classId: string,
+    trainees: Trainee[],
+    expectedStartDate: string,
+    expectedEndDate: string,
+    todayIso: string = getTodayLocalIsoDate(),
+    shouldCommit?: () => boolean,
+): Promise<ClassAttendanceState | null> {
+    const synced = getOrInitClassAttendanceState(
+        classId,
+        trainees,
+        expectedStartDate,
+        expectedEndDate,
+    );
+    const remote = await externalApi.getClassAttendance(classId).catch(() => null);
+    if (shouldCommit && !shouldCommit()) return null;
+    if (!remote?.recordsByTraineeId) {
+        return null;
+    }
+    const entries = Object.entries(remote.recordsByTraineeId);
+    if (entries.length === 0) return null;
+
+    const hasAnyMatchedTrainee = trainees.some(
+        (t) => remote.recordsByTraineeId[String(t.id)] !== undefined,
+    );
+    if (trainees.length > 0 && !hasAnyMatchedTrainee) {
+        return null;
+    }
+
+    const remoteRecords: Record<number, TraineeAttendanceRecord> = {};
+    for (const [key, value] of entries) {
+        const tid = Number(key);
+        if (!Number.isFinite(tid) || !value) continue;
+        remoteRecords[tid] = recalculateRecordFromLogs(tid, value.logs ?? [], todayIso);
+    }
+
+    const remoteConducted =
+        typeof remote.conductedSessions === "number" && remote.conductedSessions > 0
+            ? remote.conductedSessions
+            : synced.conductedSessions;
+    const remotePlanned =
+        typeof remote.plannedSessions === "number" && remote.plannedSessions > 0
+            ? Math.max(remote.plannedSessions, remoteConducted)
+            : synced.plannedSessions;
+
+    const hydrated: ClassAttendanceState = {
+        ...synced,
+        conductedSessions: Math.max(synced.conductedSessions, remoteConducted),
+        plannedSessions: Math.max(synced.plannedSessions, remotePlanned),
+        recordsByTraineeId: {
+            ...synced.recordsByTraineeId,
+            ...remoteRecords,
+        },
+    };
+    classAttendanceStore.set(classId, hydrated);
+    return hydrated;
 }
 
 export type AttendanceStatusLabel = "Eligible" | "At Risk" | "Disqualified";
@@ -540,7 +603,10 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
     const [logEditReason, setLogEditReason] = useState("");
     const [logModalError, setLogModalError] = useState("");
 
+    const hasLocalMutationRef = useRef(false);
+
     useEffect(() => {
+        hasLocalMutationRef.current = false;
         const synced = getOrInitClassAttendanceState(
             classId,
             trainees,
@@ -548,14 +614,47 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
             expectedEndDate,
         );
         setAttendanceState(synced);
-    }, [classId, expectedEndDate, expectedStartDate, trainees]);
+
+        let cancelled = false;
+        void fetchAndHydrateClassAttendance(
+            classId,
+            trainees,
+            expectedStartDate,
+            expectedEndDate,
+            todayIso,
+            () => !cancelled && !hasLocalMutationRef.current,
+        ).then((hydrated) => {
+            if (!cancelled && !hasLocalMutationRef.current && hydrated) {
+                setAttendanceState(hydrated);
+            }
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [classId, expectedEndDate, expectedStartDate, todayIso, trainees]);
 
     const updateAttendanceState = (updater: (prev: ClassAttendanceState) => ClassAttendanceState) => {
-        setAttendanceState((prev) => {
-            const next = updater(prev);
-            classAttendanceStore.set(classId, next);
-            return next;
-        });
+        hasLocalMutationRef.current = true;
+        const next = updater(attendanceState);
+        classAttendanceStore.set(classId, next);
+        setAttendanceState(next);
+
+        void externalApi
+            .saveClassAttendance(classId, {
+                conductedSessions: next.conductedSessions,
+                plannedSessions: next.plannedSessions,
+                expectedStartDate: next.expectedStartDate,
+                expectedEndDate: next.expectedEndDate,
+                trainees: trainees.map((t) => ({
+                    id: t.id,
+                    studentId: formatFptStudentIdForSite(t.fptAccount || t.code, classSite, t.id),
+                    fullName: t.fullName,
+                    personalEmail: t.personalEmail || t.email,
+                })),
+                recordsByTraineeId: next.recordsByTraineeId,
+            })
+            .catch(() => {});
     };
 
     const computedRows = useMemo(() => {

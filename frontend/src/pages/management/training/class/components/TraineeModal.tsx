@@ -1,8 +1,6 @@
-import { Pencil } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import type { TraineeFormInput, TraineeGender, TraineeStatus } from "@/api/features/trainee.api";
 import { NativeSelect } from "@/components/common/NativeSelect";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -15,8 +13,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import type { Trainee } from "@/types";
+import type { ExternalClass, Trainee } from "@/types";
 import { formatDate, splitLocalDateTime } from "@/utils/session.utils";
+import { TraineeProfile360 } from "./TraineeProfile360";
 
 export type TraineeModalMode = "create" | "edit" | "view";
 
@@ -24,12 +23,16 @@ export interface TraineeModalProps {
     membershipOnly?: boolean;
     open: boolean;
     mode: TraineeModalMode;
+    classItem?: ExternalClass;
     site?: string;
     trainee?: Trainee | null;
     existingTrainees: Trainee[];
     onOpenChange: (open: boolean) => void;
     onSubmit: (values: TraineeFormInput) => void;
     onSwitchToEdit?: () => void;
+    onSelectTrainee?: (trainee: Trainee) => void;
+    onNavigateToAttendance?: () => void;
+    onNavigateToTopicMark?: () => void;
 }
 
 export interface FptStudentIdSiteRule {
@@ -318,70 +321,6 @@ function validateTraineeForm(
     return errors;
 }
 
-function TraineeProfileBody({
-    trainee,
-    site,
-    onClose,
-    onSwitchToEdit,
-    membershipOnly,
-}: {
-    trainee: Trainee;
-    site?: string;
-    onClose: () => void;
-    onSwitchToEdit?: () => void;
-    membershipOnly?: boolean;
-}) {
-    const badge = resolveTraineeStatusBadge(trainee.status);
-    const studentId = membershipOnly ? trainee.fptAccount || trainee.code || "" : formatFptStudentIdForSite(trainee.fptAccount || trainee.code, site, trainee.id);
-    const fields: Array<{ label: string; value: string }> = [
-        { label: "Full Name", value: trainee.fullName || "—" },
-        { label: "Student ID", value: studentId || "—" },
-        { label: "Personal Email", value: trainee.personalEmail || trainee.email || "—" },
-        { label: "DOB", value: trainee.dob ? formatDate(trainee.dob) : "—" },
-        { label: "Gender", value: trainee.gender || "—" },
-    ];
-
-    return (
-        <>
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 px-4 py-3">
-                <div>
-                    <p className="text-base font-semibold text-foreground">{trainee.fullName || "—"}</p>
-                    <p className="text-xs text-muted-foreground">
-                        Student ID: {studentId || "—"}
-                    </p>
-                </div>
-                <Badge variant="secondary" className={cn("rounded-full px-3 py-0.5 text-xs font-medium", badge.className)}>
-                    {badge.label}
-                </Badge>
-            </div>
-
-            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 py-1 sm:grid-cols-2">
-                {fields.map(({ label, value }) => (
-                    <div key={label} className="rounded-md border px-3 py-2">
-                        <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-                        <dd className="mt-0.5 text-sm font-medium text-foreground break-all">{value}</dd>
-                    </div>
-                ))}
-            </dl>
-
-            <DialogFooter>
-                <Button type="button" variant="outline" onClick={onClose}>
-                    Close
-                </Button>
-                {onSwitchToEdit ? (
-                    <Button
-                        type="button"
-                        className="bg-[#283593] text-white hover:bg-[#1a237e] dark:bg-blue-600 dark:hover:bg-blue-500"
-                        onClick={onSwitchToEdit}
-                    >
-                        <Pencil className="size-4" aria-hidden /> Edit
-                    </Button>
-                ) : null}
-            </DialogFooter>
-        </>
-    );
-}
-
 function TraineeFormBody({
     mode,
     site,
@@ -637,39 +576,54 @@ export function TraineeModal({
     membershipOnly = false,
     open,
     mode,
+    classItem,
     site,
     trainee,
     existingTrainees,
     onOpenChange,
     onSubmit,
     onSwitchToEdit,
+    onSelectTrainee,
+    onNavigateToAttendance,
+    onNavigateToTopicMark,
 }: TraineeModalProps) {
     const title =
         mode === "create" ? (membershipOnly ? "Enroll Existing Trainee" : "Add New Trainee")
             : mode === "edit" ? (membershipOnly ? "Edit Enrollment" : "Edit Trainee") : "Trainee Profile";
     const description =
-        membershipOnly ? "Enroll an existing student or update their enrollment status. Personal profile information is managed in the master directory."
-            : mode === "create"
-            ? "Fill in trainee details to add them to the class list. Click Save Changes to persist."
-            : mode === "edit"
-              ? "Modify trainee information. Changes are staged locally until you click Save Changes."
-              : "Detailed personal and enrollment profile of the selected trainee.";
+        mode === "view"
+            ? "360° trainee overview: personal profile, attendance record, and topic mark performance."
+            : membershipOnly
+              ? "Enroll an existing student or update their enrollment status. Personal profile information is managed in the master directory."
+              : mode === "create"
+                ? "Fill in trainee details to add them to the class list. Click Save Changes to persist."
+                : "Modify trainee information. Changes are staged locally until you click Save Changes.";
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+            <DialogContent
+                className={cn(
+                    "max-h-[90vh] overflow-y-auto",
+                    mode === "view" ? "sm:max-w-3xl" : "sm:max-w-2xl",
+                )}
+            >
                 <DialogHeader>
                     <DialogTitle>{title}</DialogTitle>
                     <DialogDescription>{description}</DialogDescription>
                 </DialogHeader>
 
                 {mode === "view" && trainee ? (
-                    <TraineeProfileBody
+                    <TraineeProfile360
                         membershipOnly={membershipOnly}
                         trainee={trainee}
+                        existingTrainees={existingTrainees}
+                        classItem={classItem}
                         site={site}
                         onClose={() => onOpenChange(false)}
                         onSwitchToEdit={onSwitchToEdit}
+                        onSelectTrainee={onSelectTrainee}
+                        onNavigateToAttendance={onNavigateToAttendance}
+                        onNavigateToTopicMark={onNavigateToTopicMark}
                     />
                 ) : membershipOnly ? (
                     <MembershipFormBody key={`${mode}-${trainee?.id ?? "new"}-${open}`} trainee={trainee}

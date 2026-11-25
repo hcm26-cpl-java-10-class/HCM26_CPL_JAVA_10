@@ -202,6 +202,20 @@ public class ExternalApiController {
         return ResponseEntity.ok(externalApiService.saveSessionAttendance(classId, sessionId, body));
     }
 
+    @GetMapping("/classes/{id}/attendance")
+    @Operation(summary = "Fetch trainee attendance records for class from H2 database")
+    public ResponseEntity<Object> getClassAttendance(@PathVariable Long id) {
+        return ResponseEntity.ok(classOperationDatabaseService.getClassAttendance(id));
+    }
+
+    @PutMapping("/classes/{id}/attendance")
+    @Operation(summary = "Save trainee attendance records for class in H2 database")
+    public ResponseEntity<Object> saveClassAttendance(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(classOperationDatabaseService.saveClassAttendance(id, body));
+    }
+
     @GetMapping("/classes/{id}/calendars")
     @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_READ')")
     @Operation(summary = "Fetch calendar version history for a class")
