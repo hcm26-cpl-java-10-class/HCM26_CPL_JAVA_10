@@ -19,9 +19,11 @@ export function LocationAiInsights() {
     try {
       const result = await locationApi.analyzeWithAi();
       setAnalysis(result);
-      toast.success(result.configured
-        ? "AI hierarchy analysis completed."
-        : "Deterministic hierarchy analysis completed.");
+      if (result.aiUsed) {
+        toast.success("AI hierarchy analysis completed.");
+      } else {
+        toast.warning(result.warning || result.summary);
+      }
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Unable to analyze the location hierarchy.");
     } finally {
@@ -44,7 +46,7 @@ export function LocationAiInsights() {
                   ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-500"
                   : "border-amber-500/20 bg-amber-500/10 text-amber-600"
               }`}>
-                {status?.configured ? "AI ready" : "Gemini key not configured"}
+                {status?.configured ? "Gemini key configured" : "Gemini key not configured"}
               </span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -65,6 +67,12 @@ export function LocationAiInsights() {
 
       {analysis && (
         <div className="mt-4 border-t border-border pt-4">
+          {analysis.warning && (
+            <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+              <span>{analysis.warning} Deterministic checks are shown below.</span>
+            </div>
+          )}
           <div className="mb-3 flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2.5 text-xs">
             <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-primary" />
             <span>{analysis.summary}</span>

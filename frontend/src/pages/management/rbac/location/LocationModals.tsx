@@ -73,11 +73,16 @@ export const LocationFormModal: React.FC<LocationFormModalProps> = ({
             <input
               type="text"
               required
+              maxLength={30}
+              aria-describedby="location-name-count"
               placeholder="Ví dụ: Phòng Kế toán"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full bg-background border border-input p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
             />
+            <p id="location-name-count" className="mt-1 text-right text-[10px] text-muted-foreground">
+              {formData.name.length}/30
+            </p>
           </div>
           <div>
             <label className="block mb-1 font-medium text-muted-foreground">
@@ -86,21 +91,31 @@ export const LocationFormModal: React.FC<LocationFormModalProps> = ({
             <input
               type="text"
               required
+              maxLength={30}
+              aria-describedby="location-code-count"
               placeholder="Ví dụ: HN_ACC_01"
               value={formData.code}
               onChange={(e) => setFormData({ ...formData, code: e.target.value })}
               className="w-full bg-background border border-input p-2 rounded-lg font-mono uppercase focus:outline-none focus:ring-1 focus:ring-primary"
             />
+            <p id="location-code-count" className="mt-1 text-right text-[10px] text-muted-foreground">
+              {formData.code.length}/30
+            </p>
           </div>
           <div>
             <label className="block mb-1 font-medium text-muted-foreground">Mô tả vị trí</label>
             <textarea
               rows={2}
+              maxLength={50}
+              aria-describedby="location-description-count"
               placeholder="Mô tả ngắn gọn về chức năng của vị trí này..."
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="w-full bg-background border border-input p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none"
             />
+            <p id="location-description-count" className="mt-1 text-right text-[10px] text-muted-foreground">
+              {formData.description.length}/50
+            </p>
           </div>
           <div>
             <label className="block mb-1 font-medium text-muted-foreground">Trạng thái</label>

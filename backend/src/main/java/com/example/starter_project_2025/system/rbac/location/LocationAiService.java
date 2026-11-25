@@ -1,10 +1,12 @@
 package com.example.starter_project_2025.system.rbac.location;
 
 import com.example.starter_project_2025.base.crud.CrudAction;
+import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.system.demo.aicourse.AiTextClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +17,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class LocationAiService {
 
     private final AiTextClient ai;
@@ -34,9 +37,13 @@ public class LocationAiService {
 
     public record Analysis(
             boolean configured,
+            boolean aiUsed,
             String summary,
+            String warning,
             List<Finding> findings
     ) {}
+
+    private record AiAnalysis(String summary, List<Finding> findings) {}
 
     public Status getStatus() {
         return new Status(ai.isConfigured());
@@ -51,8 +58,9 @@ public class LocationAiService {
 
         List<Finding> deterministic = buildDeterministicFindings(locations);
         if (!ai.isConfigured()) {
-            return new Analysis(false,
+            return new Analysis(false, false,
                     "AI key is not configured. The page is using deterministic organization checks.",
+                    null,
                     deterministic);
         }
 
@@ -80,11 +88,12 @@ public class LocationAiService {
                     %s
                     """.formatted(objectMapper.valueToTree(buildSnapshot(locations, roots)).toPrettyString());
 
-            JsonNode response = ai.generateRecommendationJson(
+            JsonNode response = ai.generateJson(
                     system,
-                    List.of(new AiTextClient.Turn("user", user))
+                    List.of(new AiTextClient.Turn("user", user)),
+                    AiTextClient.ANALYSIS_TEMPERATURE
             );
-            Analysis analysis = objectMapper.treeToValue(response, Analysis.class);
+            AiAnalysis analysis = objectMapper.treeToValue(response, AiAnalysis.class);
             if (analysis == null || analysis.findings() == null) {
                 throw new IllegalArgumentException("Missing AI findings");
             }
@@ -98,10 +107,16 @@ public class LocationAiService {
             String summary = analysis.summary() == null || analysis.summary().isBlank()
                     ? "AI analyzed the current location hierarchy."
                     : analysis.summary();
-            return new Analysis(true, summary, findings.isEmpty() ? deterministic : findings);
+            return new Analysis(true, true, summary, null, findings.isEmpty() ? deterministic : findings);
         } catch (Exception exception) {
-            return new Analysis(true,
-                    "AI analysis returned an unreadable result. Deterministic checks are shown instead.",
+            log.warn("Location AI analysis failed; returning deterministic findings.", exception);
+            String warning = exception instanceof BadRequestException
+                    || exception instanceof IllegalArgumentException
+                    ? exception.getMessage()
+                    : "Unexpected AI analysis error. Check the backend log for details.";
+            return new Analysis(true, false,
+                    "AI analysis failed. Deterministic checks are shown instead.",
+                    warning,
                     deterministic);
         }
     }

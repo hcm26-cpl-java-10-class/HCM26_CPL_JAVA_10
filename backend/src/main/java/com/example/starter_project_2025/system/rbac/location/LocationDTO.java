@@ -23,15 +23,15 @@ import static com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY;
 public class LocationDTO extends BaseDTO {
 
     @NotBlank(groups = OnCreate.class, message = "Location code is required")
-    @Pattern(regexp = "^[A-Za-z0-9._-]{2,50}$", groups = {OnCreate.class, OnUpdate.class},
-            message = "Code must be 2-50 characters: letters, digits, '.', '_' or '-'")
+    @Pattern(regexp = "^[A-Za-z0-9._-]{2,30}$", groups = {OnCreate.class, OnUpdate.class},
+            message = "Code must be 2-30 characters: letters, digits, '.', '_' or '-'")
     String code;
 
     @NotBlank(groups = OnCreate.class, message = "Location name is required")
-    @Size(max = 150, groups = {OnCreate.class, OnUpdate.class}, message = "Name must not exceed 150 characters")
+    @Size(max = 30, groups = {OnCreate.class, OnUpdate.class}, message = "Name must not exceed 30 characters")
     String name;
 
-    @Size(max = 500, groups = {OnCreate.class, OnUpdate.class}, message = "Description must not exceed 500 characters")
+    @Size(max = 50, groups = {OnCreate.class, OnUpdate.class}, message = "Description must not exceed 50 characters")
     String description;
 
     Long parentLocationId;

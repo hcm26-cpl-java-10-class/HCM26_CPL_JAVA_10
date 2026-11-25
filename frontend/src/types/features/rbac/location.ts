@@ -65,7 +65,9 @@ export interface LocationAiStatus {
 
 export interface LocationAiAnalysis {
   configured: boolean;
+  aiUsed: boolean;
   summary: string;
+  warning?: string | null;
   findings: LocationAiFinding[];
 }
 

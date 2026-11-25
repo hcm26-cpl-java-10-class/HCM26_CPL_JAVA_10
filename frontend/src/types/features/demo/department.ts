@@ -4,6 +4,8 @@ export interface DepartmentDTO extends BaseDTO {
   name?: string;
   code?: string;
   description?: string;
+  locationId?: number | null;
+  locationName?: string | null;
   parentDepartmentId?: string | number | null;
   status?: string;
 }

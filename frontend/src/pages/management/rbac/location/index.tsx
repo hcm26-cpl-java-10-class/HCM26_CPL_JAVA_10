@@ -26,10 +26,10 @@ const locationSchema: EntitySchema = {
       validation: {
         required: true,
         minLength: 2,
-        maxLength: 50,
+        maxLength: 30,
         pattern: {
-          regex: /^[A-Za-z0-9._-]{2,50}$/,
-          message: "2-50 characters: letters, digits, dot, underscore or hyphen.",
+          regex: /^[A-Za-z0-9._-]{2,30}$/,
+          message: "2-30 characters: letters, digits, dot, underscore or hyphen.",
         },
       },
       hint: "Letters, digits, dot, underscore and hyphen only.",
@@ -39,7 +39,7 @@ const locationSchema: EntitySchema = {
       label: "Name",
       type: "text",
       sortable: true,
-      validation: { required: true, maxLength: 150 },
+      validation: { required: true, maxLength: 30 },
     },
     {
       name: "parentLocationId",
@@ -60,7 +60,7 @@ const locationSchema: EntitySchema = {
       label: "Description",
       type: "textarea",
       sortable: true,
-      validation: { maxLength: 500 },
+      validation: { maxLength: 50 },
     },
     ...(auditableFieldsSchema as FieldSchema[]),
   ],
