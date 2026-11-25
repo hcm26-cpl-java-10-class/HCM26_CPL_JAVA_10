@@ -1,0 +1,134 @@
+name: Docs Structure Check
+
+on:
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - "docs/**"
+      - "*.md"
+      - ".github/workflows/docs-structure-check.yml"
+  push:
+    branches: [dev, main]
+    paths:
+      - "docs/**"
+      - "*.md"
+      - ".github/workflows/docs-structure-check.yml"
+  workflow_dispatch:
+
+jobs:
+  validate-docs-structure:
+    name: Validate docs/ & Markdown rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check docs structure and markdown rules
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          ROOT = Path(".")
+          DOCS = ROOT / "docs"
+
+          ALLOWED_ROOT_MD = {
+              "README.md",
+              "AGENTS.md",
+              "CLAUDE.md",
+              "SRS_FAMS_LMS_MockProject_Hub_ThucTe_v2.0_With_UI.md",
+              "team-contributions.md",
+          }
+          ALLOWED_DOCS_ROOT_FILES = {"README.md"}
+          TOPIC_DIR_PATTERN = re.compile(r"^[0-9]{2}-[a-z0-9-]+$")
+          LOCAL_PATH_PATTERN = re.compile(r"\]\((?:[A-Za-z]:[/\\]|file:///)")
+
+          errors = []
+
+          # 1. Check root-level markdown files
+          for entry in sorted(ROOT.iterdir()):
+              if entry.is_file() and entry.suffix.lower() == ".md":
+                  if entry.name not in ALLOWED_ROOT_MD:
+                      errors.append(
+                          f"[Root .md] '{entry.name}' khong duoc phep nam o goc repo. "
+                          f"Hay chuyen vao thu muc chu de thich hop trong docs/01-..09-/."
+                      )
+
+          # 2. Check top-level entries inside docs/
+          if DOCS.is_dir():
+              for entry in sorted(DOCS.iterdir()):
+                  if entry.is_file():
+                      if entry.name not in ALLOWED_DOCS_ROOT_FILES:
+                          errors.append(
+                              f"[Loose docs file] 'docs/{entry.name}' khong duoc dat truc tiep o goc docs/. "
+                              f"Chi giu docs/README.md; hay chuyen vao docs/01-..09-/."
+                          )
+                  elif entry.is_dir():
+                      if not TOPIC_DIR_PATTERN.match(entry.name):
+                          errors.append(
+                              f"[Invalid docs folder] 'docs/{entry.name}/' sai quy uoc ten thu muc. "
+                              f"Thu muc cap 1 trong docs/ phai khop mau 'NN-kebab-case' (VD: 08-training-operations, 10-new-topic)."
+                          )
+
+              # 3. Check spaces in markdown filenames under docs/
+              for md_file in sorted(DOCS.rglob("*.md")):
+                  if " " in md_file.name:
+                      rel = md_file.as_posix()
+                      errors.append(
+                          f"[Filename space] '{rel}' chua khoang trang trong ten file. "
+                          f"Hay dung kebab-case hoac UPPER_SNAKE_CASE."
+                      )
+
+          # 4. On PRs, reject newly added lines containing local absolute paths (C:/, D:/, file:///)
+          event_name = os.environ.get("EVENT_NAME", "")
+          base_sha = os.environ.get("BASE_SHA", "")
+          head_sha = os.environ.get("HEAD_SHA", "")
+          if event_name == "pull_request" and base_sha and head_sha:
+              diff_proc = subprocess.run(
+                  ["git", "diff", "--unified=0", f"{base_sha}...{head_sha}", "--", "docs/**/*.md", "*.md"],
+                  capture_output=True,
+                  text=True,
+                  check=False,
+              )
+              current_file = None
+              for line in diff_proc.stdout.splitlines():
+                  if line.startswith("+++ b/"):
+                      current_file = line[6:]
+                  elif line.startswith("+") and not line.startswith("+++"):
+                      added = line[1:]
+                      if LOCAL_PATH_PATTERN.search(added):
+                          errors.append(
+                              f"[Local path] '{current_file}' chua duong dan o dia cuc bo: {added.strip()[:120]}. "
+                              f"Hay luu anh vao thu muc images/ va dung duong dan tuong doi."
+                          )
+
+          if errors:
+              print("::error::Docs structure validation failed!")
+              print("\nCac loi phat hien:")
+              for err in errors:
+                  print(f"  - {err}")
+              print(
+                  "\nTham khao bang phan loai thu muc tai docs/README.md:\n"
+                  "  01-getting-started/       Cài đặt, chạy dự án, COMMIT_GUIDE\n"
+                  "  02-architecture/          Kiến trúc, diagram\n"
+                  "  03-exam-assessment/       Exam, Question, Grading, Auth/Exam security\n"
+                  "  04-course-learning/       Course, Syllabus, Analytics, Recommendations\n"
+                  "  05-project-workspace/     Mock Project Hub (plans/, use-cases/)\n"
+                  "  06-testing-verification/  Báo cáo bug, điều tra, test plan, nghiệm thu\n"
+                  "  07-demo/                  Kịch bản demo, walkthrough\n"
+                  "  08-training-operations/   Class, Class Setup, Calendar, Trainer, Session\n"
+                  "  09-deployment-operations/ Deployment, cutover, rollback, hạ tầng\n"
+              )
+              sys.exit(1)
+
+          print("OK: Docs structure and markdown rules passed.")
+          PY

@@ -2,17 +2,17 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, useSidebar } fro
 import { NavMain, type NavItem } from "@/components/layout/NavMain";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, LoaderCircle, LogOutIcon, RefreshCw } from "lucide-react";
+import { AlertCircle, LoaderCircle, LogOutIcon, RefreshCw, ShieldCheck } from "lucide-react";
 import { useCallback, useLayoutEffect, useMemo, useRef, type UIEvent } from "react";
 import { useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
-import { authApi } from "@/api/features/auth.api";
 import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { iconMap } from "@/components/datatable/iconMap";
-import { setLogout } from "@/store/slices/auth/authSlice";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePermissions } from "@/hooks/usePermissions";
 import { ADMIN_ROLE, TEACHER_ROLE, normalizeRole } from "@/utils/rbac.utils";
+import { performAppLogout } from "@/utils/auth-logout";
+import { useRoleSwitch } from "@/contexts/RoleSwitchContext";
 
 /** Sidebar order of the entries that make up the "Class" section. */
 const CLASS_SECTION_URLS = ["/classes"];
@@ -131,14 +131,14 @@ export function SidebarMenu({
         }
     }, []);
 
+    const { setViewRole } = useRoleSwitch();
     const handleLogout = async () => {
-        try {
-            await authApi.logout();
-        } finally {
-            queryClient.removeQueries({ queryKey: ["sidebar-menu"] });
-            dispatch(setLogout());
-            navigate("/login", { replace: true });
-        }
+        await performAppLogout({
+            dispatch,
+            queryClient,
+            navigate,
+            clearViewRole: () => setViewRole(null),
+        });
     };
 
     const navGroups = useMemo(() => {
@@ -220,7 +220,8 @@ export function SidebarMenu({
                                             !location.pathname.startsWith("/exams/supervisor")))));
 
                         return {
-                            title: module.title ?? "Untitled",
+                            title: ["/management/workspaces", "/management/workspaces/candidates"].includes(module.url?.replace(/\/+$/, "") ?? "")
+                                ? "Workspaces" : module.title ?? "Untitled",
                             url: module.url ?? "#",
                             icon: resolveIcon(module.icon),
                             isActive: isMatch,
@@ -364,6 +365,16 @@ export function SidebarMenu({
                 {state === "expanded" && (
                     <span className="flex-1 truncate">RBAC System v1.0</span>
                 )}
+
+                <TooltipWrapper content="Security & Sessions">
+                    <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => navigate("/account/security")}
+                    >
+                        <ShieldCheck className="size-4" />
+                    </Button>
+                </TooltipWrapper>
 
                 <TooltipWrapper content="Logout">
                     <Button

@@ -51,6 +51,29 @@ class RecommendationServiceTest {
         var r=service.ask(1L,request());assertEquals("UNAVAILABLE",r.aiStatus());assertFalse(r.reply().contains("SECRET"));
         assertTrue(service.acquire(1L,System.currentTimeMillis()+16000));service.release(1L);
     }
+    @ParameterizedTest @ValueSource(strings={"out of memory","RESOURCE EXHAUSTED","Internal server error","service unavailable."})
+    void technicalProviderRepliesUseCatalogFallback(String reply) throws Exception {
+        when(data.automatic(1L)).thenReturn(result(List.of(item(3))));when(ai.isConfigured()).thenReturn(true);
+        when(ai.generateRecommendationJson(anyString(),anyList())).thenReturn(mapper.valueToTree(Map.of("reply",reply,"courseIds",List.of())));
+        var response=service.ask(1L,request());
+        assertEquals("UNAVAILABLE",response.aiStatus());assertFalse(response.reply().toLowerCase().contains(reply.toLowerCase()));
+        assertEquals(3L,response.recommendations().getFirst().course().id());
+    }
+    @Test void providerPayloadBoundsDescriptionsAndKeepsOnlyRecentHistoryWithinBudget() throws Exception {
+        var longCourse=new CatalogCourseDTO(3L,"T".repeat(500),"D".repeat(5000),null,null,3L,"C".repeat(500),CourseLevel.BEGINNER,3,100,true,false,4,10);
+        var automatic=result(List.of(new Item(longCourse,"R".repeat(500))));
+        when(data.automatic(1L)).thenReturn(automatic);when(ai.isConfigured()).thenReturn(true);
+        when(ai.generateRecommendationJson(anyString(),anyList())).thenReturn(mapper.readTree("{\"reply\":\"Try this course\",\"courseIds\":[3]}"));
+        var history=java.util.stream.IntStream.range(0,8).mapToObj(i -> new Turn(i%2==0?"user":"assistant",String.valueOf(i).repeat(2000))).toList();
+        service.ask(1L,new ChatRequest("current",history,"en"));
+        @SuppressWarnings("unchecked") ArgumentCaptor<List<AiTextClient.Turn>> turns=ArgumentCaptor.forClass(List.class);
+        verify(ai).generateRecommendationJson(anyString(),turns.capture());
+        String catalog=turns.getValue().getFirst().text();
+        assertTrue(catalog.contains("D".repeat(500)));assertFalse(catalog.contains("D".repeat(501)));
+        assertTrue(catalog.contains("T".repeat(200)));assertFalse(catalog.contains("T".repeat(201)));
+        int historyChars=turns.getValue().subList(1,turns.getValue().size()-1).stream().mapToInt(t -> t.text().length()).sum();
+        assertEquals(6000,historyChars);assertEquals("current",turns.getValue().getLast().text());
+    }
     @Test void deduplicatesIdsAndUsesDatabaseCardFields() throws Exception {
         when(data.automatic(1L)).thenReturn(result(List.of(item(3))));when(ai.isConfigured()).thenReturn(true);
         when(ai.generateRecommendationJson(anyString(),anyList())).thenReturn(mapper.readTree("{\"reply\":\"Consider this option\",\"courseIds\":[3,3],\"title\":\"fabricated\",\"url\":\"bad\"}"));

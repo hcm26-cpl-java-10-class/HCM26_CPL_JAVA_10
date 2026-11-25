@@ -4,7 +4,7 @@ import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.ProjectTeam;
 import com.example.starter_project_2025.system.project.domain.ProjectTopicSnapshot;
 import com.example.starter_project_2025.system.project.dto.ProjectHubDtos;
-import com.example.starter_project_2025.system.project.template.assignment.TemplateBriefSnapshotWriter;
+import com.example.starter_project_2025.system.project.template.service.assignment.TemplateBriefSnapshotWriter;
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
 import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
 import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceDetailResponse;

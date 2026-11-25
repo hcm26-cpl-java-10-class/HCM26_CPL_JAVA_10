@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.repository.ProjectTemplateRepository;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,7 +11,7 @@ import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClass;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClassRepository;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplateStatus;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -244,8 +246,10 @@ public class TeamAllocationSessionService {
         int requestedCapacity = request.maxMembers();
         int previousCapacity = session.getMaxMembers();
         List<ProjectTeam> draftTeams =
-                teamRepository.findAllByAllocationSession_IdAndStatus(
-                        sessionId, ProjectTeamStatus.DRAFT);
+                teamRepository.findAllByAllocationSession_IdAndIsActiveTrueOrderByIdAsc(sessionId)
+                        .stream()
+                        .filter(team -> team.getStatus() == ProjectTeamStatus.DRAFT)
+                        .toList();
         for (ProjectTeam team : draftTeams) {
             if (team.getProjectTemplateId() != null) {
                 continue;

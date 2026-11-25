@@ -231,6 +231,17 @@ export default function AnonymousExamTakingPage() {
     }, [attempt?.status]);
 
     useEffect(() => {
+        if (!attempt || attempt.status !== 'IN_PROGRESS') return;
+        const autosaveId = window.setInterval(() => {
+            if (pendingAnswersRef.current.size > 0) {
+                void flushPendingAnswers(attempt.id);
+            }
+        }, 15000);
+        return () => window.clearInterval(autosaveId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [attempt?.id, attempt?.status]);
+
+    useEffect(() => {
         if (attempt?.status !== 'IN_PROGRESS') return;
         const warnBeforeUnload = (event: BeforeUnloadEvent) => {
             event.preventDefault();

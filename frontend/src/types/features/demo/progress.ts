@@ -16,6 +16,8 @@ export interface LessonProgressItem {
   lastAccessedAt?: string | null;
   /** Tổng số giây học viên đã dành cho bài học này. */
   studySeconds?: number | null;
+  /** true = học viên được tua video của bài học này. */
+  allowSeeking?: boolean;
 }
 
 export interface EnrollmentProgress {

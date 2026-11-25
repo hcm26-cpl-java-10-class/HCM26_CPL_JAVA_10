@@ -3,24 +3,43 @@ package com.example.starter_project_2025.system.project.template.assignment.hier
 import com.example.starter_project_2025.init.SprintBacklogDataInitializer;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import com.example.starter_project_2025.system.project.*;
+import com.example.starter_project_2025.system.project.milestone.domain.LatePolicyType;
+import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
+import com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus;
+import com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus;
+import com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateVersionStatus;
 import com.example.starter_project_2025.system.project.rubric.domain.Rubric;
 import com.example.starter_project_2025.system.project.rubric.domain.RubricRatingLevel;
 import com.example.starter_project_2025.system.project.rubric.domain.RubricVersion;
 import com.example.starter_project_2025.system.project.rubric.integration.RubricTenantIdentity;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
+import com.example.starter_project_2025.system.project.template.config.assignment.PublishedTemplateMilestoneBackfill;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplateStatus;
+import com.example.starter_project_2025.system.project.template.domain.assignment.ProjectAssignment;
+import com.example.starter_project_2025.system.project.template.domain.milestone.TemplateMilestone;
+import com.example.starter_project_2025.system.project.template.domain.milestone.TemplateMilestoneChecklistItem;
+import com.example.starter_project_2025.system.project.template.domain.milestone.TemplateMilestoneTimeUnit;
+import com.example.starter_project_2025.system.project.template.dto.assignment.AssignmentDtos;
+import com.example.starter_project_2025.system.project.template.service.assignment.AssignmentCatalogService;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
 import com.example.starter_project_2025.system.project.trainingclass.*;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.context.ActiveProfiles;
@@ -30,15 +49,18 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -55,9 +77,12 @@ class AssignmentCatalogIntegrationTest {
     @Autowired RoleRepository roles;
     @Autowired UserDetailsService details;
     @Autowired RefreshTokenService tokens;
+    @Autowired ObjectMapper json;
+    @Autowired PublishedTemplateMilestoneBackfill milestoneBackfill;
     @MockBean SprintBacklogDataInitializer legacySeed;
 
-    Long classId, sessionId, teamId, shopId, shopVersionId, cartId, analyticsId;
+    Long tenantId, classId, sessionId, teamId, leaderId, shopId, shopVersionId, cartId, analyticsId;
+    UUID rubricVersionId;
     String admin, student;
 
     @BeforeEach
@@ -66,6 +91,7 @@ class AssignmentCatalogIntegrationTest {
             var tenant = Tenant.builder().code("CAT-" + UUID.randomUUID()).name("Catalogue").build();
             em.persist(tenant);
             em.flush();
+            tenantId = tenant.getId();
             admin = token(user(tenant, "ADMIN", "Admin"));
             var mentor = user(tenant, "TEACHER", "Mentor");
             var learner = user(tenant, "STUDENT", "Learner");
@@ -83,7 +109,7 @@ class AssignmentCatalogIntegrationTest {
             em.flush();
             classId = school.getId();
 
-            UUID rubricVersionId = publishedRubric(tenant.getId());
+            rubricVersionId = publishedRubric(tenant.getId());
 
             // Master with one module: the template row is renamed after publishing, the catalogue must show the
             // published snapshot instead. A newer DRAFT version must not leak either.
@@ -160,6 +186,7 @@ class AssignmentCatalogIntegrationTest {
             classMember.setStatus(ClassMemberStatus.ACTIVE);
             em.persist(classMember);
             em.flush();
+            leaderId = classMember.getId();
             var member = new ProjectMember();
             member.setTeam(team);
             member.setClassMember(classMember);
@@ -279,8 +306,174 @@ class AssignmentCatalogIntegrationTest {
         return version.getId();
     }
 
+    @ParameterizedTest
+    @EnumSource(AssignmentDtos.Mode.class)
+    void publishingStartsMasterAndModuleMilestonesFromThePublicationTime(AssignmentDtos.Mode mode) throws Exception {
+        String savedContent = tx.execute(status -> em.find(ProjectTemplateSnapshot.class, shopVersionId).getContentJson());
+        var content = (ObjectNode) json.readTree(savedContent);
+        var masterPlan = content.withArray("milestones");
+        masterPlan.remove(1);
+        var masterMilestone = (ObjectNode) masterPlan.get(0);
+        masterMilestone.put("dueAfter", 2);
+        masterMilestone.put("weight", 100);
+        masterMilestone.putObject("latePolicy").put("allowLateSubmission", true)
+                .put("maxLateDays", 2).put("penaltyPerDayPercent", 5);
+        var moduleMilestone = (ObjectNode) content.path("modules").path(0).path("milestones").path(0);
+        moduleMilestone.put("rubricVersionId", rubricVersionId.toString());
+
+        tx.executeWithoutResult(status -> {
+            prepareTeamForPublishing(null);
+            em.find(ProjectTemplateSnapshot.class, shopVersionId).setContentJson(content.toString());
+        });
+
+        var request = mode == AssignmentDtos.Mode.WHOLE
+                ? new AssignmentDtos.Request(shopId, shopVersionId, mode, teamId, List.of())
+                : new AssignmentDtos.Request(shopId, shopVersionId, mode, null,
+                        List.of(new AssignmentDtos.ModuleTeam(cartId, teamId)));
+        var assigned = mvc.perform(authorized(post(sessionPath() + "/project-assignments"), admin)
+                        .header("X-Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(request)))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.workspaces").isEmpty()).andReturn();
+        long assignmentId = json.readTree(assigned.getResponse().getContentAsString()).path("assignmentId").asLong();
+        tx.executeWithoutResult(status -> em.find(ProjectAssignment.class, assignmentId)
+                .setAssignedAt(Instant.now().minus(4, ChronoUnit.DAYS)));
+        assertThat(workspaceMilestones()).isEmpty();
+
+        String key = UUID.randomUUID().toString();
+        Instant beforePublish = Instant.now().minusMillis(1);
+        publish(key);
+        Instant publishedAt = tx.execute(status -> em.find(ProjectAssignment.class, assignmentId).getAssignedAt());
+        assertThat(publishedAt).isBetween(beforePublish, Instant.now().plusMillis(1));
+        assertThat(workspaceMilestones()).hasSize(2).allSatisfy(milestone -> {
+            long days = milestone.getTitle().equals("Design") ? 14 : 3;
+            assertPublishedMilestone(milestone, publishedAt, days);
+            if (days == 14) assertThat(milestone.getLateUntil()).isEqualTo(milestone.getDeadline().plus(2, ChronoUnit.DAYS));
+        });
+
+        publish(key);
+        assertThat(workspaceMilestones()).hasSize(2)
+                .allSatisfy(milestone -> assertThat(milestone.scheduledStartAt()).isEqualTo(publishedAt));
+
+        restorePreviouslyPublishedMilestones(publishedAt);
+    }
+
+    @Test
+    void publishingStartsMilestonesInAnIndividuallyAssignedTemplate() throws Exception {
+        tx.executeWithoutResult(status -> {
+            var template = em.find(ProjectTemplate.class, analyticsId);
+            template.setEstimatedDurationWeeks(6);
+            prepareTeamForPublishing(template);
+            var milestone = new TemplateMilestone();
+            milestone.setTemplate(template);
+            milestone.setTitle("Prepare dataset");
+            milestone.setDueAfter(2);
+            milestone.setDueUnit(TemplateMilestoneTimeUnit.WEEKS);
+            milestone.setWeight(new BigDecimal("100"));
+            milestone.setOrderIndex(0);
+            milestone.setAllowLateSubmission(false);
+            milestone.setRubricVersion(em.getReference(RubricVersion.class, rubricVersionId));
+            var checklist = new TemplateMilestoneChecklistItem();
+            checklist.setMilestone(milestone);
+            checklist.setContent("Dataset prepared");
+            checklist.setMandatory(true);
+            checklist.setOrderIndex(0);
+            milestone.getChecklistItems().add(checklist);
+            em.persist(milestone);
+        });
+
+        Instant beforePublish = Instant.now().minusMillis(1);
+        publish(UUID.randomUUID().toString());
+        assertThat(workspaceMilestones()).singleElement().satisfies(milestone -> {
+            assertThat(milestone.scheduledStartAt()).isBetween(beforePublish, Instant.now().plusMillis(1));
+            assertPublishedMilestone(milestone, milestone.scheduledStartAt(), 14);
+        });
+
+        var publishedAt = workspaceMilestones().getFirst().getCreatedAt();
+        resetMilestonesToLegacy(MilestoneStatus.PLANNED, null);
+        milestoneBackfill.run(new DefaultApplicationArguments());
+        assertThat(workspaceMilestones()).singleElement()
+                .satisfies(milestone -> assertPublishedMilestone(milestone, publishedAt, 14));
+    }
+
+    private void restorePreviouslyPublishedMilestones(Instant publishedAt) {
+        resetMilestonesToLegacy(MilestoneStatus.OPEN, MilestoneExecutionStatus.TODO);
+        var module = workspaceMilestones().stream().filter(milestone -> milestone.getTitle().equals("Cart API"))
+                .findFirst().orElseThrow();
+        UUID manualId = tx.execute(status -> {
+            var manual = Milestone.create(tenantId, module.getProjectId(), module.getTeamId(), "Manual milestone",
+                    null, module.getDeadline(), true, rubricVersionId, null, LatePolicyType.NO_LATE,
+                    null, null, UUID.randomUUID(), publishedAt);
+            em.persist(manual);
+            em.find(TeamAllocationSession.class, sessionId).setStatus(TeamAllocationSessionStatus.OPEN);
+            return manual.getId();
+        });
+        milestoneBackfill.run(new DefaultApplicationArguments());
+        assertThat(workspaceMilestones()).allSatisfy(milestone ->
+                assertThat(milestone.lifecycleStatus()).isEqualTo(MilestoneLifecycleStatus.PLANNED));
+
+        tx.executeWithoutResult(status -> em.find(TeamAllocationSession.class, sessionId)
+                .setStatus(TeamAllocationSessionStatus.PUBLISHED));
+        milestoneBackfill.run(new DefaultApplicationArguments());
+        var restored = workspaceMilestones();
+        assertThat(restored).hasSize(3).allSatisfy(milestone -> {
+            if (manualId.equals(milestone.getId())) {
+                assertThat(milestone.lifecycleStatus()).isEqualTo(MilestoneLifecycleStatus.PLANNED);
+                assertThat(milestone.scheduledStartAt()).isNull();
+            } else {
+                assertPublishedMilestone(milestone, publishedAt, milestone.getTitle().equals("Design") ? 14 : 3);
+            }
+        });
+
+        milestoneBackfill.run(new DefaultApplicationArguments());
+        assertThat(workspaceMilestones()).extracting(Milestone::getVersion)
+                .containsExactlyInAnyOrderElementsOf(restored.stream().map(Milestone::getVersion).toList());
+    }
+
+    private void resetMilestonesToLegacy(MilestoneStatus status, MilestoneExecutionStatus executionStatus) {
+        tx.executeWithoutResult(ignored -> em.createQuery("""
+                update Milestone m
+                   set m.status = :status, m.executionStatus = :executionStatus, m.lifecycleState = :planned,
+                       m.startDate = null, m.scheduledStartAt = null, m.autoStartEnabled = false
+                 where m.tenantId = :tenant
+                """)
+                .setParameter("status", status)
+                .setParameter("executionStatus", executionStatus)
+                .setParameter("planned", MilestoneLifecycleStatus.PLANNED)
+                .setParameter("tenant", tenantId)
+                .executeUpdate());
+    }
+
+    private void prepareTeamForPublishing(ProjectTemplate template) {
+        var team = em.find(ProjectTeam.class, teamId);
+        team.setProjectTemplate(template);
+        team.setLeaderMemberId(leaderId);
+        team.setAssignedMentorId(team.getTrainingClass().getMentorId());
+    }
+
+    private void publish(String key) throws Exception {
+        mvc.perform(authorized(post(sessionPath() + "/publish-session"), admin).header("X-Idempotency-Key", key))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.failedItems").isEmpty())
+                .andExpect(jsonPath("$.succeededItems[0]").value(teamId));
+    }
+
+    private List<Milestone> workspaceMilestones() {
+        return tx.execute(status -> em.createQuery("select m from Milestone m where m.tenantId = :tenant", Milestone.class)
+                .setParameter("tenant", tenantId).getResultList());
+    }
+
+    private void assertPublishedMilestone(Milestone milestone, Instant publishedAt, long days) {
+        assertThat(milestone.lifecycleStatus()).isEqualTo(MilestoneLifecycleStatus.IN_PROGRESS);
+        assertThat(milestone.getExecutionStatus()).isEqualTo(MilestoneExecutionStatus.IN_PROGRESS);
+        assertThat(milestone.scheduledStartAt()).isEqualTo(publishedAt);
+        assertThat(milestone.getDeadline()).isEqualTo(publishedAt.plus(days, ChronoUnit.DAYS));
+    }
+
+    private String sessionPath() {
+        return "/api/v1/classes/" + classId + "/allocation-sessions/" + sessionId;
+    }
+
     private String templates() {
-        return "/api/v1/classes/" + classId + "/allocation-sessions/" + sessionId + "/project-assignments/templates";
+        return sessionPath() + "/project-assignments/templates";
     }
 
     private MockHttpServletRequestBuilder authorized(MockHttpServletRequestBuilder request, String token) {

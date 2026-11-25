@@ -1,15 +1,15 @@
 package com.example.starter_project_2025.system.demo.course;
 
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
-import com.example.starter_project_2025.system.exam.domain.Exam;
-import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
-import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
-import com.example.starter_project_2025.system.exam.domain.ExamResultPublication;
-import com.example.starter_project_2025.system.exam.domain.ScoreReleasePolicy;
-import com.example.starter_project_2025.system.exam.domain.ExamRepository;
+import com.example.starter_project_2025.system.exam.core.domain.Exam;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttempt;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptRepository;
+import com.example.starter_project_2025.system.exam.result.domain.ExamResultPublication;
+import com.example.starter_project_2025.system.exam.result.domain.ScoreReleasePolicy;
+import com.example.starter_project_2025.system.exam.core.domain.ExamRepository;
 import com.example.starter_project_2025.system.exam.gradebook.GradebookPublishedItem;
 import com.example.starter_project_2025.system.exam.gradebook.GradebookPublishedItemRepository;
-import com.example.starter_project_2025.system.exam.service.ExamResultAccessService;
+import com.example.starter_project_2025.system.exam.result.service.ExamResultAccessService;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

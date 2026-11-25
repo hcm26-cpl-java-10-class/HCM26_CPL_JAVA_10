@@ -2,7 +2,7 @@ package com.example.starter_project_2025.system.demo.course;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
-import com.example.starter_project_2025.system.exam.service.ExamCourseLinkService;
+import com.example.starter_project_2025.system.exam.courselink.service.ExamCourseLinkService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;

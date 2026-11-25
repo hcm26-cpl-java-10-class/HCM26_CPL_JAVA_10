@@ -16,7 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 
 export default function HeaderRight() {
-  const { role, roles, rolePermissions, permissions } = useSelector((state: RootState) => state.auth);
+  const { role, roles, rolePermissions, permissions, email } = useSelector((state: RootState) => state.auth);
   const { activeRole, availableRoles, isPreviewMode, setViewRole } = useRoleSwitch();
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -59,7 +59,7 @@ export default function HeaderRight() {
           {formatRoleLabel(currentRole)}
         </Badge>
 
-        <NotificationBell />
+        <NotificationBell key={email} />
         <ToggleTheme />
       </div>
     );
@@ -162,7 +162,7 @@ export default function HeaderRight() {
         </Badge>
       )}
 
-      <NotificationBell />
+      <NotificationBell key={email} />
       <ToggleTheme />
     </div >
   );

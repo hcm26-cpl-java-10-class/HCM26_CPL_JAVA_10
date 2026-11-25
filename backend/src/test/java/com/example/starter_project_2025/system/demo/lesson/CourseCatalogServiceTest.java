@@ -43,7 +43,7 @@ class CourseCatalogServiceTest {
     @Mock
     CourseReviewRepository courseReviewRepository;
 
-    @Mock com.example.starter_project_2025.system.exam.domain.ExamRepository examRepository;
+    @Mock com.example.starter_project_2025.system.exam.core.domain.ExamRepository examRepository;
 
     CourseCatalogService service;
 
@@ -91,11 +91,11 @@ class CourseCatalogServiceTest {
     @Test
     void unenrolledLearnersSeeSectionAssessmentMetadataWithoutAssessmentSecrets() throws Exception {
         stubCourseContent();
-        var exam=new com.example.starter_project_2025.system.exam.domain.Exam();
+        var exam=new com.example.starter_project_2025.system.exam.core.domain.Exam();
         exam.setId(41L);exam.setTitle("Section quiz");exam.setIsActive(true);exam.setCourse(course);exam.setSection(section);
-        exam.setCategory(com.example.starter_project_2025.system.exam.domain.ExamCategory.QUIZ);
+        exam.setCategory(com.example.starter_project_2025.system.exam.core.domain.ExamCategory.QUIZ);
         exam.setCourseWeight(new java.math.BigDecimal("20"));exam.setAccessCode("PRIVATE-PASSWORD");
-        var question=new com.example.starter_project_2025.system.question.domain.Question();question.setContent("PRIVATE-QUESTION");exam.getQuestions().add(question);
+        var question=new com.example.starter_project_2025.system.question.core.domain.Question();question.setContent("PRIVATE-QUESTION");exam.getQuestions().add(question);
         when(examRepository.findByCourseLink(10L,null,null,true)).thenReturn(List.of(exam));
         var detail=service.getDetail(10L,7L,false,false);
         assertFalse(detail.enrolled());assertEquals(1,detail.assessments().size());
@@ -107,10 +107,10 @@ class CourseCatalogServiceTest {
     @Test
     void hidesInactiveAssessmentsAndAssessmentsInInactiveOutlineLocations() {
         stubCourseContent();
-        var inactive=new com.example.starter_project_2025.system.exam.domain.Exam();inactive.setId(40L);inactive.setIsActive(false);
-        var hiddenSection=new com.example.starter_project_2025.system.exam.domain.Exam();hiddenSection.setId(41L);hiddenSection.setIsActive(true);
+        var inactive=new com.example.starter_project_2025.system.exam.core.domain.Exam();inactive.setId(40L);inactive.setIsActive(false);
+        var hiddenSection=new com.example.starter_project_2025.system.exam.core.domain.Exam();hiddenSection.setId(41L);hiddenSection.setIsActive(true);
         hiddenSection.setSection(Section.builder().id(999L).build());
-        var hiddenLesson=new com.example.starter_project_2025.system.exam.domain.Exam();hiddenLesson.setId(42L);hiddenLesson.setIsActive(true);
+        var hiddenLesson=new com.example.starter_project_2025.system.exam.core.domain.Exam();hiddenLesson.setId(42L);hiddenLesson.setIsActive(true);
         hiddenLesson.setLesson(Lesson.builder().id(999L).section(section).build());
         when(examRepository.findByCourseLink(10L,null,null,true)).thenReturn(List.of(inactive,hiddenSection,hiddenLesson));
         assertTrue(service.getDetail(10L,7L,false,false).assessments().isEmpty());
@@ -119,8 +119,8 @@ class CourseCatalogServiceTest {
     @Test
     void includesCourseAndLessonLevelAssessmentsWithoutChangingLessonCount() {
         stubCourseContent();
-        var courseExam=new com.example.starter_project_2025.system.exam.domain.Exam();courseExam.setId(41L);courseExam.setIsActive(true);
-        var lessonExam=new com.example.starter_project_2025.system.exam.domain.Exam();lessonExam.setId(42L);lessonExam.setIsActive(true);
+        var courseExam=new com.example.starter_project_2025.system.exam.core.domain.Exam();courseExam.setId(41L);courseExam.setIsActive(true);
+        var lessonExam=new com.example.starter_project_2025.system.exam.core.domain.Exam();lessonExam.setId(42L);lessonExam.setIsActive(true);
         lessonExam.setSection(section);lessonExam.setLesson(lesson);
         when(examRepository.findByCourseLink(10L,null,null,true)).thenReturn(List.of(courseExam,lessonExam));
         var detail=service.getDetail(10L,7L,false,false);

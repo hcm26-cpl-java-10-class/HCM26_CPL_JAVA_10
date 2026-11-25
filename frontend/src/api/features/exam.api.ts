@@ -293,6 +293,10 @@ export const examApi = {
     const response = await axiosInstance.post<SimilarityReport>(`/exams/${examId}/grading/similarity/scan`);
     return response.data;
   },
+  duplicate: async (examId: number): Promise<ExamDTO> => {
+    const response = await axiosInstance.post<ExamDTO>(`/exams/${examId}/duplicate`);
+    return response.data;
+  },
   removeQuestion: async (examId: number, questionId: number): Promise<ExamDTO> => {
     const response = await axiosInstance.delete<ExamDTO>(`/exams/${examId}/questions/${questionId}`);
     return response.data;
@@ -323,6 +327,29 @@ export const examApi = {
   getQuestionPoolVersionHistory: async (examId: number) => {
     const response = await axiosInstance.get(
         `/exams/${examId}/question-pool/versions`
+    );
+    return response.data;
+  },
+  publish: async (examId: number): Promise<ExamDTO> => {
+    const response = await axiosInstance.post<ExamDTO>(`/exams/${examId}/publish`);
+    return response.data;
+  },
+  close: async (examId: number): Promise<ExamDTO> => {
+    const response = await axiosInstance.post<ExamDTO>(`/exams/${examId}/close`);
+    return response.data;
+  },
+  archive: async (examId: number): Promise<ExamDTO> => {
+    const response = await axiosInstance.post<ExamDTO>(`/exams/${examId}/archive`);
+    return response.data;
+  },
+  returnForRevision: async (
+    examId: number,
+    attemptId: number,
+    payload: { note: string; deadline?: string | null }
+  ): Promise<EssayGradingDetail> => {
+    const response = await axiosInstance.post<EssayGradingDetail>(
+      `/exams/${examId}/grading/attempts/${attemptId}/return-for-revision`,
+      payload
     );
     return response.data;
   },

@@ -1,14 +1,13 @@
 package com.example.starter_project_2025.system.exam.supervisor.service;
 
 import com.example.starter_project_2025.security.UserPrincipal;
-import com.example.starter_project_2025.system.exam.domain.*;
 import com.example.starter_project_2025.system.exam.supervisor.dto.SupervisorAttemptDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.example.starter_project_2025.system.exam.domain.ExamIntegrityEvent;
-import com.example.starter_project_2025.system.exam.domain.ExamIntegrityEventRepository;
+import com.example.starter_project_2025.system.exam.integrity.domain.ExamIntegrityEvent;
+import com.example.starter_project_2025.system.exam.integrity.domain.ExamIntegrityEventRepository;
 import com.example.starter_project_2025.system.exam.supervisor.dto.SupervisorViolationDTO;
 
 import java.util.ArrayList;
@@ -16,6 +15,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import java.util.List;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptRepository;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus;
 
 @Service
 @RequiredArgsConstructor

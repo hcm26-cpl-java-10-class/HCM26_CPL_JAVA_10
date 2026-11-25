@@ -1,11 +1,14 @@
 package com.example.starter_project_2025.system.demo.course;
-import com.example.starter_project_2025.system.exam.domain.*;
-import com.example.starter_project_2025.system.question.domain.Question;
+import com.example.starter_project_2025.system.question.core.domain.Question;
 import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttempt;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus;
+import com.example.starter_project_2025.system.exam.core.domain.Exam;
+import com.example.starter_project_2025.system.exam.core.domain.ExamCategory;
 class CourseAssessmentServiceTest {
     static Exam exam(long id,String weight) {
         Exam exam=new Exam();exam.setId(id);exam.setTitle("Assessment "+id);exam.setCategory(ExamCategory.QUIZ);

@@ -21,6 +21,7 @@ export function MainLayout({
                                mainClassName,
                                pathLinks,
                                contentClassName,
+                               compactHeader = false,
                                ignorePaths,
                                dense = false,
                                focusMode = false,
@@ -31,6 +32,7 @@ export function MainLayout({
     mainClassName?: string;
     contentClassName?: string;
     pathLinks?: Record<string, string>;
+    compactHeader?: boolean;
     /** URL segments to leave out of the breadcrumb, typically ones that have no page of their own. */
     ignorePaths?: string[];
     /** Tighter header / content padding (Course Online pages). */
@@ -80,11 +82,15 @@ export function MainLayout({
         <SidebarProvider defaultOpen={readSidebarOpenCookie()}>
             <SidebarMenu />
             <SidebarInset className="h-screen min-w-0 flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
-                <header className={`flex shrink-0 items-center gap-2 ${dense ? "min-h-11 py-0.5" : "min-h-16 py-3"}`}>
+                <header className={cn(
+                    "flex shrink-0 items-center gap-2",
+                    dense ? "min-h-11 py-0.5" : compactHeader ? "h-14 min-h-14 py-2" : "min-h-16 py-3",
+                )}>
                     <div className="flex items-center gap-2 px-4 w-full justify-between">
                         <div className="flex min-w-0 flex-1 items-center gap-2">
                             <SidebarTrigger aria-label="Toggle navigation sidebar" />
-                            <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} ignorePaths={ignorePaths} />
+                            {compactHeader ? <div className="hidden min-w-0 xl:block"><DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} ignorePaths={ignorePaths} /></div>
+                                : <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} ignorePaths={ignorePaths} />}
                         </div>
                         {headerActions && <div className="shrink-0">{headerActions}</div>}
                         <div className="shrink-0"><HeaderRight /></div>

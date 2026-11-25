@@ -2,8 +2,8 @@ package com.example.starter_project_2025.system.exam;
 
 import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course.CourseRepository;
-import com.example.starter_project_2025.system.exam.domain.Exam;
-import com.example.starter_project_2025.system.exam.domain.ExamRepository;
+import com.example.starter_project_2025.system.exam.core.domain.Exam;
+import com.example.starter_project_2025.system.exam.core.domain.ExamRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
