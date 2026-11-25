@@ -103,7 +103,7 @@ export function NotificationBell() {
           aria-label={`Notifications: ${unreadCount} unread; exam invitations: ${invitations.count} pending`}
         >
           <Bell className="size-4" />
-          {badgeCount > 0 && <span className="absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-4 text-white">{badgeCount > 99 ? "99+" : badgeCount}</span>}
+          {badgeCount > 0 && <span className="absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full bg-slate-900 px-1 text-[10px] font-semibold leading-4 text-white dark:bg-slate-100 dark:text-slate-900">{badgeCount > 99 ? "99+" : badgeCount}</span>}
         </Button>
       </PopoverTrigger>
 
@@ -114,18 +114,18 @@ export function NotificationBell() {
         </div>
 
         <button type="button" className="flex w-full items-center gap-3 border-b px-4 py-3 text-left hover:bg-accent" onClick={() => goTo("/invitations")}>
-          <FileClock className="size-5 text-blue-600" />
+          <FileClock className="size-5 text-slate-700 dark:text-slate-300" />
           <span className="min-w-0 flex-1"><span className="block text-sm font-medium">Exam invitations</span><span className="block text-xs text-muted-foreground">{invitations.isError ? "Could not refresh invitations" : `${invitations.count} pending invitation${invitations.count === 1 ? "" : "s"}`}</span></span>
           <ChevronRight className="size-4 text-muted-foreground" />
         </button>
 
-        {retryAction && <div role="alert" className="flex items-center justify-between gap-3 border-b bg-destructive/10 px-4 py-2 text-sm text-destructive"><span>Could not update notification status.</span><Button type="button" size="sm" variant="outline" onClick={() => retryAction.kind === "all" ? markAllRead.mutate() : markRead.mutate(retryAction.notification)}><RotateCcw className="mr-1 size-3" /> Retry</Button></div>}
+        {retryAction && <div role="alert" className="flex items-center justify-between gap-3 border-b bg-slate-100 px-4 py-2 text-sm text-slate-900 dark:bg-slate-900 dark:text-slate-100"><span>Could not update notification status.</span><Button type="button" size="sm" variant="outline" onClick={() => retryAction.kind === "all" ? markAllRead.mutate() : markRead.mutate(retryAction.notification)}><RotateCcw className="mr-1 size-3" /> Retry</Button></div>}
 
         <div className="max-h-80 overflow-y-auto">
           {notificationsQuery.isLoading ? <p className="p-6 text-center text-sm text-muted-foreground">Loading notifications...</p>
-            : notificationsQuery.isError ? <div className="space-y-3 p-6 text-center"><p className="text-sm text-destructive">Could not load notifications.</p><Button variant="outline" size="sm" onClick={() => void notificationsQuery.refetch()}>Try again</Button></div>
-            : data?.items.length ? data.items.map(notification => <button key={notification.id} type="button" className={cn("flex w-full gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-accent", !notification.read && "bg-blue-50/70 dark:bg-blue-950/20")} onClick={() => openNotification(notification)}>
-              <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", notification.read ? "bg-transparent" : "bg-blue-600")} />
+            : notificationsQuery.isError ? <div className="space-y-3 p-6 text-center"><p className="text-sm text-slate-700 dark:text-slate-300">Could not load notifications.</p><Button variant="outline" size="sm" onClick={() => void notificationsQuery.refetch()}>Try again</Button></div>
+            : data?.items.length ? data.items.map(notification => <button key={notification.id} type="button" className={cn("flex w-full gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-accent", !notification.read && "bg-slate-100/80 dark:bg-slate-800/60")} onClick={() => openNotification(notification)}>
+              <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", notification.read ? "bg-transparent" : "bg-slate-900 dark:bg-slate-100")} />
               <span className="min-w-0 flex-1"><span className="block text-sm font-medium">{notification.title}</span><span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{notification.message}</span><span className="mt-1 block text-[11px] text-muted-foreground">{new Date(notification.createdAt).toLocaleString()}</span></span>
             </button>)
               : <p className="p-8 text-center text-sm text-muted-foreground">No notifications on this page.</p>}

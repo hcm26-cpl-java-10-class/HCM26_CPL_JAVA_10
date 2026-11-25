@@ -13,6 +13,12 @@ public interface SessionRepository extends BaseCrudRepository<Session,Long> {
 
     List<Session> findByClassId(Long classId);
 
+    List<Session> findByIsActiveTrueAndStatusAndStartTimeBetweenOrderByStartTimeAsc(
+            Session.SessionStatus status,
+            LocalDateTime from,
+            LocalDateTime to
+    );
+
     boolean existsByTopicId(Long topicId);
 
     /**

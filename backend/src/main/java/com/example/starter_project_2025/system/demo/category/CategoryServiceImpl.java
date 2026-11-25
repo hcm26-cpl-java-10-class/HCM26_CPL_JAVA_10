@@ -16,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 
@@ -162,17 +164,27 @@ public class CategoryServiceImpl
     @Transactional(readOnly = true)
     public List<CategoryTreeDTO> getTree(boolean onlyActive) {
         checkPermission(CrudAction.READ);
+        return buildTree(onlyActive, onlyActive);
+    }
 
-        Map<Long, Long> courseCounts = new HashMap<>();
-        for (Object[] row : courseRepository.countPublishedByCategory()) {
-            courseCounts.put((Long) row[0], (Long) row[1]);
+    @Override
+    @Transactional(readOnly = true)
+    public List<CategoryTreeDTO> getCatalogTree() {
+        check("COURSE_READ");
+        return buildTree(true, false);
+    }
+
+    private List<CategoryTreeDTO> buildTree(boolean onlyActive, boolean hideEmpty) {
+        Map<Long, Set<Long>> courseIds = new HashMap<>();
+        for (Object[] row : courseRepository.findPublishedCourseCategoryIds()) {
+            courseIds.computeIfAbsent((Long) row[1], ignored -> new HashSet<>()).add((Long) row[0]);
         }
 
         List<Category> all = categoryRepository.findAll();
         Map<Long, CategoryTreeDTO> nodes = new HashMap<>();
         for (Category c : all) {
             if (onlyActive && !Boolean.TRUE.equals(c.getIsActive())) continue;
-            long own = courseCounts.getOrDefault(c.getId(), 0L);
+            long own = courseIds.getOrDefault(c.getId(), Set.of()).size();
             nodes.put(c.getId(), CategoryTreeDTO.builder()
                     .id(c.getId())
                     .name(c.getName())
@@ -198,20 +210,20 @@ public class CategoryServiceImpl
             if (parent != null) parent.getChildren().add(node);
         }
         sortRecursively(roots);
-        roots.forEach(this::computeTotals);
-        if (onlyActive) {
+        roots.forEach(node -> computeTotals(node, courseIds));
+        if (hideEmpty) {
             // Bộ lọc catalog: bỏ danh mục không có khóa học nào (kể cả ở các danh mục con).
             pruneEmpty(roots);
         }
         return roots;
     }
 
-    private long computeTotals(CategoryTreeDTO node) {
-        long total = node.getCourseCount();
+    private Set<Long> computeTotals(CategoryTreeDTO node, Map<Long, Set<Long>> courseIds) {
+        Set<Long> total = new HashSet<>(courseIds.getOrDefault(node.getId(), Set.of()));
         for (CategoryTreeDTO child : node.getChildren()) {
-            total += computeTotals(child);
+            total.addAll(computeTotals(child, courseIds));
         }
-        node.setTotalCourseCount(total);
+        node.setTotalCourseCount(total.size());
         return total;
     }
 

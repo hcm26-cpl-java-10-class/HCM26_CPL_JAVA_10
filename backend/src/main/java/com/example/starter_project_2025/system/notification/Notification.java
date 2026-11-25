@@ -63,5 +63,11 @@ public class Notification extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
     NotificationCategory category;
+
+    @Column(name = "tenant_id")
+    Long tenantId;
+
+    @Column(name = "correlation_id", length = 64)
+    String correlationId;
 }
 

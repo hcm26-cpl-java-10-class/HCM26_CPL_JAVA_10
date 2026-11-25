@@ -144,6 +144,108 @@ public class CourseDataInitializer implements CommandLineRunner {
                         document("SQL normalization worksheet", DOCUMENT_URL, 4, 300))
         );
 
+        Course addition0 = upsertCourse("REST API Development", "Hands-on practice course 7 for the Course Management UI test dataset.",
+                "https://img.youtube.com/vi/efC0Nw5rdA4/hqdefault.jpg", teacher, category("WEB_DEV"), CourseLevel.INTERMEDIATE);
+        seedCurriculum(addition0,
+                section("Foundations", 0,
+                        video("REST API Development - Foundations video", "https://www.youtube.com/watch?v=efC0Nw5rdA4&list=PLTP95OosG-qc", 0, 600),
+                        audio("REST API Development - Foundations audio recap", "https://mdn.github.io/shared-assets/audio/t-rex-roar.mp3", 1, 2),
+                        text("REST API Development - Foundations written exercise", "Complete the foundations exercise for REST API Development. Explain the main concept, give one practical example, and summarize what you learned.", 2, 420),
+                        document("REST API Development - Foundations reference document", "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", 3, 300),
+                        link("REST API Development - Foundations further learning", "https://docs.spring.io/spring-boot/index.html", 4, 300)),
+                section("Applied Practice", 1,
+                        video("REST API Development - Applied practice video", "https://www.youtube.com/watch?v=LuVEozf3wnU&list=PLP-K2k4IU4UU", 0, 720),
+                        audio("REST API Development - Applied practice audio recap", "https://mdn.github.io/shared-assets/audio/t-rex-roar.mp3", 1, 2),
+                        text("REST API Development - Applied practice written exercise", "Complete the applied practice exercise for REST API Development. Explain the main concept, give one practical example, and summarize what you learned.", 2, 480),
+                        document("REST API Development - Applied practice reference document", "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", 3, 300),
+                        link("REST API Development - Applied practice further learning", "https://docs.spring.io/spring-boot/index.html", 4, 300))
+        );
+
+        Course addition1 = upsertCourse("SQL for Java Developers", "Hands-on practice course 10 for the Course Management UI test dataset.",
+                "https://img.youtube.com/vi/8jNG1hZEcd4/hqdefault.jpg", teacher, category("DATA_ANALYSIS"), CourseLevel.INTERMEDIATE);
+        seedCurriculum(addition1,
+                section("Foundations", 0,
+                        video("SQL for Java Developers - Foundations video", "https://www.youtube.com/watch?v=8jNG1hZEcd4&list=PLWkCdvj8p1tQ", 0, 600),
+                        audio("SQL for Java Developers - Foundations audio recap", "https://mdn.github.io/shared-assets/audio/t-rex-roar.mp3", 1, 2),
+                        text("SQL for Java Developers - Foundations written exercise", "Complete the foundations exercise for SQL for Java Developers. Explain the main concept, give one practical example, and summarize what you learned.", 2, 420),
+                        document("SQL for Java Developers - Foundations reference document", "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", 3, 300),
+                        link("SQL for Java Developers - Foundations further learning", "https://www.postgresql.org/docs/current/tutorial.html", 4, 300)),
+                section("Applied Practice", 1,
+                        video("SQL for Java Developers - Applied practice video", "https://www.youtube.com/watch?v=iCYoaTvE9vo&list=PLLV7HIWZtg0k", 0, 720),
+                        audio("SQL for Java Developers - Applied practice audio recap", "https://mdn.github.io/shared-assets/audio/t-rex-roar.mp3", 1, 2),
+                        text("SQL for Java Developers - Applied practice written exercise", "Complete the applied practice exercise for SQL for Java Developers. Explain the main concept, give one practical example, and summarize what you learned.", 2, 480),
+                        document("SQL for Java Developers - Applied practice reference document", "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", 3, 300),
+                        link("SQL for Java Developers - Applied practice further learning", "https://www.postgresql.org/docs/current/tutorial.html", 4, 300))
+        );
+
+        Course addition2 = upsertCourse("Frontend Basics with React", "Hands-on practice course 11 for the Course Management UI test dataset.",
+                "https://img.youtube.com/vi/iCYoaTvE9vo/hqdefault.jpg", teacher, category("WEB_DEV"), CourseLevel.ADVANCED);
+        seedCurriculum(addition2,
+                section("Foundations", 0,
+                        video("Frontend Basics with React - Foundations video", "https://www.youtube.com/watch?v=iCYoaTvE9vo&list=PLLV7HIWZtg0k", 0, 600),
+                        audio("Frontend Basics with React - Foundations audio recap", "https://mdn.github.io/shared-assets/audio/t-rex-roar.mp3", 1, 2),
+                        text("Frontend Basics with React - Foundations written exercise", "Complete the foundations exercise for Frontend Basics with React. Explain the main concept, give one practical example, and summarize what you learned.", 2, 420),
+                        document("Frontend Basics with React - Foundations reference document", "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", 3, 300),
+                        link("Frontend Basics with React - Foundations further learning", "https://developer.mozilla.org/en-US/docs/Learn_web_development", 4, 300)),
+                section("Applied Practice", 1,
+                        video("Frontend Basics with React - Applied practice video", "https://www.youtube.com/watch?v=efC0Nw5rdA4&list=PLTP95OosG-qc", 0, 720),
+                        audio("Frontend Basics with React - Applied practice audio recap", "https://mdn.github.io/shared-assets/audio/t-rex-roar.mp3", 1, 2),
+                        text("Frontend Basics with React - Applied practice written exercise", "Complete the applied practice exercise for Frontend Basics with React. Explain the main concept, give one practical example, and summarize what you learned.", 2, 480),
+                        document("Frontend Basics with React - Applied practice reference document", "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", 3, 300),
+                        link("Frontend Basics with React - Applied practice further learning", "https://developer.mozilla.org/en-US/docs/Learn_web_development", 4, 300))
+        );
+
+        Course addition3 = upsertCourse("TypeScript Fundamentals", "Hands-on practice course 12 for the Course Management UI test dataset.",
+                "https://img.youtube.com/vi/efC0Nw5rdA4/hqdefault.jpg", teacher, category("PROGRAMMING"), CourseLevel.ADVANCED);
+        seedCurriculum(addition3,
+                section("Foundations", 0,
+                        video("TypeScript Fundamentals - Foundations video", "https://www.youtube.com/watch?v=efC0Nw5rdA4&list=PLTP95OosG-qc", 0, 600),
+                        audio("TypeScript Fundamentals - Foundations audio recap", "https://mdn.github.io/shared-assets/audio/t-rex-roar.mp3", 1, 2),
+                        text("TypeScript Fundamentals - Foundations written exercise", "Complete the foundations exercise for TypeScript Fundamentals. Explain the main concept, give one practical example, and summarize what you learned.", 2, 420),
+                        document("TypeScript Fundamentals - Foundations reference document", "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", 3, 300),
+                        link("TypeScript Fundamentals - Foundations further learning", "https://developer.mozilla.org/en-US/docs/Learn_web_development", 4, 300)),
+                section("Applied Practice", 1,
+                        video("TypeScript Fundamentals - Applied practice video", "https://www.youtube.com/watch?v=LuVEozf3wnU&list=PLP-K2k4IU4UU", 0, 720),
+                        audio("TypeScript Fundamentals - Applied practice audio recap", "https://mdn.github.io/shared-assets/audio/t-rex-roar.mp3", 1, 2),
+                        text("TypeScript Fundamentals - Applied practice written exercise", "Complete the applied practice exercise for TypeScript Fundamentals. Explain the main concept, give one practical example, and summarize what you learned.", 2, 480),
+                        document("TypeScript Fundamentals - Applied practice reference document", "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", 3, 300),
+                        link("TypeScript Fundamentals - Applied practice further learning", "https://developer.mozilla.org/en-US/docs/Learn_web_development", 4, 300))
+        );
+
+        Course addition4 = upsertCourse("Git and Team Collaboration", "Hands-on practice course 13 for the Course Management UI test dataset.",
+                "https://img.youtube.com/vi/LuVEozf3wnU/hqdefault.jpg", teacher, category("PROGRAMMING"), CourseLevel.ADVANCED);
+        seedCurriculum(addition4,
+                section("Foundations", 0,
+                        video("Git and Team Collaboration - Foundations video", "https://www.youtube.com/watch?v=LuVEozf3wnU&list=PLP-K2k4IU4UU", 0, 600),
+                        audio("Git and Team Collaboration - Foundations audio recap", "https://mdn.github.io/shared-assets/audio/t-rex-roar.mp3", 1, 2),
+                        text("Git and Team Collaboration - Foundations written exercise", "Complete the foundations exercise for Git and Team Collaboration. Explain the main concept, give one practical example, and summarize what you learned.", 2, 420),
+                        document("Git and Team Collaboration - Foundations reference document", "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", 3, 300),
+                        link("Git and Team Collaboration - Foundations further learning", "https://git-scm.com/docs/gittutorial", 4, 300)),
+                section("Applied Practice", 1,
+                        video("Git and Team Collaboration - Applied practice video", "https://www.youtube.com/watch?v=RksqUNiIQwc&list=PLLsros4UTI0o", 0, 720),
+                        audio("Git and Team Collaboration - Applied practice audio recap", "https://mdn.github.io/shared-assets/audio/t-rex-roar.mp3", 1, 2),
+                        text("Git and Team Collaboration - Applied practice written exercise", "Complete the applied practice exercise for Git and Team Collaboration. Explain the main concept, give one practical example, and summarize what you learned.", 2, 480),
+                        document("Git and Team Collaboration - Applied practice reference document", "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", 3, 300),
+                        link("Git and Team Collaboration - Applied practice further learning", "https://git-scm.com/docs/gittutorial", 4, 300))
+        );
+
+        Course addition5 = upsertCourse("Software Testing with JUnit", "Hands-on practice course 14 for the Course Management UI test dataset.",
+                "https://img.youtube.com/vi/RksqUNiIQwc/hqdefault.jpg", teacher, category("PROGRAMMING"), CourseLevel.ADVANCED);
+        seedCurriculum(addition5,
+                section("Foundations", 0,
+                        video("Software Testing with JUnit - Foundations video", "https://www.youtube.com/watch?v=RksqUNiIQwc&list=PLLsros4UTI0o", 0, 600),
+                        audio("Software Testing with JUnit - Foundations audio recap", "https://mdn.github.io/shared-assets/audio/t-rex-roar.mp3", 1, 2),
+                        text("Software Testing with JUnit - Foundations written exercise", "Complete the foundations exercise for Software Testing with JUnit. Explain the main concept, give one practical example, and summarize what you learned.", 2, 420),
+                        document("Software Testing with JUnit - Foundations reference document", "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", 3, 300),
+                        link("Software Testing with JUnit - Foundations further learning", "https://junit.org/junit5/docs/current/user-guide/", 4, 300)),
+                section("Applied Practice", 1,
+                        video("Software Testing with JUnit - Applied practice video", "https://www.youtube.com/watch?v=8jNG1hZEcd4&list=PLWkCdvj8p1tQ", 0, 720),
+                        audio("Software Testing with JUnit - Applied practice audio recap", "https://mdn.github.io/shared-assets/audio/t-rex-roar.mp3", 1, 2),
+                        text("Software Testing with JUnit - Applied practice written exercise", "Complete the applied practice exercise for Software Testing with JUnit. Explain the main concept, give one practical example, and summarize what you learned.", 2, 480),
+                        document("Software Testing with JUnit - Applied practice reference document", "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", 3, 300),
+                        link("Software Testing with JUnit - Applied practice further learning", "https://junit.org/junit5/docs/current/user-guide/", 4, 300))
+        );
+
         log.info("Published demo courses and curricula ensured.");
     }
 
@@ -155,8 +257,9 @@ public class CourseDataInitializer implements CommandLineRunner {
             Category category,
             CourseLevel level
     ) {
-        Course course = courseRepository.findByName(name)
-                .orElseGet(Course::new);
+        var existing = courseRepository.findByName(name);
+        if (existing.isPresent()) return existing.get();
+        Course course = new Course();
 
         course.setName(name);
         course.setDescription(description);
@@ -182,20 +285,21 @@ public class CourseDataInitializer implements CommandLineRunner {
         for (SectionSeed sectionSeed : sectionSeeds) {
             Section section = existingSections.stream()
                     .filter(item -> item.getOrderIndex().equals(sectionSeed.orderIndex()))
-                    .findFirst()
-                    .orElseGet(Section::new);
-            section.setCourse(course);
-            section.setTitle(sectionSeed.title());
-            section.setOrderIndex(sectionSeed.orderIndex());
-            section.setIsActive(true);
-            section = sectionRepository.save(section);
+                    .findFirst().orElse(null);
+            if (section == null) {
+                section = new Section();
+                section.setCourse(course);
+                section.setTitle(sectionSeed.title());
+                section.setOrderIndex(sectionSeed.orderIndex());
+                section.setIsActive(true);
+                section = sectionRepository.save(section);
+            }
 
             var existingLessons = lessonRepository.findBySection_IdOrderByOrderIndexAsc(section.getId());
             for (LessonSeed lessonSeed : sectionSeed.lessons()) {
-                Lesson lesson = existingLessons.stream()
-                        .filter(item -> item.getOrderIndex().equals(lessonSeed.orderIndex()))
-                        .findFirst()
-                        .orElseGet(Lesson::new);
+                // Preserve edited lessons, including inactive records; add only missing positions.
+                if (existingLessons.stream().anyMatch(item -> item.getOrderIndex().equals(lessonSeed.orderIndex()))) continue;
+                Lesson lesson = new Lesson();
                 lesson.setSection(section);
                 lesson.setTitle(lessonSeed.title());
                 lesson.setContentType(lessonSeed.contentType());

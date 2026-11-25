@@ -47,6 +47,9 @@ public class ScoreAppealService {
     private final UserRepository userRepository;
     private final EmailService emailService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.starter_project_2025.system.notification.NotificationService notificationService;
+
     @Transactional
     public ScoreAppealDTO createAppeal(Long studentId, Long attemptId, String reason, BigDecimal requestedScore) {
         if (reason == null || reason.isBlank()) {
@@ -127,6 +130,15 @@ public class ScoreAppealService {
                         requestedScore,
                         reason
                 );
+                if (notificationService != null && reviewer.getId() != null && appeal.getId() != null) {
+                    notificationService.createOnce(
+                            reviewer.getId(),
+                            "appeal.submitted." + appeal.getId() + ".u" + reviewer.getId(),
+                            "New score appeal submitted",
+                            (studentName != null ? studentName : "A student") + " appealed score for \"" + examTitle + "\".",
+                            "/exams/appeals"
+                    );
+                }
             }
         }
     }
@@ -220,6 +232,15 @@ public class ScoreAppealService {
                     saved.getStudent().getFullName(),
                     saved.getExam().getTitle(),
                     saved.getResolutionNote());
+            if (notificationService != null && saved.getStudent() != null && saved.getStudent().getId() != null) {
+                notificationService.createOnce(
+                        saved.getStudent().getId(),
+                        "appeal.rejected." + saved.getId(),
+                        "Score appeal rejected",
+                        "Your score appeal for \"" + saved.getExam().getTitle() + "\" was rejected.",
+                        "/student/exams"
+                );
+            }
             return toDTO(saved);
         }
 
@@ -277,6 +298,15 @@ public class ScoreAppealService {
                 saved.getOldScore(),
                 saved.getNewScore(),
                 saved.getResolutionNote());
+        if (notificationService != null && saved.getStudent() != null && saved.getStudent().getId() != null) {
+            notificationService.createOnce(
+                    saved.getStudent().getId(),
+                    "appeal.approved." + saved.getId(),
+                    "Score appeal approved",
+                    "Your score appeal for \"" + saved.getExam().getTitle() + "\" was approved.",
+                    "/student/exams"
+            );
+        }
         return toDTO(saved);
     }
 

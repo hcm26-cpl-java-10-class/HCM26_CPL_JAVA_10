@@ -44,4 +44,12 @@ public class NotificationPreference extends BaseEntity {
 
     @Column(name = "in_app_enabled", nullable = false)
     boolean inAppEnabled;
+
+    /** Nullable for backward compatibility with pre-existing rows; null is treated as enabled (true). */
+    @Column(name = "email_enabled")
+    Boolean emailEnabled;
+
+    public boolean isEmailEnabledEffective() {
+        return !Boolean.FALSE.equals(emailEnabled);
+    }
 }
