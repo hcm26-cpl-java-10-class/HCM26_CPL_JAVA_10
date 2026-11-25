@@ -2,7 +2,6 @@ package com.example.starter_project_2025.system.project.report;
 
 import com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
-import com.example.starter_project_2025.system.project.task.reminder.MemberReminderSettings;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -24,14 +23,12 @@ import static com.example.starter_project_2025.system.project.report.ProjectRepo
 public class ProjectReportService {
     public record Snapshot(ProjectReportScopeService.Actor actor,Filter filter,List<SubProject> all,
                            List<SubProject> matching,Instant asOf,ProjectReportQueryRepository.Source source) { }
-    public record ExportData(Snapshot snapshot, Overview overview, WorkReport work, List<DeliveryRow> deliveries,
+    public record ExportData(Snapshot snapshot, Overview overview, WorkReport work, BacklogCounts workTotals, List<DeliveryRow> deliveries,
                              List<RiskRow> risks, List<ActivityRow> activities) { }
     private final ProjectReportScopeService scope;
     private final ProjectReportQueryRepository queries;
     private final ProjectReportStatusPolicy statuses;
     private final ProjectReportRiskPolicy risks;
-    private final ProjectReportActivityService activity;
-    private final MemberReminderSettings inactivity;
     private final ProjectReportSettings settings;
     private final ProjectReportKpiService kpis;
     private final ProjectReportWorkService work;
@@ -40,7 +37,7 @@ public class ProjectReportService {
 
     public Options options() {
         var actor=scope.current(ProjectReportScopeService.READ);
-        var rows=rows(queries.load(actor),clock.instant(),false);
+        var rows=rows(queries.load(actor),clock.instant());
         return new Options(options(rows,SubProject::programId,SubProject::programName),
                 options(rows,SubProject::cohortId,SubProject::cohortName),
                 rows.stream().collect(Collectors.toMap(SubProject::classId,r->new ClassOption(r.classId(),r.className(),r.programId(),r.cohortId()),(a,b)->a))
@@ -52,7 +49,7 @@ public class ProjectReportService {
                 rows.stream().filter(r->r.teamId()!=null).collect(Collectors.toMap(SubProject::teamId,
                         r->new TeamOption(r.teamId(),r.teamName(),r.classId()),(a,b)->a)).values().stream()
                         .sorted(Comparator.comparing(TeamOption::name)).toList(),
-                actor.canExport(),settings.getTimeZone(),inactivity.inactiveWindow().toDays(),
+                actor.canExport(),settings.getTimeZone(),
                 rows.stream().map(row -> new ProjectOption(row.id(), row.code() + " · " + row.name(), row.masterId(), row.classId(), row.teamId())).toList());
     }
     private List<Option> options(List<SubProject> rows,Function<SubProject,Long> id,Function<SubProject,String> name) {
@@ -69,7 +66,9 @@ public class ProjectReportService {
     public ExportData exportData(Long actorId, Filter request) {
         var snapshot = exportSnapshot(actorId, request);
         var result = kpis.evaluate(snapshot);
-        return new ExportData(snapshot, result.overview(), work.load(snapshot), result.deliveries(), result.risks(), feed.all(snapshot, snapshot.asOf()));
+        var workResult = work.evaluate(snapshot);
+        return new ExportData(snapshot, result.overview(), workResult.report(), workResult.totals(),
+                result.deliveries(), result.risks(), feed.all(snapshot, snapshot.asOf()));
     }
     public ActivityPage activities(Filter request, int offset, int limit, Instant before) {
         return feed.page(snapshot(scope.current(ProjectReportScopeService.READ), request), offset, limit, before);
@@ -85,7 +84,7 @@ public class ProjectReportService {
         Filter filter=(request==null?Filter.empty():request).normalized();validate(filter);
         Instant now=clock.instant();
         var source=queries.load(actor);
-        List<SubProject> all=rows(source,now,true);
+        List<SubProject> all=rows(source,now);
         validateScope(filter,all);
         var matching=all.stream().filter(row->!row.contextOnly())
                 .filter(row->filter.status()==null||row.parentProjectId()!=null)
@@ -121,17 +120,14 @@ public class ProjectReportService {
                 matching.stream().filter(row->row.parentProjectId()!=null).count(),
                 masters.stream().map(Master::backlog).reduce(BacklogCounts.empty(),BacklogCounts::plus),
                 matching.stream().filter(row->row.overdueMilestones()>0).count(),
-                matching.stream().filter(row->!row.inactiveMembers().isEmpty()).count(),
-                matching.stream().flatMap(row->row.inactiveMembers().stream()).map(InactiveMember::userId).distinct().count(),
                 matching.stream().filter(row->row.lateMilestones()>0).count());
         Filter filter=snapshot.filter();int from=(int)Math.min((long)filter.page()*filter.size(),masters.size());
         var operational = kpis.evaluate(snapshot);
         return new Dashboard(summary,counts,masters.subList(from,Math.min(from+filter.size(),masters.size())),
-                masters.size(),filter.page(),filter.size(),snapshot.asOf(),settings.getTimeZone(),inactivity.inactiveWindow().toDays(),
+                masters.size(),filter.page(),filter.size(),snapshot.asOf(),settings.getTimeZone(),
                 operational.overview(), work.load(snapshot), operational.deliveries(), operational.risks(), feed.page(snapshot, 0, 10, null));
     }
-    private List<SubProject> rows(ProjectReportQueryRepository.Source source,Instant now,boolean includeActivity) {
-        Map<Long,List<InactiveMember>> inactive=includeActivity?activity.load(source,now):Map.of();
+    private List<SubProject> rows(ProjectReportQueryRepository.Source source,Instant now) {
         List<SubProject> result=new ArrayList<>();
         for(var entry:source.entries().values()) {
             var project=entry.project();var root=entry.root();var school=entry.school();var owner=entry.owner();
@@ -167,13 +163,13 @@ public class ProjectReportService {
                     project.getParentProject()==null?null:project.getParentProject().getId(),entry.depth(),
                     root.getId(),root.getCode(),root.getName(),"project:"+root.getId(),
                     school.getId(),school.getName(),school.getCohortId(),school.getCohortName(),school.getProgramId(),school.getProgramName(),
-                    owner==null?null:owner.getId(),owner==null?null:owner.getTeamName(),mentorId,source.mentors().getOrDefault(mentorId,"Chưa gán Mentor"),
-                    templateId,templateName,versionId,version==null?"Chưa xác định phiên bản":version.getVersion(),
+                    owner==null?null:owner.getId(),owner==null?null:owner.getTeamName(),mentorId,source.mentors().getOrDefault(mentorId,"No mentor assigned"),
+                    templateId,templateName,versionId,version==null?"Version unavailable":version.getVersion(),
                     entry.workspaceId(),statuses.evaluate(project.getStatus(),source.unpublishedMasters().contains(project.getId())),
                     statuses.evaluate(root.getStatus(),source.unpublishedMasters().contains(root.getId())),
                     ProjectReportQueryRepository.counts(items),(int)stages.stream().filter(stage->stage.lifecycleStatus()==MilestoneLifecycleStatus.ACCEPTED).count(),
                     List.copyOf(milestoneRows),(int)milestoneRows.stream().filter(MilestoneRow::overdue).count(),
-                    (int)milestoneRows.stream().filter(MilestoneRow::lateSubmission).count(),inactive.getOrDefault(project.getId(),List.of()),
+                    (int)milestoneRows.stream().filter(MilestoneRow::lateSubmission).count(),
                     project.getCreatedAt()==null?null:project.getCreatedAt().atZone(settings.zone()).toInstant(),entry.contextOnly()));
         }
         result.sort(Comparator.comparing(SubProject::className).thenComparing(SubProject::masterId).thenComparing(SubProject::depth).thenComparing(SubProject::id));
@@ -190,14 +186,14 @@ public class ProjectReportService {
         if(!filter.q().isEmpty()&&!String.join(" ",row.name(),row.code(),row.masterName(),row.masterCode(),row.className(),
                 Objects.toString(row.teamName(),""),row.templateName(),row.mentorName()).toLowerCase(Locale.ROOT).contains(filter.q().toLowerCase(Locale.ROOT)))return false;
         return switch(filter.risk()) {case ALL->true;case OVERDUE->row.overdueMilestones()>0;
-            case INACTIVE_MEMBERS->!row.inactiveMembers().isEmpty();case LATE_SUBMISSION->row.lateMilestones()>0;
-            case NEEDS_ATTENTION->row.overdueMilestones()>0||!row.inactiveMembers().isEmpty();};
+            case LATE_SUBMISSION->row.lateMilestones()>0;
+            case NEEDS_ATTENTION->row.overdueMilestones()>0;};
     }
     private boolean eq(Long wanted,Long actual){return wanted==null||Objects.equals(wanted,actual);}
     private void validate(Filter filter) {
         if(filter.page()<0||filter.size()<1||filter.size()>50||filter.q().length()>120)throw invalid("Invalid page, page size or search text");
-        if(filter.createdFrom()!=null&&filter.createdTo()!=null&&filter.createdFrom().isAfter(filter.createdTo()))throw invalid("Ngày bắt đầu phải trước hoặc bằng ngày kết thúc");
-        if((filter.status()==Status.CANCELLED||filter.masterStatus()==Status.CANCELLED)&&!filter.includeCancelled())throw invalid("Bật hiển thị Project đã hủy trước khi lọc CANCELLED");
+        if(filter.createdFrom()!=null&&filter.createdTo()!=null&&filter.createdFrom().isAfter(filter.createdTo()))throw invalid("The start date must be on or before the end date");
+        if((filter.status()==Status.CANCELLED||filter.masterStatus()==Status.CANCELLED)&&!filter.includeCancelled())throw invalid("Include cancelled projects before filtering by Cancelled");
         for(Long id:new Long[]{filter.programId(),filter.cohortId(),filter.classId(),filter.mentorId(),filter.templateId(),filter.sourceVersionId(),filter.teamId(),filter.projectId(),filter.masterId(),filter.workSprintId()})
             if(id!=null&&id<=0)throw invalid("Filter IDs must be positive");
     }
@@ -208,7 +204,7 @@ public class ProjectReportService {
         check(filter.masterId(),rows,SubProject::masterId);
     }
     private void check(Long id,List<SubProject> rows,Function<SubProject,Long> field) {
-        if(id!=null&&rows.stream().noneMatch(row->id.equals(field.apply(row))))throw new AccessDeniedException("Bộ lọc nằm ngoài dữ liệu báo cáo được phép xem");
+        if(id!=null&&rows.stream().noneMatch(row->id.equals(field.apply(row))))throw new AccessDeniedException("The filter is outside your report access scope");
     }
     private ResponseStatusException invalid(String message){return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,message);}
 }

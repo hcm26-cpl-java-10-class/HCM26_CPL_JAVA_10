@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.submission.mock;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.milestone.integration.mock.MockMilestoneData;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneArtifactSubmission;
@@ -30,6 +32,7 @@ import java.util.stream.Collectors;
 @Profile("milestone-mock")
 @Order(14)
 @RequiredArgsConstructor
+@StartupMutation
 public class TeamArtifactSubmissionDemoInitializer implements CommandLineRunner {
     private static final UUID DEMO_STUDENT_ID = UUID.nameUUIDFromBytes(
             "student@example.com".getBytes(StandardCharsets.UTF_8));
@@ -62,7 +65,7 @@ public class TeamArtifactSubmissionDemoInitializer implements CommandLineRunner 
             return;
         }
 
-        if (!submissionRepository.findByTenantIdAndTeamIdAndMilestoneIdOrderBySubmittedAtDesc(
+        if (!submissionRepository.findByTenantIdAndTeamIdAndMilestone_IdOrderBySubmittedAtDesc(
                 MockMilestoneData.TENANT_ID, teamId, milestone.getId()).isEmpty()) {
             log.info("Team artifact demo submissions already exist for milestone {}.", milestone.getId());
             return;
@@ -77,7 +80,7 @@ public class TeamArtifactSubmissionDemoInitializer implements CommandLineRunner 
                         MockMilestoneData.TENANT_ID,
                         milestone.getProjectId(),
                         teamId,
-                        milestone.getId(),
+                        milestone,
                         DEMO_STUDENT_ID,
                         version,
                         "https://github.com/example/team-pixel-demo",

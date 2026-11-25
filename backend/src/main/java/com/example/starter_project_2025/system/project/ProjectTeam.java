@@ -93,6 +93,9 @@ public class ProjectTeam extends BaseEntity {
     @Column(name = "charter_roster_token", length = 64)
     String charterRosterToken;
 
+    @Column(name = "charter_draft_json", columnDefinition = "LONGTEXT")
+    String charterDraftJson;
+
     @Column(name = "team_name", nullable = false, length = 255)
     String teamName;
 

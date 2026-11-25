@@ -108,7 +108,13 @@ export interface CourseDetailSection {
   lessons: CourseDetailLesson[];
 }
 
+export interface CourseDetailAssessment {
+  id: number; title: string; category: "QUIZ" | "ASSIGNMENT" | "MIDTERM" | "FINAL_TEST";
+  courseWeight: number | null; durationMinutes: number | null; sectionId: number | null; lessonId: number | null;
+}
+
 export interface CourseDetail {
+  assessments?: CourseDetailAssessment[];
   courseType?: CourseType;
   syllabus?: { id: number; code: string; name: string } | null;
   id: number;

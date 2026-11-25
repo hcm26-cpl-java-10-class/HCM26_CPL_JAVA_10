@@ -48,7 +48,8 @@ import {
   incompleteSprintMessage,
   unfinishedSprintItems,
 } from "../sprint/workspace/board.constants";
-import { backlogItemKey, formatBacklogRange, projectKeyOf, statusCounts } from "./backlog.constants";
+import { backlogItemKey, formatBacklogRange, statusCounts } from "./backlog.constants";
+import { GitLinkSummaryProvider } from "./components/GitLinkBadge";
 import { BacklogItemDetailSheet } from "./components/BacklogItemDetailSheet";
 import { BacklogSection } from "./components/BacklogSection";
 import { BacklogToolbar } from "./components/BacklogToolbar";
@@ -65,8 +66,6 @@ const MILESTONE_OPTIONS_QUERY_KEY = ["milestones", "backlog-options"] as const;
 const ASSIGNEE_OPTIONS_QUERY_KEY = ["sprint-backlogs", "assignee-options"] as const;
 /** Team-scoped board of a workspace (only its own sprints and items). */
 const TEAM_BOARD_QUERY_KEY = ["team-backlog-board"] as const;
-/** Projects the user can see, used to build the work item key prefix. */
-const PROJECT_NAMES_QUERY_KEY = ["projects", "backlog-key-prefix"] as const;
 
 const MILESTONE_CHANGED_MESSAGE =
   "Milestone không tồn tại hoặc đã bị thay đổi";
@@ -129,6 +128,7 @@ const toPlanningItem = (dto: SprintBacklogDTO): SprintPlanningItem => ({
   milestoneDueDate: dto.milestoneDueDate ?? null,
   estimatedHours: dto.estimatedHours ?? null,
   sprintOrder: null,
+  taskKey: dto.taskKey ?? null,
 });
 
 /**
@@ -187,7 +187,6 @@ interface BoardSection {
   teamId: number | null;
   title: string;
   meta: string | null;
-  prefix: string;
   /** Items matching the search / status / priority filters. */
   items: SprintPlanningItem[];
   /** Every item of the box, filters ignored. */
@@ -213,6 +212,8 @@ export interface BacklogBoardProps {
    * `/backlogs` route page).
    */
   projectId?: number | null;
+  /** Read all assigned projects while keeping the selected project for new items. */
+  aggregateProjects?: boolean;
   /**
    * Team of the open workspace. When it is set the board reads the team-scoped
    * endpoint (`/teams/{teamId}/backlog-board`), so a team workspace lists only
@@ -220,19 +221,6 @@ export interface BacklogBoardProps {
    * (`null` = tenant-wide, the `/backlogs` route page).
    */
   teamId?: number | null;
-  /**
-   * Name of the workspace project. It is the fallback source of the work item
-   * key prefix (`Student Support Portal` -> `SSP`) when the workspace does not
-   * configure one, so the workspace page passes the name it already has
-   * instead of relying on a second lookup.
-   */
-  projectName?: string | null;
-  /**
-   * Key prefix configured for the workspace (`FA` by default). It is the same
-   * prefix the backend numbers the tasks of the workspace with, so it wins
-   * over the project acronym when it is present (`FA-21`).
-   */
-  taskKeyPrefix?: string | null;
 }
 
 /**
@@ -248,15 +236,14 @@ export interface BacklogBoardProps {
 export function BacklogBoard({
   embedded = false,
   projectId = null,
+  aggregateProjects = false,
   teamId = null,
-  projectName = null,
-  taskKeyPrefix = null,
   readOnly = false,
   workspaceId,
 }: BacklogBoardProps) {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { hasAllPermissions, user } = usePermissions();
+  const { hasAllPermissions, user, activeRole } = usePermissions();
 
   const canCreate = !readOnly && hasAllPermissions(["SPRINT_CREATE"]);
   const canUpdate = !readOnly && hasAllPermissions(["SPRINT_UPDATE"]);
@@ -296,21 +283,9 @@ export function BacklogBoard({
    * queries below whenever the board is mounted for a team workspace.
    */
   const teamQuery = useQuery({
-    queryKey: [...TEAM_BOARD_QUERY_KEY, teamId ?? "none", projectId, workspaceId],
-    queryFn: () => teamBacklogApi.getBoard(teamId as number, projectId, workspaceId),
+    queryKey: [...TEAM_BOARD_QUERY_KEY, teamId ?? "none", projectId, workspaceId, aggregateProjects, user.email, activeRole],
+    queryFn: () => teamBacklogApi.getBoard(teamId as number, aggregateProjects ? null : projectId, workspaceId),
     enabled: teamId != null,
-  });
-
-  /**
-   * Names of the projects the user can see. The work item key prefix is taken
-   * from the project of a box (`Student Support Portal` -> `SSP`), so a sprint
-   * name can never leak into the key of its work items.
-   */
-  const projectNamesQuery = useQuery({
-    queryKey: [...PROJECT_NAMES_QUERY_KEY],
-    queryFn: ({ signal }) => milestoneApi.getProjectOptions(signal),
-    staleTime: 60_000,
-    retry: false,
   });
 
   const sprintsQuery = useQuery({
@@ -376,29 +351,6 @@ export function BacklogBoard({
    */
   const scopedProjectId = projectId ?? teamQuery.data?.projectId ?? null;
 
-  /**
-   * `projectId -> project name` lookup behind the work item key prefix. The
-   * name the workspace page already knows wins over the options response.
-   */
-  const projectNames = useMemo(() => {
-    const names = new Map<number, string>();
-
-    (projectNamesQuery.data ?? []).forEach((option) => {
-      const id = Number(option.id);
-      const name = option.name?.trim();
-
-      if (Number.isFinite(id) && name) {
-        names.set(id, name);
-      }
-    });
-
-    if (projectId != null && projectName?.trim()) {
-      names.set(projectId, projectName.trim());
-    }
-
-    return names;
-  }, [projectId, projectName, projectNamesQuery.data]);
-
   const sprints = useMemo<SprintDTO[]>(
     () =>
       teamId != null
@@ -414,6 +366,12 @@ export function BacklogBoard({
         ? (teamQuery.data?.items ?? [])
         : (itemsQuery.data?.content ?? []),
     [itemsQuery.data, teamId, teamQuery.data],
+  );
+
+  /** US-SY-05: ids behind the commit badges of the rows (one summary request per board). */
+  const boardItemIds = useMemo(
+    () => items.map((item) => item.id).filter((id): id is number => id != null),
+    [items],
   );
 
   /** Work items grouped by sprint id (`null` = product backlog). */
@@ -451,7 +409,7 @@ export function BacklogBoard({
   );
 
   const matchesFilters = useCallback(
-    (item: SprintPlanningItem, prefix: string) => {
+    (item: SprintPlanningItem) => {
       const status = item.status ?? "TODO";
 
       if (statusFilter !== "ALL" && status !== statusFilter) {
@@ -468,7 +426,7 @@ export function BacklogBoard({
         return true;
       }
 
-      const itemKey = backlogItemKey(prefix, item);
+      const itemKey = backlogItemKey(item);
 
       return (
         (item.title ?? "").toLowerCase().includes(normalizedKeyword) ||
@@ -485,19 +443,6 @@ export function BacklogBoard({
     ): BoardSection => {
       const sprintStatus = sprint?.status ?? null;
       const sectionProjectId = sprint?.projectId ?? scopedProjectId ?? null;
-      /**
-       * Work item key prefix of the box: the prefix configured for the
-       * workspace (`FA`) wins, because it is the one the backend numbers the
-       * tasks with; otherwise the acronym of the workspace project
-       * (`Student Support Portal` -> `SSP`). The sprint name is never used, so
-       * two sprints of the same project share the same key prefix.
-       */
-      const prefix =
-        taskKeyPrefix?.trim() ||
-        projectKeyOf(
-          sectionProjectId == null ? null : projectNames.get(sectionProjectId),
-        );
-
       return {
         key: sprint?.id != null ? sprintSectionKey(sprint.id) : BACKLOG_SECTION_KEY,
         sprint,
@@ -510,8 +455,7 @@ export function BacklogBoard({
         meta: sprint
           ? formatBacklogRange(sprint.startDate, sprint.endDate)
           : null,
-        prefix,
-        items: items.filter((item) => matchesFilters(item, prefix)),
+        items: items.filter((item) => matchesFilters(item)),
         allItems: items,
         locked: sprintStatus === "COMPLETED" || sprintStatus === "CANCELLED",
         dueDate: sprint?.endDate ?? null,
@@ -526,11 +470,9 @@ export function BacklogBoard({
   }, [
     groupedItems,
     matchesFilters,
-    projectNames,
     scopedProjectId,
     sprints,
     teamId,
-    taskKeyPrefix,
   ]);
 
   useEffect(() => {
@@ -1147,7 +1089,7 @@ export function BacklogBoard({
           : null;
 
   return (
-    <>
+    <GitLinkSummaryProvider itemIds={boardItemIds}>
       <div
         className={
           embedded
@@ -1256,7 +1198,6 @@ export function BacklogBoard({
                   meta={section.meta}
                   status={isSprintBox ? section.sprint?.status ?? null : null}
                   items={section.items}
-                  itemKeyPrefix={section.prefix}
                   selectedIds={selectedIds}
                   collapsed={!!collapsed[section.key]}
                   canEditTask={canEditTask && !section.locked}
@@ -1369,11 +1310,8 @@ export function BacklogBoard({
           if (!open) setDetailItem(null);
         }}
         item={detailItem}
-        itemKey={
-          detailItem && detailSection
-            ? backlogItemKey(detailSection.prefix, detailItem)
-            : undefined
-        }
+        workspaceId={workspaceId}
+        itemKey={detailItem ? backlogItemKey(detailItem) : undefined}
         sprintName={detailSection?.sprint?.name ?? null}
         sprints={sprints}
         milestones={milestonesFor(
@@ -1391,7 +1329,7 @@ export function BacklogBoard({
           await refreshBoard();
         }}
       />
-    </>
+    </GitLinkSummaryProvider>
   );
 }
 

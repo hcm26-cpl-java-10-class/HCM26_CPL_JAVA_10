@@ -9,8 +9,8 @@ import com.example.starter_project_2025.system.demo.course.CourseRepository;
 import com.example.starter_project_2025.system.demo.course.CourseStatus;
 import com.example.starter_project_2025.system.demo.course_review.CourseReviewRepository;
 import com.example.starter_project_2025.system.demo.course_review.dto.response.CourseReviewStats;
-import com.example.starter_project_2025.system.demo.syllabus.Syllabus;
-import com.example.starter_project_2025.system.demo.syllabus.SyllabusStatus;
+import com.example.starter_project_2025.system.demo.syllabus.entity.Syllabus;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusStatus;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
 import com.example.starter_project_2025.system.demo.section.Section;
@@ -39,6 +39,7 @@ public class CourseCatalogService {
     private final CourseEnrollmentRepository enrollmentRepository;
     private final CourseContentAccessGuard contentAccessGuard;
     private final CourseReviewRepository courseReviewRepository;
+    private final com.example.starter_project_2025.system.exam.core.domain.ExamRepository examRepository;
 
     public Page<CatalogCourseDTO> search(String keyword, Long categoryId, CourseLevel level, Pageable pageable, Long userId) {
         Pageable safePageable = sanitize(pageable);
@@ -57,6 +58,16 @@ public class CourseCatalogService {
             return new PageImpl<>(List.of(), safePageable, page.getTotalElements());
         }
 
+        return mapCatalog(page, userId);
+    }
+
+    public List<CatalogCourseDTO> recommendationCatalog(Long userId) {
+        var courses = courseRepository.findRecommendationCatalog();
+        if (courses.isEmpty()) return List.of();
+        return mapCatalog(new PageImpl<>(courses), userId).getContent();
+    }
+
+    private Page<CatalogCourseDTO> mapCatalog(Page<Course> page, Long userId) {
         List<Long> courseIds = page.getContent().stream().map(Course::getId).toList();
         Map<Long, CourseLessonStats> stats = lessonRepository.findStatsByCourseIds(courseIds).stream()
                 .collect(Collectors.toMap(CourseLessonStats::courseId, s -> s));
@@ -212,6 +223,18 @@ public class CourseCatalogService {
             totalDuration += lesson.getDuration() == null ? 0 : lesson.getDuration();
         }
 
+        var activeSections=sections.stream().map(Section::getId).collect(Collectors.toSet());
+        var activeLessons=lessonsBySection.values().stream().flatMap(List::stream)
+                .map(CourseDetailDTO.LessonItem::id).collect(Collectors.toSet());
+        List<CourseDetailDTO.AssessmentItem> assessments=examRepository.findByCourseLink(courseId,null,null,true).stream()
+                .filter(exam->Boolean.TRUE.equals(exam.getIsActive()))
+                .filter(exam->exam.getSection()==null || activeSections.contains(exam.getSection().getId()))
+                .filter(exam->exam.getLesson()==null || activeLessons.contains(exam.getLesson().getId()))
+                .map(exam->new CourseDetailDTO.AssessmentItem(exam.getId(),exam.getTitle(),exam.getCategory(),
+                        exam.getCourseWeight(),exam.getDurationMinutes(),
+                        exam.getSection()!=null?exam.getSection().getId():exam.getLesson()!=null?exam.getLesson().getSection().getId():null,
+                        exam.getLesson()==null?null:exam.getLesson().getId())).toList();
+
         List<CourseDetailDTO.SectionItem> sectionItems = sections.stream()
                 .map(section -> new CourseDetailDTO.SectionItem(
                         section.getId(),
@@ -244,7 +267,8 @@ public class CourseCatalogService {
                 totalDuration,
                 sectionItems,
                 syllabusInfo(course),
-                course.getCourseType()
+                course.getCourseType(),
+                assessments
         );
     }
 

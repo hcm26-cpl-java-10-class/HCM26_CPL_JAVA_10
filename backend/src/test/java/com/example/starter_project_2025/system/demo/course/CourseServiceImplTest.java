@@ -6,7 +6,7 @@ import com.example.starter_project_2025.system.demo.category.CategoryRepository;
 import com.example.starter_project_2025.system.demo.curriculum.CurriculumValidator;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import com.example.starter_project_2025.system.demo.section.SectionRepository;
-import com.example.starter_project_2025.system.demo.syllabus.SyllabusRepository;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusRepository;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
@@ -38,8 +38,16 @@ class CourseServiceImplTest {
             categoryRepository,
             mock(SyllabusRepository.class),
             new CurriculumValidator(mock(SectionRepository.class), mock(LessonRepository.class)),
-            mock(NotificationService.class)
+            mock(NotificationService.class),
+            readyAssessments()
     );
+
+    private static CourseAssessmentService readyAssessments() {
+        CourseAssessmentService service=mock(CourseAssessmentService.class);
+        org.mockito.Mockito.lenient().when(service.plan(org.mockito.ArgumentMatchers.<Long>any()))
+                .thenReturn(new CourseAssessmentService.Plan(java.math.BigDecimal.ZERO,true,List.of()));
+        return service;
+    }
 
     @Test
     void clearCategoryEmptiesManagedCollectionWithoutReplacingIt() {

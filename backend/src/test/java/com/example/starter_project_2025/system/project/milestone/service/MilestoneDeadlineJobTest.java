@@ -28,13 +28,13 @@ class MilestoneDeadlineJobTest {
         Instant now = Instant.parse("2026-10-29T12:00:00Z");
         UUID actor = UUID.randomUUID();
         Milestone due = Milestone.create(1L, 1L, 1L, "Due", null, now.plusSeconds(86400), true,
-                UUID.randomUUID(), null, LatePolicyType.NO_LATE, null, null, actor, now.minusSeconds(86400));
+                null, null, LatePolicyType.NO_LATE, null, null, actor, now.minusSeconds(86400));
         due.scheduleStart(LocalDate.parse("2026-10-29"), now);
         Milestone future = Milestone.create(1L, 1L, 1L, "Future", null, now.plusSeconds(172800), true,
-                UUID.randomUUID(), null, LatePolicyType.NO_LATE, null, null, actor, now);
+                null, null, LatePolicyType.NO_LATE, null, null, actor, now);
         future.scheduleStart(LocalDate.parse("2026-10-30"), now.plusSeconds(86400));
         Milestone draft = Milestone.create(1L, 1L, 1L, "Draft", null, now.plusSeconds(86400), true,
-                UUID.randomUUID(), null, LatePolicyType.NO_LATE, null, null, actor, now);
+                null, null, LatePolicyType.NO_LATE, null, null, actor, now);
         draft.scheduleStart(null, null);
         MilestoneRepository repository = mock(MilestoneRepository.class);
         when(repository.findByActiveTrueAndAutoStartEnabledTrueAndLifecycleState(MilestoneLifecycleStatus.PLANNED))
@@ -69,7 +69,7 @@ class MilestoneDeadlineJobTest {
 
     private Milestone milestone(UUID actor, Instant deadline, Instant lateUntil) {
         Milestone value = Milestone.create(1L, 1L, 1L, "Delivery", null, deadline, true,
-                UUID.randomUUID(), null, lateUntil == null ? LatePolicyType.NO_LATE : LatePolicyType.ALLOW_LATE,
+                null, null, lateUntil == null ? LatePolicyType.NO_LATE : LatePolicyType.ALLOW_LATE,
                 lateUntil, null, actor, deadline.minusSeconds(3600));
         value.openForWork(actor, deadline.minusSeconds(1800));
         value.start(actor, deadline.minusSeconds(1200));

@@ -1,7 +1,4 @@
-import {
-    CloPanel,
-    MaterialsPanel,
-} from "./SyllabusContentPanels";
+import { CloPanel } from "./SyllabusContentPanels";
 import GeneralInformationPanel from "./GeneralInformationPanel";
 import SyllabusWorkflowPanel from "./SyllabusWorkflowPanel";
 import { useState, type FormEvent } from "react";
@@ -745,12 +742,6 @@ export default function SyllabusDetailPage() {
                                                     </div>
                                                 </div>
 
-                                                {/* Materials belonging to this Topic */}
-                                                <MaterialsPanel
-                                                    syllabusId={syllabusId}
-                                                    topicId={topic.id}
-                                                    readOnly={published}
-                                                />
                                             </div>
                                         ))}
 
@@ -777,8 +768,6 @@ export default function SyllabusDetailPage() {
                                 </div>
                             )
                         )}
-                        {/* General Learning Materials */}
-                        <MaterialsPanel syllabusId={syllabusId} readOnly={published} />
                     </>
                 )}
             </div>

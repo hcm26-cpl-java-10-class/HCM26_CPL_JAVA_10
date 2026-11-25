@@ -1,9 +1,11 @@
 import { workspaceApi } from "@/api/features/workspace.api";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { CustomFilterPopover } from "@/components/datatable/toolbar/filter/CustomFilterPopover";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -11,13 +13,14 @@ import type { WorkspaceCandidateItem } from "@/types/features/workspace";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ArrowRight, ChevronLeft, ChevronRight, FolderOpen, Loader2, Plus, RefreshCw, Search, Users, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { getWorkspaceError, workspaceIneligibleReason, WorkspaceEmptyState, WorkspaceStatusBadge } from "./workspace.shared";
 
 import { WorkspaceCreateDialog } from "./WorkspaceCreateDialog";
 
 export default function WorkspaceCandidatePage() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { user, activeRole, hasPermission } = usePermissions();
   const [params, setParams] = useSearchParams();
   const [createFor, setCreateFor] = useState<WorkspaceCandidateItem | null | undefined>(undefined);
@@ -45,6 +48,7 @@ export default function WorkspaceCandidatePage() {
   const page = Math.min(Math.max(1, Number(params.get("page")) || 1), pageCount);
   const rows = filtered.slice((page - 1) * size, page * size);
   const hasFilters = !!search || cohort !== "all" || classId !== "all" || sessionId != null || workspaceState !== "all";
+  const activeFilterCount = [cohort !== "all", classId !== "all", workspaceState !== "all", sessionId != null].filter(Boolean).length;
 
   function updateParam(key: string, value: string) {
     setParams(previous => {
@@ -56,34 +60,47 @@ export default function WorkspaceCandidatePage() {
     }, { replace: true });
   }
 
-  function openWorkspace(id: number) {
+  function workspaceHref(id: number) {
     const workspaceParams = new URLSearchParams(params);
     workspaceParams.delete("tab");
-    navigate(`/management/workspaces/${id}${workspaceParams.size ? `?${workspaceParams}` : ""}`);
+    return `/management/workspaces/${id}${workspaceParams.size ? `?${workspaceParams}` : ""}`;
+  }
+
+  function openWorkspace(id: number) {
+    navigate(workspaceHref(id));
   }
 
 
   return (
-    <MainLayout pathName={{ management: "Management", workspaces: "Workspace", candidates: "Workspace" }}>
+    <MainLayout ignorePaths={pathname.split("/").includes("candidates") ? ["management", "workspaces"] : ["management"]} pathName={{ workspaces: "Workspaces", candidates: "Workspaces" }}>
       <Card className="w-full">
-        <CardHeader>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-2"><CardTitle>Workspace</CardTitle><CardDescription>Select a project and team to create a workspace or continue working in an existing one.</CardDescription></div>
-            <div className="flex flex-wrap gap-2">
+        <CardHeader className="flex flex-col items-stretch gap-3 xl:flex-row xl:items-center xl:gap-4">
+          <CardTitle className="shrink-0 text-sm font-medium leading-5">Workspaces</CardTitle>
+          <div data-workspace-toolbar className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <CustomFilterPopover activeFilterCount={activeFilterCount} onClear={() => setParams({})}>
+              <div className="grid gap-1.5"><Label className="text-xs text-muted-foreground">Cohort</Label>
+                <Select value={cohort} onValueChange={value => updateParam("cohort", value)}><SelectTrigger className="w-full min-w-0" aria-label="Cohort"><SelectValue placeholder="Cohort" /></SelectTrigger><SelectContent><SelectItem value="all">All cohorts</SelectItem>{cohorts.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent></Select>
+              </div>
+              <div className="grid gap-1.5"><Label className="text-xs text-muted-foreground">Class</Label>
+                <Select value={classId} onValueChange={value => updateParam("classId", value)}><SelectTrigger className="w-full min-w-0" aria-label="Class"><SelectValue placeholder="Class" /></SelectTrigger><SelectContent><SelectItem value="all">All classes</SelectItem>{classes.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}{hasUnassignedClass && <SelectItem value="unassigned">Not assigned</SelectItem>}</SelectContent></Select>
+              </div>
+              <div className="grid gap-1.5"><Label className="text-xs text-muted-foreground">Workspace status</Label>
+                <Select value={workspaceState} onValueChange={value => updateParam("workspace", value)}><SelectTrigger className="w-full min-w-0" aria-label="Workspace status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All workspaces</SelectItem><SelectItem value="uncreated">Not created</SelectItem><SelectItem value="created">Created</SelectItem></SelectContent></Select>
+              </div>
+              {sessionId != null && <Badge variant="outline">Phiên phân nhóm #{sessionId}</Badge>}
+            </CustomFilterPopover>
+            <div className="relative min-w-40 flex-1 lg:max-w-[420px]"><Search size={16} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search projects or teams" placeholder="Search..." value={search} onChange={event => updateParam("search", event.target.value)} className="pl-8 pr-8" />
+              {search && <button type="button" aria-label="Clear search" onClick={() => updateParam("search", "")} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X size={14} /></button>}
+            </div>
+            {sessionId != null && <Badge variant="outline">Phiên phân nhóm #{sessionId}</Badge>}
+            {hasFilters && <Button variant="ghost" onClick={() => setParams({})}><X />Clear filters</Button>}
+            <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center gap-2">
               <Button disabled={!canCreate || query.isLoading || query.isError} onClick={() => setCreateFor(null)}><Plus />Create workspace</Button>
               <Button variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={query.isFetching ? "animate-spin" : ""} />Refresh</Button>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative min-w-56 flex-1"><Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" /><Input aria-label="Search projects or teams" placeholder="Search team name..." value={search} onChange={event => updateParam("search", event.target.value)} className="pl-9" /></div>
-            <Select value={cohort} onValueChange={value => updateParam("cohort", value)}><SelectTrigger className="w-full sm:w-48" aria-label="Cohort"><SelectValue placeholder="Cohort" /></SelectTrigger><SelectContent><SelectItem value="all">All cohorts</SelectItem>{cohorts.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent></Select>
-            <Select value={classId} onValueChange={value => updateParam("classId", value)}><SelectTrigger className="w-full sm:w-52" aria-label="Class"><SelectValue placeholder="Class" /></SelectTrigger><SelectContent><SelectItem value="all">All classes</SelectItem>{classes.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}{hasUnassignedClass && <SelectItem value="unassigned">Not assigned</SelectItem>}</SelectContent></Select>
-            <Select value={workspaceState} onValueChange={value => updateParam("workspace", value)}><SelectTrigger className="w-full sm:w-44" aria-label="Workspace status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All workspaces</SelectItem><SelectItem value="uncreated">Not created</SelectItem><SelectItem value="created">Created</SelectItem></SelectContent></Select>
-            {sessionId != null && <Badge variant="outline">Phiên phân nhóm #{sessionId}</Badge>}
-            {hasFilters && <Button variant="ghost" onClick={() => setParams({})}><X />Clear filters</Button>}
-          </div>
           <div className="rounded-md border">
             <Table>
               <TableHeader><TableRow><TableHead className="pl-4">Project</TableHead><TableHead>Team</TableHead><TableHead>Class</TableHead><TableHead>Cohort</TableHead><TableHead>Members</TableHead><TableHead>Project status</TableHead><TableHead>Workspace</TableHead><TableHead className="pr-4 text-right">Actions</TableHead></TableRow></TableHeader>
@@ -92,9 +109,9 @@ export default function WorkspaceCandidatePage() {
                   : query.isError ? <TableRow><TableCell colSpan={8}><WorkspaceEmptyState icon={AlertCircle} title="Unable to load projects and teams" description={getWorkspaceError(query.error)} action={<Button variant="outline" onClick={() => void query.refetch()}>Try again</Button>} /></TableCell></TableRow>
                   : rows.length === 0 ? <TableRow><TableCell colSpan={8}><WorkspaceEmptyState icon={FolderOpen} title="No matching projects or teams" description={hasFilters ? "Change or clear the filters to find other projects and teams." : "Projects and teams appear here when you are assigned as a mentor or team member."} action={hasFilters ? <Button variant="outline" onClick={() => setParams({})}>Clear filters</Button> : undefined} /></TableCell></TableRow>
                   : rows.map(row => <TableRow key={`${row.projectId}-${row.teamId}`}>
-                    <TableCell className="pl-4"><p className="font-medium">{row.projectName ?? "No project"}</p><p className="text-xs text-muted-foreground">{row.projectCode}</p></TableCell>
-                    <TableCell><p className="font-medium">{row.teamName}</p><p className="text-xs text-muted-foreground">{row.teamCode}</p></TableCell>
-                    <TableCell>{row.className ? <><p className="font-medium">{row.className}</p><p className="text-xs text-muted-foreground">{row.classCode}</p></> : "Not assigned"}</TableCell>
+                    <TableCell className="pl-4"><p className="font-medium">{row.workspaceId ? <Link to={workspaceHref(row.workspaceId)} className="text-inherit hover:underline">{row.projectName ?? "No project"}</Link> : row.projectName ?? "No project"}</p><p className="text-xs text-muted-foreground">{row.projectCode}</p></TableCell>
+                    <TableCell><p className="font-normal">{row.teamName}</p><p className="text-xs text-muted-foreground">{row.teamCode}</p></TableCell>
+                    <TableCell>{row.className ? <><p className="font-normal">{row.className}</p><p className="text-xs text-muted-foreground">{row.classCode}</p></> : "Not assigned"}</TableCell>
                     <TableCell>{row.cohortName ?? "Not assigned"}</TableCell><TableCell><span className="inline-flex items-center gap-1.5"><Users className="size-4 text-muted-foreground" />{row.memberCount ?? 0}</span></TableCell>
                     <TableCell><WorkspaceStatusBadge status={row.projectStatus} /></TableCell><TableCell><Badge variant={row.workspaceId ? "secondary" : "outline"}>{row.workspaceId ? "Created" : "Not created"}</Badge></TableCell>
                     <TableCell className="pr-4 text-right">{row.workspaceId ? <Button variant="outline" size="sm" onClick={() => openWorkspace(row.workspaceId!)}>Open workspace<ArrowRight /></Button> : <Button size="sm" disabled={!canCreate || !row.eligibleForWorkspace} title={!canCreate ? "You do not have permission to create a workspace." : workspaceIneligibleReason(row)} onClick={() => setCreateFor(row)}><Plus />Create workspace</Button>}</TableCell>

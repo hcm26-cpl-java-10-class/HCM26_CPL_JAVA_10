@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.milestone.domain.LatePolicyType;
+import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.domain.ProjectStatus;
 import com.example.starter_project_2025.system.project.trainingclass.*;
@@ -288,9 +290,14 @@ class WorkspaceGitIntegrationTest {
         assertThat(getConfig().get("configured").asBoolean()).isFalse();
     }
     @Test void changingOrUnlinkingRepositoryDoesNotMutateSubmittedArtifactSnapshot() throws Exception {
-        var snapshot = MilestoneArtifactSubmission.submit(tenantId, projectId, teamId, UUID.randomUUID(), UUID.randomUUID(),
-                1, "https://github.com/team/original.git", null, "Original notes", "{}", "[]", Instant.now(), false, BigDecimal.ZERO);
-        UUID id = tx.execute(status -> { entities.persist(snapshot); entities.flush(); return snapshot.getId(); });
+        UUID id = tx.execute(status -> {
+            var milestone = Milestone.create(tenantId, projectId, teamId, "Snapshot milestone", null,
+                    Instant.now().plusSeconds(86_400), true, null, null, LatePolicyType.NO_LATE, null, null,
+                    UUID.randomUUID(), Instant.now());
+            entities.persist(milestone);
+            var snapshot = MilestoneArtifactSubmission.submit(tenantId, projectId, teamId, milestone, UUID.randomUUID(),
+                    1, "https://github.com/team/original.git", null, "Original notes", "{}", "[]", Instant.now(), false, BigDecimal.ZERO);
+            entities.persist(snapshot); entities.flush(); return snapshot.getId(); });
         save(0, "https://github.com/team/original.git", "main", 200);
         save(1, "https://github.com/team/replacement.git", "dev", 200);
         mvc.perform(delete(path()).param("version", "2").header("Authorization", "Bearer " + token)).andExpect(status().isOk());

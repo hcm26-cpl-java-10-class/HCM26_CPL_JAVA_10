@@ -1,0 +1,18 @@
+
+services:
+  ngrok:
+    image: ngrok/ngrok:alpine
+    container_name: git-integration-ngrok
+    restart: unless-stopped
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?Set NGROK_AUTHTOKEN in docker/git-integration/.env}
+
+    command:
+      - http
+      - --url=${NGROK_URL:?Set NGROK_URL (your static ngrok domain) in docker/git-integration/.env}
+      - ${BACKEND_UPSTREAM:-host.docker.internal:8080}
+    extra_hosts:
+
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "4040:4040"

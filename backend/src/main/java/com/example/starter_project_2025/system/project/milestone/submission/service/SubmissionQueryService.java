@@ -179,11 +179,11 @@ public class SubmissionQueryService {
                 ? Optional.empty() : artifactSubmissions.findById(current.getArtifactSubmissionId());
         Optional<MilestoneArtifactSubmission> byProject = submission.getProjectId() == null
                 ? Optional.empty()
-                : artifactSubmissions.findTopByTenantIdAndProjectIdAndMilestoneIdOrderBySubmittedAtDesc(
+                : artifactSubmissions.findTopByTenantIdAndProjectIdAndMilestone_IdOrderBySubmittedAtDesc(
                         submission.getTenantId(), submission.getProjectId(), submission.getMilestone().getId());
         Optional<MilestoneArtifactSubmission> byTeam = submission.getTeamId() == null
                 ? Optional.empty()
-                : artifactSubmissions.findTopByTenantIdAndTeamIdAndMilestoneIdOrderBySubmittedAtDesc(
+                : artifactSubmissions.findTopByTenantIdAndTeamIdAndMilestone_IdOrderBySubmittedAtDesc(
                         submission.getTenantId(), submission.getTeamId(), submission.getMilestone().getId());
         MilestoneArtifactSubmission product = linked.orElseGet(() -> java.util.stream.Stream.of(byProject, byTeam)
                 .flatMap(Optional::stream)

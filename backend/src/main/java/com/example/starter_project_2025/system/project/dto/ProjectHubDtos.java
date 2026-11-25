@@ -44,11 +44,19 @@ public final class ProjectHubDtos {
                               boolean canEdit, Charter charter, String rosterToken, List<CharterMember> members,
                               int confirmedCount, int memberCount, String progress, boolean canConfirm,
                               String confirmationBlockReason, String timeZone, boolean contentComplete,
-                              String confirmationKind, java.time.Instant selfConfirmedAt) { }
+                              String confirmationKind, java.time.Instant selfConfirmedAt,
+                              CharterWorkflow workflow, PublishedCharter publishedCharter, Charter draft) { }
+    public enum CharterPhase { NOT_SAVED, DRAFT, AWAITING_SIGNATURES, READY_TO_PUBLISH, PUBLISHED }
+    public record CharterWorkflow(CharterPhase phase, boolean canManagePublication, boolean canApprove,
+                                  boolean canPublish, String blockReason) { }
+    public record PublishedCharter(Long revision, Long publishedBy, java.time.Instant publishedAt,
+                                   Charter charter, List<CharterMember> members) { }
     public record ConfirmCharter(@NotNull @PositiveOrZero Long version, @NotNull @Positive Long revision,
                                  @NotBlank @Size(max = 64) String rosterToken) { }
     public record CharterHistory(Long revision, Long actorId, java.time.Instant savedAt, Charter charter,
-                                 List<CharterMember> members, List<CharterConsent> confirmations) { }
+                                 List<CharterMember> members, List<CharterConsent> confirmations,
+                                 Long approvedBy, java.time.Instant approvedAt,
+                                 Long publishedBy, java.time.Instant publishedAt) { }
     public record CharterConsent(Long userId, String name, List<String> roles, String responsibility,
                                  java.time.Instant confirmedAt) { }
     public record TeamView(Long id, String code, String name, Long projectId, String projectName,

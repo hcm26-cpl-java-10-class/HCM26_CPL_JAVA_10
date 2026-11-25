@@ -87,6 +87,13 @@ public class TeamCharterIntegrity {
                 .correlationId(correlation).status("PENDING").build());
     }
 
+    public void recordDraftChange(ProjectTeam team, Long actorId, String before, String after) {
+        effect(team, actorId, "TEAM_CHARTER_DRAFT_SAVED",
+                encode(Map.of("draftHash", before == null ? "" : hash(before))),
+                encode(Map.of("teamId", team.getId(), "revision", team.getCharterRevision(),
+                        "draftHash", hash(after), "savedAt", Instant.now())), correlation());
+    }
+
     public String correlation() {
         String id = CorrelationIdFilter.currentId();
         return "unknown".equals(id) ? UUID.randomUUID().toString() : id;

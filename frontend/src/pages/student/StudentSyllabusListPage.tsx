@@ -35,6 +35,9 @@ import {
 import { useDebouncedValue } from
         "@/pages/management/demo/course/hooks/useDebouncedValue";
 
+import { SyllabusLanguageSwitcher, translatedSyllabusLink, useSyllabusLanguage, type SyllabusLanguage } from "./SyllabusLanguageSwitcher";
+import { syllabusLabel } from "./syllabusTranslationUi";
+
 import { CatalogPagination } from
         "@/pages/management/demo/course/components/CatalogPagination";
 
@@ -56,12 +59,13 @@ function validOption(
 
 // Match the Course Catalog card structure.
 function SyllabusCard({
-                          syllabus,
+                          syllabus, language,
                       }: {
     syllabus: StudentSyllabusItem;
+    language: SyllabusLanguage;
 }) {
     const detailPath =
-        `/student/syllabuses/${syllabus.id}`;
+        translatedSyllabusLink(`/student/syllabuses/${syllabus.id}`, language);
 
     return (
         <article className="group flex h-full flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-lg">
@@ -82,7 +86,7 @@ function SyllabusCard({
                     </Badge>
 
                     <Badge className="absolute right-3 bottom-3 bg-emerald-600 text-white hover:bg-emerald-600">
-                        Published
+                        {syllabusLabel(language, "published", "Published")}
                     </Badge>
                 </div>
             </Link>
@@ -100,18 +104,18 @@ function SyllabusCard({
 
                 <p className="line-clamp-3 min-h-[3.75rem] text-sm leading-5 text-muted-foreground">
                     {syllabus.description?.trim() ||
-                        "Explore the course outline, learning outcomes and study materials."}
+                        (language === "vi" ? "Khám phá khung chương trình, chuẩn đầu ra và các khóa học liên quan." : "Explore the course outline, learning outcomes and related Courses.")}
                 </p>
 
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <Layers3 className="size-3.5" />
-              {syllabus.sectionCount} sections
+              {syllabus.sectionCount} {syllabusLabel(language, "sections", "sections")}
           </span>
 
                     <span className="inline-flex items-center gap-1.5">
             <FileText className="size-3.5" />
-            Course syllabus
+            {syllabusLabel(language, "syllabusType", "Course syllabus")}
           </span>
                 </div>
 
@@ -122,7 +126,7 @@ function SyllabusCard({
                         className="w-full"
                     >
                         <Link to={detailPath}>
-                            View details
+                            {syllabusLabel(language, "viewDetails", "View details")}
                         </Link>
                     </Button>
                 </div>
@@ -151,6 +155,7 @@ function SyllabusCardSkeleton() {
 }
 
 export default function StudentSyllabusListPage() {
+    const language = useSyllabusLanguage();
     const [searchParams, setSearchParams] =
         useSearchParams();
 
@@ -269,6 +274,20 @@ export default function StudentSyllabusListPage() {
     const data = query.data;
 
     const syllabuses = data?.items ?? [];
+    const translateQuery = useQuery({
+        queryKey: ["student-syllabuses-translation", syllabuses.map(s => [s.id, s.name, s.description])],
+        queryFn: () => studentSyllabusApi.translatePage(syllabuses.map(s => s.id)),
+        enabled: language === "vi" && query.isSuccess && syllabuses.length > 0 && !query.isPlaceholderData,
+        staleTime: 30 * 60 * 1000,
+        retry: false,
+    });
+    const translationMap = new Map<number, StudentSyllabusItem>(
+        language === "vi" && translateQuery.isSuccess
+            ? translateQuery.data.map((item): [number, StudentSyllabusItem] => [item.id, item])
+            : [],
+    );
+    const visibleSyllabuses = syllabuses.map(s => translationMap.get(s.id) ?? s);
+
     const totalElements =
         data?.totalElements ?? 0;
     const totalPages =
@@ -310,7 +329,7 @@ export default function StudentSyllabusListPage() {
         setSearchInput("");
 
         setSearchParams(
-            new URLSearchParams(),
+            language === "vi" ? new URLSearchParams({ lang: "vi" }) : new URLSearchParams(),
             { replace: true }
         );
     }
@@ -334,8 +353,9 @@ export default function StudentSyllabusListPage() {
 
     return (
         <MainLayout
+            headerActions={<SyllabusLanguageSwitcher loading={language === "vi" && translateQuery.isFetching} />}
             pathName={{
-                syllabuses: "Syllabuses",
+                syllabuses: language === "vi" ? "Đề cương" : "Syllabuses",
             }}
         >
             <div className="mx-auto w-full max-w-7xl space-y-8 pb-8">
@@ -348,18 +368,15 @@ export default function StudentSyllabusListPage() {
 
                     <div className="relative max-w-2xl">
                         <Badge className="mb-4 border border-white/20 bg-white/10 text-blue-100 hover:bg-white/10">
-                            SYLLABUS LIBRARY
+                            {language === "vi" ? "THƯ VIỆN ĐỀ CƯƠNG" : "SYLLABUS LIBRARY"}
                         </Badge>
 
                         <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                            Explore your learning path.
+                            {language === "vi" ? "Khám phá lộ trình học tập." : "Explore your learning path."}
                         </h1>
 
                         <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
-                            Discover published syllabuses,
-                            explore learning outcomes,
-                            review course outlines and
-                            access study materials.
+                            {syllabusLabel(language, "introduction", "Discover published syllabuses, explore learning outcomes, review course outlines and access linked Course lessons when available.")}
                         </p>
                     </div>
 
@@ -383,7 +400,7 @@ export default function StudentSyllabusListPage() {
                                 aria-label="Search syllabuses"
                                 value={searchInput}
                                 maxLength={100}
-                                placeholder="Search by syllabus code or name..."
+                                placeholder={syllabusLabel(language, "search", "Search by syllabus code or name...")}
                                 className="pl-9 pr-9"
                                 onChange={(event) =>
                                     setSearchInput(
@@ -427,7 +444,7 @@ export default function StudentSyllabusListPage() {
 
                             <SelectContent>
                                 <SelectItem value={ALL}>
-                                    Code or name
+                                    {syllabusLabel(language, "codeOrName", "Code or name")}
                                 </SelectItem>
 
                                 <SelectItem value="code">
@@ -435,7 +452,7 @@ export default function StudentSyllabusListPage() {
                                 </SelectItem>
 
                                 <SelectItem value="name">
-                                    Name
+                                    {syllabusLabel(language, "name", "Name")}
                                 </SelectItem>
                             </SelectContent>
                         </Select>
@@ -471,6 +488,14 @@ export default function StudentSyllabusListPage() {
                         </Select>
                     </div>
 
+                    {language === "vi" && translateQuery.isError && (
+                        <div role="alert" className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm text-muted-foreground">
+                            {syllabusLabel(language, "translationError", "Translation unavailable.")}
+                            <Button size="sm" variant="outline" onClick={() => void translateQuery.refetch()}>
+                                {syllabusLabel(language, "retry", "Retry")}
+                            </Button>
+                        </div>
+                    )}
                     {/* RESULT COUNT */}
                     <div className="flex min-h-8 flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
                         <p
@@ -478,10 +503,10 @@ export default function StudentSyllabusListPage() {
                             aria-live="polite"
                         >
                             {showSkeleton
-                                ? "Loading syllabuses..."
+                                ? syllabusLabel(language, "loading", "Loading syllabuses...")
                                 : query.isError
                                     ? ""
-                                    : `${totalElements} ${
+                                    : language === "vi" ? `${totalElements} Syllabus được tìm thấy` : `${totalElements} ${
                                         totalElements === 1
                                             ? "syllabus"
                                             : "syllabuses"
@@ -495,7 +520,7 @@ export default function StudentSyllabusListPage() {
                                 onClick={clearFilters}
                             >
                                 <X className="size-4" />
-                                Clear filters
+                                {syllabusLabel(language, "clearFilters", "Clear filters")}
                             </Button>
                         )}
                     </div>
@@ -507,9 +532,7 @@ export default function StudentSyllabusListPage() {
                             className="space-y-3 rounded-2xl border border-destructive/30 p-6"
                         >
                             <p className="text-sm text-destructive">
-                                Could not load the syllabus library.
-                                Please check your connection
-                                and try again.
+                                {syllabusLabel(language, "unavailable", "Could not load the syllabus library. Please check your connection and try again.")}
                             </p>
 
                             <Button
@@ -518,7 +541,7 @@ export default function StudentSyllabusListPage() {
                                     void query.refetch()
                                 }
                             >
-                                Try again
+                                {syllabusLabel(language, "retry", "Try again")}
                             </Button>
                         </div>
                     ) : showSkeleton ? (
@@ -545,13 +568,13 @@ export default function StudentSyllabusListPage() {
                             )}
 
                             <h3 className="mt-3 font-semibold">
-                                No syllabuses found
+                                {syllabusLabel(language, "noResults", "No syllabuses found")}
                             </h3>
 
                             <p className="mt-1 text-sm text-muted-foreground">
                                 {hasFilters
-                                    ? "Try another keyword or clear your search filters."
-                                    : "No syllabuses have been published yet."}
+                                    ? syllabusLabel(language, "noResultsHelp", "Try another keyword or clear your search filters.")
+                                    : syllabusLabel(language, "notPublished", "No syllabuses have been published yet.")}
                             </p>
 
                             {hasFilters && (
@@ -560,7 +583,7 @@ export default function StudentSyllabusListPage() {
                                     className="mt-4"
                                     onClick={clearFilters}
                                 >
-                                    Clear filters
+                                    {syllabusLabel(language, "clearFilters", "Clear filters")}
                                 </Button>
                             )}
                         </div>
@@ -577,10 +600,11 @@ export default function StudentSyllabusListPage() {
                                     : ""
                             }`}
                         >
-                            {syllabuses.map((syllabus) => (
+                            {visibleSyllabuses.map((syllabus) => (
                                 <SyllabusCard
                                     key={syllabus.id}
                                     syllabus={syllabus}
+                                    language={language}
                                 />
                             ))}
                         </div>

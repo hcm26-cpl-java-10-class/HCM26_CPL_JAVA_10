@@ -8,8 +8,8 @@ import com.example.starter_project_2025.system.demo.lessonreport.LessonReport;
 import com.example.starter_project_2025.system.demo.progress.LessonProgress;
 import com.example.starter_project_2025.system.demo.qna.LessonAnswer;
 import com.example.starter_project_2025.system.demo.qna.LessonQuestion;
-import com.example.starter_project_2025.system.exam.domain.Exam;
-import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
+import com.example.starter_project_2025.system.exam.core.domain.Exam;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttempt;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -185,8 +185,8 @@ public interface CourseAnalyticsRepository extends JpaRepository<CourseEnrollmen
               left join u.departments d
             where a.finalScore is not null
               and a.maxScore is not null and a.maxScore > 0
-              and a.status in (com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus.SUBMITTED,
-                               com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus.EXPIRED)
+              and a.status in (com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus.SUBMITTED,
+                               com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus.EXPIRED)
               and (:courseId is null or a.exam.course.id = :courseId)
             group by d.id
             """)
@@ -258,8 +258,8 @@ public interface CourseAnalyticsRepository extends JpaRepository<CourseEnrollmen
             from ExamAttempt a
             where a.finalScore is not null
               and a.maxScore is not null and a.maxScore > 0
-              and a.status in (com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus.SUBMITTED,
-                               com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus.EXPIRED)
+              and a.status in (com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus.SUBMITTED,
+                               com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus.EXPIRED)
               and (:courseId is null or a.exam.course.id = :courseId)
             group by a.student.id
             """)
@@ -445,4 +445,20 @@ public interface CourseAnalyticsRepository extends JpaRepository<CourseEnrollmen
             group by d.id
             """)
     List<Object[]> aggregateStudySecondsByDepartment(@Param("courseId") Long courseId);
+
+    // =================================================================
+    // 11. Bottlenecks / learner engagement
+    // =================================================================
+
+    /**
+     * [enrollmentId, lessonId, completed, studySeconds, lastAccessedAt] cho mọi bản ghi
+     * progress của khóa học (dùng để tìm bài học mà người học dừng lại / bị nghẽn).
+     */
+    @Query("""
+            select p.enrollment.id, p.lesson.id, p.completed, coalesce(p.studySeconds, 0L), p.lastAccessedAt
+            from LessonProgress p
+            where p.enrollment.course.id = :courseId
+              and p.enrollment.isActive = true
+            """)
+    List<Object[]> findLessonProgressDetail(@Param("courseId") Long courseId);
 }

@@ -18,6 +18,7 @@ import {
   SearchX,
   Share2,
   ShieldAlert,
+  Table2,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -320,12 +321,19 @@ function AnalyticsHeader({
       ) : (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>{exportButton}</DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem onClick={() => onExport("CSV")} className="cursor-pointer gap-2 text-xs">
+          <DropdownMenuContent align="end" className="w-60">
+            <DropdownMenuItem onClick={() => onExport("XLSX")} className="cursor-pointer gap-2 text-xs">
               <FileSpreadsheet className="size-3.5 text-emerald-600" />
               <div className="flex flex-col">
+                <span className="font-medium">Export as Excel (.xlsx)</span>
+                <span className="text-[10px] text-muted-foreground">Multi-sheet workbook (trends &amp; items)</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onExport("CSV")} className="cursor-pointer gap-2 text-xs">
+              <Table2 className="size-3.5 text-teal-600" />
+              <div className="flex flex-col">
                 <span className="font-medium">Export as CSV</span>
-                <span className="text-[10px] text-muted-foreground">Daily trends &amp; item metrics</span>
+                <span className="text-[10px] text-muted-foreground">Flat daily trends &amp; item metrics</span>
               </div>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onExport("PDF")} className="cursor-pointer gap-2 text-xs">

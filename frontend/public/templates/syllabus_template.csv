@@ -1,0 +1,62 @@
+﻿,,,,,,,,
+,,,,,,,,
+,Fresher / OJT Training Program,,,,,,,
+,ENTERPRISE JAVA & SPRING BOOT SYLLABUS,,,,,,,
+,,,,,,,,
+,,,,,Document Code,,,STANDARD-SYLLABUS-DOC
+,,,,,Version,,,2.0
+,,,,,Effective Date,,,15/10/2026
+Enterprise Java & Spring Boot Syllabus,,,,,,,,
+1,Technical Group,Java,,,,,,
+2,Topic Name,Enterprise Java & Spring Boot Core,,,,,,
+3,Topic Code,JAVA-SPRING-2026,,,,,,
+4,Version,2.0,,,,,,
+5,Training Audience,Trainees & Developers who already possess core Java OOP fundamentals and need enterprise-ready backend skills,,,,,,
+6,Course Objectives,"This course equips trainees with core enterprise Java architectural competencies: Spring Framework internals, IoC & Dependency Injection, Spring Data JPA with Hibernate, RESTful API design with Swagger, JWT security authentication, and a complete capstone practical defense.",,,,,,
+,,Name,Code,Description,,,,
+,,Spring Boot Fundamentals,SBF,Core understanding of auto-configuration and starter dependencies,,,,
+7,Topic Outline,"- Unit 1: Spring Core & Dependency Injection
+- Unit 2: Spring Data JPA & Hibernate ORM
+- Unit 3: RESTful Web Services & Spring Security JWT
+- Unit 4: Capstone Project & Comprehensive Defense",,,,,,
+8,Time Allocation,Concept/Lecture,0.25,"Concepts, theory, architecture overview",9 Sessions,,,
+,,Assignment/Lab,0.45,"Hands-on coding, exercises, practical labs",,,,
+,,Guides/Review,0.10,"Quiz review, Q&A, code walk-through",,,,
+,,Seminar/Workshop,0.10,Architecture design seminar & live debugging,,,,
+,,Exam,0.10,Practical capstone defense & final exam,,,,
+9,Training Materials & Environments,Text book,Official Spring Framework Documentation & Baeldung Enterprise Guide,,,,,
+,,References,https://spring.io/projects/spring-boot,,,,,
+,,Technical requirements,"JDK 21, IntelliJ IDEA / Eclipse, PostgreSQL / MySQL, Postman",,,,,
+10,Assessment Scheme,Daily Attendance & Participation,1,10,Attendance roll-call & seminar engagement (>= 80%),,,
+,,Hands-on Lab Assignments,3,40,"Evaluate code cleanliness, design patterns & Git commit history",,,
+,,Final Knowledge Quiz,1,15,Multiple-choice online quiz testing Spring internals,,,
+,,Final Practical Examination,1,35,Live coding capstone defense covering full REST & JPA stack,,,
+,,Pass Criteria,6,Overall GPA >= 6.0 / 10; Complete 100% of required labs and defense,,,
+11,Training Delivery Principles,Trainees,Completed entry test; Active engagement in daily labs and pair programming,,,,
+,,Trainer,Senior Java Architect / Technical Lead certified by FA Academy,,,,
+,,Training,"- Trainees self-study prerequisites at start of module
+- Trainer conducts architecture lectures in morning
+- Hands-on practical lab exercises in afternoon",,,,
+,,Re-Test,2,Allow maximum 2 re-takes with a different exam variant,,,
+,,Marking,Trainer grades according to the official FAMS rubric and test checklist,,,,
+,,Waiver Criteria,Students passing the technical fast-track exam with score >= 8.5/10,,,,
+,,,,,,,,
+Java SE Advanced Programming - Training Schedule,,,,,,,,
+Training Unit/Chapter,,Session,Content,Learning Objectives,Delivery Type,Duration (mins),Training Format,Training Materials / Logistics & General Notes
+1,Spring Core & Dependency Injection,1,Spring Boot Framework Overview & Environment Setup,"Understand Spring architecture, auto-configuration and project structure",Concept/Lecture,180,Offline - Sáng (Morning),"Slide-Spring-Intro.pdf, https://spring.io"
+,,2,Inversion of Control (IoC) & Dependency Injection Lab,"Configure beans, @Autowired, @Component and dependency injection",Assignment/Lab,240,Offline - Chiều (Afternoon),Lab-01-Spring-IoC.zip
+,,3,Spring Bean Lifecycle & Configuration Properties,"Master Bean scopes (@Scope, @PostConstruct) and application.yml configuration",Seminar/Workshop,180,Offline - Sáng (Morning),Slide-Bean-Lifecycle.pdf
+2,Spring Data JPA & Hibernate ORM,4,ORM Architecture & Entity Mapping,"Map relational tables with JPA annotations (@Entity, @Table, @OneToMany)",Concept/Lecture,180,Offline - Chiều (Afternoon),Slide-JPA-Entities.pdf
+,,5,Repository Layer & Custom Queries Lab,"Implement JpaRepository, Derived Queries, @Query JPQL and pagination",Assignment/Lab,240,Offline - Sáng (Morning),Lab-02-SpringDataJPA.zip
+,,6,Database Transactions & Isolation Levels,Manage database transactions with @Transactional and concurrency locks,Guides/Review,120,Offline - Chiều (Afternoon),Transaction-Guide.pdf
+3,RESTful Web Services & Security,7,Building Production-grade RESTful APIs,"Design standard REST APIs with @RestController, DTOs, and ResponseEntity",Concept/Lecture,180,Offline - Sáng (Morning),Slide-REST-Architecture.pdf
+,,8,Spring Security Architecture & JWT Authentication,Implement stateless JWT authentication filter and UserDetailsService,Assignment/Lab,240,Offline - Chiều (Afternoon),Lab-03-Security-JWT.zip
+,,9,"Validation, Global Exception Handling & Swagger OpenAPI","Use Bean Validation (@Valid), @ControllerAdvice, and Swagger API docs",Assignment/Lab,180,Offline - Sáng (Morning),Swagger-Best-Practices.pdf
+4,Capstone Project & Evaluation,10,Mid-term Assessment Quiz & Code Quality Audit,Evaluate theoretical grasp and perform automated code quality check (SonarQube),Test/Quiz,120,Offline - Chiều (Afternoon),Quiz-Spring-Midterm.pdf
+,,11,Capstone Practical Project Defense,"Live coding defense, practical database operations & API integration defense",Exam,240,Offline - Sáng (Morning),Capstone-Project-Rubric.pdf
+,,12,Final Evaluation & Grade Review,"Final grade compilation, project sign-off, and feedback retrospective",Exam,180,Offline - Chiều (Afternoon),Final-Score-Report.pdf
+,,,,,,,,
+AUTHORSHIP,,,,,,,,
+,Role,Name,Account,Unit,Notes,,,
+,Course Lead,Le Minh Hoang,hoanglm26,Training Department,HCM26_CPL_JAVA_10 Lead,,,
+,Curriculum Reviewer,Academic QA Board,qa_board,FPT Software Academy,Approved for OJT Course,,,

@@ -27,9 +27,20 @@ backend/.env.local
 backend/.env.*.local
 !backend/.env.example
 
-# === Frontend (Node) ===
+# === Frontend / Node ===
+/node_modules/
+node_modules/
+/package.json
 frontend/node_modules/
 frontend/dist/
+frontend/.env
+
+# === Test artifacts & Playwright reports ===
+playwright-report/
+test-results/
+frontend/playwright-report/
+frontend/test-results/
+/routes_dump.txt
 
 # === Frontend .env (secrets/local config) ===
 # .env.example được commit để người mới biết cần đặt biến nào.
@@ -39,11 +50,16 @@ frontend/.env.*.local
 
 # === Docker .env (secrets) ===
 docker/.env
+docker/git-integration/.env
 
 # === Logs ===
 *.log
 
 /backend.zip
+# Ignore vscode AI rules & Codacy
+.github/
+.codacy/
+
 /backend/compile.log
 /backend/compile_error.txt
 /test.txt
@@ -59,3 +75,48 @@ backend/portability-test.log
 
 # === Runtime uploaded files (khong commit) ===
 uploads/
+
+# === GitHub App private keys ===
+*.pem
+
+# === Local reports, browser evidence, generated test data and backups ===
+# Keep handoff reports, screenshots, fixtures and H2 backup archives local.
+tmp_doc/
+.playwright-mcp/
+test-results/
+playwright-report/
+blob-report/
+backend/export-test/
+backend/login-body.json
+backend/token.txt
+backend/scripts/session-mock-data.mjs
+
+# === Local credentials (examples remain available to the team) ===
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+!.env.*.example
+.secrets/
+secrets/
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+application-local.properties
+application-local.yml
+application-local.yaml
+application-secrets.properties
+application-secrets.yml
+application-secrets.yaml
+
+# === Local test tools & docx scratch files ===
+*.docx
+/swagger_*.png
+/swagger_rendered.png
+/swagger_test.png
+/extracted_images/
+/extracted_minh_hoang/
+/tools/

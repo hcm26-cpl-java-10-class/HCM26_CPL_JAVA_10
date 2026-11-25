@@ -26,7 +26,7 @@ public class ProjectAlertArtifactReadStore {
         Set<UUID> ids = new HashSet<>();
         milestones.forEach(m -> { teams.add(m.getTeamId()); ids.add(m.getId()); });
         var submissions = em.createQuery("select s from MilestoneArtifactSubmission s, Milestone m "
-                + "where m.id=s.milestoneId and m.id in :ids and s.tenantId=m.tenantId "
+                + "where m.id=s.milestone.id and m.id in :ids and s.tenantId=m.tenantId "
                 + "and m.teamId in :teams and m.active=true and s.submittedAt<=:now and "
                 + "((s.teamId=m.teamId and (s.projectId is null or s.projectId=m.projectId)) "
                 + "or (s.teamId is null and s.projectId=m.projectId)) "
@@ -53,7 +53,7 @@ public class ProjectAlertArtifactReadStore {
         if (actors.isEmpty()) return Map.of();
         Map<Long, Instant> latest = new HashMap<>();
         var submissions = em.createQuery("select s from MilestoneArtifactSubmission s, Milestone m "
-                + "where m.id=s.milestoneId and m.tenantId=:tenant and s.tenantId=:tenant and m.teamId=:team "
+                + "where m.id=s.milestone.id and m.tenantId=:tenant and s.tenantId=:tenant and m.teamId=:team "
                 + "and (m.projectId is null or m.projectId=:project) "
                 + "and s.submitterId in :actors and s.submittedAt<=:now and "
                 + "((s.teamId=:team and (s.projectId is null or s.projectId=m.projectId)) "

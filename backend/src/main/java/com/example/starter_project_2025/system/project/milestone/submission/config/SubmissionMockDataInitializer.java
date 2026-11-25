@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.submission.config;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.integration.mock.MockMilestoneData;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
@@ -27,6 +29,7 @@ import java.util.*;
 @Profile("milestone-mock | test")
 @Order(13)
 @RequiredArgsConstructor
+@StartupMutation
 public class SubmissionMockDataInitializer implements CommandLineRunner {
     public static final Long TEAM_ID = MockMilestoneData.TEAM_ID;
     public static final UUID STUDENT_ID = UUID.nameUUIDFromBytes("student@example.com".getBytes(StandardCharsets.UTF_8));
@@ -176,7 +179,7 @@ public class SubmissionMockDataInitializer implements CommandLineRunner {
         for (Object[] value : values) {
             RubricCriterion criterion = (RubricCriterion) value[0];
             RubricCriterionRating rating = (RubricCriterionRating) value[1];
-            review.addEvaluation(criterion.getId(), criterion.getCode(), criterion.getName(), rating.getId(),
+            review.addEvaluation(criterion, criterion.getCode(), criterion.getName(), rating,
                     rating.getLevel().name(), rating.getPercentage(), (BigDecimal) value[2], feedback,
                     criterion.getOrderIndex());
         }

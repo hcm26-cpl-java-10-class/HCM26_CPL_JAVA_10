@@ -33,7 +33,7 @@ public class ArtifactReviewSubmissionSyncService {
     public record ArtifactReviewState(String status, UUID reviewSubmissionId) { }
 
     public UUID synchronize(Milestone milestone, MilestoneArtifactSubmission artifact) {
-        var alreadyLinked = versions.findByArtifactSubmissionId(artifact.getId());
+        var alreadyLinked = versions.findByArtifactSubmission_Id(artifact.getId());
         if (alreadyLinked.isPresent()) return alreadyLinked.get().getSubmission().getId();
         if (artifact.getTeamId() == null) return null;
 
@@ -79,7 +79,7 @@ public class ArtifactReviewSubmissionSyncService {
                     .orElse(null);
             if (version != null) {
                 if (version.getArtifactSubmissionId() == null) {
-                    version.linkArtifactSubmission(artifact.getId());
+                    version.linkArtifactSubmission(artifact);
                     versions.save(version);
                 } else if (!version.getArtifactSubmissionId().equals(artifact.getId())) {
                     throw new com.example.starter_project_2025.system.project.milestone.exception.MilestoneConflictException(
@@ -91,7 +91,7 @@ public class ArtifactReviewSubmissionSyncService {
             return submission.getId();
         }
 
-        version.linkArtifactSubmission(artifact.getId());
+        version.linkArtifactSubmission(artifact);
         version.submit(artifact.getSubmittedAt(), artifact.isSubmittedLate(), artifact.getLatePenaltyPercent());
         submission.submitted(version.getVersionNumber(), artifact.getSubmittedAt());
         milestone.setExecutionStatus(MilestoneExecutionStatus.REVIEW, artifact.getSubmitterId(), artifact.getSubmittedAt());
@@ -114,7 +114,7 @@ public class ArtifactReviewSubmissionSyncService {
             return new ArtifactReviewState(artifact.getStatus().name(), null);
         }
         MilestoneSubmission submission = submissionOpt.get();
-        var linkedVersion = versions.findByArtifactSubmissionId(artifact.getId());
+        var linkedVersion = versions.findByArtifactSubmission_Id(artifact.getId());
 
         if (isLatestForMilestone) {
             if (submission.getStatus() != SubmissionStatus.SUBMITTED
@@ -147,13 +147,13 @@ public class ArtifactReviewSubmissionSyncService {
 
     /** Reads a persisted review result for one immutable artifact version without synchronizing or mutating it. */
     public String persistedStatusFor(MilestoneArtifactSubmission artifact) {
-        return versions.findByArtifactSubmissionId(artifact.getId())
+        return versions.findByArtifactSubmission_Id(artifact.getId())
                 .map(version -> version.getStatus().name())
                 .orElse(artifact.getStatus().name());
     }
 
     public PersistedReview persistedReviewFor(MilestoneArtifactSubmission artifact) {
-        return versions.findByArtifactSubmissionId(artifact.getId())
+        return versions.findByArtifactSubmission_Id(artifact.getId())
                 .flatMap(version -> reviews.findBySubmissionVersionId(version.getId()))
                 .map(review -> new PersistedReview(review.getOverallFeedback(), review.getReviewedAt()))
                 .orElse(new PersistedReview(null, null));

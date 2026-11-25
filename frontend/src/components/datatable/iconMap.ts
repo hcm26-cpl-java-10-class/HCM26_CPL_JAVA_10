@@ -32,6 +32,7 @@ import {
     Filter,
     Folder,
     FolderOpen,
+    GitBranch,
     Globe,
     GraduationCap,
     HardDrive,
@@ -147,6 +148,7 @@ export const iconMap = {
     globe: Globe,
     link: Link,
     "external-link": ExternalLink,
+    "git-branch": GitBranch,
 
     // Time / Info
     calendar: Calendar,

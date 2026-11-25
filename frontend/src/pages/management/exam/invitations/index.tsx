@@ -14,11 +14,6 @@ import {
     TableRow,
 } from "@/components/ui/table";
 
-function formatDate(value?: string | null) {
-    if (!value) return "—";
-    return new Date(value).toLocaleString();
-}
-
 export default function InvitationsLandingPage() {
     const navigate = useNavigate();
 
@@ -83,8 +78,6 @@ export default function InvitationsLandingPage() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Exam</TableHead>
-                                    <TableHead className="w-44">Start</TableHead>
-                                    <TableHead className="w-44">End</TableHead>
                                     <TableHead className="w-20 text-center">Total</TableHead>
                                     <TableHead className="w-24 text-center">Accepted</TableHead>
                                     <TableHead className="w-24 text-center">Anonymous</TableHead>
@@ -100,12 +93,6 @@ export default function InvitationsLandingPage() {
                                                 {row.completed ?? 0} completed ·{" "}
                                                 {row.pending ?? 0} pending
                                             </p>
-                                        </TableCell>
-                                        <TableCell className="text-sm text-muted-foreground">
-                                            {formatDate(row.startTime)}
-                                        </TableCell>
-                                        <TableCell className="text-sm text-muted-foreground">
-                                            {formatDate(row.endTime)}
                                         </TableCell>
                                         <TableCell className="text-center">
                                             <Badge variant="secondary">{row.total ?? 0}</Badge>

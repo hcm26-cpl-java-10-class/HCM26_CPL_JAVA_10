@@ -31,7 +31,7 @@ public class ProjectReportFeedService {
 
     public ActivityPage page(ProjectReportService.Snapshot snapshot, int offset, int limit, Instant before) {
         if (offset < 0 || limit < 1 || limit > 50 || before != null && before.isAfter(snapshot.asOf()))
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Điều kiện tải hoạt động không hợp lệ");
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Invalid activity query");
         Instant asOf = before == null ? snapshot.asOf() : before;
         var all = all(snapshot, asOf);
         int from = Math.min(offset, all.size()), end = (int) Math.min((long) from + limit, all.size());
@@ -45,12 +45,12 @@ public class ProjectReportFeedService {
     public ActivityHistory history(ProjectReportService.Snapshot snapshot, int page, int size,
                                    LocalDate from, LocalDate to, Instant before) {
         if (page < 0 || size < 1 || size > 50 || before != null && before.isAfter(snapshot.asOf()))
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Điều kiện tải lịch sử không hợp lệ");
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Invalid activity history query");
         Instant asOf = before == null ? snapshot.asOf() : before;
         LocalDate last = to == null ? asOf.atZone(settings.zone()).toLocalDate() : to;
         LocalDate first = from == null ? last.minusDays(6) : from;
         if (first.isAfter(last) || first.getYear() < 1 || last.getYear() > 9999)
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc");
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "The start date must be on or before the end date");
         Instant start = first.atStartOfDay(settings.zone()).toInstant();
         Instant end = last.plusDays(1).atStartOfDay(settings.zone()).toInstant();
         var events = all(snapshot, asOf, start, end);
@@ -79,7 +79,7 @@ public class ProjectReportFeedService {
         for (Object[] actor : em.createQuery("select u.id,u.email,u.firstName,u.lastName from User u where u.tenantId=:tenant", Object[].class)
                 .setParameter("tenant", tenant).getResultList()) {
             String name = (Objects.toString(actor[2], "") + " " + Objects.toString(actor[3], "")).trim();
-            actors.put((Long) actor[0], name.isBlank() ? "Người dùng" : name);
+            actors.put((Long) actor[0], name.isBlank() ? "User" : name);
             if (actor[1] != null) uuids.put(UUID.nameUUIDFromBytes(actor[1].toString().getBytes(StandardCharsets.UTF_8)), actors.get(actor[0]));
         }
         Map<String,ActivityRow> events = new LinkedHashMap<>();
@@ -98,7 +98,7 @@ public class ProjectReportFeedService {
                 }
             }
             add(events, "board:" + event.getId(), row, instant(event.getOccurredAt()),
-                    actors.getOrDefault(event.getActorId(), Objects.toString(event.getActorDisplayName(), "Người dùng")),
+                    actors.getOrDefault(event.getActorId(), Objects.toString(event.getActorDisplayName(), "User")),
                     event.getEntityType(), Objects.toString(event.getEntityId(), ""), subject, event.getActionType(),
                     state(event.getBeforeState()), state(event.getAfterState()), href, event.getCorrelationId());
         }
@@ -110,7 +110,7 @@ public class ProjectReportFeedService {
                     .setParameter("items", items.keySet()).setParameter("end", localEnd).getResultList()) {
                 var item = items.get(event.getSprintBacklogId());
                 var row = rows.get(ProjectReportQueryRepository.projectId(item));
-                add(events, "backlog:" + event.getId(), row, instant(event.getCreatedAt()), actors.getOrDefault(event.getActorId(), "Người dùng"),
+                add(events, "backlog:" + event.getId(), row, instant(event.getCreatedAt()), actors.getOrDefault(event.getActorId(), "User"),
                         "BACKLOG", item.getId().toString(), item.getTitle(), "BACKLOG_" + event.getAction(),
                         state(event.getBeforeState()), state(event.getAfterState()), workspace(row), event.getCorrelationId());
             }
@@ -125,7 +125,7 @@ public class ProjectReportFeedService {
                 var parent = items.get(task.getBacklogItem().getId());
                 if (!Objects.equals(ProjectReportQueryRepository.projectId(parent), event[2])) continue;
                 var row = rows.get((Long) event[2]);
-                add(events, "subtask:" + audit.getId(), row, instant(audit.getOccurredAt()), actors.getOrDefault(audit.getActorId(), "Người dùng"),
+                add(events, "subtask:" + audit.getId(), row, instant(audit.getOccurredAt()), actors.getOrDefault(audit.getActorId(), "User"),
                         "SUBTASK", task.getId().toString(), task.getTitle(), "TASK_" + audit.getAction(), state(audit.getBeforeState()),
                         state(audit.getAfterState()), "/tasks/" + task.getId() + "/detail", audit.getCorrelationId());
             }
@@ -148,7 +148,7 @@ public class ProjectReportFeedService {
                         || submission.getProjectId() != null && !Objects.equals(stage.getProjectId(), submission.getProjectId())) continue;
                 var row = rows.get(stage.getProjectId());
                 String actor = uuids.getOrDefault(audit.getActorId(), audit.getActorId().equals(submission.getStudentId())
-                        ? submission.getStudentName() : audit.getActorId().equals(submission.getAssignedReviewerId()) ? submission.getAssignedReviewerName() : "Người dùng");
+                        ? submission.getStudentName() : audit.getActorId().equals(submission.getAssignedReviewerId()) ? submission.getAssignedReviewerName() : "User");
                 String action = audit.getAction();
                 String after = decision(action);
                 add(events, "submission:" + audit.getId(), row, audit.getOccurredAt(), actor, "SUBMISSION", submission.getId().toString(),
@@ -159,14 +159,14 @@ public class ProjectReportFeedService {
             }
             // Legacy submissions also carry real submit timestamps; ignore copies already represented by the version audit.
             for (var artifact : activityQuery("select a from MilestoneArtifactSubmission a where a.tenantId=:tenant "
-                            + "and a.milestoneId in :milestones and a.submittedAt<=:end", MilestoneArtifactSubmission.class,
+                            + "and a.milestone.id in :milestones and a.submittedAt<=:end", MilestoneArtifactSubmission.class,
                     "a.submittedAt", from, until, false)
                     .setParameter("tenant", tenant).setParameter("milestones", milestones.keySet()).setParameter("end", asOf).getResultList()) {
                 var stage = milestones.get(artifact.getMilestoneId());
                 if (submittedArtifacts.contains(artifact.getId()) || !Objects.equals(stage.getTeamId(), artifact.getTeamId())
                         || artifact.getProjectId() != null && !Objects.equals(stage.getProjectId(), artifact.getProjectId())) continue;
                 var row = rows.get(stage.getProjectId());
-                add(events, "artifact:" + artifact.getId(), row, artifact.getSubmittedAt(), uuids.getOrDefault(artifact.getSubmitterId(), "Người dùng"),
+                add(events, "artifact:" + artifact.getId(), row, artifact.getSubmittedAt(), uuids.getOrDefault(artifact.getSubmitterId(), "User"),
                         "SUBMISSION", artifact.getId().toString(), stage.getTitle() + " · v" + artifact.getVersion(), "SUBMISSION_SUBMITTED", null,
                         "SUBMITTED", milestoneLink(row, stage.getId()), null);
             }
@@ -180,7 +180,7 @@ public class ProjectReportFeedService {
                 String after = decision(audit.getAction());
                 if (reviewMirrors.contains(stage.getId() + ":" + after + ":" + audit.getActorId() + ":" + audit.getCreatedAt())) continue;
                 var row = rows.get(stage.getProjectId());
-                add(events, "milestone:" + audit.getId(), row, audit.getCreatedAt(), uuids.getOrDefault(audit.getActorId(), "Hệ thống"),
+                add(events, "milestone:" + audit.getId(), row, audit.getCreatedAt(), uuids.getOrDefault(audit.getActorId(), "System"),
                         "MILESTONE", stage.getId().toString(), stage.getTitle(), audit.getAction(), null, after,
                         milestoneLink(row, stage.getId()), audit.getCorrelationId());
             }

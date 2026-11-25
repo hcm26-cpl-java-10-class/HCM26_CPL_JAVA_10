@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePermissions } from "@/hooks/usePermissions";
+import { SYLLABUS_DEGREE_LEVEL_OPTIONS } from "./syllabusDegreeLevels";
 
 type FieldName =
     | "description"
@@ -22,10 +23,6 @@ type FieldName =
     | "timeAllocation"
     | "studentResponsibilities"
     | "requiredTools";
-
-const DEGREE_LEVEL_OPTIONS = [
-    "Undergraduate", "Postgraduate", "Master's", "Doctoral", "Vocational / Professional",
-] as const;
 
 const fields: {
     key: FieldName;
@@ -158,7 +155,7 @@ export default function GeneralInformationPanel({
             scoringScale: info.scoringScale ?? null,
         });
 
-        setCustomDegree(Boolean(info.degreeLevel) && !DEGREE_LEVEL_OPTIONS.some((v) => v === info.degreeLevel));
+        setCustomDegree(Boolean(info.degreeLevel) && !SYLLABUS_DEGREE_LEVEL_OPTIONS.some((v) => v === info.degreeLevel));
 
         setScoreText(
             info.scoringScale == null
@@ -413,7 +410,7 @@ export default function GeneralInformationPanel({
 
                             {field.key === "degreeLevel" ? (
                                 <div className="space-y-2">
-                                    <Select value={customDegree ? "__custom__" : DEGREE_LEVEL_OPTIONS.some((v) => v === form.degreeLevel) ? form.degreeLevel : "__none__"}
+                                    <Select value={customDegree ? "__custom__" : SYLLABUS_DEGREE_LEVEL_OPTIONS.some((v) => v === form.degreeLevel) ? form.degreeLevel : "__none__"}
                                         onValueChange={(value) => {
                                             setCustomDegree(value === "__custom__");
                                             updateField("degreeLevel", value === "__custom__" || value === "__none__" ? "" : value);
@@ -421,7 +418,7 @@ export default function GeneralInformationPanel({
                                         <SelectTrigger id="info-degreeLevel" className="w-full"><SelectValue placeholder="Choose degree level" /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="__none__">Not selected</SelectItem>
-                                            {DEGREE_LEVEL_OPTIONS.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}
+                                            {SYLLABUS_DEGREE_LEVEL_OPTIONS.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}
                                             <SelectItem value="__custom__">Other / custom</SelectItem>
                                         </SelectContent>
                                     </Select>

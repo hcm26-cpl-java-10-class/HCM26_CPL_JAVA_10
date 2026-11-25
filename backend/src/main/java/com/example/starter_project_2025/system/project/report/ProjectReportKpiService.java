@@ -27,7 +27,6 @@ public class ProjectReportKpiService {
     public record Result(Overview overview, List<DeliveryRow> deliveries, List<RiskRow> risks) { }
     private final EntityManager em;
     private final ProjectReportSettings settings;
-    private final ProjectReportKpiActivityService activity;
 
     public Overview overview(ProjectReportService.Snapshot snapshot) { return evaluate(snapshot).overview(); }
 
@@ -56,7 +55,7 @@ public class ProjectReportKpiService {
         Set<Long> projects = active.stream().filter(row -> row.workspaceId() != null && activeSpaces.contains(row.workspaceId())
                         || row.id().equals(row.masterId()) && row.teamId() == null && workspaceMasters.contains(row.masterId()))
                 .map(SubProject::id).collect(Collectors.toSet());
-        if (projects.isEmpty()) return new Result(new Overview(masters, teams, milestones, artifacts, 0, 0, 0, 0), List.of(), List.of());
+        if (projects.isEmpty()) return new Result(new Overview(masters, teams, milestones, artifacts, 0, 0, 0), List.of(), List.of());
 
         Map<UUID,Milestone> stages = new LinkedHashMap<>();
         projects.forEach(id -> source.milestones().getOrDefault(id, List.of()).forEach(stage -> stages.put(stage.getId(), stage)));
@@ -65,7 +64,7 @@ public class ProjectReportKpiService {
         Map<UUID,String> latest = artifactStates(tenant, stages, source, submissions);
         Map<UUID,MilestoneArtifactSubmission> legacy = new HashMap<>();
         if (!stages.isEmpty()) for (var artifact : em.createQuery("select a from MilestoneArtifactSubmission a where a.tenantId=:tenant "
-                        + "and a.milestoneId in :ids order by a.submittedAt desc,a.version desc,a.id", MilestoneArtifactSubmission.class)
+                        + "and a.milestone.id in :ids order by a.submittedAt desc,a.version desc,a.id", MilestoneArtifactSubmission.class)
                 .setParameter("tenant", tenant).setParameter("ids", stages.keySet()).getResultList()) {
             var stage = stages.get(artifact.getMilestoneId());
             if (sameScope(stage, artifact.getProjectId(), artifact.getTeamId())) legacy.putIfAbsent(stage.getId(), artifact);
@@ -95,13 +94,13 @@ public class ProjectReportKpiService {
             Integer versionNumber = null;
             if (currentSubmission) versionNumber = submission.getCurrentVersionNumber();
             else if (submission == null && legacyArtifact != null && !"DRAFT".equals(artifact)) versionNumber = Math.toIntExact(legacyArtifact.getVersion());
-            String attention = !risk ? "NONE" : Set.of("REJECTED", "CHANGES_REQUESTED").contains(state) ? "REVISION"
+            String attention = !risk ? "NONE" : Set.of("REJECTED", "CHANGES_REQUESTED").contains(state) ? state
                     : stage.getDeadline() != null && stage.getDeadline().isBefore(now) ? "OVERDUE" : "DUE_SOON";
             int checklistTotal = version == null ? stage.getChecklistItems().size() : version.getChecklist().size();
             int checklistDone = version == null ? (int) stage.getChecklistItems().stream().filter(item -> item.isCompleted()).count()
                     : (int) version.getChecklist().stream().filter(item -> item.isCompleted()).count();
             deliveries.add(new DeliveryRow(stage.getId(), stage.getTitle(), row.id(), row.code(), row.name(), row.masterId(),
-                    row.masterName(), row.teamId(), row.teamName(), stage.isMandatory(), state, artifact,
+                    row.masterName(), row.classId(), row.className(), row.teamId(), row.teamName(), stage.isMandatory(), state, artifact,
                     currentSubmission ? submission.getId() : null, versionNumber,
                     stage.getDeadline(), "DRAFT".equals(artifact) ? null : submission == null ? source.submissions().containsKey(stage.getId())
                     ? source.submissions().get(stage.getId()).latestAt() : null : submission.getSubmittedAt(),
@@ -112,31 +111,17 @@ public class ProjectReportKpiService {
 
         Map<Long,SprintBacklog> items = new LinkedHashMap<>();
         projects.forEach(id -> source.backlogs().getOrDefault(id, List.of()).forEach(item -> items.put(item.getId(), item)));
-        var overdueItems = items.values().stream().filter(item -> overdue(item, now)).toList();
-        overdueItems.forEach(item -> {
-            var row = rows.get(ProjectReportQueryRepository.projectId(item));
-            riskRows.add(new RiskRow("backlog:" + item.getId(), "TASK", row.id(), row.name(), row.teamName(), item.getTitle(),
-                    item.getEndDate().atZone(settings.zone()).toInstant(), "OVERDUE"));
-        });
-        var subtasks = overdueSubtasks(tenant, projects, items, rows, now);
-        riskRows.addAll(subtasks);
-        var inactive = activity.inactiveSignals(source, projects, items.values(), tenant, now);
-        inactive.forEach(member -> {
-            var contexts = rows.values().stream().filter(row -> member.teamIds().contains(row.teamId())).toList();
-            riskRows.add(new RiskRow("member:" + member.userId(), "MEMBER", contexts.size() == 1 ? contexts.getFirst().id() : null,
-                    contexts.stream().map(SubProject::name).distinct().sorted().collect(Collectors.joining(", ")),
-                    contexts.stream().map(SubProject::teamName).filter(Objects::nonNull).distinct().sorted().collect(Collectors.joining(", ")),
-                    member.name(), null, "INACTIVE"));
-        });
+        long overdueItems = items.values().stream().filter(item -> overdue(item, now)).count();
+        long overdueSubtasks = countOverdueSubtasks(tenant, projects, items, now);
         deliveries.sort(Comparator.comparing(DeliveryRow::deadline, Comparator.nullsLast(Comparator.naturalOrder())).thenComparing(DeliveryRow::milestoneId));
-        return new Result(new Overview(masters, teams, milestones, artifacts, overdueItems.size(), subtasks.size(), milestoneRisks, inactive.size()),
+        return new Result(new Overview(masters, teams, milestones, artifacts, overdueItems, overdueSubtasks, milestoneRisks),
                 List.copyOf(deliveries), List.copyOf(riskRows));
     }
 
     private Set<UUID> waivers(Long tenant, Map<UUID,Milestone> stages) {
         if (stages.isEmpty()) return Set.of();
         Set<UUID> result = new HashSet<>();
-        for (var waiver : em.createQuery("select w from MilestoneWaiver w where w.tenantId=:tenant and w.milestoneId in :ids", MilestoneWaiver.class)
+        for (var waiver : em.createQuery("select w from MilestoneWaiver w where w.tenantId=:tenant and w.milestone.id in :ids", MilestoneWaiver.class)
                 .setParameter("tenant", tenant).setParameter("ids", stages.keySet()).getResultList()) {
             var stage = stages.get(waiver.getMilestoneId());
             if (Objects.equals(stage.getProjectId(), waiver.getProjectId()) && Objects.equals(stage.getTeamId(), waiver.getTeamId()))
@@ -208,10 +193,9 @@ public class ProjectReportKpiService {
         return item.getSprint() == null || Boolean.TRUE.equals(item.getSprint().getIsActive()) && item.getSprint().getStatus() == SprintStatus.ACTIVE;
     }
 
-    private List<RiskRow> overdueSubtasks(Long tenant, Set<Long> projects, Map<Long,SprintBacklog> items,
-                                         Map<Long,SubProject> rows, Instant now) {
-        if (items.isEmpty()) return List.of();
-        List<RiskRow> result = new ArrayList<>();
+    private long countOverdueSubtasks(Long tenant, Set<Long> projects, Map<Long,SprintBacklog> items, Instant now) {
+        if (items.isEmpty()) return 0;
+        long count = 0;
         for (Object[] row : em.createQuery("select t,p.projectId from ProjectTask t,TaskAlertProjectLink p "
                         + "where t.isActive=true and t.backlogItem.id in :items and t.projectId=p.id "
                         + "and p.tenantId=:tenant and p.projectId in :projects", Object[].class)
@@ -221,12 +205,10 @@ public class ProjectReportKpiService {
             if (Objects.equals(ProjectReportQueryRepository.projectId(parent), row[1]) && activeSprint(parent)
                     && (task.getStatus() == TaskStatus.TODO || task.getStatus() == TaskStatus.IN_PROGRESS)
                     && task.getDeadline() != null && task.getDeadline().isBefore(now)) {
-                var context = rows.get((Long) row[1]);
-                result.add(new RiskRow("task:" + task.getId(), "TASK", context.id(), context.name(), context.teamName(),
-                        task.getTitle(), task.getDeadline(), "OVERDUE"));
+                count++;
             }
         }
-        return List.copyOf(result);
+        return count;
     }
 
     private Map<String,Long> zeros(String... states) {

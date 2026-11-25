@@ -1,7 +1,8 @@
-import { useCallback, useState } from "react";
+import { Fragment, useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, BarChart3, Hash, RefreshCw, Users } from "lucide-react";
+import { ArrowLeft, BarChart3, GitBranch, Hash, RefreshCw, Users } from "lucide-react";
+import { FaGithub } from "react-icons/fa";
 import { workspaceApi } from "@/api/features/workspace.api";
 import { projectAssignmentApi } from "@/api/features/project-assignment.api";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -27,6 +28,12 @@ import { WorkspaceProjectHierarchy, flattenWorkspaceProjects } from "./Workspace
 import { WorkspaceResourcesPanel } from "./WorkspaceResourcesPanel";
 import { WorkspaceAlertsPanel } from "@/pages/management/alerts/WorkspaceAlertsPanel";
 import ProjectAnalyticsPage from "@/pages/management/analytics/project/ProjectAnalyticsPage";
+import { GitActivityWorkspacePanel } from "./GitActivityWorkspacePanel";
+import { clearGitHubTabParams, GITHUB_TAB, openGitHubTabParams, type GitHubTabTarget } from "@/pages/management/git-integration/github-tab.params";
+import { WorkspaceGitHubPanel } from "./WorkspaceGitHubPanel";
+import { ProjectFinalizeAction } from "./ProjectFinalizeAction";
+
+const TAB_TRIGGER = "h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none";
 
 export default function WorkspaceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -40,8 +47,11 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   // Tolerate a trailing slash (`?tab=analytic/`) and both spellings of the tab.
   const selected = (params.get("tab") ?? "overview").replace(/\/+$/, "");
   const isAnalyticsTab = selected === "analytics" || selected === "analytic";
+  const isGitActivityTab = selected === "git-activity";
+  // WS-GH-01: like Analytics, the GitHub tab is a frontend-only view of the workspace project.
+  const isGitHubTab = selected === GITHUB_TAB;
   const tab: WorkspaceSectionKey = WORKSPACE_SECTIONS.find(section => section.id === selected)?.id ?? "overview";
-  const activeTab = isAnalyticsTab ? "analytics" : tab;
+  const activeTab = isAnalyticsTab ? "analytics" : isGitHubTab ? GITHUB_TAB : isGitActivityTab ? "git-activity" : tab;
   const [blocked, setBlocked] = useState<WorkspaceSectionKey>();
   const [showAccess, setShowAccess] = useState(false);
   const validId = Number.isSafeInteger(workspaceId) && workspaceId > 0;
@@ -59,13 +69,21 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
     // US-ANL-001: Analytics is a read-only view embedded in the workspace
     // shell, so the workspace id stays in the URL and its project is resolved
     // from the workspace context.
-    if (value === "analytics") {
-      setParams(previous => { const next = new URLSearchParams(previous); next.set("tab", "analytic"); return next; }, { replace: true });
+    if (value === GITHUB_TAB) {
+      openGitHub({ view: "insights" });
       return;
     }
-    setParams(previous => { const next = new URLSearchParams(previous);
+    // Leaving the GitHub tab drops its filters so they do not leak into other tabs' URLs.
+    if (value === "analytics") {
+      setParams(previous => { const next = clearGitHubTabParams(previous); next.set("tab", "analytic"); return next; }, { replace: true });
+      return;
+    }
+    setParams(previous => { const next = clearGitHubTabParams(previous);
       if (value === "overview") next.delete("tab"); else next.set("tab", value); return next;
     }, { replace: true });
+  }
+  function openGitHub(target: GitHubTabTarget) {
+    setParams(previous => openGitHubTabParams(previous, target), { replace: true });
   }
   const context = navigation.data?.workspaceId === workspaceId ? navigation.data : undefined;
   const hierarchy = useQuery({
@@ -79,12 +97,14 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   const invalidProject = requestedProject !== null && hierarchy.isSuccess && !project;
   const projectId = project?.id ?? context?.projectId;
   const workspaceReadOnly = !!hierarchy.data?.readOnly;
-  const projectReadOnly = workspaceReadOnly || ["COMPLETED", "CANCELLED"].includes(project?.status ?? context?.projectStatus ?? "");
+  // The heading, read-only state and finalize action follow the project selected in the hierarchy.
+  const selectedStatus = project?.status ?? context?.projectStatus ?? undefined;
+  const projectReadOnly = workspaceReadOnly || ["COMPLETED", "CANCELLED"].includes(selectedStatus ?? "");
   const projectScoped = hierarchy.data?.assignmentId != null || workspaceReadOnly;
   const isMaster = hierarchy.data?.assignmentId != null && project?.parentProjectId == null;
   const sharedMasterSelected = isMaster && hierarchy.data?.mode === "SPLIT";
   const milestoneProjects = isMaster ? projects : projects.filter(item => item.parentProjectId != null);
-  const showAllMilestoneProjects = projectScoped && milestoneProjects.length > 1;
+  const showAllMilestoneProjects = projectScoped && isMaster && milestoneProjects.length > 1;
   function selectProject(projectId: number) {
     setParams(previous => { const next = new URLSearchParams(previous); next.set("project", String(projectId)); return next; }, { replace: true });
   }
@@ -101,6 +121,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   const current = sections.find(item => item.key === tab);
   const members = sections.find(item => item.key === "members");
   const canViewAnalytics = hasPermission("PROJECT_ANALYTICS_READ");
+  const canViewGitActivity = hasPermission("WORKSPACE_READ") || hasPermission("VIEW_PROJECT_WORKSPACE");
   const hasProject = Number.isSafeInteger(projectId) && Number(projectId) > 0;
   const denied = blocked === tab || !current?.canRead;
   const validContext = context && Number.isSafeInteger(context.teamId);
@@ -109,7 +130,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
     await Promise.all(["workspace-detail", "workspace-members", "workspace-section", "workspace-resources"].map(key =>
       queryClient.invalidateQueries({ queryKey: [key, workspaceId] })));
   }
-  return <MainLayout contentClassName="bg-slate-50/70 dark:bg-background" pathName={{ management: "Management", workspaces: "Workspace",
+  return <MainLayout contentClassName="bg-slate-50/70 dark:bg-background" ignorePaths={["management", "workspaces"]} pathName={{
     [String(workspaceId)]: navigation.isError ? "Workspace details" : context?.projectName ?? context?.teamName ?? "Workspace details" }}>
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
@@ -130,17 +151,27 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
               </div>
               <h1 className="break-words text-xl font-bold leading-8 tracking-tight sm:text-2xl">{context.projectName ?? "Team workspace"}</h1>
             </div>
-            {context.projectStatus && <div className="pt-1 sm:pt-6"><WorkspaceStatusBadge status={context.projectStatus} colored /></div>}
+            {(selectedStatus || hasProject) && <div className="flex flex-wrap items-center justify-end gap-2 pt-1 sm:pt-6">
+              {selectedStatus && <WorkspaceStatusBadge status={selectedStatus} colored />}
+              {hasProject && !workspaceReadOnly && <ProjectFinalizeAction key={projectId} projectId={projectId!}
+                teamId={project ? project.teamId : context.teamId} hierarchical={hierarchy.data?.assignmentId != null} />}
+            </div>}
           </section>
           {hierarchy.data && <WorkspaceProjectHierarchy data={hierarchy.data} selectedId={projectId} onSelect={selectProject} />}
           <Tabs value={activeTab} onValueChange={changeTab} className="min-w-0 gap-5">
             <div className="min-w-0 overflow-x-auto overflow-y-hidden border-b"><TabsList aria-label="Workspace sections"
-              className="h-10 w-max min-w-full justify-start gap-1 rounded-none bg-transparent p-0 align-top group-data-[orientation=horizontal]/tabs:h-10">{WORKSPACE_SECTIONS.map(({ id, label, icon: Icon }) =>
-              <TabsTrigger key={id} value={id} disabled={!sections.find(item => item.key === id)?.canRead}
-                className="h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none"><Icon className="size-4" />{label}</TabsTrigger>)}
+              className="h-10 w-max min-w-full justify-start gap-1 rounded-none bg-transparent p-0 align-top group-data-[orientation=horizontal]/tabs:h-10">{WORKSPACE_SECTIONS.map(({ id, label, icon: Icon }) => <Fragment key={id}>
+              <TabsTrigger value={id} disabled={!sections.find(item => item.key === id)?.canRead}
+                className={TAB_TRIGGER}><Icon className="size-4" />{label}</TabsTrigger>
+              {id === "backlog" && hasProject && <TabsTrigger value={GITHUB_TAB} title="Commits and pull requests of the project's GitHub repository"
+                className={TAB_TRIGGER}><FaGithub className="size-4" aria-hidden="true" />GitHub</TabsTrigger>}
+            </Fragment>)}
               {hasProject && <TabsTrigger value="analytics" disabled={!canViewAnalytics}
                 title={canViewAnalytics ? "Open read-only project analytics" : "Analytics access is not granted for your role"}
-                className="h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none"><BarChart3 className="size-4" />Analytics</TabsTrigger>}</TabsList></div>
+                className="h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none"><BarChart3 className="size-4" />Analytics</TabsTrigger>}
+              {hasProject && <TabsTrigger value="git-activity" disabled={!canViewGitActivity}
+                title={canViewGitActivity ? "Open read-only Git Activity" : "Workspace access is not granted for your role"}
+                className="h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none"><GitBranch className="size-4" />Git Activity</TabsTrigger>}</TabsList></div>
             <TabsContent key={activeTab} value={activeTab} className="space-y-5">
               {isAnalyticsTab ? (
                 hasProject && canViewAnalytics ? (
@@ -148,9 +179,16 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                     <ProjectAnalyticsPage projectId={projectId!} />
                   </EmbeddedLayoutContext.Provider>
                 ) : <WorkspaceSectionState denied retry={reloadAccess} />
-              ) : denied || !current ? <WorkspaceSectionState denied retry={reloadAccess} />
+              ) : isGitHubTab ? (
+                hasProject ? <WorkspaceGitHubPanel key={projectId} projectId={projectId!} assignedProjectIds={projects.map(item => item.id)} />
+                  : <WorkspaceSectionState denied retry={reloadAccess} />
+              ) : isGitActivityTab ? (hasProject && canViewGitActivity
+                  ? <GitActivityWorkspacePanel key={projectId} workspaceId={workspaceId} projectId={projectId!} projectScope={hierarchy.data} />
+                  : <WorkspaceSectionState denied retry={reloadAccess} />)
+                : denied || !current ? <WorkspaceSectionState denied retry={reloadAccess} />
                 : tab === "overview" ? <WorkspaceOverviewSection workspaceId={workspaceId} projectId={context.projectId} selectedProject={projectScoped ? project : undefined}
                     teamId={context.teamId} canViewMembers={!!members?.canRead} onViewMembers={() => changeTab("members")}
+                    onOpenGitHub={hasProject ? openGitHub : undefined}
                     onViewAccess={() => setShowAccess(true)}
                     onAccessChanged={reloadAccess} />
                 : tab === "members" ? <WorkspaceMembersPanel workspaceId={workspaceId} teamId={context.teamId}
@@ -176,8 +214,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                     canDelete={!projectReadOnly && hasPermission("SPRINT_BACKLOG_DELETE")}
                     onCreateWorkItem={sections.find(item => item.key === "backlog")?.canRead ? () => changeTab("backlog") : undefined} />
                 : tab === "backlog" ? <WorkspaceBacklogPanel key={projectId} workspaceId={workspaceId} projectId={projectId}
-                    teamId={context.teamId} projectName={project?.name ?? context.projectName}
-                    taskKeyPrefix={context.taskKeyPrefix} readOnly={projectReadOnly} />
+                    teamId={context.teamId} readOnly={projectReadOnly} aggregateProjects={isMaster} />
                 : tab === "activity" ? <WorkspaceProjectLogsPanel workspaceId={workspaceId} readOnly={projectReadOnly} />
                 : tab === "feedback" ? <WorkspaceAlertsPanel workspaceId={workspaceId} teamId={context.teamId} />
                 : <WorkspaceBusinessSectionPanel key={workspaceId + ":" + tab} workspaceId={workspaceId}
@@ -190,7 +227,9 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
       <Dialog open={showAccess} onOpenChange={setShowAccess}>
         <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
           <DialogHeader><DialogTitle>Quyền truy cập Workspace</DialogTitle><DialogDescription>Các mục có thể truy cập theo vai trò đang sử dụng.</DialogDescription></DialogHeader>
-          <ul className="divide-y rounded-lg border">{WORKSPACE_SECTIONS.map(({ id, label, icon: Icon }) => <li key={id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"><span className="flex items-center gap-2 text-xs"><Icon className="size-4 text-muted-foreground" />{label}</span><Badge variant={sections.find(item => item.key === id)?.canRead ? "secondary" : "outline"} className="text-[10px]">{sections.find(item => item.key === id)?.canRead ? "Có thể xem" : "Không có quyền"}</Badge></li>)}</ul>
+          <ul className="divide-y rounded-lg border">{WORKSPACE_SECTIONS.map(({ id, label, icon: Icon }) => <li key={id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"><span className="flex items-center gap-2 text-xs"><Icon className="size-4 text-muted-foreground" />{label}</span><Badge variant={sections.find(item => item.key === id)?.canRead ? "secondary" : "outline"} className="text-[10px]">{sections.find(item => item.key === id)?.canRead ? "Có thể xem" : "Không có quyền"}</Badge></li>)}
+            {hasProject && <li className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"><span className="flex items-center gap-2 text-xs"><GitBranch className="size-4 text-muted-foreground" />Git Activity</span><Badge variant={canViewGitActivity ? "secondary" : "outline"} className="text-[10px]">{canViewGitActivity ? "Có thể xem" : "Không có quyền"}</Badge></li>}
+          </ul>
         </DialogContent>
       </Dialog>
     </div>

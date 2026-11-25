@@ -111,7 +111,7 @@ public class ProjectReportQueryRepository {
         Map<UUID,Submitted> submissions = new HashMap<>();
         if(!milestoneIds.isEmpty()) for(Object[] row : em.createQuery("select m.id,max(s.submittedAt),"
                 + "sum(case when s.submittedLate=true or s.submittedAt>m.deadline then 1 else 0 end) "
-                + "from MilestoneArtifactSubmission s,Milestone m where s.milestoneId=m.id and s.tenantId=:tenant "
+                + "from MilestoneArtifactSubmission s,Milestone m where s.milestone.id=m.id and s.tenantId=:tenant "
                 + "and m.tenantId=:tenant and m.id in :ids and (s.teamId=m.teamId or (s.teamId is null and m.teamId is null)) "
                 + "and (s.projectId is null or s.projectId=m.projectId) group by m.id",Object[].class)
                 .setParameter("tenant",actor.tenantId()).setParameter("ids",milestoneIds).getResultList())

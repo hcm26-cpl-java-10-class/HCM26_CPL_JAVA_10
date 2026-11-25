@@ -3,7 +3,7 @@ import type { ReportFilters, ReportStatus, ReportRisk } from "@/types/features/p
 export const reportDefaults: ReportFilters = { risk: "ALL", includeCancelled: false, page: 0, size: 10 };
 const ids = ["programId", "cohortId", "classId", "mentorId", "templateId", "sourceVersionId", "teamId", "projectId", "masterId", "workSprintId"] as const;
 const statuses = new Set(["DRAFT", "PLANNING", "ACTIVE", "COMPLETED", "CANCELLED"]);
-const risks = new Set(["ALL", "OVERDUE", "INACTIVE_MEMBERS", "NEEDS_ATTENTION", "LATE_SUBMISSION"]);
+const risks = new Set(["ALL", "OVERDUE", "NEEDS_ATTENTION", "LATE_SUBMISSION"]);
 const keys = [...ids, "status", "masterStatus", "risk", "includeCancelled", "createdFrom", "createdTo", "q", "page", "size"];
 
 export function readReportFilters(params: URLSearchParams): ReportFilters {

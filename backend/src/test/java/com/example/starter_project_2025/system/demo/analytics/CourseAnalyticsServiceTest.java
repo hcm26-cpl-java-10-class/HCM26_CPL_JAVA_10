@@ -2,7 +2,6 @@ package com.example.starter_project_2025.system.demo.analytics;
 
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.security.UserPrincipal;
-import com.example.starter_project_2025.system.demo.analytics.CourseAnalyticsDTO.*;
 import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.department.Department;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
@@ -10,9 +9,9 @@ import com.example.starter_project_2025.system.demo.lesson.Lesson;
 import com.example.starter_project_2025.system.demo.lesson.LessonContentType;
 import com.example.starter_project_2025.system.demo.progress.LessonProgress;
 import com.example.starter_project_2025.system.demo.section.Section;
-import com.example.starter_project_2025.system.exam.domain.Exam;
-import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
-import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
+import com.example.starter_project_2025.system.exam.core.domain.Exam;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttempt;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.user.User;
 import org.junit.jupiter.api.AfterEach;
@@ -36,6 +35,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
+import com.example.starter_project_2025.system.demo.analytics.CourseAnalyticsDTO.*;
 
 /**
  * Test cho {@link CourseAnalyticsService}.

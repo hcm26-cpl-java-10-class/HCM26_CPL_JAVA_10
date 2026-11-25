@@ -1,0 +1,11 @@
+﻿Code,Name,Version,Technical Group,Duration (Hours),Description,Status
+CPL10_ERR_TEST_01,Valid Sample Row Before Error Checks,1.0,Backend,20,Row 1 is valid; remaining rows test strict rollback validation,ACTIVE
+,Missing Topic Code Error Case,1.0,Java,16,Should fail because Code is required,ACTIVE
+CPL10_ERR_NO_NAME,,1.0,Frontend,20,Should fail because Name is required,ACTIVE
+CPL10_ERR_NO_VER,Missing Version Error Case,,Database,18,Should fail because Version is required,ACTIVE
+CPL10_ERR_NEG_DUR,Negative Duration Error Case,1.0,DevOps,-8,Should fail because duration <= 0,ACTIVE
+CPL10_ERR_ZERO_DUR,Zero Duration Error Case,1.0,Testing,0,Should fail because duration must be > 0,ACTIVE
+CPL10_ERR_MAX_DUR,Excessive Duration (>1000h) Error Case,1.0,Cloud,1200,Should fail because duration > 1000 hours,ACTIVE
+CPL10_ERR_NUM_GROUP,Numeric Technical Group Error Case,1.0,12345,24,Should fail because Technical Group cannot be only numbers,ACTIVE
+CPL10_ERR_TEST_01,Duplicate Code & Version In File Error Case,1.0,Backend,20,Duplicates row 1 (CPL10_ERR_TEST_01 v1.0) inside same file,ACTIVE
+JAVA_CORE,Duplicate Existing DB Topic Error Case,1.0,Java,40,Duplicates seeded JAVA_CORE v1.0 already existing in H2 DB,ACTIVE

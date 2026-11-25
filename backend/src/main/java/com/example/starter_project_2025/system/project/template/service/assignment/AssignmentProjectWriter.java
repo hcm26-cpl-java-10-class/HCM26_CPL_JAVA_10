@@ -54,6 +54,7 @@ public class AssignmentProjectWriter {
     private final TenantSettingsPort tenantSettings;
     private final RubricVersionRepository rubrics;
     private final SprintBacklogRepository backlog;
+    private final com.example.starter_project_2025.system.project.sprint_backlog.key.BacklogTaskKeyService taskKeys;
     private final WorkspaceRepository workspaces;
     private final WorkspaceProjectScope scope;
     private final TeamSubprojectAssignmentRepository mappings;
@@ -174,7 +175,7 @@ public class AssignmentProjectWriter {
             UUID rubricId = rubric(item, assignment.getTenantId());
             Milestone milestone = Milestone.create(assignment.getTenantId(), project.getId(), project.getTeamId(),
                     item.path("title").asText(), nullableText(item, "description"), deadline,
-                    item.path("mandatory").asBoolean(true), rubricId, null,
+                    item.path("mandatory").asBoolean(true), rubrics.referenceOrNull(rubricId), null,
                     allowLate ? LatePolicyType.ALLOW_LATE : LatePolicyType.NO_LATE,
                     allowLate ? deadline.plus(late.path("maxLateDays").asLong(), ChronoUnit.DAYS) : null,
                     allowLate ? late.path("penaltyPerDayPercent").decimalValue() : null, actor, publishedAt);
@@ -219,6 +220,8 @@ public class AssignmentProjectWriter {
                     .description(nullableText(item, "description")).status(SprintBacklogStatus.TODO)
                     .workType(SprintBacklogWorkType.STORY).priority(SprintBacklogPriority.MEDIUM).isActive(true).version(0L).build());
         }
+        // Workspaces are created after the hierarchy: the items get the default prefix (FA).
+        taskKeys.assignAll(copies, null);
         backlog.saveAll(copies);
     }
 

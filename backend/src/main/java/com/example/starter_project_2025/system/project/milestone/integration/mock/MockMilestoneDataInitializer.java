@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.integration.mock;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.milestone.domain.LatePolicyType;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
@@ -25,12 +27,14 @@ import java.util.UUID;
 @Component
 @Profile("milestone-mock | test")
 @RequiredArgsConstructor
+@StartupMutation
 public class MockMilestoneDataInitializer implements CommandLineRunner {
 
     private static final UUID TEACHER_ACTOR_ID = UUID.nameUUIDFromBytes(
             "teacher@example.com".getBytes(StandardCharsets.UTF_8));
 
     private final MilestoneRepository milestoneRepository;
+    private final com.example.starter_project_2025.system.project.rubric.repository.RubricVersionRepository rubricVersions;
     private final Clock milestoneClock;
     private final com.example.starter_project_2025.system.project.workspace.config.LegacyH2ProjectSchemaMigration legacyMigration;
 
@@ -212,7 +216,7 @@ public class MockMilestoneDataInitializer implements CommandLineRunner {
                 sample.description(),
                 sample.deadline(),
                 sample.mandatory(),
-                sample.rubricId(),
+                rubricVersions.referenceOrNull(sample.rubricId()),
                 sample.reviewerId(),
                 sample.latePolicyType(),
                 sample.lateUntil(),

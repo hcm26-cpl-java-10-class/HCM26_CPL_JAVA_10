@@ -12,6 +12,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface RubricVersionRepository extends JpaRepository<RubricVersion, UUID> {
+    /** Lazy reference used to link a milestone to its rubric version without loading it; {@code null} stays {@code null}. */
+    default RubricVersion referenceOrNull(UUID id) {
+        return id == null ? null : getReferenceById(id);
+    }
+
     @EntityGraph(attributePaths = {"rubric", "criteria"})
     Optional<RubricVersion> findByIdAndRubricTenantId(UUID id, UUID tenantId);
 

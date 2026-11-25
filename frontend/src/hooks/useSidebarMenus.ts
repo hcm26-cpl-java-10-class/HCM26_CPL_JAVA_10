@@ -12,6 +12,7 @@ import {
     ADMIN_ROLE,
     STUDENT_ROLE,
 } from "@/utils/rbac.utils";
+import { resolveMenuPermission } from "@/router/menu-permission.utils";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
@@ -72,20 +73,25 @@ export function useActiveModuleGroups(enabled = true) {
             ]);
 
             const groups = groupPage.content ?? groupPage.items ?? [];
-            const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) => {
-                const url = module.url ?? "";
-                const isExcludedPath = [
-                    "/management/project-templates",
-                    "/management/project-teams",
-                ].some((path) => url.startsWith(path));
+            const modules = (modulePage.content ?? modulePage.items ?? [])
+                .map((module) => ({
+                    ...module,
+                    requiredPermission: resolveMenuPermission(module.url, module.requiredPermission),
+                }))
+                .filter((module) => {
+                    const url = module.url ?? "";
+                    const isExcludedPath = [
+                        "/management/project-templates",
+                        "/management/project-teams",
+                    ].some((path) => url.startsWith(path));
 
-                return (
-                    !isExcludedPath &&
-                    url !== "/tasks" && url !== "/management/tasks" &&
-                    url !== "/team-allocation" &&
-                    canAccessByPermission(module.requiredPermission, hasPermission)
-                );
-            });
+                    return (
+                        !isExcludedPath &&
+                        url !== "/tasks" && url !== "/management/tasks" &&
+                        url !== "/team-allocation" &&
+                        canAccessByPermission(module.requiredPermission, hasPermission)
+                    );
+                });
 
             const groupedModules = modules.reduce<Record<string, SidebarModule[]>>((acc, module) => {
                 if (!module.moduleGroupId) return acc;
@@ -291,6 +297,19 @@ export function useActiveModuleGroups(enabled = true) {
                     id: 100005, moduleGroupId: projectGroupId, title: "Alerts", name: "Alerts",
                     url: "/management/alerts", icon: "bell", displayOrder: 6,
                     requiredPermission: "PROJECT_ALERT_READ", isActive: true,
+                });
+            }
+
+            // US-GIT-001: Git Integration hub (no Module row is seeded for it yet).
+            if (
+                !modules.some((module) => module.url === "/git-integration") &&
+                (hasPermission("GIT_INTEGRATION_READ") || hasPermission("GIT_INTEGRATION_MANAGE"))
+            ) {
+                groupedModules[projectGroupId].push({
+                    id: 100008, moduleGroupId: projectGroupId, title: "Git Integration", name: "Git Integration",
+                    url: "/git-integration", icon: "git-branch", displayOrder: 5.5,
+                    requiredPermission: hasPermission("GIT_INTEGRATION_READ") ? "GIT_INTEGRATION_READ" : "GIT_INTEGRATION_MANAGE",
+                    isActive: true,
                 });
             }
 

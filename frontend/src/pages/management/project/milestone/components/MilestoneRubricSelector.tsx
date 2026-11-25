@@ -69,7 +69,7 @@ export function MilestoneRubricSelector({
               </CardDescription>
             </div>
             {allowManage && <Button asChild type="button" variant="ghost" size="sm" className="w-fit shrink-0">
-              <a href="/rubrics" target="_blank" rel="noreferrer">
+              <a href="/rubrics" target="_blank" rel="opener">
                 Manage rubrics <ExternalLink className="size-4" />
               </a>
             </Button>}

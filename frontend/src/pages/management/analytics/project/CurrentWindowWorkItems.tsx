@@ -9,14 +9,16 @@ import type { ProjectAnalyticsItemType, ProjectAnalyticsScope, ProjectAnalyticsW
 import type { SprintBacklogDTO } from "@/types";
 import {
   assigneeInitialsOf,
+  backlogItemKey,
   backlogStatusMeta,
-  projectKeyOf,
 } from "@/pages/management/backlog/backlog.constants";
 import { WidgetInlineError } from "./analytics-chart-ui";
 
 interface CurrentWindowWorkItemsProps {
   projectId: number;
+  /** @deprecated Work item keys now come from the server (`taskKey`); no longer read. */
   projectCode?: string | null;
+  /** @deprecated Work item keys now come from the server (`taskKey`); no longer read. */
   projectName?: string | null;
   scope: ProjectAnalyticsScope;
   sprintId?: number | null;
@@ -40,8 +42,6 @@ function matchesScope(item: SprintBacklogDTO, scope: ProjectAnalyticsScope, spri
  */
 export function CurrentWindowWorkItems({
   projectId,
-  projectCode,
-  projectName,
   scope,
   sprintId,
   itemType,
@@ -68,7 +68,6 @@ export function CurrentWindowWorkItems({
   const items = (itemsQuery.data?.content ?? [])
     .filter(item => matchesScope(item, scope, sprintId))
     .filter(item => itemType === "ALL" || item.workType === itemType);
-  const prefix = projectCode?.trim() || projectKeyOf(projectName);
 
   return (
     <section aria-label="Current window work items" className="overflow-hidden rounded-xl border bg-card shadow-xs">
@@ -115,7 +114,7 @@ export function CurrentWindowWorkItems({
             return (
               <li key={item.id ?? item.title ?? "work-item"} className="flex items-center gap-3 px-4 py-2.5">
                 <span className="shrink-0 font-mono text-[10px] font-semibold text-muted-foreground">
-                  {prefix}-{item.id}
+                  {item.id != null ? backlogItemKey({ id: item.id, taskKey: item.taskKey }) : "—"}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
                   {item.title ?? "Untitled work item"}

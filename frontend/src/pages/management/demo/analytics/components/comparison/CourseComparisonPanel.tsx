@@ -53,6 +53,7 @@ import {
   type ComparisonModuleDef,
   VERDICT_STYLES,
 } from "./comparison-config";
+import { CourseAiComparisonPanel } from "./CourseAiComparisonPanel";
 
 type Props = {
   /** Số khóa học tối thiểu để hiện bảng so sánh. */
@@ -149,6 +150,8 @@ export function CourseComparisonPanel({ minCourses = 2 }: Props) {
           courses={data.courses}
         />
       </div>
+
+      <CourseAiComparisonPanel courses={data.courses} />
     </div>
   );
 }
