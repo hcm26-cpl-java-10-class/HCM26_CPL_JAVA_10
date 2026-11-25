@@ -35,7 +35,7 @@ function GoalEditor({ account, hasGoal }: { account: string; hasGoal: boolean })
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm"><Settings2 aria-hidden="true" />{hasGoal ? "Edit learning goal" : "Set learning goal"}</Button>
+        <Button size="sm"><Settings2 aria-hidden="true" />{hasGoal ? "Edit learning goal" : "Set learning goal"}</Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>

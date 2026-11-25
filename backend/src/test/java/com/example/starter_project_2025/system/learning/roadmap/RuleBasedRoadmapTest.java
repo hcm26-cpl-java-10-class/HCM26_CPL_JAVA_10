@@ -25,6 +25,20 @@ class RuleBasedRoadmapTest {
     }
 
     @Test
+    void pythonGoalRequiresPythonOrAPythonFramework() {
+        var pythonGoal = new RoadmapGoal("Python Backend Developer", CourseLevel.BEGINNER, 6, null, 12);
+        var spring = new RoadmapCatalog.Candidate(1L, "Spring Boot for Beginners", "Build backend APIs",
+                null, CourseLevel.BEGINNER, 59, RoadmapCatalog.Status.PLANNED);
+        var django = course(2, "Django Fundamentals", 60, RoadmapCatalog.Status.PLANNED);
+
+        assertTrue(RuleBasedRoadmap.suggest(pythonGoal, List.of(spring)).isEmpty());
+        assertEquals(List.of(2L), RuleBasedRoadmap.suggest(pythonGoal, List.of(spring, django)).getFirst().courseIds());
+        assertEquals(List.of(django), List.of(spring, django).stream()
+                .filter(candidate -> RuleBasedRoadmap.matchesRequiredTechnology(pythonGoal, candidate))
+                .toList());
+    }
+
+    @Test
     void permitsUnknownDurationWithoutInventingOne() {
         var phases = RuleBasedRoadmap.suggest(goal, List.of(course(1, "Java APIs", 0, RoadmapCatalog.Status.ENROLLED)));
         assertEquals(List.of(1L), phases.getFirst().courseIds());

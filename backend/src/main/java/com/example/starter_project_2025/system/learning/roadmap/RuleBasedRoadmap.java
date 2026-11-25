@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 final class RuleBasedRoadmap {
+    private static final List<String> PYTHON_TERMS = List.of("python", "django", "flask", "fastapi");
     private static final Set<String> GENERIC_WORDS = Set.of("developer", "engineer", "learn", "learning",
             "beginner", "advanced", "with", "from", "the", "and", "for");
 
@@ -17,12 +18,13 @@ final class RuleBasedRoadmap {
 
     static List<LearningRoadmapService.Phase> suggest(RoadmapGoal goal, List<RoadmapCatalog.Candidate> courses) {
         Set<String> keywords = keywords(goal.careerGoal());
+        var searchTerms = keywords.contains("python") ? PYTHON_TERMS : keywords;
         int minutesPerWeek = goal.hoursPerWeek() * 60;
         int nextWeek = 1;
         var phases = new ArrayList<LearningRoadmapService.Phase>();
         var ranked = courses.stream()
                 .filter(course -> course.status() != RoadmapCatalog.Status.COMPLETED)
-                .map(course -> new Ranked(course, relevance(course, keywords)))
+                .map(course -> new Ranked(course, relevance(course, searchTerms)))
                 .filter(course -> course.score() > 0)
                 .filter(item -> Math.max(1L, Math.ceilDiv(item.course().durationMinutes(), minutesPerWeek))
                         <= goal.targetWeeks())
@@ -69,7 +71,15 @@ final class RuleBasedRoadmap {
 
     private record Ranked(RoadmapCatalog.Candidate course, int score) {}
 
-    private static int relevance(RoadmapCatalog.Candidate course, Set<String> goal) {
+    static boolean matchesRequiredTechnology(RoadmapGoal goal, RoadmapCatalog.Candidate course) {
+        return !keywords(goal.careerGoal()).contains("python") || relevance(course, PYTHON_TERMS) > 0;
+    }
+
+    static List<String> pythonSearchTerms(RoadmapGoal goal) {
+        return keywords(goal.careerGoal()).contains("python") ? PYTHON_TERMS : List.of();
+    }
+
+    private static int relevance(RoadmapCatalog.Candidate course, java.util.Collection<String> goal) {
         var title = keywords(course.title());
         var description = keywords(Objects.toString(course.description(), ""));
         var category = keywords(Objects.toString(course.category(), ""));

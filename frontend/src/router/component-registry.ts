@@ -88,6 +88,8 @@ import AiSuggestionDetailPage from "@/pages/management/ai-assistant/pages/AiSugg
 import ProjectTemplateListPage from "@/pages/management/project-template";
 import ExamSupervisorPage from "@/pages/management/exam/supervisor";
 import { ProjectTemplateFormPage } from "@/pages/management/project-template/pages/ProjectTemplateFormPage";
+import LearningPerformancePage from "@/pages/management/learning/reports/LearningPerformancePage";
+import GoalsHabitsReportPage from "@/pages/management/learning/reports/GoalsHabitsReportPage";
 import { ProjectTemplateDetailPage } from "@/pages/management/project-template/pages/ProjectTemplateDetailPage";
 import ProjectTemplateReviewPage from "@/pages/management/project-template-review/ProjectTemplateReviewPage";
 import ArtifactDraftPage from "@/pages/student/ArtifactDraftPage";
@@ -150,6 +152,8 @@ export const routes: RouteConfig[] = [
   { path: "/fams/profile", component: PersonalProfilePage },
   { path: "/profile", component: PersonalProfilePage },
   { path: "/my-learning", component: MyLearningPage },
+  { path: "/my-learning/reports/performance", component: LearningPerformancePage },
+  { path: "/my-learning/reports/goals-habits", component: GoalsHabitsReportPage },
   { path: "/fams/my-learning", component: MyLearningPage },
   { path: "/learning", component: MyLearningPage },
   { path: "/menu-groups", component: ModuleGroupsPage, requiredPermission: "MENU_READ" },

@@ -1,20 +1,23 @@
-import React, { useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { DailyActivity } from "../learning.types";
-
-interface LearningActivityCalendarProps {
-  activityData: Record<string, DailyActivity> | null;
-}
+import { learningHabitsApi } from "@/api/features/learning-habits.api";
+import { duration } from "./habits/habit-format";
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
-export const LearningActivityCalendar: React.FC<LearningActivityCalendarProps> = ({
-  activityData,
-}) => {
-  // Reference date: current date is October 2026 matching screenshots
-  const [currentDate, setCurrentDate] = useState(() => new Date()); // month index 9 is October
+export function LearningActivityCalendar({ account }: { account: string }) {
+  const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDateStr, setSelectedDateStr] = useState<string>("");
+  const key = ["learning-habits", account] as const;
+  const statistics = useQuery({
+    queryKey: [...key, "statistics", {}],
+    queryFn: ({ signal }) => learningHabitsApi.statistics({}, signal),
+  });
+  const today = statistics.data?.today;
+  const calendarToday = today ? new Date(today + "T00:00:00") : new Date();
+  const currentDate = new Date(calendarToday.getFullYear(), calendarToday.getMonth() + monthOffset, 1);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -22,11 +25,13 @@ export const LearningActivityCalendar: React.FC<LearningActivityCalendarProps> =
   const monthName = currentDate.toLocaleString("en-US", { month: "long" });
 
   const prevMonth = () => {
-    setCurrentDate(new Date(year, month - 1, 1));
+    setMonthOffset(offset => offset - 1);
+    setSelectedDateStr("");
   };
 
   const nextMonth = () => {
-    setCurrentDate(new Date(year, month + 1, 1));
+    setMonthOffset(offset => offset + 1);
+    setSelectedDateStr("");
   };
 
   // Compute days in current month
@@ -39,12 +44,21 @@ export const LearningActivityCalendar: React.FC<LearningActivityCalendarProps> =
   let startOffset = firstDayOfMonth.getDay() - 1;
   if (startOffset === -1) startOffset = 6;
 
-  // Selected date info
-  const selectedDayActivity = selectedDateStr ? activityData?.[selectedDateStr] : null;
+  const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
+  const range = { from: monthPrefix + "-01", to: monthOffset === 0 ? today : `${monthPrefix}-${daysInMonth}` };
+  const activity = useQuery({
+    queryKey: [...key, "activity", range],
+    queryFn: ({ signal }) => learningHabitsApi.activity(range, signal),
+    enabled: Boolean(today),
+  });
+  const activityByDate = new Map(activity.data?.map(day => [day.date, day]));
+  const selectedDayActivity = activityByDate.get(selectedDateStr);
 
-  if (activityData === null) return <div className="rounded-xl border bg-card p-5 text-card-foreground shadow-xs">
+  if (!today) return <div className="rounded-xl border bg-card p-5 text-card-foreground shadow-xs">
     <h4 className="mb-4 text-sm font-bold">Learning activity</h4>
-    <p className="text-sm text-muted-foreground">Learning activity records are not available.</p>
+    {statistics.isError ? <p role="alert" className="text-sm text-destructive">
+      Could not load learning history. <button type="button" className="underline" onClick={() => void statistics.refetch()}>Retry</button>
+    </p> : <p role="status" className="text-sm text-muted-foreground">Loading learning history…</p>}
   </div>;
 
   return (
@@ -68,6 +82,7 @@ export const LearningActivityCalendar: React.FC<LearningActivityCalendarProps> =
             variant="ghost"
             size="icon"
             onClick={nextMonth}
+            disabled={monthOffset === 0}
             className="size-7 text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:text-neutral-400 dark:hover:text-white dark:hover:bg-neutral-800 rounded-md cursor-pointer"
             aria-label="Next month"
           >
@@ -95,34 +110,31 @@ export const LearningActivityCalendar: React.FC<LearningActivityCalendarProps> =
         {/* Month days */}
         {Array.from({ length: daysInMonth }).map((_, i) => {
           const dayNum = i + 1;
-          const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-          const isToday = dayNum === 27 && month === 9 && year === 2026;
+          const dateStr = `${monthPrefix}-${String(dayNum).padStart(2, "0")}`;
+          const isToday = dateStr === today;
           const isSelected = selectedDateStr === dateStr;
-          const activity = activityData[dateStr];
+          const hasStudyTime = (activityByDate.get(dateStr)?.seconds ?? 0) > 0;
 
           return (
             <div key={dateStr} className="flex flex-col items-center justify-center">
               <button
                 type="button"
                 onClick={() => setSelectedDateStr(dateStr)}
+                disabled={dateStr > today}
+                aria-label={`${dateStr}${hasStudyTime ? ", study time recorded" : ""}`}
+                aria-pressed={isSelected}
                 className={`size-7 rounded-full flex items-center justify-center font-medium transition-all cursor-pointer relative ${
                   isSelected
                     ? "border-2 border-purple-600 dark:border-purple-500 text-purple-700 dark:text-white font-bold bg-purple-50/70 dark:bg-purple-950/20"
                     : isToday
                     ? "border border-gray-400 dark:border-neutral-500 text-gray-900 dark:text-white font-semibold"
                     : "text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
-                } ${activity ? "font-semibold" : ""}`}
+                } ${hasStudyTime ? "font-semibold" : ""} disabled:cursor-default disabled:opacity-50`}
               >
                 {dayNum}
                 {/* Activity badge or dot */}
-                {activity && (
-                  <span
-                    className={`absolute -bottom-0.5 size-1 rounded-full ${
-                      activity.allGoalsCompleted
-                        ? "bg-purple-600 dark:bg-purple-400"
-                        : "bg-blue-600 dark:bg-blue-400"
-                    }`}
-                  />
+                {hasStudyTime && (
+                  <span className="absolute -bottom-0.5 size-1 rounded-full bg-blue-600 dark:bg-blue-400" />
                 )}
               </button>
             </div>
@@ -134,38 +146,36 @@ export const LearningActivityCalendar: React.FC<LearningActivityCalendarProps> =
       <div className="mt-4 pt-3.5 border-t border-gray-100 dark:border-[#262626] flex flex-wrap items-center justify-between text-[11px] text-gray-500 dark:text-neutral-400 gap-y-1.5">
         <div className="flex items-center gap-1.5">
           <span className="size-2 rounded-full bg-blue-600 dark:bg-blue-400 inline-block" />
-          <span>1+ daily goals completed</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-0.5 bg-purple-600 dark:bg-purple-400 inline-block rounded" />
-          <span>All daily goals completed</span>
+          <span>Study time recorded</span>
         </div>
       </div>
 
       {/* 5. Selected Day Detail Footer */}
       <div className="mt-3.5 pt-2.5 border-t border-gray-100 dark:border-[#262626] text-xs">
-        {selectedDayActivity ? (
+        {activity.isError ? <p role="alert" className="text-destructive">
+          Could not load study records. <button type="button" className="underline" onClick={() => void activity.refetch()}>Retry</button>
+        </p> : activity.isPending ? <p role="status">Loading study records…</p> : selectedDateStr ? (
           <div className="bg-gray-50 dark:bg-[#1c1c1c] rounded-lg p-2.5 border border-gray-200 dark:border-[#2e2e2e]">
             <p className="font-semibold text-gray-900 dark:text-neutral-200">
-              {new Date(selectedDateStr).toLocaleDateString("en-US", {
+              {new Date(selectedDateStr + "T00:00:00").toLocaleDateString("en-US", {
                 weekday: "short",
                 month: "short",
                 day: "numeric",
               })}
             </p>
             <div className="flex items-center gap-3 text-gray-600 dark:text-neutral-400 text-[11px] mt-1">
-              <span>🎯 {selectedDayActivity.completedGoals} goals completed</span>
-              <span>⏱️ {selectedDayActivity.minutesLearned} mins</span>
-              <span>📚 {selectedDayActivity.itemsCount} items</span>
+              <span>{selectedDayActivity?.seconds ? duration(selectedDayActivity.seconds) + " studied" : "No study time recorded for this date."}</span>
             </div>
           </div>
         ) : (
           <div className="flex items-center gap-1.5 text-gray-400 dark:text-neutral-500 text-[11px] px-1">
             <Info className="size-3.5 shrink-0 text-gray-400" />
-            <span>Select a date to view learning activity breakdown.</span>
+            <span>{activity.data?.some(day => day.seconds > 0)
+              ? "Select a date to view study time."
+              : "No study time recorded this month."}</span>
           </div>
         )}
       </div>
     </div>
   );
-};
+}

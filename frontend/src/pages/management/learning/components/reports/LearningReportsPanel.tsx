@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { FileBarChart, Plus, Eye, Download, Pencil, Trash2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,20 @@ function GenerateReport({ options, seed, busy, onGenerate, onClose }: {
   }
 
   return <section className="rounded-xl border bg-card p-4 sm:p-5">
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+      <div>
+        <h3 className="text-sm font-semibold">Interactive Analytics Dashboards</h3>
+        <p className="text-xs text-muted-foreground">Explore real-time charts for your learning performance, goals, and study habits.</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Link to="/my-learning/reports/performance" className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted">
+          Learning Performance
+        </Link>
+        <Link to="/my-learning/reports/goals-habits" className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted">
+          Goals &amp; Habits Report
+        </Link>
+      </div>
+    </div>
     <h3 className="font-semibold">{seed ? "Generate Updated Report" : "Generate New Report"}</h3>
     <form onSubmit={submit} className="mt-4 space-y-4">
       <Field label="Report title"><Input name="title" required maxLength={150} defaultValue={seed?.title ?? "Learning Report"} /></Field>

@@ -74,7 +74,7 @@ export function MyLearningPage() {
           <TabsTrigger value="overview" className="flex-none">Overview</TabsTrigger>
           {canUseRoadmap && <TabsTrigger value="roadmap" className="flex-none">My Roadmap</TabsTrigger>}
           {canLearn && <TabsTrigger value="goals" className="flex-none">Goals &amp; Habits</TabsTrigger>}
-          <TabsTrigger value="history" className="flex-none">Learning History</TabsTrigger>
+          {canLearn && <TabsTrigger value="history" className="flex-none">Learning History</TabsTrigger>}
           {canLearn && <TabsTrigger value="reports" className="flex-none">Reports</TabsTrigger>}
         </TabsList>
         <TabsContent value="overview" className="space-y-5">
@@ -96,7 +96,9 @@ export function MyLearningPage() {
         {canLearn && <TabsContent value="goals">
           <GoalsHabitsPanel key={user.email} account={user.email} roadmapHours={roadmap.data?.goal?.hoursPerWeek} />
         </TabsContent>}
-        <TabsContent value="history"><LearningActivityCalendar activityData={null} /></TabsContent>
+        {canLearn && <TabsContent value="history">
+          <LearningActivityCalendar key={user.email} account={user.email} />
+        </TabsContent>}
         {canLearn && <TabsContent value="reports">
           <LearningReportsPanel key={user.email} account={user.email} />
         </TabsContent>}

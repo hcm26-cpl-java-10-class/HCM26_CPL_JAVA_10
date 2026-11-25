@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -111,38 +112,14 @@ export function HabitCharts({ account, stats, range, setRange }: {
         </ul> : <p className="text-sm text-muted-foreground">Course time appears after you save a study session.</p>}
       </div>
     </div>
-    <div className="space-y-3 border-t pt-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="font-medium">Learning activity calendar</h4>
-        <div className="flex items-center gap-1">
-          <Button size="icon-sm" variant="ghost" aria-label="Previous month" disabled={month <= "1900-01"} onClick={() => moveMonth(-1)}><ChevronLeft /></Button>
-          <span className="min-w-28 text-center text-sm">{dateLabel(monthStart, { month: "long", year: "numeric" })}</span>
-          <Button size="icon-sm" variant="ghost" aria-label="Next month" disabled={month >= stats.today.slice(0, 7)}
-            onClick={() => moveMonth(1)}><ChevronRight /></Button>
-        </div>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+      <div>
+        <h4 className="font-medium">Learning activity heatmap</h4>
+        <p className="text-xs text-muted-foreground">View your full activity heatmap, trends, and session breakdown in Goals &amp; Habits Report.</p>
       </div>
-      {calendar.isPending ? <p role="status" className="text-sm text-muted-foreground">Loading activity…</p>
-        : calendar.isError ? <p role="alert" className="text-sm text-destructive">Could not load activity.{" "}
-          <button className="underline" onClick={() => void calendar.refetch()}>Retry</button></p>
-        : <div className="grid max-w-xl grid-cols-7 gap-1.5 text-center">
-          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(day =>
-            <span key={day} className="text-xs text-muted-foreground">{day}</span>)}
-          {Array.from({ length: numberCells }, (_, index) => {
-            const date = dateOffset(startCell, index);
-            if (!date.startsWith(month)) return <div key={date} aria-hidden="true" />;
-            const day = days.get(date);
-            const seconds = day?.seconds ?? 0;
-            const label = dateLabel(date) + ", " + (day ? duration(seconds) + " studied, " +
-              duration(day.selfReportedSeconds) + " self-reported" : "future date");
-            return <div key={date} role="img" aria-label={label} title={label} className={
-              "grid h-9 place-items-center rounded-md text-xs font-medium " +
-              (seconds >= 3600 ? "bg-emerald-700 text-white" : day?.active
-                ? "bg-emerald-200 text-emerald-950 dark:bg-emerald-900 dark:text-emerald-100"
-                : seconds > 0 ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100"
-                : "bg-muted text-muted-foreground")}>{Number(date.slice(-2))}</div>;
-          })}
-        </div>}
-      <p className="text-xs text-muted-foreground">Darker days show more recorded time. Calendar dates use {stats.zone}.</p>
+      <Link to="/my-learning/reports/goals-habits" className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted">
+        View full heatmap
+      </Link>
     </div>
     <details className="border-t pt-4">
       <summary className="cursor-pointer font-medium">Target history</summary>

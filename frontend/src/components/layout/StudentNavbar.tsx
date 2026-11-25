@@ -182,6 +182,28 @@ export function StudentNavbar() {
       const studentGroup = groups.find(group => !group.hiddenInMenu && group.name.trim().toLowerCase() === "student");
       if (studentGroup) studentGroup.items.push(insights);
       else groups.push({ id: "student-learning", name: "Student", hiddenInMenu: false, items: [insights] });
+
+      groups.push({
+        id: "student-my-reports",
+        name: "My Reports",
+        hiddenInMenu: false,
+        items: [
+          {
+            id: "student-report-performance",
+            title: "Learning Performance",
+            url: "/my-learning/reports/performance",
+            icon: FileCheck2,
+            isActive: pathname === "/my-learning/reports/performance",
+          },
+          {
+            id: "student-report-goals-habits",
+            title: "Goals & Habits Report",
+            url: "/my-learning/reports/goals-habits",
+            icon: FileCheck2,
+            isActive: pathname === "/my-learning/reports/goals-habits",
+          },
+        ],
+      });
     }
 
     return groups.filter((group) => !group.hiddenInMenu && group.items.length > 0);

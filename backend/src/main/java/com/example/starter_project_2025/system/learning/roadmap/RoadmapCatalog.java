@@ -56,6 +56,7 @@ public class RoadmapCatalog {
 
     public List<Candidate> candidates(Long userId, RoadmapGoal goal) {
         Map<Long, CatalogCourseDTO> results = new LinkedHashMap<>();
+        RuleBasedRoadmap.pythonSearchTerms(goal).forEach(term -> addCourses(results, term, 8));
         // Search by individual goal terms before filling the remaining slots from the catalog.
         Arrays.stream(goal.careerGoal().split("[^\\p{L}\\p{N}+#.]+"))
                 .map(String::strip)

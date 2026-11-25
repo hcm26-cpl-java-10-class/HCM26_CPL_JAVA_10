@@ -221,7 +221,7 @@ export const canAccessPath = (path: string, activeRole: string | null, permissio
   if (path === "/invitations" && activeRole === STUDENT_ROLE) {
     return granted.has("LEARNER_ACCESS") && granted.has("INVITATION_READ");
   }
-  if (["/my-learning", "/fams/my-learning", "/learning", "/enrollments"].includes(path)) {
+  if (["/my-learning", "/fams/my-learning", "/learning", "/enrollments", "/my-learning/reports/performance", "/my-learning/reports/goals-habits"].includes(path)) {
     return granted.has("LEARNER_ACCESS") && granted.has("LEARNING_SELF_READ");
   }
   if (activeRole === STUDENT_ROLE && /^\/courses\/\d+$/.test(path)) {

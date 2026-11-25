@@ -138,4 +138,35 @@ class ReportAggregation {
     }
 
     private boolean inside(LocalDate date, Input input) { return !date.isBefore(input.from()) && !date.isAfter(input.to()); }
+
+    @Transactional(readOnly = true)
+    public PerformanceDashboard performanceDashboard(UserPrincipal principal, LocalDate from, LocalDate to, Long courseId) {
+        var zone = habits.reportingZone();
+        LocalDate end = to != null ? to : LocalDate.now(zone);
+        LocalDate start = from != null ? from : end.minusDays(29);
+        if (start.isAfter(end)) throw new IllegalArgumentException("Start date must not be after end date");
+        var input = new Input(UUID.randomUUID(), "Performance", Type.CUSTOM, start, end, Mode.STANDARD, Language.EN,
+            EnumSet.of(Section.OVERVIEW, Section.COURSES, Section.ROADMAP, Section.ASSESSMENTS));
+        var allowed = sections(principal);
+        allowed.retainAll(Set.of(Section.OVERVIEW, Section.COURSES, Section.ROADMAP, Section.ASSESSMENTS));
+        var snap = snapshot(principal, input, allowed);
+        var courses = snap.courses();
+        if (courseId != null && courses != null) {
+            courses = courses.stream().filter(c -> courseId.equals(c.id())).toList();
+        }
+        return new PerformanceDashboard(start, end, zone.getId(), snap.overview(), courses,
+            snap.roadmap(), snap.assessments(), snap.limitations());
+    }
+
+    @Transactional(readOnly = true)
+    public GoalsHabitsDashboard goalsHabitsDashboard(UserPrincipal principal, LocalDate from, LocalDate to) {
+        var zone = habits.reportingZone();
+        LocalDate end = to != null ? to : LocalDate.now(zone);
+        LocalDate start = from != null ? from : end.minusDays(29);
+        if (start.isAfter(end)) throw new IllegalArgumentException("Start date must not be after end date");
+        var input = new Input(UUID.randomUUID(), "Goals & Habits", Type.CUSTOM, start, end, Mode.STANDARD, Language.EN,
+            EnumSet.of(Section.STUDY, Section.OBJECTIVES));
+        var snap = snapshot(principal, input, EnumSet.of(Section.STUDY, Section.OBJECTIVES));
+        return new GoalsHabitsDashboard(start, end, zone.getId(), snap.study(), snap.objectives(), snap.limitations());
+    }
 }
