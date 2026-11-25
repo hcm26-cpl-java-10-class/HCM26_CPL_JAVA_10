@@ -97,6 +97,8 @@ class ExamAttemptGradingFlow {
             }
         }
 
+        analyzeAiContent(attempt);
+
         BigDecimal objectiveScore = ExamScoring.share(maxScore, correctWeight, attempt.getTotalPoints());
         attempt.setObjectiveScore(objectiveScore);
         Integer penalty = attempt.isLateGraceEligible()
@@ -112,6 +114,18 @@ class ExamAttemptGradingFlow {
         attempt.setSubmittedAt(submittedAt);
 
         markInvitationsCompleted(attempt);
+    }
+
+    /** Estimate the AI-written percentage for every essay / coding answer at submit time. */
+    private void analyzeAiContent(ExamAttempt attempt) {
+        for (ExamAttemptAnswer answer : attempt.getAnswers()) {
+            QuestionType type = answer.getQuestion().getType();
+            if (type != QuestionType.ESSAY && type != QuestionType.CODING) continue;
+            var r = com.example.starter_project_2025.system.exam.integrity.ai.AiContentDetector
+                    .analyze(answer.getTextAnswer(), type == QuestionType.CODING);
+            answer.setAiPercent(r == null ? null : r.percent());
+            answer.setAiSignals(r == null ? null : String.join(" | ", r.signals()));
+        }
     }
 
     /**

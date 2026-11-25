@@ -1,3 +1,4 @@
+import { getCurrentLocale } from "@/i18n/format";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -73,7 +74,7 @@ function formatSubmissionDate(value?: string | null) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(getCurrentLocale(), {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
@@ -487,7 +488,7 @@ function compactDateTime(value?: string | null, timeZone?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   try {
-    return new Intl.DateTimeFormat("en-GB", {
+    return new Intl.DateTimeFormat(getCurrentLocale(), {
       day: "2-digit",
       month: "2-digit",
       hour: "2-digit",

@@ -24,11 +24,12 @@ interface CategoryLink {
   id: number;
   name: string;
   depth: number;
+  count: number;
 }
 
 function categoryLinks(nodes: CategoryTreeDTO[], depth = 0): CategoryLink[] {
   return nodes.flatMap((node) => [
-    ...(node.totalCourseCount === 0 ? [] : [{ id: node.id, name: node.name, depth }]),
+    { id: node.id, name: node.name, depth, count: node.totalCourseCount ?? 0 },
     ...categoryLinks(node.children ?? [], depth + 1),
   ]);
 }
@@ -107,9 +108,10 @@ export function StudentExploreMenu({ canBrowse, canRecommend }: StudentExploreMe
                 >
                   <Link
                     to={`/courses?category=${category.id}`}
+                    aria-label={`${category.name} (${category.count})`}
                     style={{ paddingLeft: `${0.5 + Math.min(category.depth, 2) * 0.75}rem` }}
                   >
-                    <span className="min-w-0 truncate">{category.name}</span>
+                    <span className="min-w-0 truncate">{category.name}</span><span className="ml-auto shrink-0 text-xs text-muted-foreground">({category.count})</span>
                   </Link>
                 </DropdownMenuItem>
               ))}

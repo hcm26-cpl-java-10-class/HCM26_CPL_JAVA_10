@@ -37,6 +37,7 @@ export * from "./features/training-class.api";
 export * from "./features/student.api";
 export * from "./features/demo/certificate.api";
 export * from "./features/notification.api";
+export * from "./features/communication.api";
 export * from "./features/demo/qna.api";
 export * from "./features/score-appeal.api";
 export * from "./features/demo/lesson-report.api";
@@ -45,6 +46,7 @@ export * from "./features/demo/topic_mark_gradebook.api";
 export * from "./features/exam-template.api";
 export * from "./features/demo/course_review.api";
 export * from "./features/ai-question-generator.api";
+export * from "./features/i18n.api";
 
 export * from "./features/exam-supervisor.api";
 export * from "./features/demo/certificate-insights.api"

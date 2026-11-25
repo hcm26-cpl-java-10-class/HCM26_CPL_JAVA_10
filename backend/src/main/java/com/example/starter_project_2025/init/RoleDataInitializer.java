@@ -59,6 +59,12 @@ public class RoleDataInitializer implements CommandLineRunner {
         ensurePermission("EXAM_REVIEW", "CREATE");
         ensurePermission("EXAM_REVIEW", "ASSIGN");
         ensurePermission("EXAM_REVIEW", "VIEW_ALL");
+        // Quan ly thong bao va email (UFR-COM-001..007)
+        ensurePermission("NOTIFICATION_POLICY", "MANAGE");
+        ensurePermission("EMAIL_TEMPLATE", "READ");
+        ensurePermission("EMAIL_TEMPLATE", "MANAGE");
+        ensurePermission("EMAIL_LOG", "READ");
+        ensurePermission("EMAIL", "SEND");
         List<Permission> allPermissions = permissionRepository.findAll();
 
         // The marker permission makes this mapping migration run once.
@@ -163,7 +169,8 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "WORKSPACE_ACTIVITY_READ", "PROJECT_ANALYTICS_READ", "PROJECT_ANALYTICS_EXPORT",
                         "PROGRAM_READ", "PROGRAM_CREATE", "PROGRAM_UPDATE", "PROGRAM_DELETE",
                         "SUBJECT_READ", "SUBJECT_CREATE", "SUBJECT_UPDATE", "SUBJECT_DELETE",
-                        "SESSION_CREATE", "SESSION_READ", "SESSION_UPDATE", "SESSION_DELETE"
+                        "SESSION_CREATE", "SESSION_READ", "SESSION_UPDATE", "SESSION_DELETE",
+                        "EMAIL_LOG_READ", "EMAIL_SEND", "EMAIL_TEMPLATE_READ"
                 )
         );
 

@@ -77,6 +77,9 @@ public class InvitationService {
     final AnonymousInvitationFlow anonymousInvitationFlow = new AnonymousInvitationFlow(this);
     final InvitationBatchFlow invitationBatchFlow = new InvitationBatchFlow(this);
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    com.example.starter_project_2025.system.notification.NotificationService notificationService;
+
     @Value("${app.frontend-domain}")
     private String frontendUrl;
 
@@ -153,6 +156,15 @@ public class InvitationService {
 
         if (sendEmail) {
             emailService.sendExamInvitation(invitation, user);
+            if (notificationService != null && user.getId() != null && invitation.getId() != null) {
+                notificationService.createOnce(
+                        user.getId(),
+                        "invitation.exam.created." + invitation.getId(),
+                        "New exam invitation",
+                        "You have been invited to take \"" + exam.getTitle() + "\".",
+                        "/invitations"
+                );
+            }
 
             invitation.setStatus(InvitationStatus.SENT);
             invitation.setSentAt(LocalDateTime.now());
@@ -294,6 +306,15 @@ public class InvitationService {
 
         if (invitation.getUser() != null) {
             emailService.sendExamRevoked(invitation);
+            if (notificationService != null && invitation.getUser().getId() != null && invitation.getId() != null) {
+                notificationService.createOnce(
+                        invitation.getUser().getId(),
+                        "invitation.exam.revoked." + invitation.getId(),
+                        "Exam invitation revoked",
+                        "Your invitation for \"" + invitation.getExam().getTitle() + "\" has been revoked.",
+                        "/invitations"
+                );
+            }
         }
 
         InvitationDTO dto = toDTO(invitationRepository.save(invitation));

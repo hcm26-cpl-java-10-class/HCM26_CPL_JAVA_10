@@ -1,5 +1,6 @@
 import { LearningRecordsPanel } from "@/pages/management/learning/components/LearningRecordsPanel";
 import { usePermissions } from "@/hooks/usePermissions";
+import { formatDateTimeNow } from "@/i18n/format";
 import { departmentApi, roleApi, userApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { PermissionGate } from "@/components/PermissionGate";
@@ -33,7 +34,7 @@ import { extractServerErrors } from "../user-form.utils";
 function formatDate(value?: string): string {
   if (!value) return "";
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleString("vi-VN");
+  return Number.isNaN(d.getTime()) ? value : formatDateTimeNow(d);
 }
 
 const AVATAR_COLORS = [
@@ -74,7 +75,7 @@ function InfoRow({
       <div className="min-w-0">
         <div className="text-xs text-muted-foreground">{label}</div>
         <div className="mt-0.5 break-words text-sm font-medium">
-          {empty ? <span className="font-normal text-muted-foreground">Ch╞░a cß║¡p nhß║¡t</span> : children}
+          {empty ? <span className="font-normal text-muted-foreground">Ch╞░a cß║¡p nhß║¡t</span> : <span data-no-translate>{children}</span>}
         </div>
       </div>
     </div>

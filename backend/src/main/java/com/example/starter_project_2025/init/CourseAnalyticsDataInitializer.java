@@ -308,7 +308,8 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
     private List<Course> loadCourses() {
         List<Course> courses = new ArrayList<>();
         for (Course course : courseRepository.findAll()) {
-            if (Boolean.FALSE.equals(course.getIsActive())) {
+            // Analytics fixtures belong only to the original four demos, never new or imported content.
+            if (Boolean.FALSE.equals(course.getIsActive()) || !PROFILES_BY_COURSE.containsKey(course.getName())) {
                 continue;
             }
             courses.add(course);

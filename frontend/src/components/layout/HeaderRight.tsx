@@ -1,5 +1,7 @@
 import { usePermissions } from "@/hooks/usePermissions";
 import ToggleTheme from "@/components/ToggleTheme";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { useTranslation } from "react-i18next";
 import { startTransition, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge.tsx";
 import type { RootState } from "@/store/store";
@@ -36,6 +38,7 @@ export default function HeaderRight({ compact = false }: { compact?: boolean } =
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const primaryRole = normalizeRole(role);
   void roles;
@@ -177,6 +180,7 @@ export default function HeaderRight({ compact = false }: { compact?: boolean } =
     return (
       <div className={compact ? "flex items-center gap-1 sm:gap-3" : "flex items-center gap-3"}>
         {renderUserAccountMenu()}
+        <LanguageSwitcher />
         <NotificationBell />
         <ToggleTheme />
       </div>
@@ -190,8 +194,9 @@ export default function HeaderRight({ compact = false }: { compact?: boolean } =
           variant="secondary"
           className={`text-sm text-blue-700 bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 ${compact ? "hidden sm:inline-flex" : ""}`}
         >
-          {formatRoleLabel(currentRole)} View
+          {t("{{role}} View", { role: formatRoleLabel(currentRole) })}
         </Badge>
+        <LanguageSwitcher />
         <NotificationBell />
         {renderUserAccountMenu()}
         <ToggleTheme />
@@ -216,7 +221,7 @@ export default function HeaderRight({ compact = false }: { compact?: boolean } =
           ) : (
             <ShieldCheck size={14} />
           )}
-          <span className={compact ? "hidden sm:inline" : undefined}>{formatRoleLabel(currentRole)} View</span>
+          <span className={compact ? "hidden sm:inline" : undefined}>{t("{{role}} View", { role: formatRoleLabel(currentRole) })}</span>
           <ChevronDown
             size={13}
             className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}
@@ -242,7 +247,7 @@ export default function HeaderRight({ compact = false }: { compact?: boolean } =
                     }`}
                 >
                   {studentRow ? <GraduationCap size={15} /> : <ShieldCheck size={15} />}
-                  {formatRoleLabel(availableRole)} View
+                  {t("{{role}} View", { role: formatRoleLabel(availableRole) })}
                   {(selected || !isAssignedRole) && (
                     <span className="ml-auto flex items-center gap-2">
                       {selected && (
@@ -270,6 +275,7 @@ export default function HeaderRight({ compact = false }: { compact?: boolean } =
         </Badge>
       )}
 
+      <LanguageSwitcher />
       <NotificationBell key={auth.email} />
       {/* User Account Dropdown */}
       {renderUserAccountMenu()}

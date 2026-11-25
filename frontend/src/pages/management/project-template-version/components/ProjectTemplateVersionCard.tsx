@@ -1,3 +1,4 @@
+import { formatDateTimeCustomNow } from "@/i18n/format";
 import type { EntityCardRendererProps } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -11,7 +12,7 @@ const formatDateTime = (value?: string | null) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
 
-  return date.toLocaleString("en-GB", {
+  return formatDateTimeCustomNow(date, {
     day: "2-digit",
     month: "short",
     year: "numeric",

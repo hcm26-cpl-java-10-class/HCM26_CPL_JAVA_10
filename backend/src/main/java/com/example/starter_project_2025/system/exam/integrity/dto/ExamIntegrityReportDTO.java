@@ -75,6 +75,10 @@ public class ExamIntegrityReportDTO {
         private int totalAwaySeconds;
         private Instant lastViolationAt;
         private boolean flagged;
+        /** Highest estimated % AI-written among the essay / code answers (null = none analysed). */
+        private Integer aiPercent;
+        private String aiLevel;
+        private List<String> aiSignals = new ArrayList<>();
 
         private Long durationSeconds;            // thoi gian lam bai thuc te (giay)
 

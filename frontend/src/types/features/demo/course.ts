@@ -55,6 +55,7 @@ export interface CatalogCourse {
   instructor?: string | null;
   categoryId?: number | null;
   categoryName?: string | null;
+  categoryNames?: string[];
   level?: CourseLevel | null;
   lessonCount: number;
   /** Tổng thời lượng, đơn vị giây (cùng đơn vị với Lesson.duration). */

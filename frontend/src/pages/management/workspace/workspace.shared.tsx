@@ -1,3 +1,4 @@
+import { formatDateTimeNow } from "@/i18n/format";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { isAxiosError } from "axios";
@@ -70,5 +71,5 @@ export function workspaceIneligibleReason(row: WorkspaceCandidateItem) {
 export function formatWorkspaceDate(value?: string) {
   if (!value) return "Not available";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Not available" : date.toLocaleString("en-GB");
+  return Number.isNaN(date.getTime()) ? "Not available" : formatDateTimeNow(date);
 }

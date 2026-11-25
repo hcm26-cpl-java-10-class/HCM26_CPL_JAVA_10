@@ -1,3 +1,6 @@
+import { createLocaleFormatter } from "@/i18n/format";
+import { toLanguage } from "@/i18n/languages";
+import i18n from "@/i18n";
 import type {
   SprintPlanningItem,
   SprintStatus,
@@ -139,11 +142,7 @@ export const formatDate = (value?: string | null) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
 
-  return date.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return createLocaleFormatter(toLanguage(i18n.language)).formatDate(date);
 };
 
 export const formatDateTime = (value?: string | null) => {
@@ -152,14 +151,7 @@ export const formatDateTime = (value?: string | null) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
 
-  return date.toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+  return createLocaleFormatter(toLanguage(i18n.language)).formatDateTime(date);
 };
 
 /** Short backlog key shown on every card (e.g. `PRJ-108`). */

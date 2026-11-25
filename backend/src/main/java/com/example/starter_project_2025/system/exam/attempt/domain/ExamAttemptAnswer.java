@@ -60,6 +60,14 @@ public class ExamAttemptAnswer extends BaseEntity {
     @Column(name = "grade_attempts", nullable = false)
     private int gradeAttempts = 0;
 
+    /** Estimated % of AI-written content (0-100); null = not analysed / answer too short. */
+    @Column(name = "ai_percent")
+    private Integer aiPercent;
+
+    /** Short reasons behind aiPercent, separated by " | ". */
+    @Column(name = "ai_signals", columnDefinition = "TEXT")
+    private String aiSignals;
+
     /** Thoi diem som nhat duoc thu cham lai tu dong. */
     private Instant nextGradeAt;
 }

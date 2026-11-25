@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import axiosInstance from "@/api/axios";
+import { monthsAgoIsoDate, todayIsoDate } from "@/utils/date.utils";
 
 type Point = { period: string; count: number };
 type Report = {
@@ -17,7 +18,7 @@ type Report = {
 type Interval = "DAY" | "WEEK" | "MONTH";
 
 function vietnamToday(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  return todayIsoDate();
 }
 
 function BarList({ items }: { items: { label: string; count: number }[] }) {
@@ -39,12 +40,7 @@ function Panel({ title, note, children }: { title: string; note: string; childre
 
 export default function StudentAnalyticsPage() {
   const [to, setTo] = useState(vietnamToday);
-  const [from, setFrom] = useState(() => {
-    const today = vietnamToday();
-    const date = new Date(`${today}T00:00:00Z`);
-    date.setUTCMonth(date.getUTCMonth() - 11, 1);
-    return date.toISOString().slice(0, 10);
-  });
+  const [from, setFrom] = useState(() => monthsAgoIsoDate(11));
   const [interval, setInterval] = useState<Interval>("MONTH");
   const [course, setCourse] = useState("");
   const validRange = !!from && !!to && from <= to;

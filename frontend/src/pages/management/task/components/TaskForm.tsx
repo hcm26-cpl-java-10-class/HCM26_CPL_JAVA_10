@@ -1,3 +1,4 @@
+import { formatNumberNow } from "@/i18n/format";
 import { taskApi } from "@/api/features/task.api";
 import { FieldError } from "@/components/datatable/modal/form/FieldError";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -184,7 +185,7 @@ export function TaskForm({ projectId, backlogItemId, assignees, task, onSaved, o
               />
               <span id="task-description-count"
                 className={`text-right text-xs tabular-nums ${descriptionLength > maxTaskDescriptionLength ? "text-destructive" : "text-muted-foreground"}`}>
-                {descriptionLength.toLocaleString("en-US")} / {maxTaskDescriptionLength.toLocaleString("en-US")} characters
+                {formatNumberNow(descriptionLength)} / {formatNumberNow(maxTaskDescriptionLength)} characters
               </span>
             </TaskField>
           </CardContent>

@@ -2,6 +2,7 @@ import axios from "axios";
 import { store } from "@/store/store";
 import { setLogin, setLogout } from "@/store/slices/auth/authSlice";
 import { normalizeAuthRolePayload } from "@/utils/rbac.utils";
+import { getStoredLanguage } from "@/i18n";
 
 interface BackendAuthenticationResponse {
     accessToken: string;
@@ -64,6 +65,9 @@ axiosInstance.interceptors.request.use(
         if (token && !isPublicAuthRequest(requestUrl)) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+
+        const language = getStoredLanguage();
+        config.headers["Accept-Language"] = language;
         return config;
     },
     (error) => {

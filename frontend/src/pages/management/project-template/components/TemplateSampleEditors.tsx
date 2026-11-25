@@ -1,3 +1,4 @@
+import { formatNumberNow } from "@/i18n/format";
 import { FieldError } from "@/components/datatable/modal/form/FieldError";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +18,7 @@ function Field({ id, label, required, errors, length, limit, children }: {
     <div className="flex flex-wrap items-center justify-between gap-2">
       <Label htmlFor={id}>{label}{required && <span className="text-destructive">*</span>}</Label>
       <span id={`${id}-count`} className={`text-xs tabular-nums ${length > limit ? "text-destructive" : "text-muted-foreground"}`}>
-        {length.toLocaleString("en-US")} / {limit.toLocaleString("en-US")} characters
+        {formatNumberNow(length)} / {formatNumberNow(limit)} characters
       </span>
     </div>
     {children}<div id={`${id}-error`} aria-live="polite"><FieldError errors={errors} /></div></div>;

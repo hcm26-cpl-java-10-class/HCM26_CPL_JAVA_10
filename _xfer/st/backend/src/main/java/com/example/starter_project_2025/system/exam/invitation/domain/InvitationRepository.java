@@ -1,0 +1,68 @@
+package com.example.starter_project_2025.system.exam.invitation.domain;
+
+import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+public interface InvitationRepository extends BaseCrudRepository<Invitation, Long> {
+
+    /** Dem nhanh so loi moi cua mot de thi (khong tai ban ghi). */
+    long countByExam_Id(Long examId);
+
+    List<Invitation> findByExamId(Long examId);
+
+    List<Invitation> findByExamIdAndStatus(Long examId, InvitationStatus status);
+
+    Optional<Invitation> findByAccessCode(String accessCode);
+
+    Optional<Invitation> findByExamIdAndUserId(Long examId, Long userId);
+
+    @Query("SELECT i FROM Invitation i WHERE i.status IN ('PENDING','SENT') AND i.expiresAt < :now")
+    List<Invitation> findAllExpiredPendingInvitations(@Param("now") LocalDateTime now);
+
+    boolean existsByAccessCode(String accessCode);
+
+    /**
+     * Tìm lời mời (chưa hoàn tất) tương ứng với một lượt thi của sinh viên.
+     * Bao gồm cả lời mời ẩn danh (guestUserId) và lời mời gắn với user thật.
+     */
+    @Query("SELECT i FROM Invitation i WHERE i.exam.id = :examId "
+            + "AND (i.user.id = :studentId OR i.guestUserId = :studentId) "
+            + "AND i.status <> 'COMPLETED' AND i.status <> 'REVOKED' ORDER BY i.id DESC")
+    List<Invitation> findOpenByExamIdAndStudentId(@Param("examId") Long examId,
+                                                   @Param("studentId") Long studentId);
+
+    @Query("SELECT i FROM Invitation i WHERE i.exam.id = :examId AND i.anonymous = true")
+    List<Invitation> findAnonymousByExamId(@Param("examId") Long examId);
+
+    @Query("SELECT i FROM Invitation i JOIN FETCH i.exam e JOIN FETCH i.user WHERE i.user.id = :userId")
+    List<Invitation> findByUserIdWithExamAndUser(@Param("userId") Long userId);
+
+    boolean existsByExamIdAndUserId(Long examId, Long userId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM Invitation i WHERE i.accessCode = :accessCode")
+    Optional<Invitation> lockByAccessCode(@Param("accessCode") String accessCode);
+
+    /** Invitations of registered students whose exam opens inside (from, until]; used by the reminder job. */
+    @Query("select i from Invitation i join fetch i.exam e join fetch i.user u "
+            + "where i.status in :statuses and i.availableFrom > :from and i.availableFrom <= :until "
+            + "and e.isActive = true")
+    List<Invitation> findUpcomingForReminders(@Param("statuses") java.util.Collection<InvitationStatus> statuses,
+                                              @Param("from") LocalDateTime from,
+                                              @Param("until") LocalDateTime until);
+
+    /** Invitations that are still usable and expire inside (from, until]. */
+    @Query("select i from Invitation i where i.exam.id in :examIds and i.status in :statuses "
+            + "and i.expiresAt > :from and i.expiresAt <= :until")
+    List<Invitation> findClosingSoon(@Param("examIds") java.util.Collection<Long> examIds,
+                                     @Param("statuses") java.util.Collection<InvitationStatus> statuses,
+                                     @Param("from") LocalDateTime from,
+                                     @Param("until") LocalDateTime until);
+}

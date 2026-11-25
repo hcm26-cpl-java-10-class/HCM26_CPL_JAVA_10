@@ -6,6 +6,7 @@ import { iconMap } from "@/components/datatable/iconMap";
 import type { FieldSchema } from "@/types";
 import { OverflowBadges } from "./OverflowBadges";
 import { formatDateValue } from "./dateFormat";
+import { useTranslation } from "react-i18next";
 
 export type { DateFormatKey } from "./dateFormat";
 export { DATE_FORMAT_CYCLE, DATE_FORMAT_LABELS, formatDateValue } from "./dateFormat";
@@ -30,13 +31,15 @@ export function CellRenderer({
   disableBooleanToggle = false,
   dateFormat,
 }: CellRendererProps) {
+  const { t } = useTranslation();
+
   if (field.renderCell) {
     return <TableCell>{field.renderCell(value, row)}</TableCell>;
   }
 
   if (field.type === "boolean") {
     const labels = field.booleanLabels || { true: "Yes", false: "No" };
-    const label = value ? labels.true : labels.false;
+    const label = t(value ? labels.true : labels.false);
     const disableToggle = disableBooleanToggle || !onBooleanToggle || !!field.dynamicChild;
 
     return (
@@ -150,8 +153,8 @@ export function CellRenderer({
         return (
           <TableCell>
             <TooltipWrapper content={optionsText}>
-              <span className="text-muted-foreground cursor-help">
-                {value.length} option{value.length !== 1 ? "s" : ""}
+              <span className="text-xs text-muted-foreground cursor-help">
+                {value.length} {t(value.length === 1 ? "option" : "options")}
               </span>
             </TooltipWrapper>
           </TableCell>
@@ -170,7 +173,8 @@ export function CellRenderer({
     field.type === "select"
       ? field.options?.find((option) => option.value?.toString() === value?.toString())?.label
       : undefined;
-  const displayValue = optionLabel ?? value ?? "—";
+  // Nhãn enum là text cố định của hệ thống nên dịch được; giá trị thô (tên/email từ DB) giữ nguyên.
+  const displayValue = optionLabel ? t(optionLabel) : (value ?? "—");
   const displayStr =
     (field.type === "date" || field.type === "datetime") && value
       ? formatDateValue(value, dateFormat ?? "date")

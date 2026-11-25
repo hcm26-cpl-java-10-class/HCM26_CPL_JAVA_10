@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { learningHabitsApi } from "@/api/features/learning-habits.api";
 import type { DateRange, HabitStatistics, StudyDay } from "@/api/features/learning-habits.api";
 import { Field } from "./HabitForms";
-import { dateLabel, dateOffset, duration, monday } from "./habit-format";
+import { dateLabel, duration } from "./habit-format";
 
 export function WeekActivity({ days, threshold }: { days: StudyDay[]; threshold: number }) {
   return <div className="grid grid-cols-7 gap-1.5 text-center">
@@ -26,16 +25,6 @@ export function WeekActivity({ days, threshold }: { days: StudyDay[]; threshold:
 export function HabitCharts({ account, stats, range, setRange }: {
   account: string; stats: HabitStatistics; range: DateRange; setRange: (range: DateRange) => void;
 }) {
-  const [month, setMonth] = useState(stats.today.slice(0, 7));
-  const monthStart = month + "-01";
-  const nextMonth = new Date(monthStart + "T00:00:00Z");
-  nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
-  const monthEnd = dateOffset(nextMonth.toISOString().slice(0, 10), -1);
-  const queryEnd = monthEnd < stats.today ? monthEnd : stats.today;
-  const calendar = useQuery({
-    queryKey: ["learning-habits", account, "calendar", monthStart, queryEnd],
-    queryFn: ({ signal }) => learningHabitsApi.activity({ from: monthStart, to: queryEnd }, signal),
-  });
   const history = useQuery({
     queryKey: ["learning-habits", account, "periods", range],
     queryFn: ({ signal }) => learningHabitsApi.goalPeriods(range, signal),
@@ -45,17 +34,6 @@ export function HabitCharts({ account, stats, range, setRange }: {
   const [rangeError, setRangeError] = useState("");
   const totalWeeks = Math.max(1, ...stats.weeks.flatMap(week => [week.actualSeconds, (week.targetMinutes ?? 0) * 60]));
   const largestCourse = stats.byCourse[0]?.seconds ?? 1;
-  const startCell = monday(monthStart);
-  const days = new Map(calendar.data?.map(day => [day.date, day]));
-  const numberCells = Math.ceil((Number(monthEnd.slice(-2)) +
-    (new Date(monthStart + "T00:00:00Z").getUTCDay() + 6) % 7) / 7) * 7;
-
-  function moveMonth(offset: number) {
-    const value = new Date(monthStart + "T00:00:00Z");
-    value.setUTCMonth(value.getUTCMonth() + offset);
-    setMonth(value.toISOString().slice(0, 7));
-  }
-
   return <section className="space-y-5 rounded-xl border bg-card p-4 sm:p-5" aria-labelledby="habit-statistics">
     <h3 className="font-semibold" id="habit-statistics">Learning Statistics</h3>
     <form className="flex flex-wrap items-end gap-2" onSubmit={event => {

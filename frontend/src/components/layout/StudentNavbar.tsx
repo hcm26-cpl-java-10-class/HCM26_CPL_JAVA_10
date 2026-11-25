@@ -24,6 +24,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { performAppLogout } from "@/utils/auth-logout";
 import { useRoleSwitch } from "@/contexts/RoleSwitchContext";
 import { StudentExploreMenu } from "./StudentExploreMenu";
+import { useTranslate } from "@/i18n/use-render-translation";
 
 const normalizePath = (path?: string) => {
   const trimmed = (path || "/").replace(/\/+$/, "");
@@ -66,6 +67,8 @@ export function StudentNavbar() {
   const { data: moduleGroups = [] } = useActiveModuleGroups();
   const { count: pendingInvitationCount } = usePendingInvitations();
   const pathname = normalizePath(location.pathname);
+  // Dịch ngay lúc render để không nháy tiếng Anh rồi mới ra tiếng Việt.
+  const translate = useTranslate();
 
   const canBrowseSyllabuses =
       hasPermission("COURSE_READ");
@@ -332,7 +335,7 @@ export function StudentNavbar() {
             <div aria-hidden="true" className="pointer-events-none invisible absolute h-0 w-0 overflow-hidden">
               <div ref={sizingRef} className="flex w-max gap-2">
                 {navigation.map((entry, i) => <Button key={i} tabIndex={-1} variant="ghost" size="sm" className={navButtonClass}>
-                  <span className="max-w-[180px] truncate">{entry.type === "group" ? entry.group.name : "Syllabuses"}</span>
+                  <span className="max-w-[180px] truncate">{entry.type === "group" ? translate(entry.group.name) : "Syllabuses"}</span>
                   {entry.type === "group" && <ChevronDown className="h-4 w-4 opacity-70" />}
                 </Button>)}
               </div>
@@ -385,7 +388,7 @@ export function StudentNavbar() {
                           )}
                       >
                     <span className="max-w-[180px] truncate">
-                      {group.name}
+                      {translate(group.name)}
                     </span>
 
                         <ChevronDown className="h-4 w-4 opacity-70" />
@@ -397,7 +400,7 @@ export function StudentNavbar() {
                         className="min-w-64"
                     >
                       <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                        {group.name}
+                        {translate(group.name)}
                       </DropdownMenuLabel>
 
                       <DropdownMenuSeparator />
@@ -415,7 +418,7 @@ export function StudentNavbar() {
                               )}
                           >
                             <item.icon className="h-4 w-4" />
-                            <span>{item.title}</span>
+                            <span>{translate(item.title)}</span>
                             {renderPendingBadge(item.url)}
                           </DropdownMenuItem>
                       ))}
@@ -430,8 +433,8 @@ export function StudentNavbar() {
               <DropdownMenuContent align="end" className="w-72 max-w-[calc(100vw-2rem)]">
                 {overflow.map((entry, index) => entry.type === "syllabuses" ? <DropdownMenuItem key="more-syllabuses" onClick={() => navigate(SYLLABUS_PATH)} className={cn(isSyllabusesActive && "bg-accent text-accent-foreground")}>Syllabuses</DropdownMenuItem> : <div key={`more-${entry.group.id}`}>
                   {index > 0 && <DropdownMenuSeparator />}
-                  <DropdownMenuLabel className="text-xs uppercase tracking-wide text-muted-foreground">{entry.group.name}</DropdownMenuLabel>
-                  {entry.group.items.map(item => <DropdownMenuItem key={item.url} onClick={() => navigate(item.url)} className={cn("gap-2", item.isActive && "bg-accent text-accent-foreground")}><item.icon className="size-4" /><span className="min-w-0 break-words">{item.title}</span>{renderPendingBadge(item.url)}</DropdownMenuItem>)}
+                  <DropdownMenuLabel className="text-xs uppercase tracking-wide text-muted-foreground">{translate(entry.group.name)}</DropdownMenuLabel>
+                  {entry.group.items.map(item => <DropdownMenuItem key={item.url} onClick={() => navigate(item.url)} className={cn("gap-2", item.isActive && "bg-accent text-accent-foreground")}><item.icon className="size-4" /><span className="min-w-0 break-words">{translate(item.title)}</span>{renderPendingBadge(item.url)}</DropdownMenuItem>)}
                 </div>)}
               </DropdownMenuContent>
             </DropdownMenu>}
@@ -482,7 +485,7 @@ export function StudentNavbar() {
                             <DropdownMenuSeparator />
                         )}
                         <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          {group.name}
+                          {translate(group.name)}
                         </DropdownMenuLabel>
 
                         {group.items.map((item) => (
@@ -498,7 +501,7 @@ export function StudentNavbar() {
                                 )}
                             >
                               <item.icon className="h-4 w-4" />
-                              <span>{item.title}</span>
+                              <span>{translate(item.title)}</span>
                               {renderPendingBadge(item.url)}
                             </DropdownMenuItem>
                         ))}

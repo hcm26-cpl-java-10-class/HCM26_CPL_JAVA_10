@@ -50,6 +50,9 @@ public class ExamEssayGradingService {
     private final CodeJudgeService codeJudgeService;
     private final ExamQuestionGradingConfigRepository gradingConfigRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.starter_project_2025.system.notification.NotificationService notificationService;
+
     public List<EssayGradingDTO.Summary> listPending(Long examId) {
         requireExam(examId);
         return attemptRepository
@@ -417,6 +420,16 @@ public class ExamEssayGradingService {
         attempt.setDeadlineAt(newDeadline);
         attemptRepository.save(attempt);
 
+        if (notificationService != null && attempt.getStudent() != null && attempt.getStudent().getId() != null) {
+            notificationService.createOnce(
+                    attempt.getStudent().getId(),
+                    "exam.revision.attempt." + attempt.getId() + "." + newDeadline.getEpochSecond(),
+                    "Exam returned for revision",
+                    "Your submission for \"" + attempt.getExam().getTitle() + "\" requires revision: " + note,
+                    "/student/exams"
+            );
+        }
+
         return getDetail(examId, attemptId);
     }
 
@@ -539,6 +552,7 @@ public class ExamEssayGradingService {
         item.setCode(answerText(attempt, question));
         item.setSpec(CodeSpecSupport.forTeacher(question.getCodeSpec()));
         ExamAttemptAnswer answer = findAnswer(attempt, question);
+        applyAi(item::setAiPercent, item::setAiLevel, item::setAiSignals, answer, true);
         if (answer != null) {
             item.setScore(answer.getScore());
             item.setFeedback(answer.getFeedback());
@@ -620,12 +634,33 @@ public class ExamEssayGradingService {
         }
 
         ExamAttemptAnswer answer = findAnswer(attempt, question);
+        applyAi(item::setAiPercent, item::setAiLevel, item::setAiSignals, answer, false);
         if (answer != null) {
             item.setScore(answer.getScore());
             item.setFeedback(answer.getFeedback());
         }
 
         return item;
+    }
+
+    /** Stored AI estimate; falls back to computing it for answers submitted before this feature existed. */
+    private void applyAi(java.util.function.Consumer<Integer> pct, java.util.function.Consumer<String> level,
+                         java.util.function.Consumer<List<String>> signals, ExamAttemptAnswer answer, boolean code) {
+        if (answer == null) return;
+        Integer p = answer.getAiPercent();
+        List<String> sig = null;
+        if (p != null && answer.getAiSignals() != null) {
+            sig = List.of(answer.getAiSignals().split(" \\| "));
+        } else if (p == null) {
+            var r = com.example.starter_project_2025.system.exam.integrity.ai.AiContentDetector
+                    .analyze(answer.getTextAnswer(), code);
+            if (r != null) { p = r.percent(); sig = r.signals(); }
+        }
+        if (p == null) return;
+        pct.accept(p);
+        level.accept(p >= com.example.starter_project_2025.system.exam.integrity.ai.AiContentDetector.HIGH ? "HIGH"
+                : p >= com.example.starter_project_2025.system.exam.integrity.ai.AiContentDetector.MEDIUM ? "MEDIUM" : "LOW");
+        signals.accept(sig);
     }
 
     private ExamAttemptAnswer findAnswer(ExamAttempt attempt, ExamAttemptQuestion question) {

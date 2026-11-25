@@ -1,4 +1,7 @@
 /** Shared palette and helpers for the Course Analytics charts. */
+import { createLocaleFormatter } from "@/i18n/format";
+import { toLanguage } from "@/i18n/languages";
+import i18n from "@/i18n";
 
 export const CHART_COLORS = [
   "#2563eb",
@@ -14,9 +17,17 @@ export const CHART_COLORS = [
 export const AXIS_COLOR = "#94a3b8";
 export const GRID_COLOR = "#e2e8f0";
 
+/**
+ * Bộ định dạng theo ngôn ngữ đang chọn.
+ *
+ * Đọc `i18n.language` tại thời điểm gọi nên component tự hiển thị lại khi đổi ngôn ngữ,
+ * không cần truyền locale thủ công vào từng chart.
+ */
+const formatter = () => createLocaleFormatter(toLanguage(i18n.language));
+
 export const formatNumber = (value?: number | null): string =>
   typeof value === "number" && Number.isFinite(value)
-    ? value.toLocaleString("en-US")
+    ? formatter().formatNumber(value)
     : "—";
 
 export const formatPercent = (value?: number | null, digits = 1): string =>
@@ -28,24 +39,14 @@ export const formatDateTime = (value?: string | null): string => {
   if (!value) return "—";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "—";
-  return parsed.toLocaleString("en-US", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatter().formatDateTime(parsed);
 };
 
 export const formatDate = (value?: string | null): string => {
   if (!value) return "—";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
+  return formatter().formatDate(parsed);
 };
 
 /** Shortens lesson labels so the X axis does not overlap. */
@@ -59,9 +60,9 @@ export const truncateLabel = (value: string, max = 18): string =>
 export const tooltipNumber = (
   value: unknown,
   label: string,
-): [string, string] => [formatNumber(Number(value)), label];
+): [string, string] => [formatNumber(Number(value)), i18n.t(label)];
 
 export const tooltipPercent = (
   value: unknown,
   label: string,
-): [string, string] => [formatPercent(Number(value)), label];
+): [string, string] => [formatPercent(Number(value)), i18n.t(label)];

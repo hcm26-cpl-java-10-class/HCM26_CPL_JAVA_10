@@ -1,3 +1,4 @@
+import { formatDateNow } from "@/i18n/format";
 import { certificateApi, courseApi, userApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
@@ -115,7 +116,7 @@ function StudentCertificateList() {
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return "N/A";
     const d = new Date(dateStr);
-    return Number.isNaN(d.getTime()) ? dateStr : d.toLocaleDateString("vi-VN");
+    return Number.isNaN(d.getTime()) ? dateStr : formatDateNow(d);
   };
 
   return (

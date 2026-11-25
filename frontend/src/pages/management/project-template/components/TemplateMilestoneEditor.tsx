@@ -1,3 +1,4 @@
+import { formatNumberNow } from "@/i18n/format";
 import { FieldError } from "@/components/datatable/modal/form/FieldError";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -90,7 +91,7 @@ export function TemplateMilestoneEditor({ milestone, index, count, disabled, edi
             <Textarea {...fieldProps("description")} maxLength={maxDescriptionLength} rows={3} value={milestone.description}
               onChange={(event) => onChange({ description: event.target.value })} placeholder="Describe the expected outcome (optional)." />
             <p className="text-right text-xs tabular-nums text-muted-foreground">
-              {milestone.description.length.toLocaleString("en-US")} / {maxDescriptionLength.toLocaleString("en-US")} characters
+              {formatNumberNow(milestone.description.length)} / {formatNumberNow(maxDescriptionLength)} characters
             </p>
           </MilestoneField>
           <div className="grid gap-4 sm:grid-cols-3">

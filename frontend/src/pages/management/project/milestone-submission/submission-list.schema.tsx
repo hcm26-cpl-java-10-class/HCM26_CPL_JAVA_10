@@ -1,8 +1,9 @@
+import { getCurrentLocale } from "@/i18n/format";
 import { Badge } from "@/components/ui/badge";
 import type { EntitySchema, SubmissionListItem } from "@/types";
 import { ExecutionStatusBadge, SubmissionStatusBadge } from "./components/SubmissionStatusBadge";
 
-const date = (value?: string | null) => value ? new Intl.DateTimeFormat("en-GB", {
+const date = (value?: string | null) => value ? new Intl.DateTimeFormat(getCurrentLocale(), {
   dateStyle: "medium", timeStyle: "short",
 }).format(new Date(value)) : "—";
 
