@@ -64,7 +64,7 @@ export const clearAuthStorage = () => {
 
 export const authApi = {
     login: async (credentials: LoginRequest): Promise<LoginResponse> => {
-        const device = credentials.device || getDeviceDescription();
+        const device = credentials.device || (await getDeviceDescription());
         const response = await axiosInstance.post<BackendAuthenticationResponse>("/auth/login", {
             device,
             email: credentials.email,

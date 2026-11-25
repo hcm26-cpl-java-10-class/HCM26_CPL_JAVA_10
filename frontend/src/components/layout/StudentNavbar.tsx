@@ -19,7 +19,7 @@ import { ChevronDown, FileCheck2, GraduationCap, LogOutIcon, Menu, MoreHorizonta
 import { fittingNavigationCount } from "./student-navigation-overflow";
 import { useLayoutEffect, useRef, useState, useMemo } from "react";
 import { useDispatch } from "react-redux";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { performAppLogout } from "@/utils/auth-logout";
 import { useRoleSwitch } from "@/contexts/RoleSwitchContext";
@@ -171,8 +171,21 @@ export function StudentNavbar() {
       groups.push({ id: "student-project", name: "Project Management", hiddenInMenu: false, items: [submissionsItem] });
     }
 
+    if (canLearn) {
+      const insights = {
+        id: "student-learning-insights",
+        title: "AI Learning Insights",
+        url: "/my-learning#learning-insights-heading",
+        icon: GraduationCap,
+        isActive: pathname === "/my-learning" && location.hash === "#learning-insights-heading",
+      };
+      const studentGroup = groups.find(group => !group.hiddenInMenu && group.name.trim().toLowerCase() === "student");
+      if (studentGroup) studentGroup.items.push(insights);
+      else groups.push({ id: "student-learning", name: "Student", hiddenInMenu: false, items: [insights] });
+    }
+
     return groups.filter((group) => !group.hiddenInMenu && group.items.length > 0);
-  }, [moduleGroups, pathname, hasPermission]);
+  }, [moduleGroups, pathname, hasPermission, canLearn, location.hash]);
 
   // Pending-invitation badge next to the Invitations entry point.
   const renderPendingBadge = (url: string) => {
@@ -475,18 +488,6 @@ export function StudentNavbar() {
 
             {/* EXISTING ROLE SWITCHER */}
             <div className="min-w-0 max-w-full [&>div]:flex-wrap">
-              {canLearn && (
-            <Button asChild variant="ghost" size="sm" className="shrink-0">
-              <Link
-                to="/my-learning"
-                aria-label="AI Learning Insights"
-                aria-current={pathname === "/my-learning" ? "page" : undefined}
-              >
-                <GraduationCap aria-hidden="true" className="size-4" />
-                <span className="hidden xl:inline">AI Learning Insights</span>
-              </Link>
-            </Button>
-          )}
               <HeaderRight compact />
             </div>
 

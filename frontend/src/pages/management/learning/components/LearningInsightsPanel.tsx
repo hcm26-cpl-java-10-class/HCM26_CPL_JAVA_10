@@ -102,7 +102,7 @@ export function LearningInsightsPanel({ account }: { account: string }) {
 
   return (
     <section aria-labelledby={summaryHeading} className="space-y-4 rounded-xl border bg-card p-4 text-card-foreground sm:p-5">
-      <h2 id={summaryHeading} className="text-lg font-semibold">AI Learning Insights</h2>
+      <h2 id={summaryHeading} tabIndex={-1} className="scroll-mt-28 text-lg font-semibold">AI Learning Insights</h2>
       {query.isPending ? (
         <div role="status" className="space-y-3">
           <span className="sr-only">Loading learning insights</span>
