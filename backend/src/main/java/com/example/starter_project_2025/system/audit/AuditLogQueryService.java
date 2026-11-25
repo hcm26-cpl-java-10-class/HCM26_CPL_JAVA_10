@@ -161,6 +161,7 @@ public class AuditLogQueryService {
         Map<String, Long> byEntityType = new LinkedHashMap<>();
         Map<String, Long> byResult = new LinkedHashMap<>();
         Map<String, Long> byActor = new LinkedHashMap<>();
+        Map<String, Map<String, Long>> byEntityAction = new LinkedHashMap<>();
         long failures = 0;
 
         for (Object[] row : rows) {
@@ -178,6 +179,9 @@ public class AuditLogQueryService {
 
             byAction.merge(String.valueOf(row[1]), 1L, Long::sum);
             byEntityType.merge(String.valueOf(row[2]), 1L, Long::sum);
+            byEntityAction
+                    .computeIfAbsent(String.valueOf(row[2]), key -> new LinkedHashMap<>())
+                    .merge(String.valueOf(row[1]), 1L, Long::sum);
             byResult.merge(result, 1L, Long::sum);
             byActor.merge(row[4] != null ? String.valueOf(row[4]) : "SYSTEM", 1L, Long::sum);
         }
@@ -198,8 +202,29 @@ public class AuditLogQueryService {
                 toBuckets(byAction, 20),
                 toBuckets(byEntityType, 10),
                 toBuckets(byResult, 5),
-                toBuckets(byActor, 5)
+                toBuckets(byActor, 5),
+                toEntityActionBuckets(byEntityAction, ENTITY_ACTION_ENTITY_LIMIT)
         );
+    }
+
+    /** Only the busiest entity types are returned so the chart stays readable. */
+    private static final int ENTITY_ACTION_ENTITY_LIMIT = 10;
+
+    private static List<AuditStatsDTO.EntityActionBucket> toEntityActionBuckets(
+            Map<String, Map<String, Long>> counts,
+            int entityLimit
+    ) {
+        return counts.entrySet().stream()
+                .sorted(Comparator.comparingLong(
+                        (Map.Entry<String, Map<String, Long>> entry) ->
+                                entry.getValue().values().stream().mapToLong(Long::longValue).sum())
+                        .reversed())
+                .limit(entityLimit)
+                .flatMap(entity -> entity.getValue().entrySet().stream()
+                        .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                        .map(action -> new AuditStatsDTO.EntityActionBucket(
+                                entity.getKey(), action.getKey(), action.getValue())))
+                .toList();
     }
 
     private static String normalizeResult(String result) {

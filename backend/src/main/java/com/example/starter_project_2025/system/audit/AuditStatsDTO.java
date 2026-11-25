@@ -14,10 +14,15 @@ public record AuditStatsDTO(
         List<Bucket> byAction,
         List<Bucket> byEntityType,
         List<Bucket> byResult,
-        List<Bucket> topActors
+        List<Bucket> topActors,
+        List<EntityActionBucket> byEntityAction
 ) {
 
     public record Bucket(String key, long count) {
+    }
+
+    /** Number of events of one action on one entity type (feeds the "Actions by Entity" chart). */
+    public record EntityActionBucket(String entityType, String action, long count) {
     }
 
     public record DayBucket(String date, long total, long failures) {
