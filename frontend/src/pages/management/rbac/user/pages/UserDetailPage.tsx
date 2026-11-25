@@ -109,11 +109,11 @@ export function UserDetailPage() {
                 <Item label="Họ tên">
                   <span className="text-base font-semibold">{fullName}</span>
                 </Item>
-                <Item label="Username" data-no-translate>{user?.username}</Item>
-                <Item label="Email" data-no-translate>{user?.email}</Item>
-                <Item label="Mã nhân viên" data-no-translate>{user?.employeeCode}</Item>
-                <Item label="Mã sinh viên" data-no-translate>{user?.userCode || "Chưa được gán"}</Item>
-                <Item label="Số điện thoại" data-no-translate>{user?.phone}</Item>
+                <Item label="Username">{user?.username}</Item>
+                <Item label="Email">{user?.email}</Item>
+                <Item label="Mã nhân viên">{user?.employeeCode}</Item>
+                <Item label="Mã sinh viên">{user?.userCode || "Chưa được gán"}</Item>
+                <Item label="Số điện thoại">{user?.phone}</Item>
                 <Item label="Trạng thái">
                   <Badge variant={STATUS_VARIANT[status]}>{statusLabel}</Badge>
                 </Item>

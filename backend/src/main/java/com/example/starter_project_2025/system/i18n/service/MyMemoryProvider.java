@@ -11,9 +11,10 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,9 +36,16 @@ public class MyMemoryProvider implements TranslationProvider {
             "INVALID LANGUAGE PAIR"
     );
 
+    /** Tạm dừng lâu khi bị chặn do vượt quota (429) hoặc bị từ chối (403). */
+    private static final Duration QUOTA_COOLDOWN = Duration.ofMinutes(10);
+
+    /** Tạm dừng ngắn khi gặp lỗi mạng hoặc lỗi server. */
+    private static final Duration ERROR_COOLDOWN = Duration.ofMinutes(1);
+
     private final I18nProperties properties;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
+    private final ProviderCooldown cooldown = new ProviderCooldown("MyMemory");
 
     public MyMemoryProvider(
             I18nProperties properties,
@@ -56,7 +64,7 @@ public class MyMemoryProvider implements TranslationProvider {
 
     @Override
     public boolean isAvailable() {
-        return properties.isEnabled();
+        return properties.isEnabled() && !cooldown.isOpen();
     }
 
     @Override
@@ -79,20 +87,25 @@ public class MyMemoryProvider implements TranslationProvider {
     }
 
     private String translateOne(String sourceLanguage, String targetLanguage, String text) {
-        // `build()` (không `.encode()`) để RestTemplate tự encode đúng một lần.
-        String url = UriComponentsBuilder
-                .fromHttpUrl(properties.getMyMemoryEndpoint())
-                .queryParam("q", text)
-                .queryParam("langpair", sourceLanguage + "|" + targetLanguage)
-                .build()
-                .toUriString();
+        // Dùng template + `uriVariables` để giá trị được encode đúng một lần bởi
+        // `DefaultUriBuilderFactory` (chế độ VALUES_ONLY).
+        Map<String, String> uriVariables = new LinkedHashMap<>();
+        uriVariables.put("q", text);
+        uriVariables.put("langpair", sourceLanguage + "|" + targetLanguage);
+        String uriTemplate = buildUriTemplate(properties.getMyMemoryEndpoint(), uriVariables);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set(HttpHeaders.USER_AGENT, "Mozilla/5.0");
 
         try {
-            String body = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), String.class)
+            String body = restTemplate.exchange(
+                            uriTemplate,
+                            HttpMethod.GET,
+                            new HttpEntity<>(headers),
+                            String.class,
+                            uriVariables
+                    )
                     .getBody();
             if (body == null || body.isBlank()) {
                 return null;
@@ -108,8 +121,16 @@ public class MyMemoryProvider implements TranslationProvider {
                 return null;
             }
             return translated;
+        } catch (HttpStatusCodeException ex) {
+            int status = ex.getStatusCode().value();
+            if (status == 429 || status == 403) {
+                cooldown.trip(QUOTA_COOLDOWN, "HTTP " + status, log);
+            } else {
+                cooldown.trip(ERROR_COOLDOWN, "HTTP " + status, log);
+            }
+            return null;
         } catch (Exception ex) {
-            log.warn("[i18n] MyMemory failed for '{}': {}", text, ex.getMessage());
+            cooldown.trip(ERROR_COOLDOWN, ex.getClass().getSimpleName(), log);
             return null;
         }
     }

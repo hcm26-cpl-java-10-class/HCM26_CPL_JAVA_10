@@ -33,6 +33,31 @@ public interface TranslationProvider {
     TranslationResult translate(String sourceLanguage, String targetLanguage, List<String> texts);
 
     /**
+     * Dựng URI template từ URL gốc và các tham số query.
+     *
+     * <p>Mỗi giá trị được gắn vào một placeholder riêng ({@code ?name={name}}) để
+     * {@code RestTemplate} encode đúng một lần. Nếu nối chuỗi thủ công thì khoảng trắng, {@code &},
+     * {@code [} hay dấu tiếng Việt sẽ làm hỏng URI và dịch vụ trả về kết quả sai.
+     *
+     * @param baseUrl URL gốc, có thể đã kèm query string
+     * @param params  tham số query, mỗi tham số sẽ thành một placeholder
+     * @return URI template dùng được với {@code RestTemplate.exchange(..., uriVariables)}
+     */
+    default String buildUriTemplate(String baseUrl, Map<String, String> params) {
+        StringBuilder template = new StringBuilder(baseUrl);
+        boolean first = !baseUrl.contains("?");
+        for (Map.Entry<String, String> entry : params.entrySet()) {
+            template.append(first ? '?' : '&')
+                    .append(entry.getKey())
+                    .append("={")
+                    .append(entry.getKey())
+                    .append('}');
+            first = false;
+        }
+        return template.toString();
+    }
+
+    /**
      * Kết quả dịch của một provider.
      *
      * @param translations      chuỗi nguồn -> chuỗi đã dịch

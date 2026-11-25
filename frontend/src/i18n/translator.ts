@@ -53,7 +53,20 @@ const VI_PATTERNS: Array<[RegExp, (noun: string, tail: string) => string]> = [
   [/^Select (.+)$/i, (n) => `Chọn ${n}`],
   [/^All (.+)$/i, (n) => `Tất cả ${n}`],
   [/^Total (.+)$/i, (n) => `Tổng ${n}`],
+  [/^Showing (.+)$/i, (n) => `Hiển thị ${n}`],
+  [/^(?:Last updated|Updated)(?: on| at)? (.+)$/i, (n) => `Cập nhật lần cuối ${n}`],
+  [/^Updated (.+)$/i, (n) => `Đã cập nhật ${n}`],
+  [/^Created (.+)$/i, (n) => `Đã tạo ${n}`],
 ];
+
+/** Số + trạng thái: "336 active" -> "336 đang hoạt động". */
+const VI_COUNT_PATTERNS: Array<[RegExp, (count: string, status: string) => string]> = [
+  [/^(\d[\d.,]*)\s+(.+)$/, (count, status) => `${count} ${lowerFirst(status)}`],
+];
+
+/** Chuỗi động có nhiều số xen kẽ: aria-label của chuông thông báo. */
+const VI_NOTIFICATION_LABEL: RegExp =
+  /^Notifications: (\d+) unread; exam invitations: (\d+) pending$/i;
 
 /** Dynamic Vietnamese patterns -> English. */
 const EN_PATTERNS: Array<[RegExp, (noun: string, tail: string) => string]> = [
@@ -76,7 +89,20 @@ const EN_PATTERNS: Array<[RegExp, (noun: string, tail: string) => string]> = [
   [/^Thông tin (.+)$/i, (n) => `${n} Information`],
   [/^Báo cáo (.+)$/i, (n) => `${n} Report`],
   [/^Lịch sử (.+)$/i, (n) => `${n} History`],
+  [/^Hiển thị (.+)$/i, (n) => `Showing ${n}`],
+  [/^Cập nhật lần cuối (.+)$/i, (n) => `Last updated ${n}`],
+  [/^Đã cập nhật (.+)$/i, (n) => `Updated ${n}`],
+  [/^Đã tạo (.+)$/i, (n) => `Created ${n}`],
 ];
+
+/** Số + trạng thái: "336 đang hoạt động" -> "336 active". */
+const EN_COUNT_PATTERNS: Array<[RegExp, (count: string, status: string) => string]> = [
+  [/^(\d[\d.,]*)\s+(.+)$/, (count, status) => `${count} ${lowerFirst(status)}`],
+];
+
+/** Chuỗi động có nhiều số xen kẽ: aria-label của chuông thông báo. */
+const EN_NOTIFICATION_LABEL: RegExp =
+  /^Thông báo: (\d+) chưa đọc; lời mời thi: (\d+) đang chờ$/i;
 
 function translateExact(text: string, language: Language): string | null {
   const table = TABLES[language];
@@ -106,6 +132,18 @@ export function translatePhrase(text: string, language: Language): string | null
       if (noun === null) continue;
       return build(lowerFirst(noun), match[2] ?? "");
     }
+    // "336 active" -> "336 đang hoạt động": dịch phần trạng thái rồi viết thường.
+    for (const [pattern, build] of VI_COUNT_PATTERNS) {
+      const match = phrase.match(pattern);
+      if (!match) continue;
+      const status = translateExact(match[2], "vi");
+      if (status === null) continue;
+      return build(match[1], status);
+    }
+    const bell = phrase.match(VI_NOTIFICATION_LABEL);
+    if (bell) {
+      return `Thông báo: ${bell[1]} chưa đọc; lời mời thi: ${bell[2]} đang chờ`;
+    }
   } else if (language === "en") {
     for (const [pattern, build] of EN_PATTERNS) {
       const match = phrase.match(pattern);
@@ -113,6 +151,18 @@ export function translatePhrase(text: string, language: Language): string | null
       const noun = translateExact(match[1], "en");
       if (noun === null) continue;
       return build(noun, match[2] ?? "");
+    }
+    // "336 đang hoạt động" -> "336 active".
+    for (const [pattern, build] of EN_COUNT_PATTERNS) {
+      const match = phrase.match(pattern);
+      if (!match) continue;
+      const status = translateExact(match[2], "en");
+      if (status === null) continue;
+      return build(match[1], status);
+    }
+    const bell = phrase.match(EN_NOTIFICATION_LABEL);
+    if (bell) {
+      return `Notifications: ${bell[1]} unread; exam invitations: ${bell[2]} pending`;
     }
   }
   return null;
@@ -218,9 +268,27 @@ export interface AutoTranslationStore {
   set(entries: Record<string, string>, language: Language): void;
 }
 
-const CACHE_STORAGE_PREFIX = "fams:i18n:";
+/** Thời gian chờ dự phòng khi trình duyệt không hỗ trợ `requestIdleCallback`. */
+const IDLE_FALLBACK_MS = 120;
 
-const MAX_CACHED_ENTRIES = 5000;
+/**
+ * Tiền tố key cache trong localStorage.
+ *
+ * <p>Có số phiên bản để cache cũ (sinh ra trước khi backend tự nhận diện ngôn ngữ nguồn
+ * theo từng chuỗi) bị loại bỏ thay vì dùng lại những bản dịch sai.
+ */
+const CACHE_STORAGE_PREFIX = "fams:i18n:v3:";
+
+/**
+ * Số entry tối đa giữ lại cho mỗi ngôn ngữ.
+ *
+ * Cache nằm trong localStorage nên mỗi lần ghi là một lần `JSON.stringify` toàn bộ bảng.
+ * Giữ giới hạn nhỏ để việc serialize không chiếm main thread mỗi khi backend trả bản dịch.
+ */
+const MAX_CACHED_ENTRIES = 800;
+
+/** Thời gian chờ trước khi ghi cache xuống localStorage. */
+const CACHE_WRITE_DEBOUNCE_MS = 500;
 
 const readCache = (language: Language): Record<string, string> => {
   try {
@@ -244,6 +312,24 @@ const writeCache = (language: Language, entries: Record<string, string>) => {
   } catch {
     // localStorage có thể bị chặn (private mode).
   }
+};
+
+/**
+ * Ghi cache xuống localStorage sau một khoảng chờ.
+ *
+ * Backend có thể trả về nhiều batch liên tiếp; gộp chúng lại rồi ghi một lần giúp tránh
+ * `JSON.stringify` toàn bộ bảng nhiều lần liên tiếp trên main thread.
+ */
+const pendingCacheWrites = new Map<Language, number>();
+
+const scheduleCacheWrite = (language: Language, table: Map<string, string>) => {
+  const existing = pendingCacheWrites.get(language);
+  if (existing !== undefined) window.clearTimeout(existing);
+  const timer = window.setTimeout(() => {
+    pendingCacheWrites.delete(language);
+    writeCache(language, Object.fromEntries(table));
+  }, CACHE_WRITE_DEBOUNCE_MS);
+  pendingCacheWrites.set(language, timer);
 };
 
 /** In-memory store; the DOM translator fills it from the backend response. */
@@ -280,7 +366,7 @@ export const createMemoryAutoTranslationStore = (): AutoTranslationStore => {
         const key = source.toLowerCase();
         if (!lower.has(key)) lower.set(key, translated);
       }
-      writeCache(language, Object.fromEntries(table));
+      scheduleCacheWrite(language, table);
     },
   };
 };
@@ -288,6 +374,31 @@ export const createMemoryAutoTranslationStore = (): AutoTranslationStore => {
 // ---------------------------------------------------------------------------
 // DOM translator
 // ---------------------------------------------------------------------------
+
+/**
+ * Store dửng chung cho toàn ứng dụng.
+ *
+ * DOM translator ghi bản dịch vào store này, nên component có thể dịch ngay lúc render
+ * (không phải chờ DOM được sửa sau khi vẽ) để không bị nháy tiếng Anh
+ * trước khi ra tiếng Việt.
+ */
+const sharedAutoTranslationStore = createMemoryAutoTranslationStore();
+
+/** Store dịch tự động dùng chung. */
+export const getSharedAutoTranslationStore = (): AutoTranslationStore => sharedAutoTranslationStore;
+
+/**
+ * Dịch một chuỗi ngay lúc render.
+ *
+ * Đầu tiên tra từ điển trong từ điển, sau đó tra cache của backend.
+ * Trả về null khi không có bản dịch — lúc độ component giữ nguyên.
+ */
+export function translateForRender(sourceText: string, language: Language): string | null {
+  if (!sourceText) return null;
+  const local = translatePhrase(sourceText, language);
+  if (local !== null) return local;
+  return sharedAutoTranslationStore.get(sourceText, language);
+}
 
 const TRANSLATED_ATTRIBUTES = ["placeholder", "title", "aria-label", "alt"] as const;
 
@@ -392,14 +503,36 @@ export function startDomTranslator(
       record = { original: value, shown: value };
     } else if (record.shown !== value) {
       // React vừa ghi nội dung mới vào node: nội dung đó là chuỗi nguồn mới.
+      // Nếu `value` bằng đúng `record.shown` thì đây chính là lần ghi của translator,
+      // nên giữ nguyên `original` để không dịch lại chuỗi đã dịch (tránh vòng lặp).
       record = { original: value, shown: value };
     }
 
     const translated = resolve(record.original);
-    const next = translated === null ? record.original : withOuterWhitespace(record.original, translated);
+    const next = translated === null
+      ? record.original
+      : withOuterWhitespace(record.original, lowerFirstIfAfterNumber(node, translated));
     record.shown = next;
     textRecords.set(node, record);
-    if (value !== next) node.nodeValue = next;
+    if (value !== next) {
+      node.nodeValue = next;
+    }
+  };
+
+  /**
+   * Viết thường chữ đầu khi text node đứng ngay sau một số.
+   *
+   * React tách `{336} active` thành hai text node: "336" và " active". Nếu dịch "active"
+   * thành "Đang hoạt động" thì câu thành "336 Đang hoạt động" — sai chữ hoa giữa câu.
+   * Nhận biết số phía trước giúp viết thường lại ("336 đang hoạt động").
+   */
+  const lowerFirstIfAfterNumber = (node: Text, translated: string): string => {
+    const previous = node.previousSibling;
+    if (!previous || previous.nodeType !== Node.TEXT_NODE) return translated;
+    const before = (previous.nodeValue ?? "").trim();
+    if (!before || !/^\d[\d.,]*$/.test(before)) return translated;
+    if (!/^[A-ZÀ-Ỹ]/.test(translated)) return translated;
+    return translated.charAt(0).toLowerCase() + translated.slice(1);
   };
 
   const processElementAttributes = (element: Element) => {
@@ -416,9 +549,22 @@ export function startDomTranslator(
       const next = translated ?? record.original;
       record.shown = next;
       records = { ...(records ?? {}), [name]: record };
-      if (value !== next) element.setAttribute(name, next);
+      if (value !== next) {
+        element.setAttribute(name, next);
+      }
     }
     if (records) attributeRecords.set(element, records);
+  };
+
+  /** Duyệt một nhánh con (không tính chính `start`) và dịch các node tìm thấy. */
+  const processSubtree = (start: Node) => {
+    const walker = document.createTreeWalker(start, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+    let current = walker.nextNode();
+    while (current) {
+      if (current.nodeType === Node.TEXT_NODE) processText(current as Text);
+      else processElementAttributes(current as Element);
+      current = walker.nextNode();
+    }
   };
 
   const processTree = (start: Node) => {
@@ -429,27 +575,79 @@ export function startDomTranslator(
     if (start.nodeType !== Node.ELEMENT_NODE) return;
     if (shouldSkip(start)) return;
     processElementAttributes(start as Element);
-    const walker = document.createTreeWalker(start, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
-    let current = walker.nextNode();
-    while (current) {
-      if (current.nodeType === Node.TEXT_NODE) processText(current as Text);
-      else processElementAttributes(current as Element);
-      current = walker.nextNode();
+    processSubtree(start);
+  };
+
+  /**
+   * Chỉ dịch phần DOM vừa thay đổi thay vì quét lại toàn trang.
+   *
+   * Mỗi lần React render lại chỉ vài node đổi; quét delta giữ chi phí O(số node đổi)
+   * thay vì O(toàn bộ cây DOM).
+   */
+  const processMutations = (records: MutationRecord[]) => {
+    for (const record of records) {
+      if (record.type === "characterData") {
+        processText(record.target as Text);
+        continue;
+      }
+      if (record.type === "attributes") {
+        processElementAttributes(record.target as Element);
+        continue;
+      }
+      // childList: dịch node mới được thêm vào.
+      for (const added of Array.from(record.addedNodes)) {
+        if (added.nodeType === Node.TEXT_NODE) {
+          processText(added as Text);
+        } else if (added.nodeType === Node.ELEMENT_NODE) {
+          const element = added as Element;
+          if (shouldSkip(element)) continue;
+          processElementAttributes(element);
+          processSubtree(element);
+        }
+      }
+      // Nội dung của node cha có thể đã bị React thay bằng text node mới.
+      if (record.target.nodeType === Node.ELEMENT_NODE) {
+        const parent = record.target as Element;
+        for (const child of Array.from(parent.childNodes)) {
+          if (child.nodeType === Node.TEXT_NODE) processText(child as Text);
+        }
+      }
     }
   };
 
   let scheduled = false;
+  let pendingRecords: MutationRecord[] = [];
+  let idleHandle: number | undefined;
 
   const flush = () => {
     scheduled = false;
-    processTree(root);
+    idleHandle = undefined;
+    const records = pendingRecords;
+    pendingRecords = [];
+    if (records.length > 0) {
+      processMutations(records);
+    }
   };
 
-  const observer = new MutationObserver(() => {
-    if (!scheduled) {
-      scheduled = true;
-      queueMicrotask(flush);
+  /**
+   * Lên lịch xử lý mutation ở thời điểm trang rảnh.
+   *
+   * `requestIdleCallback` cho phép trình duyệt vẽ xong trước khi ta đụng vào DOM, nên việc
+   * dịch không làm khựng frame vẽ.
+   */
+  const scheduleFlush = () => {
+    if (scheduled) return;
+    scheduled = true;
+    if (typeof requestIdleCallback === "function") {
+      idleHandle = requestIdleCallback(() => flush());
+    } else {
+      idleHandle = window.setTimeout(() => flush(), IDLE_FALLBACK_MS);
     }
+  };
+
+  const observer = new MutationObserver((records) => {
+    pendingRecords.push(...records);
+    scheduleFlush();
   });
 
   observer.observe(root, {
@@ -470,6 +668,15 @@ export function startDomTranslator(
   return {
     refresh,
     collectPending: () => Array.from(pending),
-    stop: () => observer.disconnect(),
+    stop: () => {
+      observer.disconnect();
+      if (idleHandle !== undefined) {
+        if (typeof cancelIdleCallback === "function") cancelIdleCallback(idleHandle);
+        else window.clearTimeout(idleHandle);
+        idleHandle = undefined;
+      }
+      scheduled = false;
+      pendingRecords = [];
+    },
   };
 }

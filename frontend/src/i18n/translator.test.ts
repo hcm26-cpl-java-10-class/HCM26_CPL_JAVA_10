@@ -9,7 +9,23 @@ import {
   type Language,
 } from "@/i18n/translator";
 
-const flush = () => new Promise<void>((resolve) => queueMicrotask(() => resolve()));
+/**
+ * Chờ tới lúc translator xử lý xong các mutation đang chờ.
+ *
+ * Translator dùng `requestIdleCallback` để không chặn frame vẽ, nên test phải đợi idle
+ * callback thay vì một microtask.
+ */
+const flush = async () => {
+  await new Promise<void>((resolve) => {
+    if (typeof requestIdleCallback === "function") {
+      requestIdleCallback(() => resolve());
+    } else {
+      setTimeout(() => resolve(), 0);
+    }
+  });
+  // Thêm một vòng nữa để chắc chắn chuỗi mutation đã được xử lý.
+  await new Promise<void>((resolve) => setTimeout(() => resolve(), 0));
+};
 
 describe("translatePhrase", () => {
   it("translates exact and case-insensitive phrases, keeping ALL CAPS", () => {
@@ -168,6 +184,32 @@ describe("startDomTranslator", () => {
     const spans = document.querySelectorAll("span");
     expect(spans[0].textContent).toBe("Cancel");
     expect(spans[1].textContent).toBe("Hủy");
+  });
+
+  it("does not re-translate its own output, so the text stays stable", async () => {
+    mount('<button>Cancel</button>', "vi");
+    const button = document.querySelector("button")!;
+    expect(button.textContent).toBe("Hủy");
+
+    // Translator ghi nội dung đã dịch sẽ sinh mutation mới; nếu không chặn được vòng lặp
+    // thì chuỗi sẽ bị dịch lại liên tục và hiển thị sai.
+    await flush();
+    await flush();
+    expect(button.textContent).toBe("Hủy");
+  });
+
+  it("keeps the original text when the framework rewrites the same node", async () => {
+    const { setLanguage } = mount('<span id="label">Save</span>', "vi");
+    const label = document.getElementById("label")!;
+    expect(label.textContent).toBe("Lưu");
+
+    // React render lại với cùng nội dung gốc: phải giữ bản dịch, không bị dịch lại.
+    label.firstChild!.nodeValue = "Save";
+    await flush();
+    expect(label.textContent).toBe("Lưu");
+
+    setLanguage("en");
+    expect(label.textContent).toBe("Save");
   });
 
   it("uses the auto-translation store for phrases missing from the dictionary", () => {

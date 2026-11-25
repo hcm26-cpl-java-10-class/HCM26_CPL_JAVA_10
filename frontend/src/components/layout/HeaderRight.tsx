@@ -65,7 +65,6 @@ export default function HeaderRight() {
 
         <NotificationBell key={email} />
         <LanguageSwitcher />
-        <NotificationBell />
         <ToggleTheme />
       </div>
     );
@@ -169,7 +168,6 @@ export default function HeaderRight() {
       )}
 
       <LanguageSwitcher />
-        <NotificationBell />
       <NotificationBell key={email} />
       <ToggleTheme />
     </div >

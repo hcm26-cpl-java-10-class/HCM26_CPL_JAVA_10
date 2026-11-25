@@ -42,7 +42,7 @@ class TranslationServiceTest {
     void setUp() {
         I18nProperties properties = new I18nProperties();
         properties.setEnabled(true);
-        service = new TranslationService(properties, cacheRepository, List.of(provider));
+        service = new TranslationService(properties, cacheRepository, () -> List.of(provider));
 
         lenient().when(cacheRepository.findAllBy(anyString(), anyString(), any())).thenReturn(List.of());
         lenient().when(cacheRepository
@@ -74,7 +74,6 @@ class TranslationServiceTest {
     @Test
     void translatesThroughProviderAndReportsCounts() {
         when(provider.isAvailable()).thenReturn(true);
-        when(provider.supportsAutoDetection()).thenReturn(true);
         when(provider.translate(anyString(), anyString(), any())).thenAnswer(invocation -> {
             List<String> texts = invocation.getArgument(2);
             return TranslationProvider.TranslationResult.of(texts.stream().collect(
@@ -107,13 +106,13 @@ class TranslationServiceTest {
     void looksUpCacheWithTheRequestedTargetLanguage() {
         when(cacheRepository.findAllBy(anyString(), anyString(), any())).thenReturn(List.of());
         when(provider.isAvailable()).thenReturn(true);
-        when(provider.supportsAutoDetection()).thenReturn(true);
         when(provider.translate(anyString(), anyString(), any()))
                 .thenReturn(TranslationProvider.TranslationResult.empty());
 
-        service.translate("en", "auto", List.of("Save"));
+        service.translate("en", "auto", List.of("Quản lý khóa học"));
 
-        verify(cacheRepository).findAllBy(eq("auto"), eq("en"), any());
+        // Cache được tra cứu theo ngôn ngữ nhận diện được của chuỗi, không theo "auto".
+        verify(cacheRepository).findAllBy(eq("vi"), eq("en"), any());
     }
 
     @Test
@@ -125,7 +124,6 @@ class TranslationServiceTest {
     @Test
     void doesNotCacheFailedTranslations() {
         when(provider.isAvailable()).thenReturn(true);
-        when(provider.supportsAutoDetection()).thenReturn(true);
         when(provider.translate(anyString(), anyString(), any()))
                 .thenReturn(TranslationProvider.TranslationResult.empty());
 
@@ -134,14 +132,33 @@ class TranslationServiceTest {
     }
 
     @Test
-    void delegatesToProviderWithoutAutoDetectionUsingDetectedLanguage() {
+    void delegatesToProviderUsingDetectedLanguage() {
         when(provider.isAvailable()).thenReturn(true);
-        when(provider.supportsAutoDetection()).thenReturn(false);
         when(provider.translate(eq("vi"), eq("en"), any()))
                 .thenReturn(TranslationProvider.TranslationResult.of(Map.of("Quản lý khóa học", "Course Management")));
 
         TranslateResponse response = service.translate("en", "auto", List.of("Quản lý khóa học"));
         assertThat(response.translations()).containsEntry("Quản lý khóa học", "Course Management");
+    }
+
+    @Test
+    void translatesEnglishTextSentWithVietnameseSource() {
+        // Trang vừa có nhãn tiếng Anh vừa có nhãn tiếng Việt: mỗi chuỗi phải được dịch
+        // theo ngôn ngữ thật của nó, không theo ngôn ngữ nguồn gợi ý của request.
+        when(provider.isAvailable()).thenReturn(true);
+        when(provider.translate(eq("en"), eq("vi"), any()))
+                .thenReturn(TranslationProvider.TranslationResult.of(Map.of("Department", "Phòng ban")));
+
+        TranslateResponse response = service.translate("vi", "en", List.of("Department"));
+        assertThat(response.translations()).containsEntry("Department", "Phòng ban");
+    }
+
+    @Test
+    void keepsTextAlreadyInTargetLanguage() {
+        // "Department" đã là tiếng Anh nên khi đích là tiếng Anh thì giữ nguyên,
+        // không gửi sang provider (tránh dịch nhầm thành "set").
+        TranslateResponse response = service.translate("en", "vi", List.of("Department"));
+        assertThat(response.translations()).doesNotContainKey("Department");
     }
 
     @Test
@@ -156,7 +173,6 @@ class TranslationServiceTest {
     void normalizesCandidateTexts() {
         List<String> captured = new ArrayList<>();
         when(provider.isAvailable()).thenReturn(true);
-        when(provider.supportsAutoDetection()).thenReturn(true);
         when(provider.translate(anyString(), anyString(), any())).thenAnswer(invocation -> {
             List<String> texts = invocation.getArgument(2);
             captured.addAll(texts);
@@ -173,7 +189,7 @@ class TranslationServiceTest {
     void returnsEmptyWhenI18nIsDisabled() {
         I18nProperties disabledProperties = new I18nProperties();
         disabledProperties.setEnabled(false);
-        TranslationService disabledService = new TranslationService(disabledProperties, cacheRepository, List.of(provider));
+        TranslationService disabledService = new TranslationService(disabledProperties, cacheRepository, () -> List.of(provider));
 
         TranslateResponse response = disabledService.translate("vi", "auto", List.of("Save"));
 
@@ -214,7 +230,6 @@ class TranslationServiceTest {
         }
         when(cacheRepository.findAllBy(anyString(), anyString(), any())).thenReturn(List.of(staleEntry));
         when(provider.isAvailable()).thenReturn(true);
-        when(provider.supportsAutoDetection()).thenReturn(true);
         when(provider.translate(anyString(), anyString(), any()))
                 .thenReturn(TranslationProvider.TranslationResult.of(Map.of("Save", "Lưu mới")));
 

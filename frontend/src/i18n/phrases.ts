@@ -9,6 +9,11 @@
  * (see `locales`), because the DOM only sees the pieces separately.
  */
 const EN_VI = `
+# ---- Brand / product names (must not be machine-translated) ----
+RBAC System | RBAC System
+RBAC System v1.0 | RBAC System v1.0
+FAMS LMS | FAMS LMS
+
 # ---- Sidebar groups & menus (come from the backend @ResourceMenu) ----
 Dashboard | Bảng điều khiển
 Dashboard Stats | Thống kê tổng quan
@@ -78,6 +83,7 @@ Reports | Báo cáo
 Menus | Menu
 Menu | Menu
 Home | Trang chủ
+Breadcrumb | Đường dẫn
 Logout | Đăng xuất
 Log out | Đăng xuất
 Sign out | Đăng xuất
@@ -231,7 +237,6 @@ Offline | Ngoại tuyến
 Dropped | Đã bỏ học
 Dropped out | Đã bỏ học
 Drop-off | Tỷ lệ rời bỏ
-Open | Mở
 Closed | Đã đóng
 Required | Bắt buộc
 Mandatory | Bắt buộc
@@ -343,7 +348,6 @@ Total learners | Tổng số học viên
 Total study time | Tổng thời gian học
 Learner | Người học
 Learners | Người học
-Student | Học viên
 Instructor | Giảng viên
 Leader | Trưởng nhóm
 Members | Thành viên
@@ -376,7 +380,16 @@ Artifacts | Sản phẩm bàn giao
 Criteria | Tiêu chí
 Resource type | Loại tài nguyên
 Room | Phòng
-Rubric | Rubric
+Location | Địa điểm
+Locations | Địa điểm
+Location Management | Quản lý địa điểm
+Rubric | Tiêu chí đánh giá
+Rubrics | Tiêu chí đánh giá
+Project Team Allocation | Phân bổ nhóm dự án
+Backlog sprint | Backlog sprint
+Sprint Backlogs | Backlog sprint
+Module | Module
+Modules | Module
 Question | Câu hỏi
 Question Type | Loại câu hỏi
 Multiple Choice | Trắc nghiệm
@@ -388,7 +401,6 @@ Input | Đầu vào
 Format | Định dạng
 Template | Mẫu
 Activity | Hoạt động
-Categories | Danh mục
 Certificate of Completion | Chứng nhận hoàn thành
 Issued on | Ngày cấp
 Certificate Verification | Xác minh chứng chỉ
@@ -499,16 +511,91 @@ Forgot Password? | Quên mật khẩu?
 Don't have an account? | Chưa có tài khoản?
 Already have an account? | Đã có tài khoản?
 {{role}} View | Chế độ xem {{role}}
-Preview | Xem trước
 Language | Ngôn ngữ
 Unable to complete sign-in. Please try again. | Không thể hoàn tất đăng nhập. Vui lòng thử lại.
+Quick Actions | Thao tác nhanh
+Menu Items | Mục menu
+Navigation items | Mục điều hướng
+Your Permissions | Quyền của bạn
+Learning Funnel | Phễu học tập
+Export All (Excel) | Xuất tất cả (Excel)
+Change course | Đổi khóa học
+Open Workspace | Mở không gian làm việc
+Total Users | Tổng người dùng
+Total Roles | Tổng vai trò
+Total Menus | Tổng menu
+Total Courses | Tổng khóa học
+Total Classes | Tổng lớp học
+Total Exams | Tổng bài thi
+Total Projects | Tổng dự án
+Total Questions | Tổng câu hỏi
+Total Scores | Tổng điểm
+Total Notifications | Tổng thông báo
+Total Certificates | Tổng chứng chỉ
+Total Categories | Tổng danh mục
+Total Enrollments | Tổng đăng ký học
+Total Instructors | Tổng giảng viên
+Total Departments | Tổng phòng ban
+Total Locations | Tổng địa điểm
+Total Workspaces | Tổng không gian làm việc
+Total Sprints | Tổng sprint
+Total Milestones | Tổng cột mốc
+Total Tasks | Tổng nhiệm vụ
+Total Trainers | Tổng huấn luyện viên
+Active Users | Người dùng đang hoạt động
+Inactive Users | Người dùng ngừng hoạt động
+Active Roles | Vai trò đang hoạt động
+Active Menus | Menu đang hoạt động
+Active Courses | Khóa học đang hoạt động
+Agree | Đồng ý
+Filter | Lọc
+Export file | Xuất file
+Import file | Nhập file
+Not found | Không tìm thấy
+More | Thêm
+Less | Ít hơn
+Page | Trang
+Category | Danh mục
+Created at | Thời điểm tạo
+Updated at | Thời điểm cập nhật
+Summary | Tổng quan
+Full URL | URL đầy đủ
+Attachments | Tệp đính kèm
+Reviewer feedback | Nhận xét của người đánh giá
+Accepted | Đã chấp nhận
+Rejected | Đã từ chối
+Changes requested | Yêu cầu chỉnh sửa
+Last updated | Cập nhật lần cuối
+Updated | Đã cập nhật
+Any | Bất kỳ
+None | Không có
+Yes or no | Có hoặc không
+Unknown | Không xác định
+Are you sure? | Bạn có chắc không?
+This action cannot be undone. | Hành động này không thể hoàn tác.
+Separate release notes and attachment metadata are not available for this version. | Không có ghi chú phát hành hoặc thông tin tệp đính kèm riêng cho phiên bản này.
+Attachment information is not available for this version. | Thông tin tệp đính kèm không khả dụng cho phiên bản này.
+No files attached to this artifact version. | Không có tệp nào được đính kèm cho phiên bản này.
+Source code and deployment | Mã nguồn và triển khai
+Submission link | Liên kết bài nộp
+Open link | Mở liên kết
+Kanban Board | Bảng điều khiển dự án
+Project Template Versions | Phiên bản mẫu dự án
+Instructors | Giảng viên
+Explore Projects | Khám phá dự án
+Student Home | Trang chủ học viên
+Trainees | Học viên
 `.trim();
 
 /**
  * Vietnamese strings that already exist in the source code -> English.
  * (Reverse direction; the reverse of every EN_VI line is added automatically.)
  */
-const VI_EN_EXTRA = `
+const VI_EN_EXTRA = `# ---- Brand / product names ----
+Hệ thống RBAC | RBAC System
+Trang chủ học viên | Student Home
+Trang chủ | Home
+Mở rộng trợ lý AI | Expand AI assistant
 Lưu | Save
 Lưu thay đổi | Save changes
 Đang lưu... | Saving...
@@ -757,6 +844,76 @@ Tiếng Anh | English
 Tiếng Nhật | Japanese
 Đúng | Correct
 Sai | Incorrect
+Thao tác nhanh | Quick Actions
+Mục menu | Menu Items
+Mục điều hướng | Navigation items
+Quyền của bạn | Your Permissions
+Phễu học tập | Learning Funnel
+Xuất tất cả (Excel) | Export All (Excel)
+Đổi khóa học | Change course
+Mở không gian làm việc | Open Workspace
+Tổng người dùng | Total Users
+Tổng vai trò | Total Roles
+Tổng menu | Total Menus
+Tổng khóa học | Total Courses
+Tổng lớp học | Total Classes
+Tổng bài thi | Total Exams
+Tổng dự án | Total Projects
+Tổng câu hỏi | Total Questions
+Tổng thông báo | Total Notifications
+Tổng chứng chỉ | Total Certificates
+Tổng danh mục | Total Categories
+Tổng đăng ký học | Total Enrollments
+Tổng giảng viên | Total Instructors
+Tổng phòng ban | Total Departments
+Tổng địa điểm | Total Locations
+Tổng không gian làm việc | Total Workspaces
+Tổng sprint | Total Sprints
+Tổng cột mốc | Total Milestones
+Tổng nhiệm vụ | Total Tasks
+Tổng lượt thi | Total Attempts
+Tổng huấn luyện viên | Total Trainers
+Người dùng đang hoạt động | Active Users
+Người dùng ngừng hoạt động | Inactive Users
+Vai trò đang hoạt động | Active Roles
+Menu đang hoạt động | Active Menus
+Khóa học đang hoạt động | Active Courses
+Nhập file | Import file
+Không tìm thấy | Not found
+Ít hơn | Less
+Danh mục | Category
+Thời điểm tạo | Created at
+Thời điểm cập nhật | Updated at
+Tổng quan | Summary
+URL đầy đủ | Full URL
+Tệp đính kèm | Attachments
+Nhận xét của người đánh giá | Reviewer feedback
+Đã chấp nhận | Accepted
+Đã từ chối | Rejected
+Yêu cầu chỉnh sửa | Changes requested
+Cập nhật lần cuối | Last updated
+Đã cập nhật | Updated
+Bất kỳ | Any
+Không có | None
+Có hoặc không | Yes or no
+Không xác định | Unknown
+Bạn có chắc không? | Are you sure?
+Hành động này không thể hoàn tác. | This action cannot be undone.
+Chưa cung cấp | Not provided
+Mã nguồn và triển khai | Source code and deployment
+Kho lưu trữ mã | Repository
+Môi trường triển khai | Deployment
+Liên kết bài nộp | Submission link
+Mở liên kết | Open link
+Nhận xét tổng thế | Overall feedback
+Đã nộp | Submitted
+Bảng điều khiển dự án | Kanban Board
+Phiên bản mẫu dự án | Project Template Versions
+Khám phá dự án | Explore Projects
+Danh sách backlog | Backlogs
+Bài nộp của tôi | My Submissions
+Dành cho bạn | For you
+Giáo trình | Syllabuses
 `.trim();
 
 /**

@@ -10,8 +10,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -37,9 +37,16 @@ public class GoogleTranslateProvider implements TranslationProvider {
      */
     private static final String SEPARATOR = "\n";
 
+    /** Tạm dừng lâu khi bị chặn do vượt quota (429) hoặc bị từ chối (403). */
+    private static final Duration QUOTA_COOLDOWN = Duration.ofMinutes(10);
+
+    /** Tạm dừng ngắn khi gặp lỗi mạng hoặc lỗi server. */
+    private static final Duration ERROR_COOLDOWN = Duration.ofMinutes(1);
+
     private final I18nProperties properties;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
+    private final ProviderCooldown cooldown = new ProviderCooldown("Google Translate");
 
     public GoogleTranslateProvider(
             I18nProperties properties,
@@ -58,7 +65,7 @@ public class GoogleTranslateProvider implements TranslationProvider {
 
     @Override
     public boolean isAvailable() {
-        return properties.isEnabled();
+        return properties.isEnabled() && !cooldown.isOpen();
     }
 
     @Override
@@ -91,17 +98,16 @@ public class GoogleTranslateProvider implements TranslationProvider {
     }
 
     private BatchResult translateBatch(String sourceLanguage, String targetLanguage, List<String> batch) {
-        // `build()` (không `.encode()`) để RestTemplate tự encode đúng một lần; nếu encode
-        // thủ công ở đây thì chuỗi sẽ bị encode hai lần và dịch vụ trả về "%20" thay vì khoảng trắng.
-        String url = UriComponentsBuilder
-                .fromHttpUrl(properties.getEndpoint())
-                .queryParam("client", "gtx")
-                .queryParam("sl", sourceLanguage)
-                .queryParam("tl", targetLanguage)
-                .queryParam("dt", "t")
-                .queryParam("q", String.join(SEPARATOR, batch))
-                .build()
-                .toUriString();
+        // Dùng template + `uriVariables` để giá trị được encode đúng một lần bởi
+        // `DefaultUriBuilderFactory` (chế độ VALUES_ONLY). Nếu nối chuỗi thủ công thì khoảng
+        // trắng, `&`, `[` hay dấu tiếng Việt sẽ làm hỏng URI.
+        Map<String, String> uriVariables = new LinkedHashMap<>();
+        uriVariables.put("client", "gtx");
+        uriVariables.put("sl", sourceLanguage);
+        uriVariables.put("tl", targetLanguage);
+        uriVariables.put("dt", "t");
+        uriVariables.put("q", String.join(SEPARATOR, batch));
+        String uriTemplate = buildUriTemplate(properties.getEndpoint(), uriVariables);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -111,15 +117,28 @@ public class GoogleTranslateProvider implements TranslationProvider {
                         + "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
         try {
-            String body = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), String.class)
+            String body = restTemplate.exchange(
+                            uriTemplate,
+                            HttpMethod.GET,
+                            new HttpEntity<>(headers),
+                            String.class,
+                            uriVariables
+                    )
                     .getBody();
             if (body == null || body.isBlank()) {
                 return new BatchResult(Map.of(), Map.of());
             }
             return parse(body, batch, sourceLanguage);
+        } catch (HttpStatusCodeException ex) {
+            int status = ex.getStatusCode().value();
+            if (status == 429 || status == 403) {
+                cooldown.trip(QUOTA_COOLDOWN, "HTTP " + status, log);
+            } else {
+                cooldown.trip(ERROR_COOLDOWN, "HTTP " + status, log);
+            }
+            return new BatchResult(Map.of(), Map.of());
         } catch (Exception ex) {
-            log.warn("[i18n] Google Translate failed ({}->{}): {}",
-                    sourceLanguage, targetLanguage, ex.getMessage());
+            cooldown.trip(ERROR_COOLDOWN, ex.getClass().getSimpleName(), log);
             return new BatchResult(Map.of(), Map.of());
         }
     }
@@ -170,7 +189,7 @@ public class GoogleTranslateProvider implements TranslationProvider {
             }
             return new BatchResult(result, detected);
         } catch (Exception ex) {
-            log.warn("[i18n] Cannot parse Google Translate response: {}", ex.getMessage());
+            log.debug("[i18n] Cannot parse Google Translate response: {}", ex.getMessage());
             return new BatchResult(Map.of(), Map.of());
         }
     }

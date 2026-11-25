@@ -18,6 +18,14 @@ public class I18nProperties {
     /** Bật/tắt tầng dịch tự động. */
     private boolean enabled = true;
 
+    /**
+     * Provider dịch được dùng, phân tách bằng dấu {@code +} theo thứ tự ưu tiên.
+     *
+     * <p>Giá trị hợp lệ: {@code google}, {@code mymemory}, {@code google+mymemory} (mặc định).
+     * Cấu hình này là điểm cắm để đổi engine dịch mà không phải sửa code service.
+     */
+    private String provider = "google+mymemory";
+
     /** Địa chỉ endpoint Google Translate. */
     private String endpoint = "https://translate.googleapis.com/translate_a/single";
 

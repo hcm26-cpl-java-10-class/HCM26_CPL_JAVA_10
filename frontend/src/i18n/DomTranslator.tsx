@@ -1,20 +1,35 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { i18nApi } from "@/api/features/i18n.api";
-import { toLanguage } from "@/i18n/languages";
+import { toLanguage, type Language } from "@/i18n/languages";
 import {
-  createMemoryAutoTranslationStore,
+  getSharedAutoTranslationStore,
   startDomTranslator,
 } from "@/i18n/translator";
 
 /** Số chuỗi tự động dịch gửi trong một request. */
 const BATCH_SIZE = 30;
 
-/** Thời gian chờ giữa hai lần gọi API, để không spam backend khi render nhiều trang. */
-const REQUEST_DEBOUNCE_MS = 250;
+/**
+ * Thời gian chờ giữa hai lần gọi API.
+ *
+ * Khoảng chờ đủ dài để gom nhiều thay đổi DOM liên tiếp (React render, mở modal, điều hướng)
+ * thành một lần gọi, tránh spam backend khi người dùng chuyển trang liên tục.
+ */
+const REQUEST_DEBOUNCE_MS = 600;
 
 /** Số lần thử lại tối đa cho một chuỗi khi backend lỗi. */
 const MAX_RETRIES = 3;
+
+/**
+ * Ngôn ngữ nguồn của chuỗi gửi đi dịch.
+ *
+ * Ứng dụng có cả nhãn viết sẵn bằng tiếng Việt lẫn tiếng Anh. Nếu dùng `auto` thì provider
+ * phải tự nhận diện và có thể dịch ngược (tiếng Việt -> tiếng Việt), còn provider dự phòng
+ * (MyMemory) không hỗ trợ `auto` nên luôn trả rỗng. Vì vậy khi đích là `vi`/`ja` thì nguồn
+ * được coi là `en`, khi đích là `en` thì nguồn là `vi`.
+ */
+const sourceLanguageFor = (target: Language): Language => (target === "en" ? "vi" : "en");
 
 /**
  * Mount once near the app root. Translates every rendered page (text, placeholders, titles)
@@ -26,7 +41,7 @@ const MAX_RETRIES = 3;
  */
 export function DomTranslator() {
   const { i18n } = useTranslation();
-  const storeRef = useRef(createMemoryAutoTranslationStore());
+  const storeRef = useRef(getSharedAutoTranslationStore());
   const pendingRef = useRef<Set<string>>(new Set());
   const failedRef = useRef<Map<string, number>>(new Map());
   const timerRef = useRef<number | undefined>(undefined);
@@ -40,6 +55,8 @@ export function DomTranslator() {
       lookupAuto: (sourceText, target) => store.get(sourceText, target),
       onPending: (chunk) => {
         pendingRef.current.add(chunk);
+        // Translator đã phát hiện chuỗi mới nên không cần observer riêng để theo dõi DOM.
+        scheduleFlush();
       },
     });
 
@@ -50,7 +67,11 @@ export function DomTranslator() {
      * chuỗi của trang đó cũng được dịch ngay, không cần đổi ngôn ngữ lần nữa.
      */
     const flushPending = async () => {
-      if (inFlightRef.current) return;
+      // Tab đang ẩn: không gọi API để tránh tốn băng thông ngoài ý muốn người dùng.
+      if (document.hidden) {
+        scheduleFlush();
+        return;
+      }
 
       const target = language;
       const relevant = Array.from(pendingRef.current).filter((chunk) => {
@@ -69,7 +90,7 @@ export function DomTranslator() {
           const batch = relevant.slice(index, index + BATCH_SIZE);
           const response = await i18nApi.translate({
             targetLanguage: target,
-            sourceLanguage: "auto",
+            sourceLanguage: sourceLanguageFor(target),
             texts: batch,
           });
           store.set(response.translations, target);
@@ -87,9 +108,20 @@ export function DomTranslator() {
       } finally {
         inFlightRef.current = false;
       }
+
+      // Trong lúc request đang chạy, DOM có thể sinh ra chuỗi mới. Nếu không gửi tiếp thì
+      // các chuỗi đó bị bỏ rơi và không bao giờ được dịch.
+      if (pendingRef.current.size > 0) {
+        scheduleFlush();
+      }
     };
 
-    const scheduleFlush = () => {
+    /**
+     * Lên lịch gửi chuỗi chưa dịch lên backend.
+     *
+     * Dùng function declaration để hàm này có thể được gọi từ callback `onPending` phía trên.
+     */
+    function scheduleFlush() {
       if (timerRef.current !== undefined) {
         window.clearTimeout(timerRef.current);
       }
@@ -97,16 +129,7 @@ export function DomTranslator() {
         timerRef.current = undefined;
         void flushPending();
       }, REQUEST_DEBOUNCE_MS);
-    };
-
-    /**
-     * Mỗi khi DOM thay đổi (chuyển trang, mở modal, tải dữ liệu) thì có thể xuất hiện chuỗi
-     * mới. Cơ chế này đảm bảo chúng được gửi đi dịch ngay.
-     */
-    const observer = new MutationObserver(() => {
-      scheduleFlush();
-    });
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    }
 
     const onChange = (next: string) => {
       language = toLanguage(next);
@@ -128,7 +151,6 @@ export function DomTranslator() {
 
     return () => {
       i18n.off("languageChanged", onChange);
-      observer.disconnect();
       if (timerRef.current !== undefined) {
         window.clearTimeout(timerRef.current);
       }
