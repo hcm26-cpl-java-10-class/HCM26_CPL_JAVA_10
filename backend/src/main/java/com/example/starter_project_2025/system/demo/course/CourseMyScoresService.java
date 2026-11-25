@@ -33,6 +33,7 @@ public class CourseMyScoresService {
     private final ExamResultAccessService resultAccessService;
     private final EntityManager entityManager;
     private final GradebookPublishedItemRepository publishedRepository;
+    private final com.example.starter_project_2025.system.exam.gradebook.GradebookTemplateProvider templateProvider;
 
     @Transactional(readOnly = true)
     public List<CourseMyScoresDTO> findMyCourseScores(Long studentId) {
@@ -69,7 +70,7 @@ public class CourseMyScoresService {
      * moi cot diem la mot muc, diem tong = tong(diem x ti trong) / 100 (giong cot Final cua giang vien).
      */
     private List<GradebookPublishedItem> withTemplate(Long courseId, List<GradebookPublishedItem> own) {
-        return own == null || own.isEmpty() ? publishedRepository.templateForCourse(courseId) : own;
+        return own == null || own.isEmpty() ? templateProvider.forCourse(courseId) : own;
     }
 
     private java.util.Optional<CourseMyScoresDTO> publishedScores(Course course, List<GradebookPublishedItem> items) {

@@ -33,6 +33,7 @@ import {
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { AiPercentTag, AiSignalsList } from "@/components/AiPercentTag";
 import { CodingGradingPanel } from "./CodingGradingPanel";
 import { ESSAY_STATUS_LABEL, formatDateTime } from "./EssayAttemptListPage";
 import { QuestionGuidelinesEditor } from "./QuestionGuidelinesEditor";
@@ -514,7 +515,9 @@ export default function EssayAttemptDetailPage() {
                                             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                                                 <FileText className="size-3.5 text-muted-foreground" />
                                                 Student Submitted Answer
+                                                <AiPercentTag percent={essay.aiPercent} signals={essay.aiSignals} className="ml-2 normal-case tracking-normal" />
                                             </span>
+                                            {essay.aiPercent != null && essay.aiPercent >= 30 && <AiSignalsList signals={essay.aiSignals} />}
                                             {essay.answerText?.trim() ? (
                                                 <div className="mt-2 rounded bg-background/80 p-3 border font-mono text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words">
                                                     {essay.answerText}
