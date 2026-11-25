@@ -3,9 +3,12 @@ package com.example.starter_project_2025.system.notification.service;
 import java.math.BigDecimal;
 import com.example.starter_project_2025.system.auth.util.MailUtil;
 import com.example.starter_project_2025.system.exam.invitation.domain.Invitation;
+import com.example.starter_project_2025.system.notification.NotificationCategory;
+import com.example.starter_project_2025.system.notification.email.EmailOutboxService;
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +18,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -36,6 +40,9 @@ public class EmailService {
 
     private final MailUtil mailUtil;
 
+    @Autowired(required = false)
+    private EmailOutboxService emailOutboxService;
+
     @Value("${app.frontend-domain}")
     private String frontendUrl;
 
@@ -56,7 +63,12 @@ public class EmailService {
         vars.add(Map.entry("expiresAt", formatDateTime(invitation.getExpiresAt())));
         vars.add(Map.entry("note", invitation.getNote() == null ? "" : invitation.getNote()));
 
-        send("[Lời mời] " + examTitle, recipient.getEmail(), EXAM_INVITATION_EMAIL, vars);
+        String contextRef = invitation.getExam().getId() != null ? "EXAM:" + invitation.getExam().getId() : null;
+        String idempotencyKey = invitation.getId() != null
+                ? "exam.invitation." + invitation.getId() + ".u" + recipient.getId() + "." + UUID.randomUUID().toString().substring(0, 8)
+                : null;
+        sendWithOutbox("[Lời mời] " + examTitle, recipient.getEmail(), EXAM_INVITATION_EMAIL, vars,
+                recipient.getTenantId(), recipient.getId(), NotificationCategory.EXAM, contextRef, idempotencyKey);
     }
 
     public void sendBatchExamInvitations(List<Invitation> invitations) {
@@ -83,7 +95,10 @@ public class EmailService {
         vars.add(Map.entry("startTime", formatDateTime(invitation.getAvailableFrom())));
         vars.add(Map.entry("examLink", String.format("%s/student/exams", frontendUrl)));
 
-        send("[Đã xác nhận] " + examTitle, invitation.getUser().getEmail(), EXAM_ACCEPTED_EMAIL, vars);
+        String contextRef = invitation.getExam().getId() != null ? "EXAM:" + invitation.getExam().getId() : null;
+        sendWithOutbox("[Đã xác nhận] " + examTitle, invitation.getUser().getEmail(), EXAM_ACCEPTED_EMAIL, vars,
+                invitation.getUser().getTenantId(), invitation.getUser().getId(), NotificationCategory.EXAM, contextRef,
+                invitation.getId() != null ? "exam.accepted." + invitation.getId() : null);
     }
 
     public void sendExamReminder(Invitation invitation, LocalDateTime now) {
@@ -106,8 +121,10 @@ public class EmailService {
         vars.add(Map.entry("countdown", countdown));
         vars.add(Map.entry("examLink", examLink));
 
-        send("[Nhắc nhở] " + examTitle + " sắp bắt đầu", invitation.getUser().getEmail(),
-                EXAM_REMINDER_EMAIL, vars);
+        String contextRef = invitation.getExam().getId() != null ? "EXAM:" + invitation.getExam().getId() : null;
+        sendWithOutbox("[Nhắc nhở] " + examTitle + " sắp bắt đầu", invitation.getUser().getEmail(),
+                EXAM_REMINDER_EMAIL, vars, invitation.getUser().getTenantId(), invitation.getUser().getId(),
+                NotificationCategory.EXAM, contextRef, null);
     }
 
     public void sendExamReminderWithAccessCode(Invitation invitation, LocalDateTime now) {
@@ -164,7 +181,10 @@ public class EmailService {
                 invitation.getRevokedReason() == null ? "Không có lý do được cung cấp" : invitation.getRevokedReason()));
         vars.add(Map.entry("revokedAt", formatDateTime(LocalDateTime.now())));
 
-        send("[Hủy] " + examTitle, invitation.getUser().getEmail(), EXAM_REVOKED_EMAIL, vars);
+        String contextRef = invitation.getExam().getId() != null ? "EXAM:" + invitation.getExam().getId() : null;
+        sendWithOutbox("[Hủy] " + examTitle, invitation.getUser().getEmail(), EXAM_REVOKED_EMAIL, vars,
+                invitation.getUser().getTenantId(), invitation.getUser().getId(), NotificationCategory.EXAM, contextRef,
+                invitation.getId() != null ? "exam.revoked." + invitation.getId() : null);
     }
 
     public void sendAnonymousExamResult(
@@ -265,11 +285,57 @@ public class EmailService {
     }
 
     private void send(String subject, String to, String template, List<Map.Entry<String, Object>> vars) {
+        sendWithOutbox(subject, to, template, vars, null, null, NotificationCategory.EXAM, null, null);
+    }
+
+    private void sendWithOutbox(
+            String subject,
+            String to,
+            String template,
+            List<Map.Entry<String, Object>> vars,
+            Long tenantId,
+            Long recipientUserId,
+            NotificationCategory category,
+            String contextRef,
+            String idempotencyKey
+    ) {
+        if (to == null || to.isBlank()) {
+            return;
+        }
+        if (emailOutboxService != null) {
+            try {
+                String html = mailUtil.renderTemplate(template, vars);
+                String effectiveKey = (idempotencyKey == null || idempotencyKey.isBlank())
+                        ? template + ":" + to.trim().toLowerCase() + ":" + UUID.randomUUID()
+                        : idempotencyKey;
+                emailOutboxService.enqueue(new EmailOutboxService.EnqueueCommand(
+                        tenantId,
+                        effectiveKey,
+                        null,
+                        recipientUserId,
+                        to,
+                        category == null ? NotificationCategory.EXAM : category,
+                        template,
+                        1,
+                        contextRef,
+                        subject,
+                        html,
+                        null,
+                        recipientUserId != null
+                ));
+                return;
+            } catch (Exception e) {
+                log.error("Failed to enqueue email to {} with template {}: {}",
+                        to, template, EmailOutboxService.maskSensitiveError(e.getMessage()));
+                return;
+            }
+        }
         try {
             mailUtil.buildAndSendMail(subject, hostEmail, to, template, vars);
             log.info("Email sent to {} with template {}", to, template);
         } catch (Exception e) {
-            log.error("Failed to send email to {} with template {}: {}", to, template, e.getMessage());
+            log.error("Failed to send email to {} with template {}: {}",
+                    to, template, EmailOutboxService.maskSensitiveError(e.getMessage()));
         }
     }
 

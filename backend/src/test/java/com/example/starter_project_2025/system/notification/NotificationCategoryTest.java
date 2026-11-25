@@ -18,6 +18,10 @@ class NotificationCategoryTest {
         assertEquals(NotificationCategory.COURSE, NotificationCategory.fromEventKey("lesson-created:7"));
         assertEquals(NotificationCategory.COURSE, NotificationCategory.fromEventKey("learning-nudge:1:2:day"));
         assertEquals(NotificationCategory.COURSE, NotificationCategory.fromEventKey("enrollment:9"));
+        assertEquals(NotificationCategory.CLASS, NotificationCategory.fromEventKey("class.session.remind.24h.9.u7"));
+        assertEquals(NotificationCategory.CLASS, NotificationCategory.fromEventKey("calendar.updated.6"));
+        assertEquals(NotificationCategory.EXAM, NotificationCategory.fromEventKey("appeal.approved.12"));
+        assertEquals(NotificationCategory.EXAM, NotificationCategory.fromEventKey("invitation.exam.created.3"));
     }
 
     @Test

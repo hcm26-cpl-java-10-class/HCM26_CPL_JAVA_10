@@ -25,19 +25,20 @@ public class MailUtil {
     JavaMailSender mailSender;
     SpringTemplateEngine templateEngine;
 
-    public void buildAndSendMail(
-            String title,
-            String from,
-            String to,
+    public String renderTemplate(
             String templateName,
             List<Map.Entry<String, Object>> contextVariables
     ) {
         Context context = new Context();
-        for (Map.Entry<String, Object> entry : contextVariables) {
-            context.setVariable(entry.getKey(), entry.getValue());
+        if (contextVariables != null) {
+            for (Map.Entry<String, Object> entry : contextVariables) {
+                context.setVariable(entry.getKey(), entry.getValue());
+            }
         }
-        String htmlContent = templateEngine.process(templateName, context);
+        return templateEngine.process(templateName, context);
+    }
 
+    public void sendHtmlMail(String title, String from, String to, String htmlContent) {
         try {
             MimeMessage mimeMessage = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
@@ -49,8 +50,19 @@ public class MailUtil {
 
             mailSender.send(mimeMessage);
         } catch (MessagingException exception) {
-            log.error(exception.getMessage());
+            log.error("Failed to build/send mime message to {}: {}", to, exception.getMessage());
             throw new BadRequestException("Failed to send email to " + to);
         }
+    }
+
+    public void buildAndSendMail(
+            String title,
+            String from,
+            String to,
+            String templateName,
+            List<Map.Entry<String, Object>> contextVariables
+    ) {
+        String htmlContent = renderTemplate(templateName, contextVariables);
+        sendHtmlMail(title, from, to, htmlContent);
     }
 }

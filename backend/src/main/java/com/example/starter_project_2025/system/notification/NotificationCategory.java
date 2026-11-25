@@ -4,7 +4,7 @@ import java.util.Locale;
 
 /** Groups notifications for filtering and for per-user preferences. Derived from the event key. */
 public enum NotificationCategory {
-    EXAM, COURSE, PROJECT, SYSTEM;
+    EXAM, COURSE, PROJECT, CLASS, SYSTEM;
 
     public static NotificationCategory fromEventKey(String eventKey) {
         if (eventKey == null || eventKey.isBlank()) {
@@ -16,6 +16,9 @@ public enum NotificationCategory {
         }
         if (startsWithAny(key, "milestone", "task", "backlog", "sprint", "member-reminder", "workspace")) {
             return PROJECT;
+        }
+        if (startsWithAny(key, "class", "session", "calendar", "attendance", "trainer")) {
+            return CLASS;
         }
         if (startsWithAny(key, "enrollment", "course", "lesson", "learning-nudge", "qna", "certificate")) {
             return COURSE;

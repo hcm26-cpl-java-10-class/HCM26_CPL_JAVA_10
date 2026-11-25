@@ -50,6 +50,9 @@ public class ExamEssayGradingService {
     private final CodeJudgeService codeJudgeService;
     private final ExamQuestionGradingConfigRepository gradingConfigRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.starter_project_2025.system.notification.NotificationService notificationService;
+
     public List<EssayGradingDTO.Summary> listPending(Long examId) {
         requireExam(examId);
         return attemptRepository
@@ -416,6 +419,16 @@ public class ExamEssayGradingService {
         attempt.setOfficialDeadlineAt(newDeadline);
         attempt.setDeadlineAt(newDeadline);
         attemptRepository.save(attempt);
+
+        if (notificationService != null && attempt.getStudent() != null && attempt.getStudent().getId() != null) {
+            notificationService.createOnce(
+                    attempt.getStudent().getId(),
+                    "exam.revision.attempt." + attempt.getId() + "." + newDeadline.getEpochSecond(),
+                    "Exam returned for revision",
+                    "Your submission for \"" + attempt.getExam().getTitle() + "\" requires revision: " + note,
+                    "/student/exams"
+            );
+        }
 
         return getDetail(examId, attemptId);
     }

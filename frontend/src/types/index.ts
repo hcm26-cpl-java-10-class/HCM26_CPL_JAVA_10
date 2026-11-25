@@ -18,6 +18,7 @@ export * from "./features/demo/student_score";
 export * from "./features/demo/topic_mark_gradebook";
 export * from "./features/demo/certificate";
 export * from "./features/notification";
+export * from "./features/communication";
 export * from "./features/exam";
 export * from "./features/invitation";
 export * from "./features/menu/module";
