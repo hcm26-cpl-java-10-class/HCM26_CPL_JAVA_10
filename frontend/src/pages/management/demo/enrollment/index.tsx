@@ -1,3 +1,4 @@
+import { formatDateNow } from "@/i18n/format";
 import { enrollmentApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { EnrollmentProgressBar } from "../progress/EnrollmentProgressBar";
 
 const formatEnrollmentDate = (value: string) => {
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("vi-VN");
+    return Number.isNaN(date.getTime()) ? value : formatDateNow(date);
 };
 
 // The router discovers this configuration as a named export.

@@ -1,3 +1,4 @@
+import { formatDateCustomNow } from "@/i18n/format";
 import { courseReviewApi } from "@/api";
 import type {
   CourseReviewRequest,
@@ -26,7 +27,7 @@ function formatReviewDate(value?: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Recently";
 
-  return date.toLocaleDateString("en-US", {
+  return formatDateCustomNow(date, {
     year: "numeric",
     month: "long",
     day: "numeric",

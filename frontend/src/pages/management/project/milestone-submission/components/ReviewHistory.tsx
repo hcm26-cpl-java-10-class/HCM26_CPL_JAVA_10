@@ -1,9 +1,10 @@
+import { formatDateTimeNow } from "@/i18n/format";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { SubmissionReviewHistory } from "@/types";
 import { ChevronDown, History } from "lucide-react";
 
-const date = (value: string) => new Date(value).toLocaleString("en-GB");
+const date = (value: string) => formatDateTimeNow(value);
 
 export function ReviewHistory({ reviews }: { reviews: SubmissionReviewHistory[] }) {
   if (!reviews.length) return null;

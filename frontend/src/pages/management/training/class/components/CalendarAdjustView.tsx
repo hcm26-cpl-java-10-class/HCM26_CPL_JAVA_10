@@ -1,3 +1,4 @@
+import { formatDateCustomNow } from "@/i18n/format";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowLeft, ArrowUp, ChevronDown, GripHorizontal, Loader2, Plus, Trash2 } from "lucide-react";
@@ -25,7 +26,7 @@ function validDate(value: string) {
 }
 
 function shortDate(value: string) {
-    return validDate(value) ? new Date(`${value}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }).replace(" ", "-") : "—";
+    return validDate(value) ? formatDateCustomNow(new Date(`${value}T00:00:00Z`), { day: "2-digit", month: "short", timeZone: "UTC" }).replace(" ", "-") : "—";
 }
 
 function addDays(dateStr: string, days: number): string {

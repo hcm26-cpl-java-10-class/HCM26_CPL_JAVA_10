@@ -1,3 +1,4 @@
+import { formatDateNow, formatNumberNow } from "@/i18n/format";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -23,7 +24,7 @@ type Selection = {
 };
 
 function formatNumber(value: number) {
-  return new Intl.NumberFormat("en-US").format(value);
+  return formatNumberNow(value);
 }
 
 function formatPercent(value: number) {
@@ -37,7 +38,7 @@ function formatDate(value?: string | null) {
 
   return Number.isNaN(date.getTime())
     ? value
-    : date.toLocaleDateString("vi-VN");
+    : formatDateNow(date);
 }
 
 /*

@@ -1,3 +1,4 @@
+import { formatDateTimeNow } from "@/i18n/format";
 import { projectTemplateVersionApi } from "@/api/features/project-template-version.api";
 import { projectTemplateApi } from "@/api/features/project-template.api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -123,7 +124,7 @@ export function TemplateVersionConfiguration({ versionId, editOverview = false, 
       <TabsContent value="activity">{audit.isLoading ? <ProjectTemplateLoading /> : audit.isError ? <ProjectTemplateError error={audit.error} onRetry={() => void audit.refetch()} />
         : <Card><CardHeader><CardTitle>Version activity</CardTitle></CardHeader><CardContent>
           {!audit.data?.length ? <p className="text-sm text-muted-foreground">No recorded activity.</p> : <ul className="divide-y">{audit.data.map(item => <li key={item.id} className="grid gap-1 py-3 text-sm">
-            <span className="font-medium">{item.action?.replaceAll("_", " ")}</span><span className="text-muted-foreground">{item.actorEmail ?? "System"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-GB") : "—"}</span>
+            <span className="font-medium">{item.action?.replaceAll("_", " ")}</span><span className="text-muted-foreground">{item.actorEmail ?? "System"} · {item.createdAt ? formatDateTimeNow(item.createdAt) : "—"}</span>
           </li>)}</ul>}</CardContent></Card>}</TabsContent>
       <TabsContent value="modules"><TemplateModulesPanel templateId={template.id} versionId={versionId}
         historical={!editable} canCreate={editable && !!options.data?.canCreate}

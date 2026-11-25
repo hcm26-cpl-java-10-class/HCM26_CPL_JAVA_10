@@ -1,10 +1,11 @@
+import { formatDateTimeCustomNow } from "@/i18n/format";
 import { ChevronDown, Clock, Info, MessageSquareText } from "lucide-react";
 import type { SubmissionDetail, SubmissionReviewHistory } from "@/types";
 import { cn } from "@/lib/utils";
 import { latestReview } from "../review-outcome";
 import { decisionStyles, formatScore, ratingTones } from "./review-decision";
 
-const date = (value: string) => new Date(value).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+const date = (value: string) => formatDateTimeCustomNow(new Date(value), { dateStyle: "medium", timeStyle: "short" });
 
 /**
  * Read-only outcome of a submission: the latest decision expanded first and earlier decisions as a compact timeline.

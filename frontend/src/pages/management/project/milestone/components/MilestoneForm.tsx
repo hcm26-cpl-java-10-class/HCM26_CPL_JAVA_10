@@ -1,3 +1,4 @@
+import { formatNumberNow } from "@/i18n/format";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useCallback, useEffect, useState } from "react";
 import { Controller, type FieldErrors, type FieldPath, useForm, useWatch } from "react-hook-form";
@@ -296,7 +297,7 @@ export function MilestoneForm({
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-3">
                   <Label htmlFor="milestone-description">Description</Label>
-                  <span className="text-xs text-muted-foreground">{values.description?.length ?? 0}/{MILESTONE_FORM_LIMITS.description.toLocaleString("en-US")}</span>
+                  <span className="text-xs text-muted-foreground">{formatNumberNow(values.description?.length ?? 0)}/{formatNumberNow(MILESTONE_FORM_LIMITS.description)}</span>
                 </div>
                 <Textarea
                   id="milestone-description"
