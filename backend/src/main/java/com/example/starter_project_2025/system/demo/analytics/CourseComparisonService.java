@@ -9,6 +9,9 @@ import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
 import com.example.starter_project_2025.system.demo.lesson.Lesson;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import com.example.starter_project_2025.system.demo.report.CourseReportRepository;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttempt;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus;
+import com.example.starter_project_2025.system.exam.core.domain.Exam;
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -38,9 +41,7 @@ import java.util.function.ToDoubleFunction;
  * <p>Service này gom số liệu của <b>tất cả</b> các khóa học mà người dùng được xem
  * rồi đặt chúng cạnh nhau, kèm thứ hạng và nhận định cho từng module:
  * phễu học tập, xu hướng, hoạt động/rủi ro, đánh giá, phòng ban, xếp hạng,
- * chất lượng nội dung và thời gian học.
- *
- * <p>Phần "bài thi" được bỏ qua vì dữ liệu seed hiện tại không có lượt thi nào.
+ * chất lượng nội dung, thời gian học và kết quả bài thi.
  */
 @Service
 @RequiredArgsConstructor
@@ -53,6 +54,8 @@ public class CourseComparisonService {
     private final CourseAnalyticsRepository analyticsRepository;
     private final CourseReportRepository courseReportRepository;
     private final LessonRepository lessonRepository;
+    private final com.example.starter_project_2025.system.exam.core.domain.ExamRepository examRepository;
+    private final com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptRepository attemptRepository;
 
     // =====================================================================
     // Entry point
@@ -265,7 +268,87 @@ public class CourseComparisonService {
         row.studyAverageHours = row.studyLearners == 0 ? 0
                 : round2(row.totalStudySeconds / 3600.0 / row.studyLearners);
 
+        // ----- 8. Bài thi -----
+        applyExamStats(row, courseId);
+
         return row;
+    }
+
+    /**
+     * Gom số liệu bài thi của một khóa học: số đề, số lượt thi, điểm trung bình và
+     * tỉ lệ đạt/không đạt.
+     *
+     * <p>Chỉ tính các lượt thi đã chấm ({@code SUBMITTED} / {@code EXPIRED} và có
+     * {@code finalScore}) — giống hệt cách tab "Exam Analytics" tính.
+     */
+    private void applyExamStats(Row row, Long courseId) {
+        List<Exam> exams = analyticsRepository.findActiveExamsByCourse(courseId);
+        row.examTotal = exams.size();
+        if (exams.isEmpty()) {
+            return;
+        }
+
+        Map<Long, Exam> examById = new HashMap<>();
+        for (Exam exam : exams) {
+            examById.put(exam.getId(), exam);
+        }
+
+        // Gom lượt thi theo đề: [finalScore, maxScore, passScore, studentId, graded]
+        List<Object[]> rows = analyticsRepository.findAttemptRowsByCourse(courseId);
+        Set<Long> participants = new LinkedHashSet<>();
+        double scoreSum = 0;
+        long graded = 0;
+        long passed = 0;
+        double highest = Double.NEGATIVE_INFINITY;
+        double lowest = Double.POSITIVE_INFINITY;
+
+        for (Object[] r : rows) {
+            Long examId = (Long) r[0];
+            Exam exam = examById.get(examId);
+            if (exam == null) {
+                continue;
+            }
+            row.examAttempts++;
+
+            Long studentId = (Long) r[1];
+            if (studentId != null) {
+                participants.add(studentId);
+            }
+
+            BigDecimal score = (BigDecimal) r[2];
+            ExamAttemptStatus status = (ExamAttemptStatus) r[3];
+            Object submittedAt = r[4];
+            boolean isGraded = score != null && submittedAt != null
+                    && (status == ExamAttemptStatus.SUBMITTED || status == ExamAttemptStatus.EXPIRED);
+            if (!isGraded) {
+                continue;
+            }
+
+            graded++;
+            double value = score.doubleValue();
+            scoreSum += value;
+            highest = Math.max(highest, value);
+            lowest = Math.min(lowest, value);
+
+            BigDecimal passScore = exam.getPassScore();
+            if (passScore == null) {
+                BigDecimal max = exam.getMaxScore() == null ? BigDecimal.TEN : exam.getMaxScore();
+                passScore = max.multiply(new BigDecimal("0.5"));
+            }
+            if (score.compareTo(passScore) >= 0) {
+                passed++;
+            }
+        }
+
+        row.examGradedAttempts = graded;
+        row.examParticipants = participants.size();
+        row.examAverageScore = graded == 0 ? 0 : round2(scoreSum / graded);
+        row.examHighestScore = graded == 0 ? 0 : round2(highest);
+        row.examLowestScore = graded == 0 ? 0 : round2(lowest);
+        row.examPassedAttempts = passed;
+        row.examFailedAttempts = graded - passed;
+        row.examPassRate = pct(passed, graded);
+        row.examFailRate = pct(graded - passed, graded);
     }
 
     private void applyDepartmentStats(Row row, Long courseId, long lessonCount) {
@@ -329,6 +412,9 @@ public class CourseComparisonService {
                 .thenComparingDouble(r -> -r.contentResolvedRate), (r, rank) -> r.contentRank = rank);
         rankBy(rows, Comparator.comparingDouble((Row r) -> -r.studyAverageHours)
                 .thenComparingLong(r -> -r.learnerCount), (r, rank) -> r.studyRank = rank);
+        // Bài thi: tỉ lệ đạt cao là tốt, điểm trung bình cao là tốt.
+        rankBy(rows, Comparator.comparingDouble((Row r) -> -r.examPassRate)
+                .thenComparingDouble(r -> -r.examAverageScore), (r, rank) -> r.examRank = rank);
 
         // 4 bảng xếp hạng toàn cục (giống tab Ranking).
         rankBy(rows, Comparator.comparingLong((Row r) -> -r.learnerCount),
@@ -363,13 +449,17 @@ public class CourseComparisonService {
             double retention = 100 - row.dropOffRate;
             double content = (row.contentAnswerRate + row.contentResolvedRate) / 2;
             double study = row.studyAverageHours > 0 ? Math.min(100, row.studyAverageHours * 50) : 0;
+            // Khi khóa chưa có lượt thi nào thì không tính vào điểm tổng hợp
+            // (tránh hạ điểm oan cho các khóa mới).
+            double exam = row.examGradedAttempts == 0 ? 0 : row.examPassRate;
 
             double score = completion * 0.22
                     + engagement * 0.18
                     + rating * 0.20
                     + retention * 0.15
                     + content * 0.12
-                    + study * 0.13;
+                    + study * 0.08
+                    + exam * 0.05;
             row.overallScore = Math.round(score * 10) / 10.0;
             row.overallVerdict = row.overallScore >= 80 ? "EXCELLENT"
                     : row.overallScore >= 60 ? "GOOD"
@@ -407,6 +497,13 @@ public class CourseComparisonService {
             }
             if (row.departmentGap >= 40) {
                 weaknesses.add("Large gap between departments (" + fmt1(row.departmentGap) + " pts)");
+            }
+            if (row.examGradedAttempts > 0) {
+                if (row.examPassRate >= 80) {
+                    strengths.add("High exam pass rate (" + fmt1(row.examPassRate) + "%)");
+                } else if (row.examPassRate < 50) {
+                    weaknesses.add("Low exam pass rate (" + fmt1(row.examPassRate) + "%)");
+                }
             }
             if (strengths.isEmpty()) {
                 strengths.add("Has learners enrolled (" + row.learnerCount + ")");
@@ -527,6 +624,23 @@ public class CourseComparisonService {
                             ? "Learners spend a lot of time here, the content is deep but heavy."
                             : "Study time is reasonable for the course length."));
 
+            // ----- 9. Bài thi -----
+            evaluations.put("exams", String.format(
+                    "The course has %d exams with %d attempts (%d graded) from %d participants. "
+                            + "Average score is %s (highest %s, lowest %s) and %s%% of learners passed. "
+                            + "%s. %s",
+                    row.examTotal, row.examAttempts, row.examGradedAttempts, row.examParticipants,
+                    fmt2(row.examAverageScore), fmt2(row.examHighestScore), fmt2(row.examLowestScore),
+                    fmt1(row.examPassRate),
+                    rankPhrase(row.examRank, "the exam ranking"),
+                    row.examGradedAttempts == 0
+                            ? "No graded attempt yet - check whether learners can start the exams."
+                            : row.examPassRate >= 80
+                            ? "Assessment outcomes are strong, the pass threshold looks well calibrated."
+                            : row.examPassRate >= 60
+                            ? "Most learners pass, but review the failing group before the next round."
+                            : "A low pass rate suggests the exam is too hard or the material was not covered."));
+
             row.moduleEvaluations = evaluations;
         }
     }
@@ -643,6 +757,21 @@ public class CourseComparisonService {
                         fmt2(maxOf(items, i -> i.studyAverageHours())),
                         maxName(items, i -> i.studyTotalHours()),
                         fmt2(maxOf(items, i -> i.studyTotalHours())))));
+
+        insights.add(insight(items, "exams", "Exams",
+                "Assessment coverage, average score and pass rate across the exams of each course.",
+                "Pass rate",
+                i -> i.examPassRate(),
+                String.format("Assessment outcomes differ: the pass rate spans from %s%% to %s%% "
+                                + "across %d graded attempts in total. %s has the highest pass rate (%s%%), "
+                                + "while %s has the lowest (%s%%).",
+                        fmt1(minOf(items, i -> i.examPassRate())),
+                        fmt1(maxOf(items, i -> i.examPassRate())),
+                        items.stream().mapToLong(i -> i.examGradedAttempts()).sum(),
+                        maxName(items, i -> i.examPassRate()),
+                        fmt1(maxOf(items, i -> i.examPassRate())),
+                        minName(items, i -> i.examPassRate()),
+                        fmt1(minOf(items, i -> i.examPassRate())))));
 
         return insights;
     }
@@ -867,6 +996,19 @@ public class CourseComparisonService {
         double maxStudyHours;
         int studyRank;
 
+        long examTotal;
+        long examAttempts;
+        long examGradedAttempts;
+        long examParticipants;
+        double examAverageScore;
+        double examHighestScore;
+        double examLowestScore;
+        long examPassedAttempts;
+        double examPassRate;
+        long examFailedAttempts;
+        double examFailRate;
+        int examRank;
+
         double overallScore;
         String overallVerdict;
         List<String> strengths = List.of();
@@ -896,6 +1038,9 @@ public class CourseComparisonService {
                     contentTotalReports, contentOpenReports, contentResolvedRate, contentTotalQuestions,
                     contentUnanswered, contentAnswerRate, contentAverageResponseHours, contentRank,
                     studyTotalHours, studyAverageHours, round2(maxStudyHours), studyRank,
+                    examTotal, examAttempts, examGradedAttempts, examParticipants,
+                    examAverageScore, examHighestScore, examLowestScore,
+                    examPassedAttempts, examPassRate, examFailedAttempts, examFailRate, examRank,
                     overallScore, overallVerdict, strengths, weaknesses, moduleEvaluations);
         }
     }
