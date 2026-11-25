@@ -56,3 +56,4 @@ public class SubjectSyllabus extends BaseEntity {
     @Column(name = "assessment_scheme_json", columnDefinition = "LONGTEXT")
     String assessmentSchemeJson;
 }
+

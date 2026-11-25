@@ -1,4 +1,3 @@
-import { apiErrorMessage } from "@/utils/api-error.utils";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -122,7 +121,11 @@ export function ImportTab({
       await onImport(file);
       clearFile();
     } catch (error: unknown) {
-      setError(apiErrorMessage(error, "Failed to import data."));
+      setError(
+          error instanceof Error
+              ? error.message
+              : "Failed to import data."
+      );
     }
   }
 

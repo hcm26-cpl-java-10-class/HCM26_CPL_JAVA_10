@@ -22,7 +22,6 @@ import com.example.starter_project_2025.system.project.tenant.Tenant;
 import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
-import com.example.starter_project_2025.system.auth.util.PasswordPolicy;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import jakarta.transaction.Transactional;
@@ -36,13 +35,13 @@ import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-import java.time.Instant;
 
-import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -50,11 +49,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import com.example.starter_project_2025.system.audit.AuditAction;
-import com.example.starter_project_2025.system.audit.AuditLogService;
-import com.example.starter_project_2025.system.audit.AuditSupport;
-import org.springframework.security.core.AuthenticationException;
-
 
 @Service
 @RequiredArgsConstructor
@@ -71,8 +65,6 @@ public class AuthServiceImpl implements AuthService {
     RoleRepository roleRepository;
     TenantRepository tenantRepository;
     PasswordEncoder passwordEncoder;
-    SsoAccessPolicy ssoAccessPolicy;
-    AuditLogService auditLogService;
     AuthAuditService authAuditService;
 
     @NonFinal
@@ -80,26 +72,13 @@ public class AuthServiceImpl implements AuthService {
     boolean ssoJitProvisioningEnabled;
 
     @Override
-    @Transactional
     public AuthenticationResponse login(LoginRequest request) {
         return login(request, null, null);
     }
 
     @Override
     @Transactional
-    public AuthenticationResponse login(LoginRequest request, String device) {
-        return login(request, device, null, null);
-    }
-
-    @Override
-    @Transactional
     public AuthenticationResponse login(LoginRequest request, String ipAddress, String userAgent) {
-        return login(request, request.device(), ipAddress, userAgent);
-    }
-
-    @Override
-    @Transactional
-    public AuthenticationResponse login(LoginRequest request, String device, String ipAddress, String userAgent) {
         String normalizedEmail = request.email() == null ? "" : request.email().trim();
         Authentication authentication;
         try {
@@ -109,32 +88,14 @@ public class AuthServiceImpl implements AuthService {
         } catch (AuthenticationException ex) {
             authAuditService.record(null, null, normalizedEmail, null,
                     AuthAuditAction.LOGIN_FAILED, ipAddress, userAgent, ex.getClass().getSimpleName());
-            auditLogService.logLoginFailure(normalizedEmail, UUID.randomUUID().toString());
             throw ex;
         }
 
         UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
         User user = principal.getUser();
         ensureUserAndTenantActive(user, ipAddress, userAgent, AuthAuditAction.LOGIN_FAILED);
-        // Temporary password (for example from an Excel import): the password was right, but the account
-        // can only be used after its owner chooses their own. No access or refresh token is issued, so the
-        // temporary password cannot be used to call the API; the user only gets a short-lived token to set
-        // the new password on the existing reset-password page.
-        if (Boolean.TRUE.equals(principal.getUser().getMustChangePassword())) {
-            String setupToken = oneTimeTokenService.createOneTimeToken(
-                    principal.getUser(), OneTimeToken.TokenType.RESET_PASSWORD, Duration.ofMinutes(30));
 
-            return AuthenticationResponse.builder()
-                    .email(principal.getUser().getEmail())
-                    .passwordChangeRequired(true)
-                    .setupToken(setupToken)
-                    .build();
-        }
-        if (StringUtils.hasText(device)) {
-            user.setLastLoginDevice(device.trim());
-        }
-
-        user.setLastLoginAt(Instant.now());
+        user.setLastLoginAt(LocalDateTime.now());
         userRepository.save(user);
 
         boolean rememberMe = request.isRememberMeEnabled();
@@ -146,7 +107,6 @@ public class AuthServiceImpl implements AuthService {
         authAuditService.record(user.getTenantId(), user.getId(), user.getEmail(), user.getId(),
                 AuthAuditAction.LOGIN_SUCCESS, ipAddress, userAgent, "sessionId=" + created.sessionId());
 
-        auditLogService.log("LOGIN", "AUTH", String.valueOf(user.getId()), null, null, UUID.randomUUID().toString(), "SUCCESS");
         return buildAuthResponse(principal, accessToken, created.rawToken(), rememberMe);
     }
 
@@ -158,64 +118,36 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName, String device) {
-        return loginWithGoogle(email, true, firstName, lastName, device);
-    }
-
-    @Override
-    @Transactional
-    public AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName) {
-        return loginWithGoogle(email, emailVerified, firstName, lastName, null);
-    }
-
-    @Override
-    @Transactional
-    public AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName, String ipAddress, String userAgent) {
-        return loginWithGoogle(email, true, firstName, lastName, null, ipAddress, userAgent);
-    }
-
-    @Override
-    @Transactional
-    public AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName, String device) {
-        return loginWithGoogle(email, emailVerified, firstName, lastName, device, null, null);
-    }
-
-    @Override
-    @Transactional
-    public AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName, String device, String ipAddress, String userAgent) {
+    public AuthenticationResponse loginWithGoogle(
+            String email,
+            String firstName,
+            String lastName,
+            String ipAddress,
+            String userAgent
+    ) {
         if (!StringUtils.hasText(email)) {
-            throw new SsoLoginException(SsoLoginException.AUTH_FAILED, "Google account email is required");
+            authAuditService.record(null, null, null, null,
+                    AuthAuditAction.LOGIN_GOOGLE_FAILED, ipAddress, userAgent, "Missing Google email");
+            throw new BadRequestException("Google account email is required");
         }
 
-        email = email.trim();
-        ssoAccessPolicy.checkEmail(email, emailVerified);
+        String normalizedEmail = email.trim();
+        User user = userRepository.findByEmail(normalizedEmail).orElse(null);
 
-        // Only accounts that already exist may sign in (imported or created by an administrator),
-        // unless app.sso.auto-create-users=true.
-        User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
         if (user == null) {
             if (!ssoJitProvisioningEnabled) {
-                authAuditService.record(null, null, email, null, AuthAuditAction.LOGIN_GOOGLE_FAILED,
-                        ipAddress, userAgent, "JIT provisioning disabled");
+                authAuditService.record(null, null, normalizedEmail, null,
+                        AuthAuditAction.LOGIN_GOOGLE_FAILED, ipAddress, userAgent, "JIT provisioning disabled");
                 throw new DisabledException("Account does not exist and automatic SSO provisioning is disabled");
             }
-            if (!ssoAccessPolicy.autoCreateUsers()) {
-                throw ssoAccessPolicy.notRegistered(email);
-            }
-            user = createGoogleUser(email, firstName, lastName);
+            user = createGoogleUser(normalizedEmail, firstName, lastName);
+        } else {
+            ensureUserAndTenantActive(user, ipAddress, userAgent, AuthAuditAction.LOGIN_GOOGLE_FAILED);
+            user = updateUserFromGoogleProfile(user, firstName, lastName);
         }
 
-        ssoAccessPolicy.checkAccount(user);
-        ensureUserAndTenantActive(user, ipAddress, userAgent, AuthAuditAction.LOGIN_GOOGLE_FAILED);
-
-        user = updateUserFromGoogleProfile(user, firstName, lastName);
-
-        user.setLastLoginAt(Instant.now());
-        if (StringUtils.hasText(device)) {
-            user.setLastLoginDevice(device.trim());
-        }
+        user.setLastLoginAt(LocalDateTime.now());
         user = userRepository.save(user);
-
 
         UserPrincipal principal = UserPrincipal.fromUser(user);
         Authentication authentication = new UsernamePasswordAuthenticationToken(
@@ -251,17 +183,7 @@ public class AuthServiceImpl implements AuthService {
 
         user.getRoles().add(getDefaultStudentRole());
 
-        User savedUser = userRepository.save(user);
-
-        auditLogService.logEventAs(
-                savedUser.getId(),
-                savedUser.getEmail(),
-                AuditAction.REGISTER,
-                "USER",
-                String.valueOf(savedUser.getId()),
-                null,
-                AuditSupport.json("email", savedUser.getEmail())
-        );
+        userRepository.save(user);
 
         verificationService.sendEmailVerification(user.getEmail());
     }
@@ -355,19 +277,12 @@ public class AuthServiceImpl implements AuthService {
             String ipAddress,
             String userAgent
     ) {
-        String correlationId = UUID.randomUUID().toString();
-        try {
-            if (StringUtils.hasText(rawRefreshToken)) {
-                refreshTokenService.revokeRefreshToken(rawRefreshToken);
-            }
-            if (StringUtils.hasText(sessionId)) {
-                refreshTokenService.revokeSession(sessionId, "LOGOUT");
-            }
-        } catch (RuntimeException ex) {
-            auditLogService.logLogout(actorId, actorEmail, correlationId, "FAILURE");
-            throw ex;
+        if (StringUtils.hasText(rawRefreshToken)) {
+            refreshTokenService.revokeRefreshToken(rawRefreshToken);
         }
-        auditLogService.logLogout(actorId, actorEmail, correlationId, "SUCCESS");
+        if (StringUtils.hasText(sessionId)) {
+            refreshTokenService.revokeSession(sessionId, "LOGOUT");
+        }
         authAuditService.record(null, actorId, actorEmail, actorId,
                 AuthAuditAction.LOGOUT, ipAddress, userAgent,
                 StringUtils.hasText(sessionId) ? "sessionId=" + sessionId : "cookie-logout");
@@ -382,33 +297,13 @@ public class AuthServiceImpl implements AuthService {
 
         User user = resetToken.getUser();
 
-        String passwordProblem = PasswordPolicy.validate(request.newPassword());
-        if (passwordProblem != null) {
-            throw new BadRequestException(passwordProblem);
-        }
-
-        // The new password must really be new (for example not the temporary one it replaces).
-        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
-            throw new BadRequestException("The new password must be different from the current password.");
-        }
-
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
-        user.setMustChangePassword(false);
         userRepository.save(user);
 
         refreshTokenService.revokeAllRefreshTokens(user.getId(), "PASSWORD_RESET");
 
         oneTimeTokenService.markUsed(resetToken);
 
-        auditLogService.logEventAs(
-                user.getId(),
-                user.getEmail(),
-                AuditAction.RESET_PASSWORD,
-                "USER",
-                String.valueOf(user.getId()),
-                null,
-                null
-        );
         authAuditService.record(user.getTenantId(), user.getId(), user.getEmail(), user.getId(),
                 AuthAuditAction.PASSWORD_RESET, null, null, "Password reset completed; all sessions revoked");
     }
@@ -628,7 +523,6 @@ public class AuthServiceImpl implements AuthService {
         }
 
         return user.getRoles().stream()
-                .filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                 .map(Role::getName)
                 .filter(StringUtils::hasText)
                 .map(this::normalizeRoleName)
@@ -642,7 +536,6 @@ public class AuthServiceImpl implements AuthService {
         }
 
         return user.getRoles().stream()
-                .filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                 .filter(role -> role.getPermissions() != null)
                 .flatMap(role -> role.getPermissions().stream())
                 .map(permission -> permission.getName())
@@ -657,7 +550,6 @@ public class AuthServiceImpl implements AuthService {
 
         if (user.getRoles() != null) {
             Map<String, Role> rolesByName = user.getRoles().stream()
-                    .filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                     .filter(role -> StringUtils.hasText(role.getName()))
                     .collect(Collectors.toMap(
                             role -> normalizeRoleName(role.getName()),
@@ -674,7 +566,21 @@ public class AuthServiceImpl implements AuthService {
             }
         }
 
+        if (sortedRoles.contains("ADMIN")) {
+            includePreviewRolePermissions(rolePermissions, "STUDENT");
+            includePreviewRolePermissions(rolePermissions, "TEACHER");
+        }
+
         return rolePermissions;
+    }
+
+    private void includePreviewRolePermissions(Map<String, Set<String>> rolePermissions, String roleName) {
+        if (rolePermissions.containsKey(roleName)) {
+            return;
+        }
+
+        roleRepository.findByName(roleName)
+                .ifPresent(role -> rolePermissions.put(roleName, mapRolePermissions(role)));
     }
 
     private Set<String> mapRolePermissions(Role role) {

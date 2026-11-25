@@ -4,7 +4,7 @@ import type {
   CourseReviewRequest,
   CourseReviewResponse,
   CourseReviewSummary,
-  CourseReviewEligibility
+  CourseReviewEligibility 
 } from "@/types";
 
 const path = (courseId: number) => `/courses/${courseId}/reviews`;

@@ -107,9 +107,9 @@ export function SidebarMenu({
 }: {
     collapsible?: "icon" | "offcanvas";
 } = {}) {
-    const dispatch = useDispatch();
     const location = useLocation();
     const navigate = useNavigate();
+    const dispatch = useDispatch();
     const queryClient = useQueryClient();
     const { toggleSidebar, state } = useSidebar();
     const { activeRole, hasPermission } = usePermissions();

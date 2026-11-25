@@ -11,3 +11,4 @@ public interface ClassTopicAssessmentRepository extends JpaRepository<ClassTopic
     List<ClassTopicAssessmentEntity> findByClassIdOrderByTopicIndexAsc(Long classId);
     void deleteByClassId(Long classId);
 }
+

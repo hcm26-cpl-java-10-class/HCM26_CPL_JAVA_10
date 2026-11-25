@@ -33,3 +33,4 @@ public class ClassActivityEntity {
     @Column(name = "type", length = 20)
     private String type;
 }
+

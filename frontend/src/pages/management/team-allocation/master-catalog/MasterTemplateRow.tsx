@@ -72,3 +72,4 @@ export function MasterTemplateRow({ template, selected, keyword, onPreview, onSe
     </div>
   </article>;
 }
+

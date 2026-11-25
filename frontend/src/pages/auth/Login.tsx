@@ -7,11 +7,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { motion } from "motion/react";
 import { FcGoogle } from "react-icons/fc";
 import { useDispatch } from "react-redux";
-import { setLogin, setLogout } from "@/store/slices/auth/authSlice";
+import { setLogin } from "@/store/slices/auth/authSlice";
 import { authApi } from "@/api/features/auth.api";
 import axios from "axios";
 import { Eye, EyeOff } from "lucide-react";
-import { availableAccountViews, getHomePathByRole, resolveEffectivePermissions } from "@/utils/rbac.utils";
+import { getHomePathByRole, resolveEffectivePermissions } from "@/utils/rbac.utils";
 import { useRoleSwitch } from "@/contexts/RoleSwitchContext";
 
 const URL_LOGIN_WITH_GOOGLE =
@@ -58,16 +58,9 @@ export const Login: React.FC = () => {
         const cleanEmail = email.trim();
         try {
             const res = await authApi.login({ email: cleanEmail, password, isRememberedMe });
-            if (res.passwordChangeRequired && res.setupToken) {
-                dispatch(setLogout());
-                navigate(`/reset-password?token=${encodeURIComponent(res.setupToken)}`, { replace: true });
-                return;
-            }
             setViewRole(null);
             dispatch(setLogin(res));
-            const primaryRole = res.role ?? availableAccountViews(res.permissions ?? [])[0];
-            const effectivePermissions = resolveEffectivePermissions(primaryRole, res.rolePermissions, res.permissions ?? []);
-            navigate(getHomePathByRole(primaryRole, effectivePermissions), { replace: true });
+            navigate(getHomePathByRole(res.role, resolveEffectivePermissions(res.role, res.rolePermissions, res.permissions)), { replace: true });
         } catch (err) {
             if (axios.isAxiosError(err)) {
                 const backendMsg = err.response?.data?.message;

@@ -33,7 +33,7 @@ vi.mock("@/components/layout/MainLayout", async () => {
     return { MainLayout: ({ children }: { children: ReactNode }) => <SidebarProvider><SidebarMenu /><main>{children}</main></SidebarProvider> };
 });
 
-const rights = ["ADMIN_ACCESS", "USER_READ", "MENU_READ", "CLASS_READ", "CLASS_UPDATE", "SESSION_READ", "PROGRAM_READ", "SUBJECT_READ", "ASSIGNMENT_READ", "ENROLLMENT_READ", "AUDIT_READ", "TRAINER_READ"];
+const rights = ["USER_READ", "MENU_READ", "CLASS_READ", "CLASS_UPDATE", "SESSION_READ", "PROGRAM_READ", "SUBJECT_READ", "ASSIGNMENT_READ", "ENROLLMENT_READ", "AUDIT_READ", "TRAINER_READ"];
 const cls = { id: 4, code: "INTERNAL_4", name: "Internal test class", traineeSource: "internal", status: "planning", program: "PROGRAM_4",
     startDate: "2030-06-01", endDate: "2030-09-01", plannedSize: 20, site: "HCM", classAdmin: "Admin", masterTrainer: "Trainer" };
 beforeEach(() => {

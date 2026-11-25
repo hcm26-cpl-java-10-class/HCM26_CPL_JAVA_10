@@ -10,7 +10,6 @@ import lombok.experimental.NonFinal;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -27,18 +26,13 @@ public class OneTimeTokenServiceImpl implements OneTimeTokenService {
 
     @Override
     public String createOneTimeToken(User user, OneTimeToken.TokenType type) {
-        return createOneTimeToken(user, type, Duration.ofSeconds(oneTimeExpirationSeconds));
-    }
-
-    @Override
-    public String createOneTimeToken(User user, OneTimeToken.TokenType type, Duration lifetime) {
         String rawToken = UUID.randomUUID().toString();
 
         OneTimeToken token = OneTimeToken.builder()
                 .tokenHash(TokenUtil.hash(rawToken))
                 .user(user)
                 .type(type)
-                .expiryDate(Instant.now().plus(lifetime))
+                .expiryDate(Instant.now().plusSeconds(oneTimeExpirationSeconds))
                 .used(false)
                 .build();
 
