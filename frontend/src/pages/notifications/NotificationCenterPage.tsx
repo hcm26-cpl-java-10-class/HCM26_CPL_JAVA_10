@@ -46,7 +46,7 @@ function PreferencesDialog({ open, onClose }: { open: boolean; onClose: () => vo
   const preferences = useQuery({
     queryKey: preferencesKey,
     queryFn: notificationApi.getPreferences,
-    enabled: open,
+    enabled: open && account !== "signed-out",
   });
   const update = useMutation({
     mutationFn: (change: { category: NotificationCategory; inAppEnabled: boolean }) =>
@@ -103,6 +103,7 @@ export default function NotificationCenterPage() {
   const query = useQuery({
     queryKey: [...notificationQueryKey(account), "page", category ?? "ALL", unreadOnly, page],
     queryFn: () => notificationApi.getPage({ category, unreadOnly, page, size: PAGE_SIZE }),
+    enabled: account !== "signed-out",
     refetchInterval: 10_000,
     placeholderData: (previous) => previous,
   });

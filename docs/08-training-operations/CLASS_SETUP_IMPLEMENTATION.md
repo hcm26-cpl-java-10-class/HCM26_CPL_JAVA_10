@@ -1,6 +1,6 @@
 # Class Setup: implementation and usage
 
-Date: 09/11/2026 (Asia/Saigon). This document describes the implemented source, not an instruction to change existing class records automatically. See [the routing report](FRONTEND_ROUTING_404_FIX_REPORT.md) for live backend/version evidence and navigation checks.
+Date: 09/11/2026 (Asia/Saigon). This document describes the implemented source, not an instruction to change existing class records automatically. See [the routing report](../06-testing-verification/FRONTEND_ROUTING_404_FIX_REPORT.md) for live backend/version evidence and navigation checks.
 
 ## Reused model and APIs
 
