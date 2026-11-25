@@ -47,6 +47,21 @@ public class ClassOperationDatabaseService {
     private static final DateTimeFormatter MONTH_LABEL_FMT = DateTimeFormatter.ofPattern("MMM - yyyy", Locale.ENGLISH);
     private static final DateTimeFormatter ACTIVITY_TS_FMT = DateTimeFormatter.ofPattern("dd-MMM-yyyy HH:mm:ss", Locale.ENGLISH);
 
+    private TrainingClass getTrainingClassOrFallback(Long classId) {
+        return trainingClassRepository.findById(classId)
+                .orElseGet(() -> {
+                    TrainingClass tc = new TrainingClass();
+                    tc.setId(classId);
+                    tc.setCode("CLASS_" + classId);
+                    tc.setName("Class " + classId);
+                    tc.setStatus("active");
+                    tc.setStartDate(LocalDate.now());
+                    tc.setEndDate(LocalDate.now().plusMonths(3));
+                    tc.setPlannedSize(25);
+                    return trainingClassRepository.save(tc);
+                });
+    }
+
     // =========================================================================
     // 0. BASELINE CLASSES & TRAINEE ENROLLMENTS SEED (H2 DATABASE)
     // =========================================================================
@@ -163,14 +178,14 @@ public class ClassOperationDatabaseService {
 
     @Transactional
     public Map<String, Object> getOperation(Long classId) {
-        ClassOperationEntity entity = operationRepository.findByClassId(classId)
+        ClassOperationEntity entity = operationRepository.findByTrainingClass_Id(classId)
                 .orElseGet(() -> initializeOperationFromH2(classId));
         return toOperationMap(entity);
     }
 
     @Transactional
     public Map<String, Object> saveOperation(Long classId, Map<String, Object> body) {
-        ClassOperationEntity entity = operationRepository.findByClassId(classId)
+        ClassOperationEntity entity = operationRepository.findByTrainingClass_Id(classId)
                 .orElseGet(() -> initializeOperationFromH2(classId));
 
         Map<String, Object> opInfo = (Map<String, Object>) body.get("operatingInfo");
@@ -214,7 +229,7 @@ public class ClassOperationDatabaseService {
 
     @Transactional
     public List<Map<String, Object>> getTopicAssessments(Long classId) {
-        List<ClassTopicAssessmentEntity> list = topicAssessmentRepository.findByClassIdOrderByTopicIndexAsc(classId);
+        List<ClassTopicAssessmentEntity> list = topicAssessmentRepository.findByTrainingClass_IdOrderByTopicIndexAsc(classId);
         if (list.isEmpty()) {
             list = initializeTopicAssessmentsFromH2(classId);
         }
@@ -229,7 +244,7 @@ public class ClassOperationDatabaseService {
             return getTopicAssessments(classId);
         }
 
-        List<ClassTopicAssessmentEntity> existingList = topicAssessmentRepository.findByClassIdOrderByTopicIndexAsc(classId);
+        List<ClassTopicAssessmentEntity> existingList = topicAssessmentRepository.findByTrainingClass_IdOrderByTopicIndexAsc(classId);
         Map<Integer, ClassTopicAssessmentEntity> existingByIndex = new HashMap<>();
         for (ClassTopicAssessmentEntity existing : existingList) {
             if (existing.getTopicIndex() != null) {
@@ -239,6 +254,7 @@ public class ClassOperationDatabaseService {
 
         List<ClassTopicAssessmentEntity> updatedEntities = new ArrayList<>();
         int index = 1;
+        TrainingClass tc = getTrainingClassOrFallback(classId);
         for (Map<String, Object> t : incomingTopics) {
             String title = (String) t.get("title");
             List<Map<String, Object>> assessments = (List<Map<String, Object>>) t.get("assessments");
@@ -265,7 +281,7 @@ public class ClassOperationDatabaseService {
             ClassTopicAssessmentEntity entity = existingByIndex.get(index);
             if (entity == null) {
                 entity = ClassTopicAssessmentEntity.builder()
-                        .classId(classId)
+                        .trainingClass(tc)
                         .topicIndex(index)
                         .title(title)
                         .assessmentsJson(json)
@@ -287,7 +303,7 @@ public class ClassOperationDatabaseService {
     }
 
     private void syncMilestoneWeightsWithTopicAssessments(Long classId, List<Map<String, Object>> incomingTopics) {
-        ClassOperationEntity opEntity = operationRepository.findByClassId(classId)
+        ClassOperationEntity opEntity = operationRepository.findByTrainingClass_Id(classId)
                 .orElseGet(() -> initializeOperationFromH2(classId));
         if (opEntity.getMilestonesJson() == null || opEntity.getMilestonesJson().isBlank()) {
             return;
@@ -359,7 +375,7 @@ public class ClassOperationDatabaseService {
 
     @Transactional
     public List<ClassActivityEntity> getActivities(Long classId) {
-        List<ClassActivityEntity> list = activityRepository.findByClassIdOrderByIdDesc(classId);
+        List<ClassActivityEntity> list = activityRepository.findByTrainingClass_IdOrderByIdDesc(classId);
         if (list.isEmpty()) {
             list = initializeActivitiesFromH2(classId);
         }
@@ -373,9 +389,10 @@ public class ClassOperationDatabaseService {
         String type = body.get("type") != null ? String.valueOf(body.get("type")) : "comment";
         String initials = buildInitials(author);
         String now = LocalDateTime.now().format(ACTIVITY_TS_FMT);
+        TrainingClass tc = getTrainingClassOrFallback(classId);
 
         ClassActivityEntity entity = ClassActivityEntity.builder()
-                .classId(classId)
+                .trainingClass(tc)
                 .author(author)
                 .initials(initials)
                 .content(content)
@@ -833,14 +850,14 @@ public class ClassOperationDatabaseService {
 
     @Transactional
     public ClassOperationEntity initializeOperationFromH2(Long classId) {
-        Optional<ClassOperationEntity> existing = operationRepository.findByClassId(classId);
+        Optional<ClassOperationEntity> existing = operationRepository.findByTrainingClass_Id(classId);
         if (existing.isPresent()) {
             return existing.get();
         }
 
-        TrainingClass tc = trainingClassRepository.findById(classId).orElse(null);
-        LocalDate startDate = tc != null && tc.getStartDate() != null ? tc.getStartDate() : LocalDate.now().withDayOfMonth(1);
-        LocalDate endDate = tc != null && tc.getEndDate() != null ? tc.getEndDate() : startDate.plusMonths(3).withDayOfMonth(28);
+        TrainingClass tc = getTrainingClassOrFallback(classId);
+        LocalDate startDate = tc.getStartDate() != null ? tc.getStartDate() : LocalDate.now().withDayOfMonth(1);
+        LocalDate endDate = tc.getEndDate() != null ? tc.getEndDate() : startDate.plusMonths(3).withDayOfMonth(28);
 
         List<Session> classSessions = sessionRepository.findByClassId(classId).stream()
                 .filter(s -> Boolean.TRUE.equals(s.getIsActive()) && s.getStartTime() != null)
@@ -940,7 +957,7 @@ public class ClassOperationDatabaseService {
         }
 
         ClassOperationEntity entity = ClassOperationEntity.builder()
-                .classId(classId)
+                .trainingClass(tc)
                 .actualStartDate(startDate.toString())
                 .earlyGraduatedDate(endDate.toString())
                 .actualEndDate("")
@@ -958,11 +975,12 @@ public class ClassOperationDatabaseService {
 
     @Transactional
     public List<ClassTopicAssessmentEntity> initializeTopicAssessmentsFromH2(Long classId) {
-        List<ClassTopicAssessmentEntity> existing = topicAssessmentRepository.findByClassIdOrderByTopicIndexAsc(classId);
+        List<ClassTopicAssessmentEntity> existing = topicAssessmentRepository.findByTrainingClass_IdOrderByTopicIndexAsc(classId);
         if (!existing.isEmpty()) {
             return existing;
         }
 
+        TrainingClass tc = getTrainingClassOrFallback(classId);
         List<TopicDescriptor> topics = resolveTopicsFromH2(classId);
         List<ClassTopicAssessmentEntity> savedList = new ArrayList<>();
         int index = 1;
@@ -1011,7 +1029,7 @@ public class ClassOperationDatabaseService {
             }
 
             ClassTopicAssessmentEntity entity = ClassTopicAssessmentEntity.builder()
-                    .classId(classId)
+                    .trainingClass(tc)
                     .topicIndex(index)
                     .title(title)
                     .assessmentsJson(json)
@@ -1026,27 +1044,27 @@ public class ClassOperationDatabaseService {
 
     @Transactional
     public List<ClassActivityEntity> initializeActivitiesFromH2(Long classId) {
-        List<ClassActivityEntity> existing = activityRepository.findByClassIdOrderByIdDesc(classId);
+        List<ClassActivityEntity> existing = activityRepository.findByTrainingClass_IdOrderByIdDesc(classId);
         if (!existing.isEmpty()) {
             return existing;
         }
 
-        TrainingClass tc = trainingClassRepository.findById(classId).orElse(null);
-        String classCode = tc != null && tc.getCode() != null ? tc.getCode() : "CLASS_" + classId;
-        String trainer = tc != null && tc.getMasterTrainer() != null ? tc.getMasterTrainer() : "Trainer";
-        String admin = tc != null && tc.getClassAdmin() != null ? tc.getClassAdmin() : "ClassAdmin";
-        String location = tc != null && tc.getLocation() != null ? tc.getLocation() : "Training Lab";
+        TrainingClass tc = getTrainingClassOrFallback(classId);
+        String classCode = tc.getCode() != null ? tc.getCode() : "CLASS_" + classId;
+        String trainer = tc.getMasterTrainer() != null ? tc.getMasterTrainer() : "Trainer";
+        String admin = tc.getClassAdmin() != null ? tc.getClassAdmin() : "ClassAdmin";
+        String location = tc.getLocation() != null ? tc.getLocation() : "Training Lab";
         long sessionCount = sessionRepository.findByClassId(classId).stream()
                 .filter(s -> Boolean.TRUE.equals(s.getIsActive()))
                 .count();
 
-        LocalDateTime baseTime = tc != null && tc.getStartDate() != null
+        LocalDateTime baseTime = tc.getStartDate() != null
                 ? tc.getStartDate().atTime(9, 0)
                 : LocalDateTime.now().minusDays(3);
 
         List<ClassActivityEntity> list = new ArrayList<>();
         list.add(ClassActivityEntity.builder()
-                .classId(classId)
+                .trainingClass(tc)
                 .author(admin)
                 .initials(buildInitials(admin))
                 .content("initialized class " + classCode + " at " + location + " in H2 database.")
@@ -1055,7 +1073,7 @@ public class ClassOperationDatabaseService {
                 .build());
 
         list.add(ClassActivityEntity.builder()
-                .classId(classId)
+                .trainingClass(tc)
                 .author(trainer)
                 .initials(buildInitials(trainer))
                 .content("synchronized " + sessionCount + " training sessions and milestone weights from H2 schedule.")
@@ -1064,7 +1082,7 @@ public class ClassOperationDatabaseService {
                 .build());
 
         list.add(ClassActivityEntity.builder()
-                .classId(classId)
+                .trainingClass(tc)
                 .author(trainer)
                 .initials(buildInitials(trainer))
                 .content("Class " + classCode + " curriculum and topic assessments are ready for review.")

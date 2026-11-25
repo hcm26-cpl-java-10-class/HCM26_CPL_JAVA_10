@@ -8,7 +8,7 @@ import java.util.List;
 
 @Repository
 public interface ClassTopicAssessmentRepository extends JpaRepository<ClassTopicAssessmentEntity, Long> {
-    List<ClassTopicAssessmentEntity> findByClassIdOrderByTopicIndexAsc(Long classId);
-    void deleteByClassId(Long classId);
+    List<ClassTopicAssessmentEntity> findByTrainingClass_IdOrderByTopicIndexAsc(Long classId);
+    void deleteByTrainingClass_Id(Long classId);
 }
 

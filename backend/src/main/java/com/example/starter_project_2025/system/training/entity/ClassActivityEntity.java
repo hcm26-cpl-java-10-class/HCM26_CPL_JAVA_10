@@ -1,12 +1,13 @@
 package com.example.starter_project_2025.system.training.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
 @Table(name = "class_activities")
-@Getter
-@Setter
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -15,8 +16,12 @@ public class ClassActivityEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "class_id", nullable = false)
-    private Long classId;
+    @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "class_id", nullable = false)
+    private TrainingClass trainingClass;
 
     @Column(name = "author", length = 100)
     private String author;
@@ -32,5 +37,10 @@ public class ClassActivityEntity {
 
     @Column(name = "type", length = 20)
     private String type;
+
+    @JsonProperty("classId")
+    public Long getClassId() {
+        return trainingClass != null ? trainingClass.getId() : null;
+    }
 }
 

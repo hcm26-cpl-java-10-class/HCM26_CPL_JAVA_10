@@ -1,12 +1,13 @@
 package com.example.starter_project_2025.system.training.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
 @Table(name = "class_operations")
-@Getter
-@Setter
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -15,8 +16,16 @@ public class ClassOperationEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "class_id", nullable = false, unique = true)
-    private Long classId;
+    @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "class_id", nullable = false, unique = true)
+    private TrainingClass trainingClass;
+
+    public Long getClassId() {
+        return trainingClass != null ? trainingClass.getId() : null;
+    }
 
     @Column(name = "actual_start_date")
     private String actualStartDate;
@@ -49,5 +58,16 @@ public class ClassOperationEntity {
 
     @Column(name = "total_weighted_number")
     private Integer totalWeightedNumber;
+
+    public static class ClassOperationEntityBuilder {
+        public ClassOperationEntityBuilder classId(Long classId) {
+            if (classId != null) {
+                TrainingClass tc = new TrainingClass();
+                tc.setId(classId);
+                this.trainingClass = tc;
+            }
+            return this;
+        }
+    }
 }
 
