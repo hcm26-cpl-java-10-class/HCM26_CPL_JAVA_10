@@ -7,6 +7,11 @@ import java.util.function.Function;
 @Builder
 public record ExportColumn<T>(
         String header,
-        Function<T, Object> valueExtractor
+        Function<T, Object> valueExtractor,
+        String hint
 ) {
+
+    public ExportColumn(String header, Function<T, Object> valueExtractor) {
+        this(header, valueExtractor, "");
+    }
 }

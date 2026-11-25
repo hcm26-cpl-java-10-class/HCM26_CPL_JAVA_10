@@ -17,8 +17,16 @@ const clearRecommendationChats = () => {
     try { Object.keys(sessionStorage).filter(key => key.startsWith("course_recommendation_chat:")).forEach(key => sessionStorage.removeItem(key)); } catch { /* Storage may be disabled. */ }
 };
 
-LEGACY_AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
-sessionStorage.removeItem("fams.auth.tab");
+function clearLegacyAuthStorage() {
+    try {
+        LEGACY_AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+        globalThis.sessionStorage?.removeItem("fams.auth.tab");
+    } catch {
+        // Browser storage may be unavailable.
+    }
+}
+
+clearLegacyAuthStorage();
 
 const emptyAuthState: AuthState = {
     token: "",
@@ -71,6 +79,34 @@ const authSlice = createSlice({
         setAuthInitialized: (state) => {
             state.isAuthInitialized = true;
         },
+        updateUserProfile: (
+            state,
+            action: PayloadAction<{ firstName?: string; lastName?: string; fullName?: string }>,
+        ) => {
+            const { firstName, lastName, fullName } = action.payload;
+
+            if (firstName !== undefined) {
+                state.firstName = firstName;
+            }
+            if (lastName !== undefined) {
+                state.lastName = lastName;
+            }
+
+            if (fullName !== undefined) {
+                const trimmed = fullName.trim();
+                const firstSpace = trimmed.indexOf(" ");
+                if (firstSpace > 0) {
+                    state.firstName = trimmed.substring(0, firstSpace).trim();
+                    state.lastName = trimmed.substring(firstSpace + 1).trim();
+                } else {
+                    state.firstName = trimmed;
+                    state.lastName = "";
+                }
+            }
+
+            localStorage.setItem("firstName", state.firstName);
+            localStorage.setItem("lastName", state.lastName);
+        },
         setLogout: (state) => {
             state.token = "";
             state.email = "";
@@ -83,11 +119,10 @@ const authSlice = createSlice({
             state.isAuthenticated = false;
             state.isAuthInitialized = true;
             clearRecommendationChats();
-            sessionStorage.removeItem("fams.auth.tab");
-            LEGACY_AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+            clearLegacyAuthStorage();
         },
     },
 });
 
-export const { setLogin, setLogout, setAuthInitialized } = authSlice.actions;
+export const { setLogin, setLogout, setAuthInitialized, updateUserProfile } = authSlice.actions;
 export default authSlice.reducer;

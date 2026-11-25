@@ -114,6 +114,13 @@ export function DetailModal({
       case "datetime": {
         try {
           const date = new Date(value);
+          if (field.name === "dateOfBirth") {
+            return formatDateCustomNow(date, {
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            });
+          }
           return formatDateCustomNow(date, {
             year: "numeric",
             month: "2-digit",

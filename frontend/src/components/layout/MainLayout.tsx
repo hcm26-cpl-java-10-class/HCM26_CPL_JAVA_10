@@ -5,6 +5,7 @@ import DynamicBreadcrumbs from "@/components/layout/DynamicBreadcrumbs.tsx";
 import { StudentNavbar } from "@/components/layout/StudentNavbar";
 import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
+import { Outlet } from "react-router-dom";
 import { useContext, type ReactNode } from "react";
 import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 import { cn } from "@/lib/utils";
@@ -27,7 +28,7 @@ export function MainLayout({
                                focusMode = false,
                                headerActions,
                            }: {
-    children: ReactNode;
+    children?: ReactNode;
     pathName?: Record<string, string>;
     mainClassName?: string;
     contentClassName?: string;
@@ -46,16 +47,17 @@ export function MainLayout({
     // Hooks must run before any early return so hook order stays stable.
     const { activeRole } = usePermissions();
     const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
+    const content = children ?? <Outlet />;
 
     if (isEmbedded) {
-        return <>{children}</>;
+        return <>{content}</>;
     }
 
     if (focusMode) {
         return (
             <div className="flex h-screen max-h-[calc(100vh-18px)] flex-col overflow-hidden">
                 <main className="flex flex-1 min-h-0 flex-col overflow-y-auto px-6 pb-6 pt-4">
-                    {children}
+                    {content}
                 </main>
             </div>
         );
@@ -72,7 +74,7 @@ export function MainLayout({
                 </header>
 
                 <main className={cn("flex-1 px-6 pb-6 pt-4", mainClassName, contentClassName)}>
-                    {children}
+                    {content}
                 </main>
             </div>
         );
@@ -103,7 +105,7 @@ export function MainLayout({
                     mainClassName,
                     contentClassName,
                 )}>
-                    {children}
+                    {content}
                 </main>
             </SidebarInset>
         </SidebarProvider>

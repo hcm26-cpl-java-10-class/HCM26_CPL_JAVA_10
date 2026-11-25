@@ -7,7 +7,7 @@ export interface ImportError {
 
 export interface ImportResult {
 
-  /** Tổng số dòng dữ liệu đọc được trong file import */
+  /** Tß╗òng sß╗æ d├▓ng dß╗» liß╗çu ─æß╗ìc ─æ╞░ß╗úc trong file import */
   totalCount?: number;
 
   successCount: number;

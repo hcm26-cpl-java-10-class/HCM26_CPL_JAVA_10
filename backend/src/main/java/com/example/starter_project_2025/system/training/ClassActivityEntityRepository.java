@@ -10,4 +10,3 @@ import java.util.List;
 public interface ClassActivityEntityRepository extends JpaRepository<ClassActivityEntity, Long> {
     List<ClassActivityEntity> findByClassIdOrderByIdDesc(Long classId);
 }
-

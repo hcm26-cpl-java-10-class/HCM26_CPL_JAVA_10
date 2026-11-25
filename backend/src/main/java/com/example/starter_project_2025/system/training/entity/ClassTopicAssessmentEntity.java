@@ -27,4 +27,3 @@ public class ClassTopicAssessmentEntity {
     @Column(name = "assessments_json", columnDefinition = "TEXT")
     private String assessmentsJson;
 }
-

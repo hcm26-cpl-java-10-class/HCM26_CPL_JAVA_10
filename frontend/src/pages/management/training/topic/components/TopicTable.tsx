@@ -304,4 +304,3 @@ export function TopicTable({
     </div>
   );
 }
-

@@ -166,4 +166,3 @@ public class SubjectValidator {
         if (request.getIsActive() != null) subject.setIsActive(request.getIsActive());
     }
 }
-

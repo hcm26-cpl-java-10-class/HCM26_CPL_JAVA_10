@@ -141,4 +141,3 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
     </div>
   );
 }
-

@@ -50,4 +50,3 @@ public class ClassOperationEntity {
     @Column(name = "total_weighted_number")
     private Integer totalWeightedNumber;
 }
-

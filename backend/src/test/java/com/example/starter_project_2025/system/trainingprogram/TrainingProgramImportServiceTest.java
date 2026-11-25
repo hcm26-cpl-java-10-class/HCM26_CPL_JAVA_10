@@ -101,4 +101,3 @@ class TrainingProgramImportServiceTest {
         assertEquals(146L, captor.getValue().subjects().get(1).subjectId());
     }
 }
-

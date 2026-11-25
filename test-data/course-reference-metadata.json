@@ -1,0 +1,92 @@
+[
+  {
+    "name": "Java 21 Fundamentals",
+    "description": "Hands-on practice course 1 for the Course Management UI test dataset.",
+    "instructor": "Teacher User",
+    "thumbnailUrl": null
+  },
+  {
+    "name": "Object-Oriented Programming with Java",
+    "description": "Hands-on practice course 2 for the Course Management UI test dataset.",
+    "instructor": "Teacher User",
+    "thumbnailUrl": null
+  },
+  {
+    "name": "Java Collections and Generics",
+    "description": "Hands-on practice course 3 for the Course Management UI test dataset.",
+    "instructor": "Teacher User",
+    "thumbnailUrl": null
+  },
+  {
+    "name": "Exception Handling and Debugging",
+    "description": "Hands-on practice course 4 for the Course Management UI test dataset.",
+    "instructor": "Teacher User",
+    "thumbnailUrl": null
+  },
+  {
+    "name": "Java Streams and Lambdas",
+    "description": "Hands-on practice course 5 for the Course Management UI test dataset.",
+    "instructor": "Teacher User",
+    "thumbnailUrl": null
+  },
+  {
+    "name": "Spring Boot Fundamentals",
+    "description": "Hands-on practice course 6 for the Course Management UI test dataset.",
+    "instructor": "Teacher User",
+    "thumbnailUrl": null
+  },
+  {
+    "name": "REST API Development",
+    "description": "Hands-on practice course 7 for the Course Management UI test dataset.",
+    "instructor": "Teacher User",
+    "thumbnailUrl": null
+  },
+  {
+    "name": "Spring Data JPA",
+    "description": "Hands-on practice course 8 for the Course Management UI test dataset.",
+    "instructor": "Teacher User",
+    "thumbnailUrl": null
+  },
+  {
+    "name": "Spring Security Essentials",
+    "description": "Hands-on practice course 9 for the Course Management UI test dataset.",
+    "instructor": "Teacher User",
+    "thumbnailUrl": null
+  },
+  {
+    "name": "SQL for Java Developers",
+    "description": "Hands-on practice course 10 for the Course Management UI test dataset.",
+    "instructor": "Teacher User",
+    "thumbnailUrl": null
+  },
+  {
+    "name": "Frontend Basics with React",
+    "description": "Hands-on practice course 11 for the Course Management UI test dataset.",
+    "instructor": "Teacher User",
+    "thumbnailUrl": null
+  },
+  {
+    "name": "TypeScript Fundamentals",
+    "description": "Hands-on practice course 12 for the Course Management UI test dataset.",
+    "instructor": "Teacher User",
+    "thumbnailUrl": null
+  },
+  {
+    "name": "Git and Team Collaboration",
+    "description": "Hands-on practice course 13 for the Course Management UI test dataset.",
+    "instructor": "Teacher User",
+    "thumbnailUrl": null
+  },
+  {
+    "name": "Software Testing with JUnit",
+    "description": "Hands-on practice course 14 for the Course Management UI test dataset.",
+    "instructor": "Teacher User",
+    "thumbnailUrl": null
+  },
+  {
+    "name": "Full-Stack Course Project",
+    "description": "Hands-on practice course 15 for the Course Management UI test dataset.",
+    "instructor": "Teacher User",
+    "thumbnailUrl": null
+  }
+]

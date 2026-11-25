@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider } from "./contexts/AuthContext";
 import { RoleSwitchProvider } from "./contexts/RoleSwitchContext";
+import { CourseProvider } from "./contexts/CourseContext";
 import { usePermissions } from "./hooks/usePermissions";
 import { useActiveModuleGroups } from "./hooks/useSidebarMenus";
 import { NotFoundRedirect } from "./pages/error/NotFoundRedirect";
@@ -14,11 +15,11 @@ import { resolveMenuPermission } from "./router/menu-permission.utils";
 import { SystemChatbotWidget } from '@/components/chatbot/SystemChatbotWidget';
 
 function AppRoutes() {
-    const { isAuthenticated, isAuthInitialized } = useSelector((state: RootState) => state.auth);
+    const { isAuthenticated, isAuthInitialized, permissions } = useSelector((state: RootState) => state.auth);
     const { activeRole, effectivePermissions } = usePermissions();
     const { data: moduleGroups = [] } = useActiveModuleGroups(isAuthenticated && isAuthInitialized);
 
-    const homePath = isAuthenticated ? getHomePathByRole(activeRole, effectivePermissions) : "/login";
+    const homePath = isAuthenticated ? getHomePathByRole(activeRole, effectivePermissions ?? permissions) : "/login";
 
     // Backend menus may point to either explicit or generated routes. Prefer explicit implementations.
     const componentRegistry = Object.fromEntries(
@@ -114,7 +115,9 @@ function App() {
             />
             <AuthProvider>
                 <RoleSwitchProvider key={isAuthenticated ? email : "anonymous"}>
-                    <AppRoutes />
+                    <CourseProvider>
+                        <AppRoutes />
+                    </CourseProvider>
                     <SystemChatbotWidget />
                 </RoleSwitchProvider>
             </AuthProvider>

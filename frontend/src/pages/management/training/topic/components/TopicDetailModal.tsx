@@ -46,4 +46,3 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
     </Dialog>
   );
 }
-

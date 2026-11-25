@@ -2,6 +2,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAutoPageSize } from "@/components/datatable/hook/useAutoPageSize";
 import type { EntityCardLayout, EntityCardRendererProps, FieldSchema } from "@/types";
 import { ChevronRight } from "lucide-react";
+import { EntityHistoryDialog } from "@/components/audit/EntityHistoryDialog";
+import { usePermissions } from "@/hooks/usePermissions";
+import { isAuditAdmin } from "@/components/audit/auditAccess";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import Loading from "./common/Loading";
 import NoResult from "./common/NoResult";
@@ -157,6 +160,7 @@ export function ProTable<TData = any>({
     expandable,
 }: ProTableProps<TData>) {
     const { schema } = table;
+    const { user } = usePermissions();
     const isBrowseMode = mode === "browse";
     /** Browse mode normally hides row actions; entities can opt back in. */
     const allowBrowseRowActions = isBrowseMode && browseRowActions;
@@ -187,6 +191,7 @@ export function ProTable<TData = any>({
     const [deleteItem, setDeleteItem] = useState<TData | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [detailRow, setDetailRow] = useState<TData | null>(null);
+    const [historyRow, setHistoryRow] = useState<TData | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>(() =>
         isBrowseMode || (responsiveCards && window.matchMedia("(max-width: 640px)").matches)
             ? "card"
@@ -275,10 +280,13 @@ export function ProTable<TData = any>({
     const hasRowActions = canViewRow || canEditRow || canDeleteRow;
 
     const showActionsColumn = !hideActions && hasRowActions;
+    // Audit history is only available to ADMIN (the audit API is admin-only)
+    const canViewHistory =
+        isAuditAdmin(user.roles) && !!table.permission?.resource;
     // Entities that add their own row buttons (e.g. Project Template Versions
     // with "Create new version" + "Clone") need a wider action column, otherwise
     // the trailing icon button is clipped by the cell's overflow-hidden.
-    const ACTION_COLUMN_WIDTH = actionsColumnWidth ?? (renderExtraRowActions ? 236 : 152);
+    const ACTION_COLUMN_WIDTH = actionsColumnWidth ?? ((renderExtraRowActions ? 236 : 152) + (canViewHistory ? 40 : 0));
 
     const defaultRenderRowActions = (row: TData) => (
         <RowActions
@@ -286,6 +294,7 @@ export function ProTable<TData = any>({
             onView={onView || setDetailRow}
             onEdit={onEdit || table.openEdit}
             onDelete={onDelete || setDeleteItem}
+            onHistory={canViewHistory ? setHistoryRow : undefined}
             viewPermission={table.permission?.keys?.read}
             editPermission={table.permission?.keys?.update}
             deletePermission={table.permission?.keys?.delete}
@@ -337,7 +346,7 @@ export function ProTable<TData = any>({
                             <colgroup>
                                 {isExpandable && <col style={{ width: 40 }} />}
                                 {selectable && <col style={{ width: 20 }} />}
-                                {showIndex && <col style={{ width: 50 }} />}
+                                {showIndex && <col style={{ width: schema.indexColumnWidth || 50 }} />}
                                 {table.visibleFields.map((f: any) => (
                                     <col key={f.name} style={{ width: columnWidths[f.name] || 150 }} />
                                 ))}
@@ -352,8 +361,8 @@ export function ProTable<TData = any>({
                                         </TableHead>
                                     )}
                                     {showIndex && (
-                                        <TableHead style={{ width: 50 }} className="text-center">
-                                            #
+                                        <TableHead style={{ width: schema.indexColumnWidth || 50 }} className="text-center">
+                                            {schema.indexColumnTitle || "#"}
                                         </TableHead>
                                     )}
                                     {table.visibleFields.map((f: any) => (
@@ -452,8 +461,10 @@ export function ProTable<TData = any>({
                                                     )}
 
                                                     {showIndex && (
-                                                        <TableCell className="text-center text-muted-foreground">
-                                                            {(table.page || 0) * (table.size || 10) + index + 1}
+                                                        <TableCell className="text-center text-muted-foreground font-medium">
+                                                            {schema.renderIndex
+                                                                ? schema.renderIndex(row, index, table.page, table.size)
+                                                                : (table.page || 0) * (table.size || 10) + index + 1}
                                                         </TableCell>
                                                     )}
 
@@ -475,7 +486,7 @@ export function ProTable<TData = any>({
                                                                 }}
                                                                 dateFormat={
                                                                     f.type === "date"
-                                                                        ? (dateFormats[f.name] ?? "datetime")
+                                                                        ? (dateFormats[f.name] ?? "date")
                                                                         : undefined
                                                                 }
                                                             />
@@ -670,6 +681,16 @@ export function ProTable<TData = any>({
                 onConfirm={handleDeleteConfirm}
                 loading={deleteLoading}
             />
+
+            {/* Detail View Modal: Always use internal system */}
+            {canViewHistory && (
+                <EntityHistoryDialog
+                    open={!!historyRow}
+                    entityType={String(table.permission?.resource ?? "")}
+                    entityId={historyRow ? ((historyRow as any)[schema.idField] ?? null) : null}
+                    onClose={() => setHistoryRow(null)}
+                />
+            )}
 
             <DetailModal
                 open={!!detailRow}

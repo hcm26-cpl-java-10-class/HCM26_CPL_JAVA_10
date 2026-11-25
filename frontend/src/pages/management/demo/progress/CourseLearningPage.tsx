@@ -142,6 +142,7 @@ export function CourseLearningPage() {
       void queryClient.invalidateQueries({ queryKey: ["course-exams"] });
       void queryClient.invalidateQueries({ queryKey: ["student-exam-locks"] });
       toast.success("Progress updated.");
+      void queryClient.invalidateQueries({ queryKey: ["personal-learning-roadmap"] });
     },
 
     onError: (error: any) => {
@@ -322,7 +323,7 @@ export function CourseLearningPage() {
                             </Button>
                           </div>
                       )}
-                      
+
                   {progressQuery.data.courseCompleted === true &&
                       <CourseReviewPrompt
                         courseId={progressQuery.data.courseId}

@@ -2,7 +2,7 @@ import { authApi } from "@/api/features/auth.api";
 import { useRoleSwitch } from "@/contexts/RoleSwitchContext";
 import { setLogin } from "@/store/slices/auth/authSlice";
 import type { LoginResponse } from "@/types";
-import { getHomePathByRole, normalizeAuthRolePayload, resolveEffectivePermissions } from "@/utils/rbac.utils";
+import { availableAccountViews, getHomePathByRole, normalizeAuthRolePayload, resolveEffectivePermissions } from "@/utils/rbac.utils";
 import { jwtDecode } from "jwt-decode";
 import { useEffect } from "react";
 import { useDispatch } from "react-redux";
@@ -28,10 +28,11 @@ export const OAuth2RedirectHandler = () => {
             if (cancelled) return;
             setViewRole(null);
             dispatch(setLogin(userData));
+            const homeRole = availableAccountViews(userData.permissions ?? [])[0] ?? userData.role;
             navigate(
                 getHomePathByRole(
-                    userData.role,
-                    resolveEffectivePermissions(userData.role, userData.rolePermissions, userData.permissions),
+                    homeRole,
+                    resolveEffectivePermissions(homeRole, userData.rolePermissions, userData.permissions),
                 ),
                 { replace: true },
             );

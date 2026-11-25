@@ -16,4 +16,3 @@ import com.example.starter_project_2025.init.annotation.ResourceMenu;
 )
 public class WeeklyTimetableMenuRegistration {
 }
-

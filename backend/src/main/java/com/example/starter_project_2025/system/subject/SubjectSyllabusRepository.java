@@ -12,4 +12,3 @@ public interface SubjectSyllabusRepository extends BaseCrudRepository<SubjectSyl
 
     void deleteBySubject_Id(Long subjectId);
 }
-

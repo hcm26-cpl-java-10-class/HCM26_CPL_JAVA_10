@@ -43,20 +43,25 @@ export type FilterType =
 
 export interface FieldValidation {
   required?: boolean;
+  requiredOnCreate?: boolean;
   requiredMessage?: string;
   minLength?: number;
-  /** Overrides the default limit for the field type; `null` = no limit. */
   maxLength?: number | null;
-  /** number: minimum / maximum value. */
   min?: number;
   max?: number;
-  /** Force http/https URL check (auto-enabled for fields named *Url). */
   url?: boolean;
-  /** Force email check (auto-enabled for fields named email). */
   email?: boolean;
-  /** Custom regex + its error message. */
-  pattern?: { regex: RegExp; message: string };
-  /** Custom validation: return an error message, or null/undefined if valid. */
+  pattern?: RegExp | { regex: RegExp; message: string };
+  patternMessage?: string;
+  hint?: string;
+  placeholder?: string;
+  passwordRules?: boolean;
+  inputFilter?: (value: string) => string;
+  validate?: (
+    value: any,
+    form: Record<string, any>,
+    ctx: { isEdit: boolean; initial?: any }
+  ) => string | undefined;
   custom?: (
     value: any,
     form: Record<string, any>,
@@ -105,6 +110,8 @@ export interface FieldSchema {
   /** Client-side: hide the field from the edit form. */
   hideOnEdit?: boolean;
 
+  transient?: boolean;
+
   booleanLabels?: {
     true: string;
     false: string;
@@ -122,7 +129,7 @@ export interface FieldSchema {
 
   validation?: FieldValidation;
 
-  /** Gợi ý hiển thị dưới ô nhập (vd: "Ví dụ: Java Basics"). Tự động ghép thêm với các rule validation. */
+  /** Gß╗úi ├╜ hiß╗ân thß╗ï d╞░ß╗¢i ├┤ nhß║¡p (vd: "V├¡ dß╗Ñ: Java Basics"). Tß╗▒ ─æß╗Öng gh├⌐p th├¬m vß╗¢i c├íc rule validation. */
   hint?: string;
 
   /** Required input in the create/edit form. */
@@ -160,6 +167,9 @@ export interface EntitySchema {
   entityName: string;
   idField: string;
   fields: FieldSchema[];
+  indexColumnTitle?: string;
+  indexColumnWidth?: number;
+  renderIndex?: (row: any, index: number, page?: number, size?: number) => React.ReactNode;
 
   /**
    * Optional cross-field validation executed by the generic form modal before
@@ -178,8 +188,8 @@ export interface RelationConfig {
   multiple?: boolean;
 
   /**
-   * Lọc danh sách lựa chọn trong form trước khi hiển thị
-   * (vd: loại chính nó và con cháu khi chọn danh mục cha).
+   * Lß╗ìc danh s├ích lß╗▒a chß╗ìn trong form tr╞░ß╗¢c khi hiß╗ân thß╗ï
+   * (vd: loß║íi ch├¡nh n├│ v├á con ch├íu khi chß╗ìn danh mß╗Ñc cha).
    */
   filterItems?: (items: any[], ctx: { initial?: any; isEdit: boolean }) => any[];
 }

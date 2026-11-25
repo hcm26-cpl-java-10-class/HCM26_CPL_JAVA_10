@@ -14,6 +14,7 @@ import com.example.starter_project_2025.system.auth.authentication.dto.response.
 import com.example.starter_project_2025.system.auth.authentication.dto.response.UserSessionDTO;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import com.example.starter_project_2025.system.auth.util.CookieUtil;
+import com.example.starter_project_2025.system.auth.util.DeviceUtil;
 import com.example.starter_project_2025.system.auth.verify.VerificationService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -58,9 +59,15 @@ public class AuthController {
     ) {
         AuthenticationResponse authenticationResponse = authService.login(
                 request,
+                resolveDevice(httpRequest.getHeader("X-Device-Info"), request.device(), httpRequest.getHeader("User-Agent")),
                 resolveClientIp(httpRequest),
                 httpRequest.getHeader("User-Agent")
         );
+
+        if (Boolean.TRUE.equals(authenticationResponse.getPasswordChangeRequired())) {
+            cookieUtil.clearRefreshTokenCookie(response);
+            return ResponseEntity.ok(authenticationResponse);
+        }
 
         cookieUtil.setRefreshTokenCookie(
                 response,
@@ -96,6 +103,11 @@ public class AuthController {
                 resolveClientIp(httpRequest),
                 httpRequest.getHeader("User-Agent")
         );
+
+        if (Boolean.TRUE.equals(authenticationResponse.getPasswordChangeRequired())) {
+            cookieUtil.clearRefreshTokenCookie(response);
+            return ResponseEntity.ok(authenticationResponse);
+        }
 
         cookieUtil.setRefreshTokenCookie(
                 response,
@@ -224,6 +236,19 @@ public class AuthController {
     ) {
         authService.resetPassword(request);
         return ResponseEntity.noContent().build();
+    }
+
+    private String resolveDevice(String clientDevice, String requestDevice, String userAgent) {
+        if (StringUtils.hasText(clientDevice)) {
+            return clientDevice.trim();
+        }
+        if (StringUtils.hasText(requestDevice)) {
+            return requestDevice.trim();
+        }
+        if (StringUtils.hasText(userAgent)) {
+            return DeviceUtil.parse(userAgent);
+        }
+        return null;
     }
 
     private String extractSessionId(HttpServletRequest request) {

@@ -347,6 +347,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         }
 
         return user.getRoles().stream()
+                .filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                 .map(Role::getName)
                 .filter(StringUtils::hasText)
                 .map(this::normalizeRoleName)
@@ -360,6 +361,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         }
 
         return user.getRoles().stream()
+                .filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                 .filter(role -> role.getPermissions() != null)
                 .flatMap(role -> role.getPermissions().stream())
                 .map(permission -> permission.getName())
@@ -374,6 +376,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
         if (user.getRoles() != null) {
             Map<String, Role> rolesByName = user.getRoles().stream()
+                    .filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                     .filter(role -> StringUtils.hasText(role.getName()))
                     .collect(Collectors.toMap(
                             role -> normalizeRoleName(role.getName()),

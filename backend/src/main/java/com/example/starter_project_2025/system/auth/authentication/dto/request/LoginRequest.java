@@ -16,10 +16,11 @@ public record LoginRequest(
         @Size(min = 5, message = "Password must be at least 5 characters long")
         String password,
 
+        String device,
         Boolean rememberMe
 ) {
     public LoginRequest(String email, String password) {
-        this(email, password, false);
+        this(email, password, null, false);
     }
 
     public boolean isRememberMeEnabled() {

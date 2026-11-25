@@ -10,11 +10,22 @@ public interface AuthService {
 
     AuthenticationResponse login(LoginRequest request);
 
-    AuthenticationResponse login(LoginRequest request, String ipAddress, String userAgent);
+    AuthenticationResponse login(LoginRequest request, String device);
 
     AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName);
 
+    AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName);
+
+    AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName, String device);
+
+    AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName, String device);
+    AuthenticationResponse login(LoginRequest request, String ipAddress, String userAgent);
+
+
     AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName, String ipAddress, String userAgent);
+    AuthenticationResponse login(LoginRequest request, String device, String ipAddress, String userAgent);
+
+    AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName, String device, String ipAddress, String userAgent);
 
     void register(RegisterRequest request);
 

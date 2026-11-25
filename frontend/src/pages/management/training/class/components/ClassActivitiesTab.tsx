@@ -184,4 +184,3 @@ export function ClassActivitiesTab({ classItem }: { classItem: ExternalClass }) 
         </div>
     );
 }
-

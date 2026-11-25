@@ -800,4 +800,3 @@ export function TraineeTopicMarkView({ classItem, trainees, onBack }: TraineeTop
     );
 }
 export default TraineeTopicMarkView;
-

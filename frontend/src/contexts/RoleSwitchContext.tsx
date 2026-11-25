@@ -1,9 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import type { RootState } from "@/store/store";
 import {
-  ADMIN_ROLE,
-  STUDENT_ROLE,
-  TEACHER_ROLE,
+  availableAccountViews,
   normalizeRole,
   uniqueRoles,
 } from "@/utils/rbac.utils";
@@ -25,7 +23,7 @@ const RoleSwitchContext = createContext<RoleSwitchContextType | undefined>(
 export const RoleSwitchProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { isAuthenticated, role, roles, rolePermissions } = useSelector(
+  const { isAuthenticated, role, roles, rolePermissions, permissions } = useSelector(
     (state: RootState) => state.auth,
   );
 
@@ -34,27 +32,19 @@ export const RoleSwitchProvider: React.FC<{ children: React.ReactNode }> = ({
   const primaryRole = normalizeRole(role);
 
   const availableRoles = useMemo(() => {
+    const fallbackViews = availableAccountViews(permissions ?? []);
     const roleCandidates = uniqueRoles(
       [
         ...Object.keys(rolePermissions ?? {}),
         ...(roles ?? []),
         primaryRole,
+        ...fallbackViews,
       ],
       primaryRole,
     );
 
-    if (primaryRole === ADMIN_ROLE) {
-      if (!roleCandidates.includes(STUDENT_ROLE)) {
-        roleCandidates.push(STUDENT_ROLE);
-      }
-
-      if (!roleCandidates.includes(TEACHER_ROLE)) {
-        roleCandidates.push(TEACHER_ROLE);
-      }
-    }
-
-    return roleCandidates;
-  }, [primaryRole, rolePermissions, roles]);
+    return roleCandidates.length > 0 ? roleCandidates : fallbackViews;
+  }, [primaryRole, rolePermissions, roles, permissions]);
 
   const setViewRole = useCallback((nextRole: string | null) => {
     const normalizedRole = normalizeRole(nextRole);

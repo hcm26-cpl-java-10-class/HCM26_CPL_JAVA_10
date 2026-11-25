@@ -14,6 +14,11 @@ public class AiGradingProperties {
     private boolean enabled = true;
 
     private String apiKey;
+    private String fallbackApiKey;
+
+    public String getApiKey() {
+        return apiKey != null && !apiKey.isBlank() ? apiKey : fallbackApiKey;
+    }
 
     private String model = "gemini-3.5-flash-lite";
 

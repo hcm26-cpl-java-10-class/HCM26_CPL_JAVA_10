@@ -18,6 +18,7 @@ public class LearningNoteController {
 
     private final LearningNoteService learningNoteService;
 
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('LEARNER_ACCESS')")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public LearningNoteResponse create(

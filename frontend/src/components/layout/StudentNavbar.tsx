@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { iconMap } from "@/components/datatable/iconMap";
 import { getHomePathByRole } from "@/utils/rbac.utils";
 import { usePermissions } from "@/hooks/usePermissions";
-import { ChevronDown, FileCheck2, LogOutIcon, Menu, MoreHorizontal, ShieldCheck } from "lucide-react";
+import { ChevronDown, FileCheck2, GraduationCap, LogOutIcon, Menu, MoreHorizontal, ShieldCheck } from "lucide-react";
 import { fittingNavigationCount } from "./student-navigation-overflow";
 import { useLayoutEffect, useRef, useState, useMemo } from "react";
 import { useDispatch } from "react-redux";
@@ -63,7 +63,7 @@ export function StudentNavbar() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const queryClient = useQueryClient();
-  const { activeRole, effectivePermissions, hasPermission } = usePermissions();
+  const { activeRole, effectivePermissions, hasPermission, canLearn } = usePermissions();
   const { data: moduleGroups = [] } = useActiveModuleGroups();
   const { count: pendingInvitationCount } = usePendingInvitations();
   const pathname = normalizePath(location.pathname);
@@ -174,8 +174,43 @@ export function StudentNavbar() {
       groups.push({ id: "student-project", name: "Project Management", hiddenInMenu: false, items: [submissionsItem] });
     }
 
+    if (canLearn) {
+      const insights = {
+        id: "student-learning-insights",
+        title: "AI Learning Insights",
+        url: "/my-learning#learning-insights-heading",
+        icon: GraduationCap,
+        isActive: pathname === "/my-learning" && location.hash === "#learning-insights-heading",
+      };
+      const studentGroup = groups.find(group => !group.hiddenInMenu && group.name.trim().toLowerCase() === "student");
+      if (studentGroup) studentGroup.items.push(insights);
+      else groups.push({ id: "student-learning", name: "Student", hiddenInMenu: false, items: [insights] });
+
+      groups.push({
+        id: "student-my-reports",
+        name: "My Reports",
+        hiddenInMenu: false,
+        items: [
+          {
+            id: "student-report-performance",
+            title: "Learning Performance",
+            url: "/my-learning/reports/performance",
+            icon: FileCheck2,
+            isActive: pathname === "/my-learning/reports/performance",
+          },
+          {
+            id: "student-report-goals-habits",
+            title: "Goals & Habits Report",
+            url: "/my-learning/reports/goals-habits",
+            icon: FileCheck2,
+            isActive: pathname === "/my-learning/reports/goals-habits",
+          },
+        ],
+      });
+    }
+
     return groups.filter((group) => !group.hiddenInMenu && group.items.length > 0);
-  }, [moduleGroups, pathname, hasPermission]);
+  }, [moduleGroups, pathname, hasPermission, canLearn, location.hash]);
 
   // Pending-invitation badge next to the Invitations entry point.
   const renderPendingBadge = (url: string) => {
@@ -478,7 +513,7 @@ export function StudentNavbar() {
 
             {/* EXISTING ROLE SWITCHER */}
             <div className="min-w-0 max-w-full [&>div]:flex-wrap">
-              <HeaderRight />
+              <HeaderRight compact />
             </div>
 
             {/* SECURITY & SESSIONS */}

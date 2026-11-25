@@ -18,4 +18,3 @@ public record MilestoneOutput(
         List<RubricCriterionOutput> rubricCriteria
 ) {
 }
-

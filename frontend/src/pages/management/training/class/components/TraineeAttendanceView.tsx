@@ -2167,4 +2167,3 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
         </div>
     );
 }
-

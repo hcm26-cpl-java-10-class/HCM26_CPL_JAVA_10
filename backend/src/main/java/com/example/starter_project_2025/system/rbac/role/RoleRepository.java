@@ -11,6 +11,8 @@ public interface RoleRepository extends BaseCrudRepository<Role, Long> {
 
     Optional<Role> findByName(String name);
 
+    Optional<Role> findByNameIgnoreCase(String name);
+
     Long countByIsActive(Boolean isActive);
 
     Long countByIdIn(Iterable<Long> ids);

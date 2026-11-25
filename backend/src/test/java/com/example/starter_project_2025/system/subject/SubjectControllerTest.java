@@ -156,4 +156,3 @@ class SubjectControllerTest {
                 .andExpect(jsonPath("$.successCount").value(1));
     }
 }
-

@@ -27,6 +27,7 @@ const locationSchema: EntitySchema = {
         required: true,
         minLength: 2,
         maxLength: 50,
+        inputFilter: (value) => value.replace(/[^A-Za-z0-9._-]/g, ""),
         pattern: {
           regex: /^[A-Za-z0-9._-]{2,50}$/,
           message: "2-50 characters: letters, digits, dot, underscore or hyphen.",
@@ -75,7 +76,7 @@ export const entityConfig: EntityConfig = {
 
 export function LocationPage() {
   const table = useProTable(entityConfig.api, entityConfig.schema);
-  const [viewMode, setViewMode] = useState<"tree" | "table">("tree");
+  const [viewMode, setViewMode] = useState<"tree" | "table">("table");
 
   return (
     <MainLayout pathName={{ locations: "Location" }}>

@@ -47,3 +47,6 @@ export-test/
 .env.local
 .env.*.local
 !.env.example
+
+# Local H2 database
+/data/

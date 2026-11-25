@@ -12,9 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { USER_STATUS_OPTIONS, type FieldSchema, type RelationConfig } from "@/types";
+import { cn } from "@/lib/utils";
+import { GENDER_OPTIONS, USER_STATUS_DOT_CLASS, USER_STATUS_OPTIONS, type FieldSchema, type RelationConfig } from "@/types";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Save } from "lucide-react";
 import type { FormEvent, ReactNode } from "react";
@@ -34,7 +34,7 @@ const roleRel: RelationConfig = { api: roleApi, valueField: "id", labelField: "n
 const deptRel: RelationConfig = { api: departmentApi, valueField: "id", labelField: "name", multiple: true };
 
 const roleField = { name: "roleIds", label: "Role", type: "relation" } as FieldSchema;
-const deptField = { name: "departmentIds", label: "Phòng ban", type: "relation" } as FieldSchema;
+const deptField = { name: "departmentIds", label: "Ph├▓ng ban", type: "relation" } as FieldSchema;
 
 const errCls = (errs?: string[]) => (errs && errs.length ? "border-destructive" : "");
 
@@ -92,73 +92,89 @@ export function UserForm({ mode, values, errors, submitting, onChange, onSubmit,
     />
   );
 
-  const generalHasError = (
-    ["firstName", "lastName", "username", "email", "employeeCode", "phone", "password", "confirmPassword", "departmentIds", "status", "description"] as const
-  ).some((k) => errors[k]?.length);
-  const authHasError = !!errors.roleIds?.length;
-
   return (
-    <form onSubmit={handleSubmit} noValidate>
-      <Tabs defaultValue="general" className="grid gap-5">
-        <TabsList>
-          <TabsTrigger value="general" className={generalHasError ? "text-destructive" : ""}>
-            Thông tin chung{generalHasError && " •"}
-          </TabsTrigger>
-          <TabsTrigger value="authorization" className={authHasError ? "text-destructive" : ""}>
-            Phân quyền{authHasError && " •"}
-          </TabsTrigger>
-        </TabsList>
+    <form onSubmit={handleSubmit} noValidate className="mx-auto grid w-full max-w-5xl gap-5">
+      <section className="rounded-xl border bg-card p-5 shadow-sm">
+        <h3 className="mb-5 text-sm font-semibold">Th├┤ng tin t├ái khoß║ún</h3>
 
-        <TabsContent value="general" className="grid gap-5">
-          <div className="grid gap-5 md:grid-cols-2">
-            <Field id="user-lastName" label="Họ đệm" errors={errors.lastName}>
-              {text("lastName", "user-lastName", "Nguyễn Văn")}
-            </Field>
-            <Field id="user-firstName" label="Tên" required errors={errors.firstName}>
-              {text("firstName", "user-firstName", "An")}
-            </Field>
-            <Field id="user-username" label="Username" required errors={errors.username}>
-              {text("username", "user-username", "an.nv")}
-            </Field>
-            <Field id="user-employeeCode" label="Mã nhân viên" required errors={errors.employeeCode}>
-              {text("employeeCode", "user-employeeCode", "NV0001")}
-            </Field>
-            <Field id="user-email" label="Email" required errors={errors.email}>
-              {text("email", "user-email", "an.nv@company.com", "email")}
-            </Field>
-            <Field id="user-phone" label="Số điện thoại" errors={errors.phone}>
-              {text("phone", "user-phone", "0901234567", "tel")}
-            </Field>
-            <Field
-              id="user-password"
-              label={mode === "create" ? "Mật khẩu" : "Mật khẩu mới"}
-              required={mode === "create"}
-              errors={errors.password}
-            >
-              {text(
-                "password",
-                "user-password",
-                mode === "create" ? "Tối thiểu 8 ký tự" : "Để trống nếu không đổi",
-                "password",
-              )}
-            </Field>
-            <Field id="user-confirmPassword" label="Xác nhận mật khẩu" errors={errors.confirmPassword}>
-              {text("confirmPassword", "user-confirmPassword", "Nhập lại mật khẩu", "password")}
-            </Field>
-            <Field id="user-status" label="Trạng thái" errors={errors.status}>
-              <Select value={values.status} onValueChange={(v) => onChange("status", v as UserFormValues["status"])}>
-                <SelectTrigger id="user-status" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {USER_STATUS_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
+        <div className="grid gap-5 md:grid-cols-2">
+          <Field id="user-lastName" label="Hß╗ì ─æß╗çm" errors={errors.lastName}>
+            {text("lastName", "user-lastName", "Nguyß╗àn V─ân")}
+          </Field>
+          <Field id="user-firstName" label="T├¬n" required errors={errors.firstName}>
+            {text("firstName", "user-firstName", "An")}
+          </Field>
+          <Field id="user-username" label="Username" required errors={errors.username}>
+            {text("username", "user-username", "an.nv")}
+          </Field>
+          <Field id="user-employeeCode" label="M├ú nh├ón vi├¬n" required errors={errors.employeeCode}>
+            {text("employeeCode", "user-employeeCode", "NV0001")}
+          </Field>
+          <Field id="user-email" label="Email" required errors={errors.email}>
+            {text("email", "user-email", "an.nv@company.com", "email")}
+          </Field>
+          <Field id="user-phone" label="Sß╗æ ─æiß╗çn thoß║íi" errors={errors.phone}>
+            {text("phone", "user-phone", "0901234567", "tel")}
+          </Field>
+          <Field id="user-dateOfBirth" label="Ng├áy sinh (yyyy-MM-dd)" required={mode === "create"} errors={errors.dateOfBirth}>
+            {text("dateOfBirth", "user-dateOfBirth", "2000-01-31")}
+          </Field>
+          <Field id="user-gender" label="Giß╗¢i t├¡nh" required={mode === "create"} errors={errors.gender}>
+            <Select value={values.gender} onValueChange={(v) => onChange("gender", v as UserFormValues["gender"])}>
+              <SelectTrigger id="user-gender" className="w-full">
+                <SelectValue placeholder="Select gender" />
+              </SelectTrigger>
+              <SelectContent>
+                {GENDER_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field
+            id="user-password"
+            label={mode === "create" ? "Mß║¡t khß║⌐u" : "Mß║¡t khß║⌐u mß╗¢i"}
+            required={mode === "create"}
+            errors={errors.password}
+          >
+            {text(
+              "password",
+              "user-password",
+              mode === "create" ? "Tß╗æi thiß╗âu 8 k├╜ tß╗▒" : "─Éß╗â trß╗æng nß║┐u kh├┤ng ─æß╗òi",
+              "password",
+            )}
+          </Field>
+          <Field id="user-confirmPassword" label="X├íc nhß║¡n mß║¡t khß║⌐u" errors={errors.confirmPassword}>
+            {text("confirmPassword", "user-confirmPassword", "Nhß║¡p lß║íi mß║¡t khß║⌐u", "password")}
+          </Field>
+          <Field id="user-status" label="Trß║íng th├íi" errors={errors.status}>
+            <Select value={values.status} onValueChange={(v) => onChange("status", v as UserFormValues["status"])}>
+              <SelectTrigger id="user-status" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {/* Chß╗ë cho chß╗ìn Hoß║ít ─æß╗Öng / Bß╗ï kh├│a; "Ng╞░ng hoß║ít ─æß╗Öng" chß╗ë hiß╗çn khi t├ái khoß║ún c┼⌐ ─æang ß╗ƒ trß║íng th├íi ─æ├│. */}
+                {USER_STATUS_OPTIONS.filter((o) => o.value !== "INACTIVE" || values.status === "INACTIVE").map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    <span className={cn("mr-2 inline-block h-2 w-2 rounded-full", USER_STATUS_DOT_CLASS[o.value])} />
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <MultiRelationSelect
+            field={roleField}
+            rel={roleRel}
+            items={roles}
+            value={values.roleIds}
+            errorClass={errCls(errors.roleIds)}
+            fieldErrors={errors.roleIds}
+            onChange={(v) => onChange("roleIds", v)}
+          />
+          <div className="md:col-span-2">
             <MultiRelationSelect
               field={deptField}
               rel={deptRel}
@@ -169,45 +185,30 @@ export function UserForm({ mode, values, errors, submitting, onChange, onSubmit,
               onChange={(v) => onChange("departmentIds", v)}
             />
           </div>
-          <Field id="user-description" label="Mô tả" errors={errors.description}>
-            <Textarea
-              id="user-description"
-              rows={4}
-              value={values.description}
-              placeholder="Ghi chú về người dùng"
-              onChange={(e) => onChange("description", e.target.value)}
-            />
-          </Field>
-        </TabsContent>
-
-        <TabsContent value="authorization" className="grid gap-5">
-          <p className="text-sm text-muted-foreground">
-            Người dùng có thể giữ nhiều role; quyền hiệu lực là hợp của các role được gán.
-          </p>
-          <div className="max-w-xl">
-            <MultiRelationSelect
-              field={roleField}
-              rel={roleRel}
-              items={roles}
-              value={values.roleIds}
-              errorClass={errCls(errors.roleIds)}
-              fieldErrors={errors.roleIds}
-              onChange={(v) => onChange("roleIds", v)}
-            />
+          <div className="md:col-span-2">
+            <Field id="user-description" label="M├┤ tß║ú" errors={errors.description}>
+              <Textarea
+                id="user-description"
+                rows={4}
+                value={values.description}
+                placeholder="Ghi ch├║ vß╗ü ng╞░ß╗¥i d├╣ng"
+                onChange={(e) => onChange("description", e.target.value)}
+              />
+            </Field>
           </div>
-        </TabsContent>
+        </div>
+      </section>
 
-        <CardFooter className="flex justify-end gap-2 px-0 pt-2">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
-            <ArrowLeft className="h-4 w-4" />
-            Quay lại
-          </Button>
-          <Button type="submit" disabled={submitting}>
-            <Save className="h-4 w-4" />
-            {submitting ? "Đang lưu..." : mode === "create" ? "Tạo người dùng" : "Lưu thay đổi"}
-          </Button>
-        </CardFooter>
-      </Tabs>
+      <CardFooter className="flex justify-end gap-2 px-0 pt-0">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
+          <ArrowLeft className="h-4 w-4" />
+          Quay lß║íi
+        </Button>
+        <Button type="submit" disabled={submitting}>
+          <Save className="h-4 w-4" />
+          {submitting ? "─Éang l╞░u..." : mode === "create" ? "Tß║ío ng╞░ß╗¥i d├╣ng" : "L╞░u thay ─æß╗òi"}
+        </Button>
+      </CardFooter>
     </form>
   );
 }

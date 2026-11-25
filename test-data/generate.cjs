@@ -269,4 +269,3 @@ generatePrograms1000();
 generateProgramsWithErrors();
 
 console.log('All test data files generated successfully in:', OUTPUT_DIR);
-

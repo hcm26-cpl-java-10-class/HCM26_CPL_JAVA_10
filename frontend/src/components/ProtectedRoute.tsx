@@ -1,9 +1,10 @@
 import React from "react";
-import { Navigate, useLocation } from "react-router-dom";
-
+import { canAccessPath } from "@/utils/rbac.utils";
+import { useLocation, Navigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/store/store";
 import { usePermissions } from "@/hooks/usePermissions";
+import { isAuditAdmin } from "@/components/audit/auditAccess";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -18,8 +19,16 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredPermissions,
   requireAll = false,
 }) => {
-  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
-  const { activeRole, hasPermission, hasAnyPermission, hasAllPermissions } = usePermissions();
+  const { isAuthenticated, permissions } = useSelector(
+    (state: RootState) => state.auth
+  );
+  const {
+    user,
+    activeRole,
+    hasPermission,
+    hasAnyPermission,
+    hasAllPermissions,
+  } = usePermissions();
 
   const { pathname } = useLocation();
 
@@ -29,6 +38,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   if (activeRole === "STUDENT" && (/^\/exams(?:\/|$)/.test(pathname) || /^\/management\/exam(?:\/|$)/.test(pathname))) {
     return <Navigate to="/student/exams" replace />;
+  }
+
+  if (!canAccessPath(pathname, activeRole, permissions)) {
+    return <Navigate to="/unauthorized" replace />;
   }
 
   if (requiredPermission && !hasPermission(requiredPermission)) {
@@ -43,6 +56,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     if (!hasAccess) {
       return <Navigate to="/unauthorized" replace />;
     }
+  }
+
+  if (pathname === "/admin/audit-log" && !isAuditAdmin(user.roles)) {
+    return <Navigate to="/unauthorized" replace />;
   }
 
   return <>{children}</>;
