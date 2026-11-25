@@ -4,6 +4,7 @@ import type {
   NotificationListDTO,
   NotificationPageDTO,
   NotificationPreferenceDTO,
+  TenantNotificationPolicyDTO,
 } from "@/types";
 
 export const notificationQueryKey = (account: string) => ["notifications", account] as const;
@@ -48,6 +49,16 @@ export const notificationApi = {
 
   updatePreferences: async (changes: NotificationPreferenceDTO[]): Promise<NotificationPreferenceDTO[]> => {
     const response = await axiosInstance.put<NotificationPreferenceDTO[]>("/notifications/preferences", changes);
+    return response.data;
+  },
+
+  getPolicies: async (): Promise<TenantNotificationPolicyDTO[]> => {
+    const response = await axiosInstance.get<TenantNotificationPolicyDTO[]>("/notifications/policies");
+    return response.data;
+  },
+
+  updatePolicies: async (changes: TenantNotificationPolicyDTO[]): Promise<TenantNotificationPolicyDTO[]> => {
+    const response = await axiosInstance.put<TenantNotificationPolicyDTO[]>("/notifications/policies", changes);
     return response.data;
   },
 };

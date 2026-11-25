@@ -29,6 +29,12 @@ public class ExamResultPublicationService {
     private final ExamResultReadinessService readinessService;
     private final com.example.starter_project_2025.system.demo.course.CourseAssessmentCompletionService completion;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.starter_project_2025.system.notification.NotificationService notificationService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptRepository attemptRepository;
+
     @Transactional(readOnly = true)
     public ExamResultPublicationDTO getStatus(Long examId) {
         requireExam(examId);
@@ -77,6 +83,22 @@ public class ExamResultPublicationService {
         if (!wasPublished
                 && policy == ScoreReleasePolicy.MY_SCORES_AND_EMAIL) {
             emailDispatcher.dispatch(exam);
+        }
+
+        if (!wasPublished && policy != ScoreReleasePolicy.HIDDEN
+                && notificationService != null && attemptRepository != null) {
+            attemptRepository.findAllByExam_Id(exam.getId()).stream()
+                    .map(com.example.starter_project_2025.system.exam.attempt.domain.ExamAttempt::getStudent)
+                    .filter(student -> student != null && student.getId() != null)
+                    .map(com.example.starter_project_2025.system.rbac.user.User::getId)
+                    .distinct()
+                    .forEach(studentId -> notificationService.createOnce(
+                            studentId,
+                            "exam.result.published." + exam.getId() + ".u" + studentId,
+                            "Exam results published",
+                            "Results for \"" + exam.getTitle() + "\" have been published.",
+                            "/student/exams/" + exam.getId()
+                    ));
         }
 
         if (exam.getCourse()!=null) completion.refreshCourse(exam.getCourse().getId());
