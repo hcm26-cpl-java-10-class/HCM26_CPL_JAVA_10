@@ -1,50 +1,42 @@
 package com.example.starter_project_2025.base.dataio.importer.service;
 
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportHash;
-import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
 import com.example.starter_project_2025.base.dataio.importer.hook.ImportHandler;
 import com.example.starter_project_2025.base.dataio.importer.mapper.GenericImportMapper;
 import com.example.starter_project_2025.base.dataio.importer.parser.FileParser;
 import com.example.starter_project_2025.base.dataio.importer.parser.ParserFactory;
-import com.example.starter_project_2025.base.dataio.importer.resolver.RelationLookupEngine;
 import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
 import com.example.starter_project_2025.base.dataio.importer.result.RowError;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.interceptor.TransactionAspectSupport;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.Locale;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class GenericImportService implements ImportService {
 
+    /** First data row of the spreadsheet (row 1 is the header). */
+    private static final int FIRST_DATA_ROW = 2;
+
+    private static final int MAX_ERROR_MESSAGE_LENGTH = 500;
+
     private final ParserFactory parserFactory;
     private final GenericImportMapper mapper;
     private final PasswordEncoder passwordEncoder;
     private final List<ImportHandler<?>> handlers;
-    private final RelationLookupEngine relationLookupEngine;
+    private final PlatformTransactionManager transactionManager;
 
-    /**
-     * All or nothing: the whole file is imported in one transaction. When any row has an error nothing is
-     * saved, and the result lists every row that has to be fixed before the file is imported again.
-     */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public <T, ID> ImportResult importFile(
             MultipartFile file,
             Class<T> entityClass,
@@ -52,8 +44,6 @@ public class GenericImportService implements ImportService {
     ) {
 
         ImportResult result = new ImportResult();
-
-        relationLookupEngine.startCache();
 
         try {
             FileParser parser = parserFactory.getParser(file.getOriginalFilename());
@@ -68,7 +58,7 @@ public class GenericImportService implements ImportService {
             }
 
             try {
-                int rowIndex = 2;
+                int rowIndex = FIRST_DATA_ROW;
 
                 for (Map<String, String> row : rows) {
 
@@ -106,7 +96,7 @@ public class GenericImportService implements ImportService {
                     } catch (Exception e) {
 
                         result.getErrors().add(
-                                new RowError(rowIndex, e.getMessage()));
+                                new RowError(rowIndex, rootMessage(e)));
 
                         result.setFailureCount(result.getFailureCount() + 1);
                     }
@@ -120,80 +110,84 @@ public class GenericImportService implements ImportService {
                 }
             }
 
-            if (result.getFailureCount() > 0) {
-                rollBack(result, rows, entityClass);
-            }
-
         } catch (Exception e) {
             throw new RuntimeException("Import failed", e);
-        } finally {
-            relationLookupEngine.endCache();
         }
 
         return result;
     }
 
-    /** Undo everything this import did and report that nothing was saved. */
-    private void rollBack(ImportResult result, List<Map<String, String>> rows, Class<?> entityClass) {
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+    @Override
+    public <T, ID> ImportResult importFileAtomic(
+            MultipartFile file,
+            Class<T> entityClass,
+            JpaRepository<T, ID> repository
+    ) {
+
+        ImportResult result = new ImportResult();
+
+        List<Map<String, String>> rows;
+
+        try {
+            rows = parse(file);
+        } catch (Exception e) {
+            throw new RuntimeException("Import failed", e);
         }
 
-        int rowsWithErrors = result.getFailureCount();
+        // Phase 1: map / validate every row in memory. Nothing is written yet,
+        // so a validation error leaves the database untouched.
+        List<T> entities = new ArrayList<>(rows.size());
 
-        result.setRolledBack(true);
-        result.setSuccessCount(0);
-        result.setUpdatedCount(0);
-        result.setEmailsSent(0);
-        result.setEmailsFailed(0);
-        result.setEmailsSkipped(0);
-        result.getCredentials().clear();
-        result.setMissingCodes(missingCodes(rows, entityClass));
-        result.setMessage("Nothing was imported: " + rowsWithErrors
-                + " row(s) have errors. Fix the rows listed below in the file and import it again.");
-    }
+        int rowIndex = FIRST_DATA_ROW;
 
-    /**
-     * Every code used in the file (all rows, not only the first one that failed in each row) that has no
-     * record yet, so they can all be added in one go instead of one round of importing per code.
-     */
-    private List<String> missingCodes(List<Map<String, String>> rows, Class<?> entityClass) {
-        Map<String, String> missing = new LinkedHashMap<>();
+        for (Map<String, String> row : rows) {
 
-        for (Field field : entityClass.getDeclaredFields()) {
-            ImportField column = field.getAnnotation(ImportField.class);
-            if (column == null || column.lookupEntity() == Void.class || !"code".equals(column.lookupField())) {
-                continue;
+            try {
+                entities.add(toEntity(row, entityClass));
+            } catch (Exception e) {
+                result.getErrors().add(new RowError(rowIndex, rootMessage(e)));
             }
 
-            String separator = column.separator().isEmpty() ? "," : column.separator();
-            Set<String> checked = new HashSet<>();
+            rowIndex++;
+        }
 
-            for (Map<String, String> row : rows) {
-                String raw = row.get(column.name());
-                if (raw == null || raw.isBlank()) {
-                    continue;
-                }
-                for (String part : raw.split(Pattern.quote(separator))) {
-                    String code = part.trim();
-                    if (code.isEmpty() || !checked.add(code.toLowerCase(Locale.ROOT))) {
-                        continue;
-                    }
+        if (!result.getErrors().isEmpty()) {
+            result.setSuccessCount(0);
+            result.setFailureCount(rows.size());
+            return result;
+        }
+
+        // Phase 2: persist every entity in one transaction. A failure on any
+        // row rolls the whole transaction back, so nothing of the file is kept.
+        try {
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                for (int i = 0; i < entities.size(); i++) {
                     try {
-                        relationLookupEngine.resolveSingle(code, column.lookupEntity(), "code");
-                    } catch (RuntimeException e) {
-                        if (e.getMessage() != null && e.getMessage().startsWith("Not found:")) {
-                            missing.putIfAbsent(code.toLowerCase(Locale.ROOT), code);
-                        }
+                        repository.saveAndFlush(entities.get(i));
+                    } catch (Exception e) {
+                        throw new RowPersistenceException(FIRST_DATA_ROW + i, e);
                     }
                 }
-            }
+            });
+        } catch (RowPersistenceException e) {
+            result.setSuccessCount(0);
+            result.setFailureCount(rows.size());
+            result.getErrors().add(
+                    new RowError(e.getRowNumber(), rootMessage(e.getCause())));
+            return result;
         }
-        return new ArrayList<>(missing.values());
+
+        result.setSuccessCount(entities.size());
+        result.setFailureCount(0);
+
+        return result;
     }
 
     @SuppressWarnings("unchecked")
     private <T> ImportHandler<T> findHandler(Class<T> entityClass) {
+        if (handlers == null) {
+            return null;
+        }
         for (ImportHandler<?> handler : handlers) {
             if (handler.entityType().equals(entityClass)) {
                 return (ImportHandler<T>) handler;
@@ -202,24 +196,77 @@ public class GenericImportService implements ImportService {
         return null;
     }
 
+    private List<Map<String, String>> parse(MultipartFile file) throws Exception {
+        FileParser parser = parserFactory.getParser(file.getOriginalFilename());
+        return parser.parse(file.getInputStream());
+    }
+
+    private <T> T toEntity(Map<String, String> row, Class<T> entityClass) throws IllegalAccessException {
+        T entity = mapper.map(row, entityClass);
+        applyHash(entity);
+        return entity;
+    }
+
+    /**
+     * Message of the deepest cause, trimmed to a readable length for the
+     * per-row error list of the import result.
+     */
+    private String rootMessage(Throwable throwable) {
+
+        Throwable root = throwable;
+
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+
+        String message = root.getMessage();
+
+        if (message == null || message.isBlank()) {
+            message = throwable.getMessage();
+        }
+
+        if (message == null || message.isBlank()) {
+            return throwable.getClass().getSimpleName();
+        }
+
+        return message.length() > MAX_ERROR_MESSAGE_LENGTH
+                ? message.substring(0, MAX_ERROR_MESSAGE_LENGTH) + "..."
+                : message;
+    }
+
+    /**
+     * Carries the spreadsheet row number of the row that could not be stored,
+     * so the transaction can be rolled back and the failure reported.
+     */
+    private static final class RowPersistenceException extends RuntimeException {
+
+        private final int rowNumber;
+
+        RowPersistenceException(int rowNumber, Throwable cause) {
+            super(cause);
+            this.rowNumber = rowNumber;
+        }
+
+        int getRowNumber() {
+            return rowNumber;
+        }
+    }
+
     private void applyHash(Object entity) throws IllegalAccessException {
 
         for (Field field : entity.getClass().getDeclaredFields()) {
 
             ImportHash ann = field.getAnnotation(ImportHash.class);
-            if (ann == null) continue;
+            if (ann == null)
+                continue;
 
             field.setAccessible(true);
 
-            Object val = field.get(entity);
+            Object value = field.get(entity);
 
-            if (val instanceof String raw && !isHashed(raw)) {
+            if (value instanceof String raw && !raw.isBlank()) {
                 field.set(entity, passwordEncoder.encode(raw));
             }
         }
-    }
-
-    private boolean isHashed(String v) {
-        return v.startsWith("$2");
     }
 }

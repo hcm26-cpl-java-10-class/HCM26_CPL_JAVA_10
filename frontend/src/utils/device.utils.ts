@@ -1,27 +1,46 @@
 /**
  * Lightweight client-side browser, OS, and device category detector.
  * Formats match enterprise UI requirements:
- * - "Chrome · Windows 11"
- * - "Microsoft Edge · Windows 11"
+ * - "Chrome · Windows"
+ * - "Microsoft Edge · Windows"
  * - "Safari · macOS"
  * - "Chrome · Android · Mobile"
  */
-export const getDeviceDescription = (): string => {
-  if (typeof window === "undefined" || !navigator) {
+type BrowserNavigator = Navigator & {
+  brave?: { isBrave(): Promise<boolean> };
+  userAgentData?: { brands?: readonly { brand: string }[] };
+};
+
+export const getDeviceDescription = async (): Promise<string> => {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
     return "Desktop";
   }
 
   const ua = navigator.userAgent || "";
   const lowerUa = ua.toLowerCase();
+  const browserNavigator = navigator as BrowserNavigator;
+  const brands = browserNavigator.userAgentData?.brands ?? [];
+  let isBrave = /\bbrave\b/.test(lowerUa) || brands.some(({ brand }) => brand === "Brave");
+  if (!isBrave) {
+    try {
+      isBrave = (await browserNavigator.brave?.isBrave()) === true;
+    } catch {
+      // Browser identification is optional and must not prevent login.
+    }
+  }
 
   // 1. Detect Browser
   let browser = "Browser";
-  if (lowerUa.includes("edg/") || lowerUa.includes("edge/")) {
+  if (isBrave) {
+    browser = "Brave";
+  } else if (lowerUa.includes("edg/") || lowerUa.includes("edge/")) {
     browser = "Microsoft Edge";
   } else if (lowerUa.includes("opr/") || lowerUa.includes("opera/")) {
     browser = "Opera";
-  } else if (lowerUa.includes("chrome/") || lowerUa.includes("crios/")) {
+  } else if (lowerUa.includes("crios/") || brands.some(({ brand }) => brand === "Google Chrome")) {
     browser = "Chrome";
+  } else if (lowerUa.includes("chrome/") || lowerUa.includes("chromium/")) {
+    browser = "Chromium";
   } else if (lowerUa.includes("firefox/") || lowerUa.includes("fxios/")) {
     browser = "Firefox";
   } else if (lowerUa.includes("safari/") && (lowerUa.includes("version/") || lowerUa.includes("mobile/"))) {
@@ -32,7 +51,7 @@ export const getDeviceDescription = (): string => {
 
   // 2. Detect Operating System
   let os = "OS";
-  if (lowerUa.includes("windows nt 10.0") || lowerUa.includes("windows 11")) {
+  if (lowerUa.includes("windows 11")) {
     os = "Windows 11";
   } else if (lowerUa.includes("windows nt 6.3")) {
     os = "Windows 8.1";

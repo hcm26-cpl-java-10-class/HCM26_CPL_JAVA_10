@@ -1,4 +1,5 @@
 import { usePermissions } from "@/hooks/usePermissions";
+import { Link } from "react-router-dom";
 import React, { useState, useMemo, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "sonner";
@@ -10,6 +11,7 @@ import { ProfileHeader } from "./components/ProfileHeader";
 import { ProfileSummaryCard } from "./components/ProfileSummaryCard";
 import { PersonalInfoCard } from "./components/PersonalInfoCard";
 import { LearningOverviewCard } from "./components/LearningOverviewCard";
+import { LearningGoalCard } from "./components/LearningGoalCard";
 import { AccountSecurityCard } from "./components/AccountSecurityCard";
 import { SkillsCard } from "./components/SkillsCard";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
@@ -261,7 +263,15 @@ export const PersonalProfilePage: React.FC = () => {
                 onCancelEditing={() => setIsEditing(false)}
                 onSaveProfile={handleSaveProfile}
               />
+              {canLearn && auth.permissions.includes("COURSE_READ") && <LearningGoalCard key={auth.email} account={auth.email} />}
               {canLearn && <LearningOverviewCard />}
+              {canLearn && <section className="rounded-xl border bg-card p-4">
+                <h2 className="font-semibold">Personal Learning Reports</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Review and export your saved learning reports.</p>
+                <Button asChild variant="outline" size="sm" className="mt-3">
+                  <Link to="/my-learning?tab=reports">Open Reports</Link>
+                </Button>
+              </section>}
             </div>
 
             {/* Right Column: Account Security & Skills */}

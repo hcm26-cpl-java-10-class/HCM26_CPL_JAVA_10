@@ -4,20 +4,16 @@ import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 const MAX_TOOLTIP_ITEMS = 10;
 
 interface BadgeListProps {
-  /** Danh sách item đã được match với option */
+
   items: any[];
-  /** Tên trường hiển thị label (VD "name") */
+
   labelField: string;
-  /** Tên trường giá trị ID (VD "id") */
+
   valueField: string;
-  /** Số badge tối đa hiển thị (mặc định không giới hạn ⟹ hiện tất cả) */
+
   maxVisible?: number;
 }
 
-/**
- * Danh sách badge kèm tooltip hiển thị đầy đủ danh sách.
- * Dùng cho field relation/select dạng multiple.
- */
 export function BadgeList({
   items,
   labelField,
@@ -42,12 +38,12 @@ export function BadgeList({
 
   return (
     <TooltipWrapper content={tooltipText}>
-      <div className="flex min-w-0 max-w-full flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1">
         {visible.map((m) => (
           <Badge
             key={m[valueField]}
             variant="secondary"
-            className="max-w-full whitespace-normal break-all text-xs"
+            className="text-xs truncate"
           >
             {m[labelField]}
           </Badge>

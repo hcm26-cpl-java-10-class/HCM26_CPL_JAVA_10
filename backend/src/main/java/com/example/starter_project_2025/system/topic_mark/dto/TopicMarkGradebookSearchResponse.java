@@ -8,10 +8,6 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 
-/**
- * Paginated gradebook search result.
- * Includes static column definitions once + paginated student rows.
- */
 @Data
 @Builder
 @NoArgsConstructor

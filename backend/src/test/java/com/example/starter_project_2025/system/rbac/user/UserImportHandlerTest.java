@@ -5,7 +5,7 @@ import com.example.starter_project_2025.base.dataio.importer.resolver.RelationLo
 import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import com.example.starter_project_2025.system.auth.util.PasswordPolicy;
-import com.example.starter_project_2025.system.rbac.department.Department;
+import com.example.starter_project_2025.system.demo.department.Department;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

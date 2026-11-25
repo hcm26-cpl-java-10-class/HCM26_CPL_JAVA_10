@@ -1,4 +1,5 @@
 import { Eye, History, Pen, Trash2 } from "lucide-react";
+import type { ReactNode } from "react";
 import ActionButton from "../common/ActionButton";
 import { PermissionGate } from "@/components/PermissionGate";
 
@@ -11,6 +12,8 @@ interface RowActionsProps {
   viewPermission?: string;
   editPermission?: string;
   deletePermission?: string;
+  /** Extra entity-specific buttons rendered after the default actions. */
+  extra?: ReactNode;
 }
 
 export function RowActions({
@@ -22,6 +25,7 @@ export function RowActions({
   viewPermission,
   editPermission,
   deletePermission,
+  extra,
 }: RowActionsProps) {
   return (
     <>
@@ -53,6 +57,7 @@ export function RowActions({
           icon={<Trash2 size={10} className="text-red-500" />}
         />
       </PermissionGate>
+      {extra}
     </>
   );
 }

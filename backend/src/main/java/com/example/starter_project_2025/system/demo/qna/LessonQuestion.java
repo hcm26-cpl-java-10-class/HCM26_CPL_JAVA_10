@@ -2,7 +2,7 @@ package com.example.starter_project_2025.system.demo.qna;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
-import com.example.starter_project_2025.system.demo.online_lession.Lesson;
+import com.example.starter_project_2025.system.demo.lesson.Lesson;
 import com.example.starter_project_2025.system.rbac.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -50,7 +50,7 @@ public class LessonQuestion extends BaseEntity {
     /** Thời điểm ghim; null nếu không được ghim. */
     LocalDateTime pinnedAt;
 
-    /** Số lượt upvote (số liệu phi chuẩn hóa từ question votes, để sắp xếp nhanh). */
+    /** Số lượt upvote (số liệu phi chuẩn hóa từ {@link LessonQuestionVote}, để sắp xếp nhanh). */
     @Column(nullable = false)
     int upvoteCount;
 

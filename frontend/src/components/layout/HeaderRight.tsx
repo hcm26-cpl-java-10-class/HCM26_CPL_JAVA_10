@@ -10,11 +10,13 @@ import {
   formatRoleLabel,
   getHomePathByRole,
   normalizeRole,
+  resolveEffectivePermissions,
 } from "@/utils/rbac.utils";
 import { useNavigate } from "react-router-dom";
-import { authApi } from "@/api/features/auth.api";
-import { setLogout } from "@/store/slices/auth/authSlice";
+import { performAppLogout } from "@/utils/auth-logout";
+import { useQueryClient } from "@tanstack/react-query";
 import { initialProfileData } from "@/pages/management/profile/mockData";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,11 +26,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export default function HeaderRight() {
+export default function HeaderRight({ compact = false }: { compact?: boolean } = {}) {
   const { canLearn } = usePermissions();
   const dispatch = useDispatch();
+  const queryClient = useQueryClient();
   const auth = useSelector((state: RootState) => state.auth);
-  const { role, roles, isAuthenticated } = auth;
+  const { role, roles, rolePermissions, permissions, isAuthenticated } = auth;
   const { activeRole, availableRoles, isPreviewMode, setViewRole } = useRoleSwitch();
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -58,17 +61,13 @@ export default function HeaderRight() {
   const userInitials = computeInitials(userName);
   const userRoleDisplay = role ? formatRoleLabel(primaryRole) : initialProfileData.role;
 
-  const handleLogout = async () => {
-    if (isAuthenticated) {
-      try {
-        await authApi.logout();
-      } catch {
-        // Proceed with client logout even if backend is offline
-      }
-    }
-    dispatch(setLogout());
-    navigate("/login");
-  };
+  const handleLogout = () => performAppLogout({
+    dispatch,
+    queryClient,
+    navigate,
+    clearViewRole: () => setViewRole(null),
+    skipApi: !isAuthenticated,
+  });
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -85,14 +84,29 @@ export default function HeaderRight() {
 
   const switchRole = (nextRole: string) => {
     const normalizedRole = normalizeRole(nextRole);
+    const targetRole = normalizedRole === primaryRole ? null : normalizedRole;
+
     setOpen(false);
 
-    // Đổi role và đổi trang trong CÙNG một lần cập nhật. Nếu tách ra, React có một lượt render
-    // mà role mới đã có hiệu lực nhưng URL vẫn là trang cũ -> trang cũ bị coi là không có quyền
-    // (403) hoặc không tồn tại với role mới (404) và bị đẩy sang trang lỗi.
+    /**
+     * The role and the URL must change in the same commit: React Router
+     * applies navigation updates inside `startTransition`, so an urgent
+     * `setViewRole` would otherwise commit first and re-render the *current*
+     * protected route with the *new* role (-> 403 on the old page).
+     */
     startTransition(() => {
-      setViewRole(normalizedRole === primaryRole ? null : normalizedRole);
-      navigate(getHomePathByRole(normalizedRole, auth.permissions), { replace: true });
+      setViewRole(targetRole);
+      navigate(
+        getHomePathByRole(
+          normalizedRole,
+          resolveEffectivePermissions(
+            normalizedRole,
+            rolePermissions,
+            permissions
+          ),
+        ),
+        { replace: true },
+      );
     });
   };
 
@@ -136,13 +150,15 @@ export default function HeaderRight() {
           <span>My Profile</span>
         </DropdownMenuItem>
 
-        {canLearn && <DropdownMenuItem
-          onClick={() => navigate("/my-learning")}
-          className="cursor-pointer gap-2.5 py-2"
-        >
-          <GraduationCap className="size-4 text-blue-600 dark:text-blue-400" />
-          <span>My Learning</span>
-        </DropdownMenuItem>}
+        {canLearn && (
+          <DropdownMenuItem
+            onClick={() => navigate("/my-learning")}
+            className="cursor-pointer gap-2.5 py-2"
+          >
+            <GraduationCap className="size-4 text-blue-600 dark:text-blue-400" />
+            <span>My Learning</span>
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuSeparator />
 
@@ -159,8 +175,9 @@ export default function HeaderRight() {
 
   if (!role) {
     return (
-      <div className="flex items-center gap-3">
+      <div className={compact ? "flex items-center gap-1 sm:gap-3" : "flex items-center gap-3"}>
         {renderUserAccountMenu()}
+        <NotificationBell />
         <ToggleTheme />
       </div>
     );
@@ -168,27 +185,28 @@ export default function HeaderRight() {
 
   if (!canSwitchRole) {
     return (
-      <div className="flex items-center gap-3">
+      <div className={compact ? "flex items-center gap-1 sm:gap-3" : "flex items-center gap-3"}>
         <Badge
           variant="secondary"
-          className="text-sm text-blue-700 bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300"
+          className={`text-sm text-blue-700 bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 ${compact ? "hidden sm:inline-flex" : ""}`}
         >
           {formatRoleLabel(currentRole)} View
         </Badge>
+        <NotificationBell />
         {renderUserAccountMenu()}
         <ToggleTheme />
       </div>
     );
   }
 
-
   return (
-    <div className="flex items-center gap-3" ref={dropdownRef}>
+    <div className={compact ? "flex items-center gap-1 sm:gap-3" : "flex items-center gap-3"} ref={dropdownRef}>
       {/* Existing Role / View-mode selector */}
       <div className="relative">
         <button
           onClick={() => setOpen((o) => !o)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer dark:bg-card dark:border-border dark:text-foreground ${isStudentRole
+          aria-label={`Switch view. Current view: ${formatRoleLabel(currentRole)}`}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer dark:bg-card dark:border-border dark:text-foreground ${compact ? "max-sm:px-1.5" : ""} ${isStudentRole
             ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
             : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
             }`}
@@ -198,7 +216,7 @@ export default function HeaderRight() {
           ) : (
             <ShieldCheck size={14} />
           )}
-          <span>{formatRoleLabel(currentRole)} View</span>
+          <span className={compact ? "hidden sm:inline" : undefined}>{formatRoleLabel(currentRole)} View</span>
           <ChevronDown
             size={13}
             className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}
@@ -229,7 +247,7 @@ export default function HeaderRight() {
                     <span className="ml-auto flex items-center gap-2">
                       {selected && (
                         <span className={`text-xs ${studentRow ? "text-green-500" : "text-blue-500"}`}>
-                          ●
+                          ΓùÅ
                         </span>
                       )}
                       {!isAssignedRole && (
@@ -252,6 +270,7 @@ export default function HeaderRight() {
         </Badge>
       )}
 
+      <NotificationBell key={auth.email} />
       {/* User Account Dropdown */}
       {renderUserAccountMenu()}
 

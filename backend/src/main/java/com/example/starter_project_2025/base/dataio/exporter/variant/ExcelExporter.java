@@ -33,7 +33,6 @@ public class ExcelExporter implements Exporter {
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet(config.sheetName());
 
-        // Header
         Row headerRow = sheet.createRow(0);
         for (int i = 0; i < config.columns().size(); i++) {
             headerRow.createCell(i)
@@ -45,7 +44,6 @@ public class ExcelExporter implements Exporter {
             }
         }
 
-        // Data
         for (int i = 0; i < data.size(); i++) {
             T item = data.get(i);
             Row row = sheet.createRow(i + 1);
@@ -59,6 +57,11 @@ public class ExcelExporter implements Exporter {
                 row.createCell(j)
                         .setCellValue(value != null ? value.toString() : "");
             }
+        }
+
+        // Auto size columns
+        for (int i = 0; i < config.columns().size(); i++) {
+            sheet.autoSizeColumn(i);
         }
 
         workbook.write(os);
@@ -77,5 +80,3 @@ public class ExcelExporter implements Exporter {
         sheet.addValidationData(validation);
     }
 }
-
-

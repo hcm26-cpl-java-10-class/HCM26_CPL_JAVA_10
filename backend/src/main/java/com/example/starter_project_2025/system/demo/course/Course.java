@@ -1,16 +1,21 @@
 package com.example.starter_project_2025.system.demo.course;
+import com.example.starter_project_2025.system.demo.category.Category;
+import com.example.starter_project_2025.system.demo.syllabus.entity.Syllabus;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
+import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
+import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
+import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 
-@com.example.starter_project_2025.base.dataio.exporter.annotation.ExportEntity(fileName="courses",sheetName="Courses")
+import java.util.HashSet;
+import java.util.Set;
+
 @Entity
 @Getter
 @Setter
@@ -20,6 +25,7 @@ import lombok.experimental.SuperBuilder;
 @Table(name = "courses")
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("COURSE")
+@ImportEntity("course")
 @ResourceMenu(
         title = "Courses",
         group = "Course Management",
@@ -29,44 +35,58 @@ import lombok.experimental.SuperBuilder;
         permission = "COURSE_READ"
 )
 public class Course extends BaseEntity {
-    @jakarta.persistence.ManyToMany
-    @jakarta.persistence.JoinTable(name="course_category", joinColumns=@jakarta.persistence.JoinColumn(name="course_id"), inverseJoinColumns=@jakarta.persistence.JoinColumn(name="category_id"))
-    @Builder.Default
-    java.util.Set<com.example.starter_project_2025.system.demo.category.Category> categories = new java.util.HashSet<>();
 
     @Column(unique = true, nullable = false, length = 150)
-    @com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField(name="Name")
+    @ImportField(name = "Name", required = true)       // <-- thêm
     String name;
 
     @Column(length = 500)
-    @com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField(name="Description")
+    @ImportField(name = "Description")
     String description;
 
     @Column(length = 255)
-    @com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField(name="Thumbnail URL")
     String thumbnailUrl;
 
     @Column(length = 100)
-    @com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField(name="Instructor")
     String instructor;
 
-    @Column(length = 255)
-    @com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField(name="Category Codes")
-    String category;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "instructor_id")
+    User instructorUser;
 
-    @Column(length = 50)
-    @com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField(name="Level")
-    String courseLevel;
+    @Builder.Default
+    @ManyToMany
+    @JoinTable(
+            name = "course_category",
+            joinColumns = @JoinColumn(name = "course_id"),
+            inverseJoinColumns = @JoinColumn(name = "category_id")
+    )
+    Set<Category> categories = new HashSet<>();
 
-    @Column(length = 50)
-    @com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField(name="Status")
-    String publicationStatus;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "syllabus_id")
+    Syllabus syllabus;
 
-    @Column(length = 255)
-    @com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField(name="Instructor Email")
-    String instructorEmail;
-    public String getCategoryName() {
-        if(categories != null && !categories.isEmpty()) return categories.stream().map(com.example.starter_project_2025.system.demo.category.Category::getName).filter(java.util.Objects::nonNull).sorted().collect(java.util.stream.Collectors.joining(", "));
-        return category;
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20,
+            columnDefinition = "varchar(20) default 'STANDARD'")
+    CourseType courseType = CourseType.STANDARD;
+
+    public boolean allowsOutlineEditing() {
+        return courseType == CourseType.FROM_SYLLABUS && status == CourseStatus.DRAFT;
     }
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    CourseStatus status = CourseStatus.DRAFT;
+
+    @Builder.Default
+    @Column(nullable = false)
+    Boolean isFree = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    CourseLevel level;
 }

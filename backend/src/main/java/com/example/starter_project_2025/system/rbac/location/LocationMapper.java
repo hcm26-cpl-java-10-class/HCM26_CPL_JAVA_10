@@ -15,12 +15,12 @@ public interface LocationMapper extends BaseCrudMapper<Location, LocationDTO> {
     @IgnoreAuditFields
     @Mapping(target = "users", ignore = true)
     @Mapping(target = "children", ignore = true)
-    @Mapping(target = "parent", ignore = true)
+    @Mapping(target = "parentLocation", ignore = true)
     Location toEntity(LocationDTO request);
 
     @Override
-    @Mapping(target = "parentLocationId", source = "parent.id")
-    @Mapping(target = "parentLocationName", source = "parent.name")
+    @Mapping(target = "parentLocationId", source = "parentLocation.id")
+    @Mapping(target = "parentLocationName", source = "parentLocation.name")
     @Mapping(target = "users", ignore = true)
     @Mapping(target = "totalUsers", ignore = true)
     LocationDTO toResponse(Location location);
@@ -29,7 +29,7 @@ public interface LocationMapper extends BaseCrudMapper<Location, LocationDTO> {
     @IgnoreAuditFields
     @Mapping(target = "users", ignore = true)
     @Mapping(target = "children", ignore = true)
-    @Mapping(target = "parent", ignore = true)
+    @Mapping(target = "parentLocation", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void update(@MappingTarget Location location, LocationDTO request);
 

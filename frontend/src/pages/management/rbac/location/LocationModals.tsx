@@ -6,15 +6,25 @@ interface ModalLocationNode {
   name: string;
   code: string;
   status?: string;
-  parentId?: number | string | null;
+  parentLocationId?: number | string | null;
 }
 
 interface LocationFormModalProps {
   isOpen: boolean;
   editingNode: ModalLocationNode | null;
-  formData: { name: string; code: string; description: string; status: string };
+  formData: {
+    name: string;
+    code: string;
+    description: string;
+    status: "ACTIVE" | "INACTIVE";
+  };
   setFormData: React.Dispatch<
-    React.SetStateAction<{ name: string; code: string; description: string; status: string }>
+    React.SetStateAction<{
+      name: string;
+      code: string;
+      description: string;
+      status: "ACTIVE" | "INACTIVE";
+    }>
   >;
   errorMessage: string | null;
   submitting: boolean;
@@ -96,7 +106,12 @@ export const LocationFormModal: React.FC<LocationFormModalProps> = ({
             <label className="block mb-1 font-medium text-muted-foreground">Trạng thái</label>
             <select
               value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  status: e.target.value === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+                })
+              }
               className="w-full bg-background border border-input p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="ACTIVE">Hoạt động (ACTIVE)</option>
@@ -127,18 +142,34 @@ export const LocationFormModal: React.FC<LocationFormModalProps> = ({
 
 interface AssignUserModalProps {
   isOpen: boolean;
-  email: string;
-  setEmail: (val: string) => void;
+  search: string;
+  setSearch: (val: string) => void;
+  candidates: Array<{
+    id: number;
+    email: string;
+    fullName: string;
+    employeeCode?: string | null;
+    roleName?: string | null;
+  }>;
+  selectedUserIds: number[];
+  setSelectedUserIds: React.Dispatch<React.SetStateAction<number[]>>;
   error: string | null;
+  loadingCandidates: boolean;
+  submitting: boolean;
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => void;
 }
 
 export const AssignUserModal: React.FC<AssignUserModalProps> = ({
   isOpen,
-  email,
-  setEmail,
+  search,
+  setSearch,
+  candidates,
+  selectedUserIds,
+  setSelectedUserIds,
   error,
+  loadingCandidates,
+  submitting,
   onClose,
   onSubmit,
 }) => {
@@ -167,15 +198,58 @@ export const AssignUserModal: React.FC<AssignUserModalProps> = ({
 
         <form onSubmit={onSubmit} className="space-y-3 text-xs">
           <div>
-            <label className="block mb-1 font-medium text-muted-foreground">Email Nhân sự *</label>
+            <label className="block mb-1 font-medium text-muted-foreground">Tìm nhân sự *</label>
             <input
-              type="email"
-              required
-              placeholder="Ví dụ: student01@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="search"
+              placeholder="Tên, email hoặc mã nhân viên"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-background border border-input p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
             />
+          </div>
+          <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-border p-1">
+            {loadingCandidates ? (
+              <p className="py-6 text-center text-muted-foreground">Đang tải nhân sự...</p>
+            ) : candidates.length === 0 ? (
+              <p className="py-6 text-center text-muted-foreground">Không có nhân sự phù hợp.</p>
+            ) : (
+              candidates.map((candidate) => {
+                const checked = selectedUserIds.includes(candidate.id);
+                return (
+                  <label
+                    key={candidate.id}
+                    className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 ${
+                      checked ? "bg-primary/10" : "hover:bg-muted/60"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) =>
+                        setSelectedUserIds((previous) =>
+                          e.target.checked
+                            ? [...previous, candidate.id]
+                            : previous.filter((id) => id !== candidate.id)
+                        )
+                      }
+                      className="size-3.5"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{candidate.fullName}</p>
+                      <p className="truncate text-[10px] text-muted-foreground">
+                        {candidate.email}
+                        {candidate.employeeCode ? ` · ${candidate.employeeCode}` : ""}
+                      </p>
+                    </div>
+                    {candidate.roleName && (
+                      <span className="shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-[9px]">
+                        {candidate.roleName}
+                      </span>
+                    )}
+                  </label>
+                );
+              })
+            )}
           </div>
           <div className="flex justify-end gap-2 pt-3 border-t border-border">
             <button
@@ -187,9 +261,10 @@ export const AssignUserModal: React.FC<AssignUserModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90"
+              disabled={submitting || selectedUserIds.length === 0}
+              className="px-4 py-1.5 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50"
             >
-              Gán nhân sự
+              {submitting ? "Đang gán..." : `Gán ${selectedUserIds.length || ""} nhân sự`}
             </button>
           </div>
         </form>

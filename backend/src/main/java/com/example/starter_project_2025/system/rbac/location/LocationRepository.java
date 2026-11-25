@@ -10,16 +10,16 @@ import java.util.Optional;
 public interface LocationRepository extends BaseCrudRepository<Location, Long> {
 
     // Tìm danh sách nút con theo ID của nút cha (Spring Data JPA tự hiểu thuộc tính parent.id)
-    List<Location> findByParentId(Long parentId);
+    List<Location> findByParentLocationId(Long parentLocationId);
 
     // Tìm tất cả các nút gốc (Root Locations - không có parent)
-    List<Location> findByParentIsNull();
+    List<Location> findByParentLocationIsNull();
 
     // Kiểm tra trùng code
     boolean existsByCode(String code);
 
     // Kiểm tra xem vị trí cha này có vị trí con nào không
-    boolean existsByParentId(Long parentId);
+    boolean existsByParentLocationId(Long parentLocationId);
 
     // Tìm vị trí theo code
     Optional<Location> findByCode(String code);

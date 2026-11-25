@@ -27,11 +27,13 @@ const locationSchema: EntitySchema = {
         required: true,
         minLength: 2,
         maxLength: 50,
-        pattern: /^[A-Za-z0-9._-]{2,50}$/,
-        patternMessage: "2-50 characters: letters, digits, dot, underscore or hyphen.",
-        inputFilter: (v) => v.replace(/[^A-Za-z0-9._-]/g, ""),
-        hint: "Letters, digits, dot, underscore and hyphen only.",
+        inputFilter: (value) => value.replace(/[^A-Za-z0-9._-]/g, ""),
+        pattern: {
+          regex: /^[A-Za-z0-9._-]{2,50}$/,
+          message: "2-50 characters: letters, digits, dot, underscore or hyphen.",
+        },
       },
+      hint: "Letters, digits, dot, underscore and hyphen only.",
     },
     {
       name: "name",
@@ -50,8 +52,7 @@ const locationSchema: EntitySchema = {
         valueField: "id",
         labelField: "name",
         multiple: false,
-        queryParams: { page: 0, size: 100 },
-      } as any,
+      },
       filterable: true,
       filterType: "select",
     },
@@ -75,31 +76,38 @@ export const entityConfig: EntityConfig = {
 
 export function LocationPage() {
   const table = useProTable(entityConfig.api, entityConfig.schema);
-  const [viewMode, setViewMode] = useState<"tree" | "table">("tree");
+  const [viewMode, setViewMode] = useState<"tree" | "table">("table");
 
   return (
     <MainLayout pathName={{ locations: "Location" }}>
       <div className="space-y-4">
-        {/* Nút Toggle chuyển đổi giữa Tree View (Mặc định) và Table View */}
-        <div className="flex justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setViewMode(viewMode === "tree" ? "table" : "tree")}
-            className="flex items-center gap-1.5 text-xs font-medium"
-          >
-            {viewMode === "tree" ? (
-              <>
-                <TableIcon className="size-4 text-primary" />
-                <span>Table View</span>
-              </>
-            ) : (
-              <>
-                <FolderTree className="size-4 text-primary" />
-                <span>Tree View</span>
-              </>
-            )}
-          </Button>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Location Management</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Manage the location hierarchy, staff assignments and organizational coverage.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setViewMode(viewMode === "tree" ? "table" : "tree")}
+              className="flex items-center gap-1.5 text-xs font-medium"
+            >
+              {viewMode === "tree" ? (
+                <>
+                  <TableIcon className="size-4 text-primary" />
+                  <span>Table View</span>
+                </>
+              ) : (
+                <>
+                  <FolderTree className="size-4 text-primary" />
+                  <span>Tree View</span>
+                </>
+              )}
+            </Button>
+          </div>
         </div>
 
         {viewMode === "tree" ? (

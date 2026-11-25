@@ -26,9 +26,9 @@ const ActionButton = ({
       <Button
         variant={variant || "outline"}
         size={title ? "default" : "icon"}
-        aria-label={title || tooltip}
         onClick={onClick}
         disabled={disabled}
+        aria-label={title ?? tooltip}
         className={className}
       >
         {icon}

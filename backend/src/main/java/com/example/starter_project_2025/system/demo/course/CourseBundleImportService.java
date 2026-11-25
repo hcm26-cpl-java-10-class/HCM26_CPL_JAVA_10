@@ -4,9 +4,9 @@ import com.example.starter_project_2025.base.dataio.importer.result.ImportResult
 import com.example.starter_project_2025.base.dataio.importer.result.RowError;
 import com.example.starter_project_2025.system.demo.category.Category;
 import com.example.starter_project_2025.system.demo.category.CategoryRepository;
-import com.example.starter_project_2025.system.demo.online_lession.Lesson;
-
-import com.example.starter_project_2025.system.demo.online_lession.LessonRepository;
+import com.example.starter_project_2025.system.demo.lesson.Lesson;
+import com.example.starter_project_2025.system.demo.lesson.LessonContentType;
+import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import com.example.starter_project_2025.system.demo.section.Section;
 import com.example.starter_project_2025.system.demo.section.SectionRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
@@ -52,10 +52,10 @@ public class CourseBundleImportService {
     }
 
     @Transactional
-    public ImportResult importBundle(MultipartFile file, boolean updateExisting) {
+    public ImportResult importBundle(MultipartFile file) {
         ImportResult result = new ImportResult();
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
-            importCourses(workbook.getSheet("Courses"), result, updateExisting);
+            importCourses(workbook.getSheet("Courses"), result);
             importSections(workbook.getSheet("Sections"), result);
             importLessons(workbook.getSheet("Lessons"), result);
             return result;
@@ -64,17 +64,14 @@ public class CourseBundleImportService {
         }
     }
 
-    private void importCourses(Sheet sheet, ImportResult result, boolean updateExisting) {
+    private void importCourses(Sheet sheet, ImportResult result) {
         Map<String, Integer> columns = columns(sheet);
         for (int index = 1; index <= sheet.getLastRowNum(); index++) {
             Row row = sheet.getRow(index);
             if (row == null || value(row, columns, "Name").isBlank()) continue;
             try {
                 String name = value(row, columns, "Name");
-                var match = courseRepository.findAll().stream().filter(c -> c.getName().trim().replaceAll("\\s+", " ").equalsIgnoreCase(name.trim().replaceAll("\\s+", " "))).findFirst();
-                if (match.isPresent() && !updateExisting) { result.setSkippedCount(result.getSkippedCount()+1); continue; }
-                Course course = match.orElseGet(Course::new);
-                if (name.length()>150 || value(row,columns,"Description").length()>500) throw new IllegalArgumentException("Course field exceeds supported length");
+                Course course = courseRepository.findByName(name).orElseGet(Course::new);
                 course.setName(name);
                 course.setDescription(value(row, columns, "Description"));
                 course.setInstructor(optionalValue(row, columns, "Instructor"));
@@ -83,7 +80,7 @@ public class CourseBundleImportService {
                 if (instructorEmail != null) {
                     User instructor = userRepository.findByEmail(instructorEmail)
                             .orElseThrow(() -> new IllegalArgumentException("instructor was not found: " + instructorEmail));
-                    course.setInstructorEmail(instructorEmail);
+                    course.setInstructorUser(instructor);
                     course.setInstructor(instructor.getFullName());
                 }
 
@@ -95,21 +92,20 @@ public class CourseBundleImportService {
                         String code = rawCode.trim();
                         if (code.isEmpty()) continue;
                         Category category = categoryRepository.findByCodeIgnoreCase(code)
-                                .orElseGet(() -> categoryRepository.save(Category.builder().code(code).name(code).isActive(true).build()));
+                                .orElseThrow(() -> new IllegalArgumentException("category was not found: " + code));
                         categories.add(category);
                     }
                 }
 
                 course.setCategories(categories);
-                course.setCategory(categoryCodes);
 
                 course.setThumbnailUrl(optionalValue(row, columns, "Thumbnail URL"));
-                course.setPublicationStatus(optionalValue(row, columns, "Status"));
-                course.setCourseLevel(optionalValue(row, columns, "Level"));
+                course.setStatus(enumValue(value(row, columns, "Status"), CourseStatus.class, CourseStatus.PUBLISHED));
+                course.setLevel(enumValue(value(row, columns, "Level"), CourseLevel.class, CourseLevel.BEGINNER));
                 course.setIsActive(booleanValue(row, columns, "Active", true));
 
                 courseRepository.save(course);
-                if (match.isPresent()) result.setUpdatedCount(result.getUpdatedCount()+1); else success(result);
+                success(result);
             } catch (Exception exception) {
                 failure(result, index + 1, "Courses: " + exception.getMessage());
             }
@@ -131,7 +127,6 @@ public class CourseBundleImportService {
                         .findFirst()
                         .orElseGet(Section::new);
 
-                if (section.getId() != null) { result.setSkippedCount(result.getSkippedCount()+1); continue; }
                 section.setCourse(course);
                 section.setTitle(title);
                 section.setOrderIndex(integerValue(row, columns, "Order Index", 0));
@@ -166,17 +161,12 @@ public class CourseBundleImportService {
                         .findFirst()
                         .orElseGet(Lesson::new);
 
-                if (lesson.getId() != null) { result.setSkippedCount(result.getSkippedCount()+1); continue; }
-                lesson.setCourse(course);
                 lesson.setSection(section);
                 lesson.setTitle(title);
-                lesson.setContentType(value(row, columns, "Content Type"));
+                lesson.setContentType(enumValue(value(row, columns, "Content Type"), LessonContentType.class, LessonContentType.VIDEO));
                 lesson.setContentUrl(optionalValue(row, columns, "Content URL"));
-                lesson.setVideoUrl(optionalValue(row, columns, "Content URL"));
                 lesson.setTextContent(optionalValue(row, columns, "Text Content"));
-                Integer seconds = nullableIntegerValue(row, columns, "Duration (seconds)");
-                lesson.setDurationSeconds(seconds);
-                lesson.setDurationMinutes(seconds == null ? null : (int)Math.ceil(seconds / 60.0));
+                lesson.setDuration(nullableIntegerValue(row, columns, "Duration (seconds)"));
                 lesson.setOrderIndex(integerValue(row, columns, "Order Index", 0));
                 lesson.setIsActive(booleanValue(row, columns, "Active", true));
 
@@ -225,10 +215,7 @@ public class CourseBundleImportService {
 
     private boolean booleanValue(Row row, Map<String, Integer> columns, String name, boolean fallback) {
         String raw = optionalValue(row, columns, name);
-        if (raw == null) return fallback;
-        if (java.util.Set.of("true","1","yes","active").contains(raw.toLowerCase(Locale.ROOT))) return true;
-        if (java.util.Set.of("false","0","no","inactive").contains(raw.toLowerCase(Locale.ROOT))) return false;
-        throw new IllegalArgumentException("Invalid Active value: " + raw);
+        return raw == null ? fallback : Boolean.parseBoolean(raw);
     }
 
     private <E extends Enum<E>> E enumValue(String raw, Class<E> type, E fallback) {

@@ -3,7 +3,7 @@ package com.example.starter_project_2025.system.demo.progress;
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
-import com.example.starter_project_2025.system.demo.online_lession.Lesson;
+import com.example.starter_project_2025.system.demo.lesson.Lesson;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -49,6 +49,13 @@ public class LessonProgress extends BaseEntity {
 
     @Column(name = "last_accessed_at")
     LocalDateTime lastAccessedAt;
+
+    /**
+     * Tổng số giây học viên đã dành cho bài học này (tích luỹ qua các lần ghi nhận
+     * thời lượng học). Dùng để tính "số giờ học" trong Course Analytics.
+     */
+    @Column(name = "study_seconds")
+    Long studySeconds;
 
     @Lob
     @Column(name = "student_answer")

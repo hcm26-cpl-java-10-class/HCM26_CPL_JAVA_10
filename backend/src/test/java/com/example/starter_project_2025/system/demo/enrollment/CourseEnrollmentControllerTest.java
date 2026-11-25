@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 // Plain unit tests: no Spring context, database, or startup initializers.
 class CourseEnrollmentControllerTest {
     private final StubEnrollmentService service = new StubEnrollmentService();
-    private final CourseEnrollmentController controller = new CourseEnrollmentController(service);
+    private final CourseEnrollmentController controller = new CourseEnrollmentController(service, null);
     private final UserPrincipal principal = new UserPrincipal(User.builder().id(7L).build(), List.of());
 
     @Test
@@ -60,7 +60,7 @@ class CourseEnrollmentControllerTest {
         Long requestedUserId;
         int calls;
 
-        StubEnrollmentService() { super(null, null, null); }
+        StubEnrollmentService() { super(null, null, null, null, null, null, null); }
 
         @Override
         public List<CourseEnrollment> getMyCourses(Long userId) {

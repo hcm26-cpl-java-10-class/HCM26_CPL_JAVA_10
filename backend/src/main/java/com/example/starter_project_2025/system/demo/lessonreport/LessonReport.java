@@ -2,7 +2,7 @@ package com.example.starter_project_2025.system.demo.lessonreport;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
-import com.example.starter_project_2025.system.demo.online_lession.Lesson;
+import com.example.starter_project_2025.system.demo.lesson.Lesson;
 import com.example.starter_project_2025.system.rbac.user.User;
 import jakarta.persistence.*;
 import lombok.*;

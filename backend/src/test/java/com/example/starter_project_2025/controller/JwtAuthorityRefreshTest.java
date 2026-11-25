@@ -2,6 +2,7 @@ package com.example.starter_project_2025.controller;
 
 import com.example.starter_project_2025.security.*;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.*;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -22,7 +23,7 @@ class JwtAuthorityRefreshTest {
                 .email("user@example.com").isActive(true).locked(false).build(),
                 List.of(new SimpleGrantedAuthority("LEARNER_ACCESS")));
         when(users.loadUserByUsername("user@example.com")).thenReturn(principal);
-        var filter = new JwtAuthenticationFilter(tokens, users);
+        var filter = new JwtAuthenticationFilter(tokens, users, mock(TenantRepository.class));
         var request = new MockHttpServletRequest("GET", "/api/learning/me");
         request.addHeader("Authorization", "Bearer old-jwt");
         try {

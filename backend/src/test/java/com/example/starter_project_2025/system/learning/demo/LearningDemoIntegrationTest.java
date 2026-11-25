@@ -23,6 +23,7 @@ import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
@@ -47,6 +48,7 @@ import static org.mockito.Mockito.mock;
 @DataJpaTest(showSql = false)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({CourseServiceImpl.class, CourseMapperImpl.class, AutoSpecBuilder.class,
+        com.example.starter_project_2025.system.demo.curriculum.CurriculumValidator.class,
         CourseEnrollmentService.class, LearningRecordsService.class})
 class LearningDemoIntegrationTest {
     static final String DATABASE = "jdbc:h2:mem:learning-isolated-" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1";
@@ -58,6 +60,8 @@ class LearningDemoIntegrationTest {
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
     }
 
+    @MockBean com.example.starter_project_2025.system.notification.NotificationService notificationService;
+    @MockBean CourseAssessmentService courseAssessmentService;
     @Autowired CourseService courses;
     @Autowired CourseRepository courseRepository;
     @Autowired CourseEnrollmentService enrollments;
@@ -83,17 +87,24 @@ class LearningDemoIntegrationTest {
         return new LearningDemoCourseInitializer(courses, dataSource, environment);
     }
 
+    private void publishFixture(Long courseId) {
+        // A new demo course is a draft under the DEV authoring rules.
+        // Enrollment tests start from a fixture whose publication is already complete.
+        var course = courseRepository.findById(courseId).orElseThrow();
+        course.setStatus(CourseStatus.PUBLISHED);
+        courseRepository.saveAndFlush(course);
+    }
+
     @Test void realServiceSeedsFourAndPreservesIdsMetadataAndEnrollmentsOnRerun() throws Exception {
         initializer().run();
-        var importServiceMock = mock(CourseBundleImportService.class);
-        var exportControllerMock = mock(CourseBundleExportController.class);
-        var controller = new CourseController(courses, courseRepository, importServiceMock, exportControllerMock);
+        var controller = new CourseController(courses, courseRepository, mock(com.example.starter_project_2025.system.demo.course.CourseBundleImportService.class));
         var list = controller.getAll(PageRequest.of(0, 10), null, null).getBody();
         assertNotNull(list);
         assertEquals(4, list.getTotalElements());
         var original = list.getContent();
         assertTrue(original.stream().allMatch(c -> c.getId() != null && c.getCreatedAt() != null && c.getIsActive()));
         var alice = user("alice@example.test");
+        publishFixture(original.getFirst().getId());
         var enrollment = enrollments.enroll(alice.getId(), original.getFirst().getId());
         initializer().run();
         assertEquals(original.stream().map(CourseDTO::getId).sorted().toList(),
@@ -107,9 +118,10 @@ class LearningDemoIntegrationTest {
         var course = courses.getAll(PageRequest.of(0, 10), "Java Fundamentals", null).getContent().getFirst();
         var alice = user("alice@example.test");
         var bob = user("bob@example.test");
-        var controller = new CourseEnrollmentController(enrollments);
+        var controller = new CourseEnrollmentController(enrollments, users);
         var request = new com.fasterxml.jackson.databind.ObjectMapper().readValue("{\"courseId\":" + course.getId() + "}", CourseEnrollmentController.EnrollRequest.class);
         var alicePrincipal = new UserPrincipal(alice, List.of());
+        publishFixture(course.getId());
         var confirmed = controller.enroll(alicePrincipal, request);
         assertEquals(course.getId(), confirmed.getCourseId());
         assertThrows(RuntimeException.class, () -> controller.enroll(alicePrincipal, request));
@@ -145,13 +157,14 @@ class LearningDemoIntegrationTest {
         assertFalse(courseRepository.existsById(created.getId()));
     }
 
-    @Test void documentsExistingBackendXlsxLimitationsWithoutChangingCourseCode() throws Exception {
+    @Test void importsCourseNameThroughDevAnnotationsWhileGenericExportRemainsUnsupported() throws Exception {
+        // DEV supports importing the annotated course fields. Generic export still requires @ExportEntity.
         var exporter = new GenericExportService(List.of(new ExcelExporter()), mock(ExportConfigBuilder.class));
         var exportFailure = assertThrows(IllegalArgumentException.class, () -> exporter.export(FileFormat.EXCEL, List.<Course>of(), Course.class, new MockHttpServletResponse()));
         assertTrue(exportFailure.getMessage().contains("@ExportEntity"));
         var lookup = new RelationLookupEngine(context);
         var mapper = new GenericImportMapper(lookup, new RelationGraphBuilder(lookup, new RelationPathParser()), new ValueConverter());
-        var importer = new GenericImportService(new ParserFactory(List.of(new ExcelParser())), mapper, mock(org.springframework.security.crypto.password.PasswordEncoder.class), List.of(), lookup);
+        var importer = new GenericImportService(new ParserFactory(List.of(new ExcelParser())), mapper, mock(org.springframework.security.crypto.password.PasswordEncoder.class), java.util.Collections.<com.example.starter_project_2025.base.dataio.importer.hook.ImportHandler<?>>emptyList(), mock(org.springframework.transaction.PlatformTransactionManager.class));
         byte[] bytes;
         try (var workbook = new XSSFWorkbook(); var output = new ByteArrayOutputStream()) {
             var sheet = workbook.createSheet("Courses");
@@ -162,10 +175,12 @@ class LearningDemoIntegrationTest {
         }
         long before = courseRepository.count();
         var result = importer.importFile(new MockMultipartFile("file", "courses.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes), Course.class, courseRepository);
-        assertEquals(0, result.getSuccessCount());
-        assertEquals(1, result.getFailureCount());
+        assertEquals(1, result.getSuccessCount());
+        assertEquals(0, result.getFailureCount());
+        entityManager.flush();
         entityManager.clear();
-        assertEquals(before, courseRepository.count());
+        assertEquals(before + 1, courseRepository.count());
+        assertTrue(courseRepository.existsByName("Isolated XLSX fixture"));
     }
 
     User user(String email) {

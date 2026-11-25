@@ -47,7 +47,7 @@ public class ExcelParser implements FileParser {
             DataFormatter formatter = new DataFormatter();
             FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
 
-            
+
             List<String> headers = new ArrayList<>();
             int headerCount = Math.max(headerRow.getLastCellNum(), 0);
             for (int j = 0; j < headerCount; j++) {
@@ -58,7 +58,7 @@ public class ExcelParser implements FileParser {
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
 
-               
+
                 if (row == null) {
                     continue;
                 }

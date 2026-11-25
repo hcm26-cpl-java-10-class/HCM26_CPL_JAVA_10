@@ -1,5 +1,5 @@
 import type { FieldSchema } from "@/types/common/datatable";
-import type { EntityCardRendererProps } from "@/types";
+import type { EntityCardLayout, EntityCardRendererProps } from "@/types";
 import { CardItem } from "./CardItem";
 import { CardSelectAllBar } from "./CardSelectAllBar";
 
@@ -16,6 +16,8 @@ interface CardViewProps {
   selectable?: boolean;
   showIndex?: boolean;
   renderCard?: (props: EntityCardRendererProps) => React.ReactNode;
+  /** "list" stacks full-width cards vertically instead of a responsive grid. */
+  layout?: EntityCardLayout;
 }
 
 export function CardView({
@@ -31,6 +33,7 @@ export function CardView({
   selectable = true,
   showIndex = true,
   renderCard,
+  layout = "grid",
 }: CardViewProps) {
   const { schema } = table;
 
@@ -69,7 +72,7 @@ export function CardView({
   };
 
   return (
-    <div className="flex h-full w-full min-w-0 max-w-full flex-col overflow-hidden">
+    <div className="flex flex-col overflow-hidden h-full">
       {selectable && (
         <CardSelectAllBar
           totalCount={allIds.length}
@@ -81,7 +84,11 @@ export function CardView({
       )}
 
       <div
-        className={`grid grid-cols-1 gap-4 p-3 sm:grid-cols-2 lg:grid-cols-3 w-full min-w-0 max-w-full overflow-y-auto flex-1 transition-opacity ${table.isFetching ? "opacity-50" : ""
+        className={`${
+          layout === "list"
+            ? "flex flex-col gap-2"
+            : "grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+        } p-3 overflow-y-auto flex-1 transition-opacity ${table.isFetching ? "opacity-50" : ""
           }`}
       >
         {table.data?.map((row: any, idx: number) => {
@@ -108,7 +115,14 @@ export function CardView({
           };
 
           if (renderCard) {
-            return <div key={id} className="w-full min-w-0 max-w-full">{renderCard(cardProps)}</div>;
+            return (
+              <div
+                key={id}
+                className={layout === "list" ? "w-full shrink-0" : undefined}
+              >
+                {renderCard(cardProps)}
+              </div>
+            );
           }
 
           return (

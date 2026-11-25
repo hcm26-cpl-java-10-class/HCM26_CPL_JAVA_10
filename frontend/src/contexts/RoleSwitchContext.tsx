@@ -1,9 +1,11 @@
+/* eslint-disable react-refresh/only-export-components */
 import type { RootState } from "@/store/store";
 import {
   availableAccountViews,
   normalizeRole,
+  uniqueRoles,
 } from "@/utils/rbac.utils";
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 
 interface RoleSwitchContextType {
@@ -14,8 +16,6 @@ interface RoleSwitchContextType {
   setViewRole: (role: string | null) => void;
 }
 
-const VIEW_ROLE_STORAGE_KEY = "viewRole";
-
 const RoleSwitchContext = createContext<RoleSwitchContextType | undefined>(
   undefined,
 );
@@ -23,59 +23,52 @@ const RoleSwitchContext = createContext<RoleSwitchContextType | undefined>(
 export const RoleSwitchProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { isAuthenticated, permissions } = useSelector(
+  const { isAuthenticated, role, roles, rolePermissions, permissions } = useSelector(
     (state: RootState) => state.auth,
   );
 
-  const [viewRole, setViewRoleState] = useState<string | null>(() => {
-    const storedRole = localStorage.getItem(VIEW_ROLE_STORAGE_KEY);
-    const normalizedRole = normalizeRole(storedRole);
-    return normalizedRole || null;
-  });
+  const [viewRole, setViewRoleState] = useState<string | null>(null);
 
-  const availableRoles = useMemo(() => availableAccountViews(permissions), [permissions]);
+  const primaryRole = normalizeRole(role);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setViewRoleState(null);
-      localStorage.removeItem(VIEW_ROLE_STORAGE_KEY);
-      return;
-    }
+  const availableRoles = useMemo(() => {
+    const fallbackViews = availableAccountViews(permissions ?? []);
+    const roleCandidates = uniqueRoles(
+      [
+        ...Object.keys(rolePermissions ?? {}),
+        ...(roles ?? []),
+        primaryRole,
+        ...fallbackViews,
+      ],
+      primaryRole,
+    );
 
-    setViewRoleState((currentViewRole) => {
-      if (!currentViewRole || availableRoles.includes(currentViewRole)) {
-        return currentViewRole;
-      }
+    return roleCandidates.length > 0 ? roleCandidates : fallbackViews;
+  }, [primaryRole, rolePermissions, roles, permissions]);
 
-      localStorage.removeItem(VIEW_ROLE_STORAGE_KEY);
-      return null;
-    });
-  }, [availableRoles, isAuthenticated]);
-
-  const setViewRole = (nextRole: string | null) => {
+  const setViewRole = useCallback((nextRole: string | null) => {
     const normalizedRole = normalizeRole(nextRole);
 
     if (!normalizedRole) {
       setViewRoleState(null);
-      localStorage.removeItem(VIEW_ROLE_STORAGE_KEY);
       return;
     }
 
     if (!availableRoles.includes(normalizedRole)) {
       return;
     }
-
     setViewRoleState(normalizedRole);
-    localStorage.setItem(VIEW_ROLE_STORAGE_KEY, normalizedRole);
-  };
+  }, [availableRoles]);
 
-  const activeRole = viewRole && availableRoles.includes(viewRole) ? viewRole : availableRoles[0] || null;
-  const isPreviewMode = false;
+  const activeViewRole =
+    isAuthenticated && viewRole && availableRoles.includes(viewRole) ? viewRole : null;
+  const activeRole = activeViewRole || primaryRole || availableRoles[0] || null;
+  const isPreviewMode = !!activeViewRole && normalizeRole(activeViewRole) !== primaryRole;
 
   return (
     <RoleSwitchContext.Provider
       value={{
-        viewRole,
+        viewRole: activeViewRole,
         activeRole,
         availableRoles,
         isPreviewMode,

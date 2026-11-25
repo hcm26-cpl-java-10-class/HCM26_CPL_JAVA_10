@@ -2,7 +2,6 @@ package com.example.starter_project_2025.base.dataio.exporter.resolver;
 
 import com.example.starter_project_2025.base.dataio.exporter.metadata.ExportFieldMeta;
 import lombok.AccessLevel;
-import org.hibernate.Hibernate;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Component;
@@ -45,7 +44,7 @@ public class ExportValueResolver {
 
     private Object readValue(Object source, ExportFieldMeta meta) {
         try {
-            return meta.field().get(Hibernate.unproxy(source));
+            return meta.field().get(source);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

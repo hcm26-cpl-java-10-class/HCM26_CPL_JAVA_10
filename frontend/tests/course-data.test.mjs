@@ -99,10 +99,10 @@ test("legacy browser Course records are identified without modifying any storage
   assert.equal(storage.get("app_courses_state"), raw); assert.equal(storage.get("unrelated-preference"), "keep");
 });
 
-test("Course mutations refresh Course, Catalog, Detail and Learning query families", async () => {
+test("Course mutations refresh Catalog, Detail, Learning records and the personal Roadmap", async () => {
   const keys = [];
   await refreshCourseViews({ invalidateQueries: async ({ queryKey }) => { keys.push(queryKey[0]); } });
-  assert.deepEqual(keys, ["course-data", "course-detail", "my-enrollments", "personal-learning", "admin-learning"]);
+  assert.deepEqual(keys, ["course-data", "course-detail", "my-enrollments", "personal-learning", "admin-learning", "personal-learning-roadmap"]);
 });
 
 test("full backend read follows every page and rejects an unstable dataset", async () => {

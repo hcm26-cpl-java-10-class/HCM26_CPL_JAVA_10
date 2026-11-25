@@ -15,4 +15,3 @@ public record ExportColumn<T>(
         this(header, valueExtractor, "");
     }
 }
-

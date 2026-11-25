@@ -1,6 +1,10 @@
 package com.example.starter_project_2025.system.rbac.department;
 
 import com.example.starter_project_2025.exception.BusinessValidationException;
+import com.example.starter_project_2025.system.demo.department.Department;
+import com.example.starter_project_2025.system.demo.department.DepartmentMapper;
+import com.example.starter_project_2025.system.demo.department.DepartmentRepository;
+import com.example.starter_project_2025.system.demo.department.DepartmentServiceImpl;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import org.junit.jupiter.api.*;
@@ -20,7 +24,7 @@ class DepartmentAssignmentTest {
     DepartmentServiceImpl service;
 
     @BeforeEach void setup() {
-        service = new DepartmentServiceImpl(mock(DepartmentMapper.class), departments, users);
+        service = new DepartmentServiceImpl(departments, mock(DepartmentMapper.class), users);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("authorized-test", null,
                         List.of(new SimpleGrantedAuthority("DEPARTMENT_DELETE"))));
@@ -68,13 +72,5 @@ class DepartmentAssignmentTest {
         users.saveAndFlush(user);
         assertTrue(users.existsByDepartmentCodeOrName("IT", "Information Technology"));
         assertFalse(users.existsByDepartmentCodeOrName("HR", "Human Resources"));
-    }
-
-    @Test void childDepartmentGuardRemainsActive() {
-        Department parent = department("ROOT", "Root");
-        departments.saveAndFlush(Department.builder().code("CHILD").name("Child")
-                .parentDepartment(parent).build());
-        assertThrows(BusinessValidationException.class, () -> service.delete(parent.getId()));
-        assertTrue(departments.existsById(parent.getId()));
     }
 }

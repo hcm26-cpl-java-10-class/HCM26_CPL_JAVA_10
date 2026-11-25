@@ -54,7 +54,7 @@ const userSchema: EntitySchema = {
         maxLength: 100,
         pattern: EMAIL_PATTERN,
         patternMessage: "Enter a valid email address, e.g. name@company.com.",
-        inputFilter: (v) => v.replace(/\s/g, ""),
+        inputFilter: (v: string) => v.replace(/\s/g, ""),
         placeholder: "name@company.com",
       },
     },
@@ -77,7 +77,7 @@ const userSchema: EntitySchema = {
         maxLength: 100,
         pattern: NAME_PATTERN,
         patternMessage: "Use letters, spaces, dots, apostrophes or hyphens only.",
-        inputFilter: (v) => v.replace(/[^\p{L}\s.'-]/gu, ""),
+        inputFilter: (v: string) => v.replace(/[^\p{L}\s.'-]/gu, ""),
       },
     },
     {
@@ -91,7 +91,7 @@ const userSchema: EntitySchema = {
         maxLength: 100,
         pattern: NAME_PATTERN,
         patternMessage: "Use letters, spaces, dots, apostrophes or hyphens only.",
-        inputFilter: (v) => v.replace(/[^\p{L}\s.'-]/gu, ""),
+        inputFilter: (v: string) => v.replace(/[^\p{L}\s.'-]/gu, ""),
       },
     },
     {
@@ -103,7 +103,7 @@ const userSchema: EntitySchema = {
         maxLength: 16,
         pattern: PHONE_PATTERN,
         patternMessage: "Enter 8-15 digits, optionally starting with +.",
-        inputFilter: (v) => v.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, ""),
+        inputFilter: (v: string) => v.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, ""),
         placeholder: "0901234567",
       },
     },
@@ -118,7 +118,7 @@ const userSchema: EntitySchema = {
         maxLength: 64,
         passwordRules: true,
         hint: "No email is sent: give this initial password to the user. When editing, leave blank to keep the current password.",
-        validate: (value) =>
+        validate: (value: any) =>
           value ? validatePasswordStrength(String(value)) : undefined,
       },
     },
@@ -133,7 +133,7 @@ const userSchema: EntitySchema = {
         requiredOnCreate: true,
         maxLength: 64,
         placeholder: "Re-enter the password",
-        validate: (value, form) => {
+        validate: (value: any, form: any) => {
           const password = String(form.password ?? "");
           const confirm = String(value ?? "");
           if (password && !confirm) return "Please re-enter the password to confirm it.";
@@ -179,7 +179,7 @@ const userSchema: EntitySchema = {
         pattern: /^\d{4}-\d{1,2}-\d{1,2}$/,
         patternMessage: "Use the format yyyy-MM-dd, for example 2000-01-31.",
         placeholder: "2000-01-31",
-        validate: (value) => {
+        validate: (value: any) => {
           const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(value ?? "").trim());
           if (!m) return undefined; // an empty value or a wrong format is reported by the rules above
           const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];

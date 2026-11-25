@@ -8,7 +8,7 @@ import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.BusinessValidationException;
 import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course.CourseRepository;
-import com.example.starter_project_2025.system.demo.online_lession.LessonRepository;
+import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;

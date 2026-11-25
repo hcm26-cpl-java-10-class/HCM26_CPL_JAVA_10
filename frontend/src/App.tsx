@@ -11,55 +11,49 @@ import { NotFoundRedirect } from "./pages/error/NotFoundRedirect";
 import { routes } from "./router/component-registry";
 import type { RootState } from "./store/store";
 import { getHomePathByRole } from "./utils/rbac.utils";
+import { resolveMenuPermission } from "./router/menu-permission.utils";
+import { SystemChatbotWidget } from '@/components/chatbot/SystemChatbotWidget';
 
 function AppRoutes() {
-    const { isAuthenticated, permissions } = useSelector((state: RootState) => state.auth);
-    const { activeRole } = usePermissions();
-    const { data: moduleGroups = [] } = useActiveModuleGroups(isAuthenticated);
+    const { isAuthenticated, isAuthInitialized, permissions } = useSelector((state: RootState) => state.auth);
+    const { activeRole, effectivePermissions } = usePermissions();
+    const { data: moduleGroups = [] } = useActiveModuleGroups(isAuthenticated && isAuthInitialized);
 
-    const homePath = isAuthenticated ? getHomePathByRole(activeRole, permissions) : "/login";
+    const homePath = isAuthenticated ? getHomePathByRole(activeRole, effectivePermissions ?? permissions) : "/login";
 
-    // Create component lookup map from module-driven routes
-    const explicitOverrides: Record<string, any> = {
-        "/courses": routes.find((r) => r.path === "/courses")?.component,
-        "/enrollments": routes.find((r) => r.path === "/enrollments")?.component,
-        "/course-enrollments": routes.find((r) => r.path === "/course-enrollments")?.component,
-        "/my-learning": routes.find((r) => r.path === "/my-learning")?.component,
-        "/fams/my-learning": routes.find((r) => r.path === "/fams/my-learning")?.component,
-        "/learning": routes.find((r) => r.path === "/learning")?.component,
-        "/profile": routes.find((r) => r.path === "/profile")?.component,
-        "/fams/profile": routes.find((r) => r.path === "/fams/profile")?.component,
-        "/fams/ho-so-ca-nhan-oi-mat-khau": routes.find((r) => r.path === "/fams/ho-so-ca-nhan-oi-mat-khau")?.component,
-        "/fams/ho-so-ca-nhan-doi-mat-khau": routes.find((r) => r.path === "/fams/ho-so-ca-nhan-doi-mat-khau")?.component,
-    };
+    // Backend menus may point to either explicit or generated routes. Prefer explicit implementations.
+    const componentRegistry = Object.fromEntries(
+        [...routes.filter(r => r.isModuleDriven), ...routes.filter(r => !r.isModuleDriven)]
+            .map(r => [r.path, r]),
+    );
 
-    const componentRegistry = {
-        ...Object.fromEntries(
-            routes.filter((r) => r.isModuleDriven).map((r) => [r.path, r.component]),
-        ),
-        ...explicitOverrides,
-    };
+    // Get non-module routes (frontend-controlled)
+    const menuPaths = new Set(moduleGroups.flatMap(group => group.modules.map(module => module.url)));
+    const staticRoutes = routes.filter((r) => !r.isModuleDriven && !menuPaths.has(r.path));
 
-    // Get non-module routes (frontend-controlled), ensuring essential app routes are always registered
-    const staticRoutes = [
-        ...routes.filter((r) => !r.isModuleDriven),
-        { path: "/courses", component: routes.find((r) => r.path === "/courses")?.component },
-        { path: "/enrollments", component: routes.find((r) => r.path === "/enrollments")?.component },
-    ].filter((r): r is any => !!r && !!r.component);
+    if (!isAuthInitialized) {
+        return (
+            <div className="flex min-h-screen items-center justify-center" role="status">
+                Checking sign-in session...
+            </div>
+        );
+    }
 
     return (
         <Routes>
-            {/* Root redirect */}
             <Route path="/" element={<Navigate to={homePath} replace />} />
 
             {/* Dynamic routes from backend Module table */}
             {moduleGroups.flatMap((group) =>
                 group.modules.map((m) => {
                     if (!m.url) return null;
-                    const Component = componentRegistry[m.url];
+                    const registered = componentRegistry[m.url];
+                    const Component = registered?.component;
 
                     if (!Component) {
-                        return <Route key={`missing-${m.id ?? m.url}`} path={m.url} element={<Navigate to="/not-found-page" replace />} />;
+                        // Frontend-controlled pages can still be exposed in the sidebar.
+                        // Their static route below is responsible for rendering them.
+                        return null;
                     }
 
                     return (
@@ -67,7 +61,8 @@ function AppRoutes() {
                             key={m.id}
                             path={m.url}
                             element={
-                                <ProtectedRoute requiredPermission={m.requiredPermission}>
+                                <ProtectedRoute requiredPermission={resolveMenuPermission(m.url, m.requiredPermission)}
+                                    requiredPermissions={registered.requiredPermission ? [registered.requiredPermission] : undefined} requireAll>
                                     <Component />
                                 </ProtectedRoute>
                             }
@@ -89,7 +84,10 @@ function AppRoutes() {
                         key={index}
                         path={route.path}
                         element={
-                            <ProtectedRoute requiredPermission={route.requiredPermission}>
+                            <ProtectedRoute
+                                requiredPermission={route.requiredPermission}
+                                requiredPermissions={route.requiredPermissions}
+                            >
                                 <Component />
                             </ProtectedRoute>
                         }
@@ -97,13 +95,14 @@ function AppRoutes() {
                 );
             })}
 
-            {/* Catch all */}
             <Route path="*" element={<NotFoundRedirect />} />
         </Routes>
     );
 }
 
 function App() {
+    const { email, isAuthenticated } = useSelector((state: RootState) => state.auth);
+
     return (
         <BrowserRouter>
             <Toaster
@@ -115,10 +114,11 @@ function App() {
                 }}
             />
             <AuthProvider>
-                <RoleSwitchProvider>
+                <RoleSwitchProvider key={isAuthenticated ? email : "anonymous"}>
                     <CourseProvider>
                         <AppRoutes />
                     </CourseProvider>
+                    <SystemChatbotWidget />
                 </RoleSwitchProvider>
             </AuthProvider>
         </BrowserRouter>

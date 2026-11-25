@@ -36,6 +36,7 @@ public class UserPrincipal implements UserDetails {
             );
 
             for (Permission permission : role.getPermissions()) {
+                if (!Boolean.TRUE.equals(permission.getIsActive())) continue;
                 authorities.add(
                         new SimpleGrantedAuthority(permission.getName())
                 );
@@ -72,5 +73,9 @@ public class UserPrincipal implements UserDetails {
     @Override
     public boolean isEnabled() {
         return Boolean.TRUE.equals(this.getUser().getIsActive());
+    }
+
+    public Long getTenantId() {
+        return this.user != null && this.user.getTenant() != null ? this.user.getTenant().getId() : null;
     }
 }

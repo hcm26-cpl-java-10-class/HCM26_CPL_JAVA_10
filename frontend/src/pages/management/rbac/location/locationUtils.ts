@@ -66,7 +66,7 @@ export const exportLocationUsersCsv = (activeNode: UtilLocationNode) => {
   collect(activeNode);
 
   if (rows.length === 0) {
-    alert("Vị trí này hiện chưa có nhân sự nào để xuất báo cáo!");
+    toast.error("Vị trí này hiện chưa có nhân sự nào để xuất báo cáo!");
     return;
   }
 
@@ -91,4 +91,6 @@ export const exportLocationUsersCsv = (activeNode: UtilLocationNode) => {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+  toast.success("Đã xuất báo cáo nhân sự.");
 };
+import { toast } from "sonner";

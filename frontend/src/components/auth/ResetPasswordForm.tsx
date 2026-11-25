@@ -8,14 +8,10 @@ import { useForm } from "react-hook-form";
 import type { ResetPasswordData } from "@/types";
 import { Button } from "../ui/button";
 import { useState } from "react";
-import { validatePasswordStrength } from "@/utils/password.utils";
 
 const resetSchema = z
     .object({
-        password: z.string().superRefine((value, ctx) => {
-            const problem = validatePasswordStrength(value);
-            if (problem) ctx.addIssue({ code: "custom", message: problem });
-        }),
+        password: z.string().min(6, "Password must be at least 6 characters"),
         confirmPassword: z.string(),
     })
     .refine((data) => data.password === data.confirmPassword, {
@@ -33,7 +29,6 @@ export const ResetPasswordForm = ({ onSubmit, loading }: ResetPasswordFormProps)
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const form = useForm<ResetPasswordData>({
         resolver: zodResolver(resetSchema),
-        mode: "onChange", // show problems while typing, not only on submit
         defaultValues: { password: "", confirmPassword: "" },
     });
 
@@ -41,7 +36,7 @@ export const ResetPasswordForm = ({ onSubmit, loading }: ResetPasswordFormProps)
         <div className="p-10 space-y-7">
             <div className="text-center space-y-3">
                 <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">New Password</h1>
-                <p className="text-lg text-gray-500">Use 8-64 characters with at least one letter and one number</p>
+                <p className="text-lg text-gray-500">Please enter your new secure password</p>
             </div>
 
             <Form {...form}>

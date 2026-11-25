@@ -6,36 +6,20 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { motion } from "motion/react";
 import { FcGoogle } from "react-icons/fc";
 import { useDispatch } from "react-redux";
-import { setLogin } from "@/store/slices/auth/authSlice";
-import { authApi, PasswordChangeRequiredError } from "@/api/features/auth.api";
+import { setLogin, setLogout } from "@/store/slices/auth/authSlice";
+import { authApi } from "@/api/features/auth.api";
 import axios from "axios";
 import { Eye, EyeOff } from "lucide-react";
-import { availableAccountViews, getHomePathByRole } from "@/utils/rbac.utils";
+import { availableAccountViews, getHomePathByRole, resolveEffectivePermissions } from "@/utils/rbac.utils";
+import { useRoleSwitch } from "@/contexts/RoleSwitchContext";
 
 const URL_LOGIN_WITH_GOOGLE =
     import.meta.env.VITE_API_URL_FOR_GOOGLE || "http://localhost:8080/oauth2/authorization/google";
-
-// Local development convenience: the page opens with the seeded admin account already filled in,
-// so one click on "Login" is enough. Production builds are never prefilled.
-// Set VITE_PREFILL_LOGIN=false in .env.local to turn it off while developing.
-const PREFILL_ADMIN = import.meta.env.DEV && import.meta.env.VITE_PREFILL_LOGIN !== "false";
-const DEV_ADMIN_EMAIL = "admin@example.com";
-const DEV_ADMIN_PASSWORD = "password123";
 
 const getOAuthErrorMessage = (errorParam: string | null): string => {
     switch (errorParam) {
         case "google_auth_failed":
             return "Google sign-in failed. Please try again.";
-        case "google_not_registered":
-            return "This Google account is not registered in the system. Ask an administrator to add your email address.";
-        case "google_email_unverified":
-            return "Your Google email address is not verified, so it cannot be used to sign in.";
-        case "google_domain_not_allowed":
-            return "Accounts with this email domain are not allowed to sign in.";
-        case "google_account_disabled":
-            return "Your account is inactive. Contact an administrator.";
-        case "google_account_locked":
-            return "Your account is locked. Contact an administrator.";
         case "google_token_missing":
             return "Google sign-in did not return an access token.";
         case "google_token_invalid":
@@ -48,8 +32,8 @@ const getOAuthErrorMessage = (errorParam: string | null): string => {
 };
 
 export const Login: React.FC = () => {
-    const [email, setEmail] = useState(PREFILL_ADMIN ? DEV_ADMIN_EMAIL : "");
-    const [password, setPassword] = useState(PREFILL_ADMIN ? DEV_ADMIN_PASSWORD : "");
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
     const [isRememberedMe, setIsRememberedMe] = useState<boolean>(false);
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -57,6 +41,7 @@ export const Login: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const dispatch = useDispatch();
+    const { setViewRole } = useRoleSwitch();
 
     useEffect(() => {
         const oauthErrorMessage = getOAuthErrorMessage(searchParams.get("error"));
@@ -70,17 +55,19 @@ export const Login: React.FC = () => {
         setError("");
         setIsLoading(true);
         const cleanEmail = email.trim();
-        const cleanPassword = password.trim();
         try {
-            const res = await authApi.login({ email: cleanEmail, password: cleanPassword, isRememberedMe });
-            dispatch(setLogin(res));
-            navigate(getHomePathByRole(availableAccountViews(res.permissions ?? [])[0], res.permissions), { replace: true });
-        } catch (err) {
-            if (err instanceof PasswordChangeRequiredError) {
-                // First sign-in with a temporary password: choose your own password first.
-                navigate(`/forgot-password?token=${encodeURIComponent(err.setupToken)}&first=1`, { replace: true });
+            const res = await authApi.login({ email: cleanEmail, password, isRememberedMe });
+            if (res.passwordChangeRequired && res.setupToken) {
+                dispatch(setLogout());
+                navigate(`/reset-password?token=${encodeURIComponent(res.setupToken)}`, { replace: true });
                 return;
             }
+            setViewRole(null);
+            dispatch(setLogin(res));
+            const primaryRole = res.role ?? availableAccountViews(res.permissions ?? [])[0];
+            const effectivePermissions = resolveEffectivePermissions(primaryRole, res.rolePermissions, res.permissions ?? []);
+            navigate(getHomePathByRole(primaryRole, effectivePermissions), { replace: true });
+        } catch (err) {
             if (axios.isAxiosError(err)) {
                 const backendMsg = err.response?.data?.message;
 
@@ -147,6 +134,14 @@ export const Login: React.FC = () => {
                             <label htmlFor="password" className="text-sm font-medium leading-none">
                                 Password
                             </label>
+                            <Button
+                                type="button"
+                                variant="link"
+                                className="p-0 h-auto text-xs font-medium text-muted-foreground hover:text-foreground"
+                                onClick={() => navigate("/forgot-password")}
+                            >
+                                Forgot password?
+                            </Button>
                         </div>
                         <div className="flex justify-items-center">
                             <Input
@@ -169,7 +164,11 @@ export const Login: React.FC = () => {
                     </div>
 
                     <div className="flex items-center space-x-2">
-                        <Checkbox id="remember" onCheckedChange={(checked: boolean) => handleIsRememberMe(checked)} />
+                        <Checkbox
+                            id="remember"
+                            checked={isRememberedMe}
+                            onCheckedChange={(checked) => handleIsRememberMe(checked === true)}
+                        />
                         <label htmlFor="remember" className="text-sm font-medium leading-none cursor-pointer">
                             Remember me
                         </label>
@@ -219,25 +218,24 @@ export const Login: React.FC = () => {
                     </p>
                 </div>
 
-                {/* Test accounts are shown only while developing; a production build never lists passwords. */}
                 {import.meta.env.DEV && (
-                <div className="mt-8 pt-6 border-t border-dashed">
-                    <p className="text-xs font-semibold uppercase text-muted-foreground mb-3">(Test Only):</p>
-                    <div className="space-y-2 text-sm bg-muted/50 p-3 rounded-lg border">
-                        <p className="flex justify-between">
-                            <span className="text-muted-foreground font-mono text-[11px]">ADMIN:</span>
-                            <span className="font-medium">admin@example.com / password123</span>
-                        </p>
-                        <p className="flex justify-between">
-                            <span className="text-muted-foreground font-mono text-[11px]">STUDENT:</span>
-                            <span className="font-medium">student@example.com / password123</span>
-                        </p>
-                        <p className="flex justify-between">
-                            <span className="text-muted-foreground font-mono text-[11px]">TEACHER:</span>
-                            <span className="font-medium">teacher@example.com / password123</span>
-                        </p>
+                    <div className="mt-8 pt-6 border-t border-dashed">
+                        <p className="text-xs font-semibold uppercase text-muted-foreground mb-3">(Dev Test Only):</p>
+                        <div className="space-y-2 text-sm bg-muted/50 p-3 rounded-lg border">
+                            <p className="flex justify-between">
+                                <span className="text-muted-foreground font-mono text-[11px]">ADMIN:</span>
+                                <span className="font-medium">admin@example.com / password123</span>
+                            </p>
+                            <p className="flex justify-between">
+                                <span className="text-muted-foreground font-mono text-[11px]">STUDENT:</span>
+                                <span className="font-medium">student@example.com / password123</span>
+                            </p>
+                            <p className="flex justify-between">
+                                <span className="text-muted-foreground font-mono text-[11px]">TEACHER:</span>
+                                <span className="font-medium">teacher@example.com / password123</span>
+                            </p>
+                        </div>
                     </div>
-                </div>
                 )}
             </motion.div>
         </div>

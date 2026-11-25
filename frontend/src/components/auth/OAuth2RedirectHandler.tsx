@@ -1,80 +1,89 @@
-import { useEffect, useRef } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { useDispatch } from "react-redux";
-import { jwtDecode } from "jwt-decode";
+import { authApi } from "@/api/features/auth.api";
+import { useRoleSwitch } from "@/contexts/RoleSwitchContext";
 import { setLogin } from "@/store/slices/auth/authSlice";
 import type { LoginResponse } from "@/types";
-import { availableAccountViews, getHomePathByRole, normalizeAuthRolePayload } from "@/utils/rbac.utils";
+import { availableAccountViews, getHomePathByRole, normalizeAuthRolePayload, resolveEffectivePermissions } from "@/utils/rbac.utils";
+import { jwtDecode } from "jwt-decode";
+import { useEffect } from "react";
+import { useDispatch } from "react-redux";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 export const OAuth2RedirectHandler = () => {
     const [searchParams] = useSearchParams();
-    const location = useLocation();
     const navigate = useNavigate();
     const dispatch = useDispatch();
-
-    // React StrictMode runs effects twice while developing. The first run navigates away and clears the
-    // "#token=..." part of the address, so the second run used to find no token and sent the user back
-    // to the login page with "did not return an access token". Handle the redirect only once.
-    const handled = useRef(false);
+    const { setViewRole } = useRoleSwitch();
 
     useEffect(() => {
-        if (handled.current) {
-            return;
-        }
-        handled.current = true;
-
+        let cancelled = false;
         const error = searchParams.get("error");
-        // The backend puts the token in the URL fragment (#token=...) so it never reaches a server log.
-        // The query string is still read for older links. The fragment comes from the router location,
-        // which does not change under our feet while we navigate.
-        const token =
-            new URLSearchParams(location.hash.replace(/^#/, "")).get("token") ??
-            searchParams.get("token");
+        const legacyToken = searchParams.get("token");
 
         if (error) {
-            // Keep the reason (not registered, locked, ...) so the login page can explain it.
-            navigate(`/login?error=${encodeURIComponent(error)}`, { replace: true });
+            navigate("/login?error=google_auth_failed", { replace: true });
             return;
         }
 
-        if (!token) {
-            navigate("/login?error=google_token_missing", { replace: true });
+        const completeSignIn = (userData: LoginResponse) => {
+            if (cancelled) return;
+            setViewRole(null);
+            dispatch(setLogin(userData));
+            const homeRole = availableAccountViews(userData.permissions ?? [])[0] ?? userData.role;
+            navigate(
+                getHomePathByRole(
+                    homeRole,
+                    resolveEffectivePermissions(homeRole, userData.rolePermissions, userData.permissions),
+                ),
+                { replace: true },
+            );
+        };
+
+        if (legacyToken) {
+            try {
+                const decoded = jwtDecode<Record<string, unknown>>(legacyToken);
+                const normalized = normalizeAuthRolePayload({
+                    role: typeof decoded.role === "string" ? decoded.role : "",
+                    roles: Array.isArray(decoded.roles)
+                        ? decoded.roles.filter((item): item is string => typeof item === "string")
+                        : [],
+                    permissions: Array.isArray(decoded.permissions)
+                        ? decoded.permissions.filter((item): item is string => typeof item === "string")
+                        : [],
+                    rolePermissions:
+                        decoded.rolePermissions && typeof decoded.rolePermissions === "object"
+                            ? (decoded.rolePermissions as Record<string, string[]>)
+                            : {},
+                });
+
+                completeSignIn({
+                    token: legacyToken,
+                    email: typeof decoded.email === "string" ? decoded.email : "",
+                    firstName: typeof decoded.firstName === "string" ? decoded.firstName : "",
+                    lastName: typeof decoded.lastName === "string" ? decoded.lastName : "",
+                    role: normalized.role,
+                    roles: normalized.roles,
+                    permissions: normalized.permissions,
+                    rolePermissions: normalized.rolePermissions,
+                });
+            } catch {
+                navigate("/login?error=google_token_invalid", { replace: true });
+            }
             return;
         }
 
-        try {
-            const decoded = jwtDecode<Record<string, unknown>>(token);
-            const normalized = normalizeAuthRolePayload({
-                role: typeof decoded.role === "string" ? decoded.role : "",
-                roles: Array.isArray(decoded.roles)
-                    ? decoded.roles.filter((item): item is string => typeof item === "string")
-                    : [],
-                permissions: Array.isArray(decoded.permissions)
-                    ? decoded.permissions.filter((item): item is string => typeof item === "string")
-                    : [],
-                rolePermissions:
-                    decoded.rolePermissions && typeof decoded.rolePermissions === "object"
-                        ? (decoded.rolePermissions as Record<string, string[]>)
-                        : {},
+        authApi
+            .refreshSession()
+            .then(completeSignIn)
+            .catch(() => {
+                if (!cancelled) {
+                    navigate("/login?error=google_auth_failed", { replace: true });
+                }
             });
 
-            const userData: LoginResponse = {
-                token,
-                email: typeof decoded.email === "string" ? decoded.email : "",
-                firstName: typeof decoded.firstName === "string" ? decoded.firstName : "",
-                lastName: typeof decoded.lastName === "string" ? decoded.lastName : "",
-                role: normalized.role,
-                roles: normalized.roles,
-                permissions: normalized.permissions,
-                rolePermissions: normalized.rolePermissions,
-            };
-
-            dispatch(setLogin(userData));
-            navigate(getHomePathByRole(availableAccountViews(userData.permissions ?? [])[0], userData.permissions), { replace: true });
-        } catch {
-            navigate("/login?error=google_token_invalid", { replace: true });
-        }
-    }, [searchParams, location.hash, dispatch, navigate]);
+        return () => {
+            cancelled = true;
+        };
+    }, [searchParams, dispatch, navigate, setViewRole]);
 
     return (
         <div className="flex h-screen items-center justify-center">

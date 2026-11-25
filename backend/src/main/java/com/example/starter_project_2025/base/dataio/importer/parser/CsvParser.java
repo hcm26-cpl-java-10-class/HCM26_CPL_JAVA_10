@@ -6,10 +6,11 @@ import org.springframework.stereotype.Component;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 @Component
@@ -31,45 +32,33 @@ public class CsvParser implements FileParser {
 
             if (rows.size() < 2) return result;
 
-            String[] headers = rows.get(0).clone();
-            for (int j = 0; j < headers.length; j++) {
-                headers[j] = cleanHeader(headers[j], j == 0);
+            String[] headers = rows.get(0);
+            var unique = new HashSet<String>();
+            for (int i = 0; i < headers.length; i++) {
+                headers[i] = headers[i].replace("\uFEFF", "").strip();
+                if (headers[i].isEmpty() || !unique.add(headers[i].toLowerCase(Locale.ROOT))) {
+                    throw new IllegalArgumentException("Column names must be non-empty and unique");
+                }
             }
 
             for (int i = 1; i < rows.size(); i++) {
                 Map<String, String> rowMap = new HashMap<>();
+
                 String[] row = rows.get(i);
-                boolean hasData = false;
+                for (int j = headers.length; j < row.length; j++) {
+                    if (!row[j].isBlank()) throw new IllegalArgumentException("A row contains more values than the header");
+                }
 
                 for (int j = 0; j < headers.length; j++) {
-                    if (headers[j].isEmpty()) {
-                        continue;
-                    }
-                    String value = j < row.length ? row[j].trim() : "";
-                    rowMap.put(headers[j], value);
-                    if (!value.isEmpty()) {
-                        hasData = true;
-                    }
+                    rowMap.put(headers[j], j < row.length ? row[j] : "");
                 }
 
-                if (hasData) {
-                    rowMap.put(ROW_NUMBER_KEY, String.valueOf(i + 1));
-                    result.add(rowMap);
-                }
+                result.add(rowMap);
             }
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Error parsing CSV: " + e.getMessage(), e);
         }
 
         return result;
-    }
-
-    /** Excel saves "CSV UTF-8" with a hidden byte-order mark in front of the first header ("\uFEFFEmail"). */
-    private String cleanHeader(String header, boolean first) {
-        String text = header == null ? "" : header;
-        if (first && text.startsWith("\uFEFF")) {
-            text = text.substring(1);
-        }
-        return text.trim();
     }
 }

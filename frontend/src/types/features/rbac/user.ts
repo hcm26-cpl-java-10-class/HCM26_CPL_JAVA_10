@@ -1,15 +1,15 @@
 import type { BaseDTO, BaseFilter } from "@/types/common/base";
 
-/** Khớp enum UserStatus trong class diagram. */
+/** Khß╗¢p enum UserStatus trong class diagram. */
 export type UserStatus = "ACTIVE" | "LOCKED" | "INACTIVE";
 
 export const USER_STATUS_OPTIONS: { value: UserStatus; label: string }[] = [
-  { value: "ACTIVE", label: "Hoạt động" },
-  { value: "LOCKED", label: "Bị khóa" },
-  { value: "INACTIVE", label: "Ngưng hoạt động" },
+  { value: "ACTIVE", label: "Hoß║ít ─æß╗Öng" },
+  { value: "LOCKED", label: "Bß╗ï kh├│a" },
+  { value: "INACTIVE", label: "Ng╞░ng hoß║ít ─æß╗Öng" },
 ];
 
-/** Màu badge theo trạng thái. */
+/** M├áu badge theo trß║íng th├íi. */
 export const USER_STATUS_BADGE_CLASS: Record<UserStatus, string> = {
   ACTIVE:
     "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/25 dark:bg-emerald-500/15 dark:text-emerald-400",
@@ -19,7 +19,7 @@ export const USER_STATUS_BADGE_CLASS: Record<UserStatus, string> = {
     "bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-400/30 dark:bg-slate-500/25 dark:text-slate-300",
 };
 
-/** Nền + viền khối đầu trang chi tiết theo trạng thái. */
+/** Nß╗ün + viß╗ün khß╗æi ─æß║ºu trang chi tiß║┐t theo trß║íng th├íi. */
 export const USER_STATUS_HEADER_CLASS: Record<UserStatus, string> = {
   ACTIVE:
     "border-emerald-200 bg-emerald-50/70 dark:border-emerald-500/30 dark:bg-emerald-500/10",
@@ -46,6 +46,7 @@ export const GENDER_OPTIONS: { label: string; value: Gender }[] = [
 export interface UserDTO extends BaseDTO {
   username?: string;
   email?: string;
+  userCode?: string | null;
   password?: string;
   firstName?: string;
   lastName?: string;
@@ -59,13 +60,23 @@ export interface UserDTO extends BaseDTO {
   gender?: Gender;
   /** user_roles (N-N): at least one role. */
   roleIds?: Array<string | number>;
-  /** user_departments (N-N): optional. */
   departmentIds?: Array<string | number>;
+  departmentId?: number | null;
+  departmentName?: string | null;
+  departmentNames?: string[];
+  clearDepartment?: boolean;
   lastLoginAt?: string;
 }
 
 export interface UserFilter extends BaseFilter {
-  roleIds?: string[];
-  departmentIds?: string[];
+  departmentId?: number;
+  roleIds?: Array<string | number>;
+  departmentIds?: Array<string | number>;
   status?: UserStatus;
+}
+
+export interface StudentSummaryDTO {
+  id: number;
+  email: string;
+  fullName: string;
 }

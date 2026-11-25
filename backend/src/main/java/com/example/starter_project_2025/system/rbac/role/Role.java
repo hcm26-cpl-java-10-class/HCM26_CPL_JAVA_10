@@ -12,6 +12,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -42,13 +43,14 @@ public class Role extends BaseEntity {
     @ExportField(name = "Name")
     String name;
 
-    @Column(length = 1000)
+    @Column
     @ImportField(name = "Description")
     @ExportField(name = "Description")
     String description;
 
     @Builder.Default
     @Column(name = "is_system", nullable = false)
+    @ColumnDefault("false")
     @ExportField(name = "Is System")
     Boolean isSystem = false;
 

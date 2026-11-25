@@ -1,54 +1,111 @@
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import HeaderRight from "@/components/layout/HeaderRight";
 import { SidebarMenu } from "@/components/layout/Sidebar.tsx";
 import DynamicBreadcrumbs from "@/components/layout/DynamicBreadcrumbs.tsx";
 import { StudentNavbar } from "@/components/layout/StudentNavbar";
 import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
+import { Outlet } from "react-router-dom";
+import { useContext, type ReactNode } from "react";
+import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
+import { cn } from "@/lib/utils";
+
+function readSidebarOpenCookie(): boolean {
+    if (typeof document === "undefined") return true;
+    const match = document.cookie.match(/(?:^|;\s*)sidebar_state=(true|false)/);
+    return match ? match[1] === "true" : true;
+}
 
 export function MainLayout({
-    children,
-    pathName,
-    plainBreadcrumb = false,
-}: {
-    children: React.ReactNode;
+                               children,
+                               pathName,
+                               mainClassName,
+                               pathLinks,
+                               contentClassName,
+                               compactHeader = false,
+                               ignorePaths,
+                               dense = false,
+                               focusMode = false,
+                               headerActions,
+                           }: {
+    children?: ReactNode;
     pathName?: Record<string, string>;
-    plainBreadcrumb?: boolean;
+    mainClassName?: string;
+    contentClassName?: string;
+    pathLinks?: Record<string, string>;
+    compactHeader?: boolean;
+    /** URL segments to leave out of the breadcrumb, typically ones that have no page of their own. */
+    ignorePaths?: string[];
+    /** Tighter header / content padding (Course Online pages). */
+    dense?: boolean;
+    /** Hide the navbar / breadcrumbs / sidebar (e.g. while taking an exam). */
+    focusMode?: boolean;
+    /** Optional per-page control beside the breadcrumb (e.g. Student Syllabus translation). */
+    headerActions?: ReactNode;
 }) {
+    const isEmbedded = useContext(EmbeddedLayoutContext);
+    // Hooks must run before any early return so hook order stays stable.
     const { activeRole } = usePermissions();
     const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
+    const content = children ?? <Outlet />;
+
+    if (isEmbedded) {
+        return <>{content}</>;
+    }
+
+    if (focusMode) {
+        return (
+            <div className="flex h-screen max-h-[calc(100vh-18px)] flex-col overflow-hidden">
+                <main className="flex flex-1 min-h-0 flex-col overflow-y-auto px-6 pb-6 pt-4">
+                    {content}
+                </main>
+            </div>
+        );
+    }
 
     if (isStudentView) {
         return (
-            <div className="flex h-screen max-h-[calc(100vh-18px)] flex-col overflow-hidden">
+            <div className="flex min-h-screen flex-col">
                 <StudentNavbar />
 
-                <header className="flex h-14 shrink-0 items-center border-b px-6">
-                    <DynamicBreadcrumbs pathTitles={pathName} variant="student" />
+                <header className="flex min-h-14 shrink-0 items-center border-b px-6 py-2">
+                    <div className="min-w-0 flex-1"><DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} ignorePaths={ignorePaths} variant="student" /></div>
+                    {headerActions && <div className="ml-auto shrink-0 pl-3">{headerActions}</div>}
                 </header>
 
-                <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-6 pb-6 pt-4">
-                    {children}
+                <main className={cn("flex-1 px-6 pb-6 pt-4", mainClassName, contentClassName)}>
+                    {content}
                 </main>
             </div>
         );
     }
 
     return (
-        <SidebarProvider>
+        <SidebarProvider defaultOpen={readSidebarOpenCookie()}>
             <SidebarMenu />
             <SidebarInset className="h-screen min-w-0 flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
-                <header className="flex h-16 shrink-0 items-center gap-2">
+                <header className={cn(
+                    "flex shrink-0 items-center gap-2",
+                    dense ? "min-h-11 py-0.5" : compactHeader ? "h-14 min-h-14 py-2" : "min-h-16 py-3",
+                )}>
                     <div className="flex items-center gap-2 px-4 w-full justify-between">
-                        <div className="flex items-center gap-2">
-                            <DynamicBreadcrumbs pathTitles={pathName} plain={plainBreadcrumb} />
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <SidebarTrigger aria-label="Toggle navigation sidebar" />
+                            {compactHeader ? <div className="hidden min-w-0 xl:block"><DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} ignorePaths={ignorePaths} /></div>
+                                : <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} ignorePaths={ignorePaths} />}
                         </div>
-                        <HeaderRight />
+                        {headerActions && <div className="shrink-0">{headerActions}</div>}
+                        <div className="shrink-0"><HeaderRight /></div>
                     </div>
                 </header>
 
-                <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto flex flex-col px-6 pb-6 pt-6">
-                    {children}
+                <main className={cn(
+                    "min-h-0 min-w-0 flex-1 flex flex-col overflow-x-hidden overflow-y-auto",
+                    dense ? "px-4 pb-3 pt-1" : "px-6 pb-6 pt-6",
+                    mainClassName,
+                    contentClassName,
+                )}>
+                    {content}
                 </main>
             </SidebarInset>
         </SidebarProvider>

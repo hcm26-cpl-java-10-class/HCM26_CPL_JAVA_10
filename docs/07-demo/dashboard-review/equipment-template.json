@@ -1,0 +1,66 @@
+{
+  "code": "DASH-EQUIP-CD",
+  "name": "Campus Equipment Booking - Muon thiet bi hoc tap",
+  "description": "Build a campus equipment lending application for students and teaching staff. Students browse available laptops, projectors and lab kits, request an item for a time interval and track approval, checkout and return. Staff manage inventory, approve or reject requests, record returns and report overdue loans. Prevent overlapping approved bookings for the same equipment, reject invalid time intervals and keep a traceable history of lending actions. Deliver a documented REST API, a usable web interface, automated checks for booking conflicts, and a short demonstration. Work in a four-person PM/BA/DEV/QA team. Demonstrate partial progress, artifact submission, review feedback and a revised submission before accepting the final delivery.",
+  "category": "Web Application",
+  "level": "INTERMEDIATE",
+  "estimatedDurationWeeks": 1,
+  "teamConstraints": {
+    "minMembers": 4,
+    "maxMembers": 4,
+    "roleQuotas": { "pm": 1, "ba": 1, "dev": 1, "qa": 1 },
+    "allowMultiRole": false
+  },
+  "milestones": [
+    {
+      "title": "M1 - Analysis",
+      "description": "Define equipment, booking and loan rules. Deliver the use cases, data model and UI flow for requesting, approving, checking out and returning equipment.",
+      "dueAfter": 1, "dueUnit": "DAYS", "weight": 40, "mandatory": true,
+      "rubricName": "Technical Documentation Rubric",
+      "checklistItems": [
+        { "content": "Equipment and booking use cases include valid and invalid time intervals", "mandatory": true },
+        { "content": "Data model explains equipment, booking, approval and return history", "mandatory": true },
+        { "content": "Wireframes cover student booking and staff approval", "mandatory": true }
+      ],
+      "latePolicy": { "allowLateSubmission": true, "maxLateDays": 2, "penaltyPerDayPercent": 5 }
+    },
+    {
+      "title": "M2 - Implementation",
+      "description": "Implement equipment availability, booking approval, checkout and returns. Demonstrate conflict protection and tests for overlapping bookings.",
+      "dueAfter": 3, "dueUnit": "DAYS", "weight": 40, "mandatory": true,
+      "rubricName": "Milestone Delivery Rubric",
+      "checklistItems": [
+        { "content": "Student can request equipment and staff can approve or reject a booking", "mandatory": true },
+        { "content": "Overlapping approved bookings for the same equipment are rejected", "mandatory": true },
+        { "content": "Checkout and return update availability and retain history", "mandatory": true }
+      ],
+      "latePolicy": { "allowLateSubmission": true, "maxLateDays": 2, "penaltyPerDayPercent": 5 }
+    },
+    {
+      "title": "M3 - Handover",
+      "description": "Deliver setup instructions, a test report and a short demo of booking, conflict handling, approval, checkout and return.",
+      "dueAfter": 7, "dueUnit": "DAYS", "weight": 20, "mandatory": true,
+      "rubricName": "Demo and Presentation Rubric",
+      "checklistItems": [
+        { "content": "A new developer can start the app using the setup guide", "mandatory": true },
+        { "content": "Test evidence includes conflicts, invalid dates and the full loan lifecycle", "mandatory": true },
+        { "content": "Demo explains completed work and remaining limitations", "mandatory": true }
+      ],
+      "latePolicy": { "allowLateSubmission": true, "maxLateDays": 2, "penaltyPerDayPercent": 5 }
+    }
+  ],
+  "backlogItems": [
+    { "title": "M1 - Plan equipment lending scope", "description": "List actors, demo goals and the lending lifecycle. Suggested milestone: M1 - Analysis.", "suggestedRole": "PM" },
+    { "title": "M1 - Specify booking and approval rules", "description": "Document valid booking intervals, approval rules and overlapping-booking examples. Suggested milestone: M1 - Analysis.", "suggestedRole": "BA" },
+    { "title": "M1 - Design equipment and booking data model", "description": "Design equipment, booking, approval, checkout and return records. Suggested milestone: M1 - Analysis.", "suggestedRole": "DEV" },
+    { "title": "M1 - Define booking acceptance cases", "description": "Prepare valid, invalid-date and conflict test cases. Suggested milestone: M1 - Analysis.", "suggestedRole": "QA" },
+    { "title": "M2 - Track implementation and integration", "description": "Coordinate API and UI work and record unresolved integration issues. Suggested milestone: M2 - Implementation.", "suggestedRole": "PM" },
+    { "title": "M2 - Review approval and return flows", "description": "Check the implemented booking, rejection, checkout and return flows against requirements. Suggested milestone: M2 - Implementation.", "suggestedRole": "BA" },
+    { "title": "M2 - Implement equipment booking and conflict checks", "description": "Build availability lookup, booking requests and overlapping-booking protection. Suggested milestone: M2 - Implementation.", "suggestedRole": "DEV" },
+    { "title": "M2 - Verify conflicts and equipment availability", "description": "Run booking conflict, duplicate request and return-availability tests. Suggested milestone: M2 - Implementation.", "suggestedRole": "QA" },
+    { "title": "M3 - Prepare handover and demo agenda", "description": "Prepare an agenda that explains delivery status and known limitations. Suggested milestone: M3 - Handover.", "suggestedRole": "PM" },
+    { "title": "M3 - Write student and staff usage guide", "description": "Explain how to book, approve, check out and return equipment. Suggested milestone: M3 - Handover.", "suggestedRole": "BA" },
+    { "title": "M3 - Document local setup and sample data", "description": "Document environment setup and sample equipment records for a fresh run. Suggested milestone: M3 - Handover.", "suggestedRole": "DEV" },
+    { "title": "M3 - Publish verification evidence", "description": "Summarize test results, unresolved defects and reproducible demo steps. Suggested milestone: M3 - Handover.", "suggestedRole": "QA" }
+  ]
+}

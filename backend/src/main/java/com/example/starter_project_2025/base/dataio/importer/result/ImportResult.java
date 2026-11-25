@@ -11,6 +11,7 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ImportResult {
 
+    int totalCount;
     int successCount;
     int failureCount;
 
@@ -31,18 +32,6 @@ public class ImportResult {
 
     /** Temporary passwords generated for rows that had none. Shown once to the person who imported. */
     List<GeneratedCredential> credentials = new ArrayList<>();
-
-    /** True when the import found errors and therefore saved nothing at all. */
-    boolean rolledBack;
-
-    /**
-     * Codes of related records (for users: departments) that the file refers to but that do not exist yet.
-     * Filled when the import was rolled back, so the screen can offer to add them.
-     */
-    List<String> missingCodes = new ArrayList<>();
-
-    /** Short explanation for the person who ran the import (set when the import was rolled back). */
-    String message;
 
     List<RowError> errors = new ArrayList<>();
 }

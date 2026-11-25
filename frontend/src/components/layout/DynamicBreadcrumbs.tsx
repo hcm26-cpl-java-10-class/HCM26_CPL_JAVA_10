@@ -15,10 +15,10 @@ import { iconMap } from "@/components/datatable/iconMap";
 
 type Props = {
     pathTitles?: Record<string, string>;
+    pathLinks?: Record<string, string>;
     hasPage?: boolean;
     ignorePaths?: string[];
     variant?: "default" | "student";
-    plain?: boolean;
 };
 
 type BreadcrumbNode = {
@@ -47,7 +47,7 @@ function isLikelyIdentifier(segment: string) {
     const numericPattern = /^\d+$/;
     const uuidPattern =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    const tokenLikePattern = /^[A-Za-z0-9_-]{16,}$/;
+    const tokenLikePattern = /^(?=.*\d)[A-Za-z0-9_-]{16,}$/;
 
     return numericPattern.test(segment) || uuidPattern.test(segment) || tokenLikePattern.test(segment);
 }
@@ -70,10 +70,10 @@ function resolveTitle(
 
 export default function DynamicBreadcrumbs({
     pathTitles,
+    pathLinks,
     hasPage = true,
     ignorePaths = [],
     variant = "default",
-    plain = false,
 }: Props) {
     const location = useLocation();
     const { data: moduleGroups } = useActiveModuleGroups();
@@ -103,20 +103,21 @@ export default function DynamicBreadcrumbs({
     }, [modules]);
 
     const ignoredPaths = new Set(ignorePaths.map((segment) => segment.toLowerCase()));
-    const pathnameSegments = location.pathname
-        .split("/")
-        .filter(Boolean)
-        .filter((segment) => !ignoredPaths.has(segment.toLowerCase()));
+    // Hrefs are built from the full path; ignored segments (e.g. ones without a page of their own) are only hidden.
+    const pathnameSegments = location.pathname.split("/").filter(Boolean);
 
-    const rawSegments =
-        isStudentVariant && pathnameSegments[0]?.toLowerCase() === "student"
-            ? pathnameSegments.slice(1)
-            : pathnameSegments;
+    const rawSegments = pathnameSegments;
+    if (isStudentVariant) ignoredPaths.add("student");
 
     const crumbs: BreadcrumbNode[] = rawSegments.flatMap((segment, index) => {
-        const href = `/${rawSegments.slice(0, index + 1).join("/")}`;
-        const title = resolveTitle(segment, href, pathTitles, moduleTitleByPath);
-        const hasCustomTitle = Boolean(pathTitles?.[segment] || pathTitles?.[href]);
+        const routeHref = `/${rawSegments.slice(0, index + 1).join("/")}`;
+        const href = pathLinks?.[segment] || pathLinks?.[routeHref] || routeHref;
+        const title = resolveTitle(segment, routeHref, pathTitles, moduleTitleByPath);
+        const hasCustomTitle = Boolean(pathTitles?.[segment] || pathTitles?.[routeHref]);
+
+        if (ignoredPaths.has(segment.toLowerCase())) {
+            return [];
+        }
 
         if (!hasCustomTitle && isLikelyIdentifier(segment)) {
             return [];
@@ -181,17 +182,17 @@ export default function DynamicBreadcrumbs({
             <BreadcrumbList className="min-w-0">
                 <BreadcrumbItem>
                     {showHomeAsPage ? (
-                        <BreadcrumbPage className={plain ? "text-foreground" : "inline-flex max-w-[50vw] items-center gap-1.5 truncate rounded-md bg-accent px-2.5 py-1 font-semibold"}>
-                            {!plain && <HomeIcon className="size-3.5 shrink-0 text-muted-foreground" />}
-                            <span className={plain ? undefined : "truncate"}>{homeLabel}</span>
+                        <BreadcrumbPage className="inline-flex max-w-[50vw] items-center gap-1.5 truncate rounded-md bg-accent px-2.5 py-1 font-semibold">
+                            <HomeIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                            <span className="truncate">{homeLabel}</span>
                         </BreadcrumbPage>
                     ) : (
                         <BreadcrumbLink
                             asChild
-                            className={plain ? "text-muted-foreground hover:text-foreground" : "inline-flex items-center gap-1 rounded-md px-2 py-1 text-muted-foreground hover:bg-accent"}
+                            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-muted-foreground hover:bg-accent"
                         >
                             <Link to={homePath}>
-                                {!plain && <HomeIcon className="size-3.5" />}
+                                <HomeIcon className="size-3.5" />
                                 {homeLabel}
                             </Link>
                         </BreadcrumbLink>
@@ -210,9 +211,9 @@ export default function DynamicBreadcrumbs({
                                 {node.type === "ellipsis" ? (
                                     <BreadcrumbEllipsis className="size-7" />
                                 ) : node.crumb.isLast || !hasPage ? (
-                                    <BreadcrumbPage className={plain ? "text-foreground font-normal" : "inline-flex max-w-[44vw] items-center gap-1.5 truncate rounded-md bg-accent px-2.5 py-1 font-semibold"}>
-                                        {!plain && <ActiveIcon className="size-3.5 shrink-0 text-muted-foreground" />}
-                                        <span className={plain ? undefined : "truncate"}>{node.crumb.title}</span>
+                                    <BreadcrumbPage className="inline-flex max-w-[44vw] items-center gap-1.5 truncate rounded-md bg-accent px-2.5 py-1 font-semibold">
+                                        <ActiveIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                                        <span className="truncate">{node.crumb.title}</span>
                                     </BreadcrumbPage>
                                 ) : (
                                     <BreadcrumbLink

@@ -13,4 +13,5 @@ public interface LocationService
     void processImportedLocations(List<Location> importedLocations);
 
     ByteArrayInputStream exportLocationsToExcel();
+
 }

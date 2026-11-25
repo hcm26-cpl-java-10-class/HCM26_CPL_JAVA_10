@@ -7,6 +7,8 @@ import jakarta.validation.constraints.Size;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.util.List;
+
 @Getter
 @Setter
 @Builder
@@ -14,8 +16,6 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CourseDTO extends BaseDTO {
-    @com.fasterxml.jackson.annotation.JsonProperty(access=com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
-    String categoryName;
 
     @NotBlank(groups = OnCreate.class, message = "Course name is required")
     @Size(max = 150, message = "Name must not exceed 150 characters")
@@ -30,15 +30,31 @@ public class CourseDTO extends BaseDTO {
     @Size(max = 100, message = "Instructor must not exceed 100 characters")
     String instructor;
 
-    @Size(max = 255)
-    String category;
+    Long instructorId;
 
-    @Size(max = 50)
-    String courseLevel;
+    /** true = chủ động bỏ giảng viên đang được gán; null/false = không thay đổi khi cập nhật. */
+    Boolean clearInstructor;
 
-    @Size(max = 50)
-    String publicationStatus;
+    List<Long> categoryIds;
 
-    @Size(max = 255)
-    String instructorEmail;
+    /** true = bỏ danh mục của khóa học (PUT bỏ qua null nên cần cờ riêng). */
+    Boolean clearCategory;
+
+    List<String> categoryNames;
+
+    Long syllabusId;
+    Boolean clearSyllabus;
+    String syllabusCode;
+    String syllabusName;
+
+    @com.fasterxml.jackson.annotation.JsonProperty(
+            access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    CourseType courseType;
+
+    CourseStatus status;
+
+    Boolean isFree;
+
+    CourseLevel level;
+
 }

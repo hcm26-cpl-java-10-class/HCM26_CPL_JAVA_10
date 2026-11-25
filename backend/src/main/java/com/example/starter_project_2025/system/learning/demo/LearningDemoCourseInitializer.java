@@ -60,7 +60,10 @@ public class LearningDemoCourseInitializer implements CommandLineRunner {
         var previous = SecurityContextHolder.getContext();
         var bootstrap = SecurityContextHolder.createEmptyContext();
         bootstrap.setAuthentication(new UsernamePasswordAuthenticationToken("learning-local-demo", null,
-                List.of(new SimpleGrantedAuthority("COURSE_READ"), new SimpleGrantedAuthority("COURSE_CREATE"))));
+                // DEV limits readers without COURSE_UPDATE to published courses.
+                List.of(new SimpleGrantedAuthority("COURSE_READ"),
+                        new SimpleGrantedAuthority("COURSE_CREATE"),
+                        new SimpleGrantedAuthority("COURSE_UPDATE"))));
         SecurityContextHolder.setContext(bootstrap);
         try {
             Set<String> existing = existingNames();

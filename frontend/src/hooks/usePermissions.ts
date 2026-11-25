@@ -1,5 +1,8 @@
 import type { RootState } from "@/store/store";
-import { normalizePermission, resolveEffectivePermissions } from "@/utils/rbac.utils";
+import {
+  normalizePermission,
+  resolveEffectivePermissions,
+} from "@/utils/rbac.utils";
 import { useMemo } from "react";
 import { useSelector } from "react-redux";
 import { useRoleSwitch } from "@/contexts/RoleSwitchContext";

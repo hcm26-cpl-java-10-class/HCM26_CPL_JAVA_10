@@ -18,6 +18,15 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * Fallback template of an importable entity: the header row of its
+ * {@link ImportField} columns.
+ * <p>
+ * Modules that need a documented template (required flags, dropdown values,
+ * business rules, examples) implement {@link ImportTemplateProvider} inside
+ * their own package instead; this service only keeps the plain header-only
+ * format for the remaining entities.
+ */
 @Service
 public class ImportTemplateService {
 

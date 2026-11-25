@@ -34,7 +34,7 @@ const roleRel: RelationConfig = { api: roleApi, valueField: "id", labelField: "n
 const deptRel: RelationConfig = { api: departmentApi, valueField: "id", labelField: "name", multiple: true };
 
 const roleField = { name: "roleIds", label: "Role", type: "relation" } as FieldSchema;
-const deptField = { name: "departmentIds", label: "Phòng ban", type: "relation" } as FieldSchema;
+const deptField = { name: "departmentIds", label: "Ph├▓ng ban", type: "relation" } as FieldSchema;
 
 const errCls = (errs?: string[]) => (errs && errs.length ? "border-destructive" : "");
 
@@ -95,31 +95,31 @@ export function UserForm({ mode, values, errors, submitting, onChange, onSubmit,
   return (
     <form onSubmit={handleSubmit} noValidate className="mx-auto grid w-full max-w-5xl gap-5">
       <section className="rounded-xl border bg-card p-5 shadow-sm">
-        <h3 className="mb-5 text-sm font-semibold">Thông tin tài khoản</h3>
+        <h3 className="mb-5 text-sm font-semibold">Th├┤ng tin t├ái khoß║ún</h3>
 
         <div className="grid gap-5 md:grid-cols-2">
-          <Field id="user-lastName" label="Họ đệm" errors={errors.lastName}>
-            {text("lastName", "user-lastName", "Nguyễn Văn")}
+          <Field id="user-lastName" label="Hß╗ì ─æß╗çm" errors={errors.lastName}>
+            {text("lastName", "user-lastName", "Nguyß╗àn V─ân")}
           </Field>
-          <Field id="user-firstName" label="Tên" required errors={errors.firstName}>
+          <Field id="user-firstName" label="T├¬n" required errors={errors.firstName}>
             {text("firstName", "user-firstName", "An")}
           </Field>
           <Field id="user-username" label="Username" required errors={errors.username}>
             {text("username", "user-username", "an.nv")}
           </Field>
-          <Field id="user-employeeCode" label="Mã nhân viên" required errors={errors.employeeCode}>
+          <Field id="user-employeeCode" label="M├ú nh├ón vi├¬n" required errors={errors.employeeCode}>
             {text("employeeCode", "user-employeeCode", "NV0001")}
           </Field>
           <Field id="user-email" label="Email" required errors={errors.email}>
             {text("email", "user-email", "an.nv@company.com", "email")}
           </Field>
-          <Field id="user-phone" label="Số điện thoại" errors={errors.phone}>
+          <Field id="user-phone" label="Sß╗æ ─æiß╗çn thoß║íi" errors={errors.phone}>
             {text("phone", "user-phone", "0901234567", "tel")}
           </Field>
-          <Field id="user-dateOfBirth" label="Ngày sinh (yyyy-MM-dd)" required={mode === "create"} errors={errors.dateOfBirth}>
+          <Field id="user-dateOfBirth" label="Ng├áy sinh (yyyy-MM-dd)" required={mode === "create"} errors={errors.dateOfBirth}>
             {text("dateOfBirth", "user-dateOfBirth", "2000-01-31")}
           </Field>
-          <Field id="user-gender" label="Giới tính" required={mode === "create"} errors={errors.gender}>
+          <Field id="user-gender" label="Giß╗¢i t├¡nh" required={mode === "create"} errors={errors.gender}>
             <Select value={values.gender} onValueChange={(v) => onChange("gender", v as UserFormValues["gender"])}>
               <SelectTrigger id="user-gender" className="w-full">
                 <SelectValue placeholder="Select gender" />
@@ -135,27 +135,27 @@ export function UserForm({ mode, values, errors, submitting, onChange, onSubmit,
           </Field>
           <Field
             id="user-password"
-            label={mode === "create" ? "Mật khẩu" : "Mật khẩu mới"}
+            label={mode === "create" ? "Mß║¡t khß║⌐u" : "Mß║¡t khß║⌐u mß╗¢i"}
             required={mode === "create"}
             errors={errors.password}
           >
             {text(
               "password",
               "user-password",
-              mode === "create" ? "Tối thiểu 8 ký tự" : "Để trống nếu không đổi",
+              mode === "create" ? "Tß╗æi thiß╗âu 8 k├╜ tß╗▒" : "─Éß╗â trß╗æng nß║┐u kh├┤ng ─æß╗òi",
               "password",
             )}
           </Field>
-          <Field id="user-confirmPassword" label="Xác nhận mật khẩu" errors={errors.confirmPassword}>
-            {text("confirmPassword", "user-confirmPassword", "Nhập lại mật khẩu", "password")}
+          <Field id="user-confirmPassword" label="X├íc nhß║¡n mß║¡t khß║⌐u" errors={errors.confirmPassword}>
+            {text("confirmPassword", "user-confirmPassword", "Nhß║¡p lß║íi mß║¡t khß║⌐u", "password")}
           </Field>
-          <Field id="user-status" label="Trạng thái" errors={errors.status}>
+          <Field id="user-status" label="Trß║íng th├íi" errors={errors.status}>
             <Select value={values.status} onValueChange={(v) => onChange("status", v as UserFormValues["status"])}>
               <SelectTrigger id="user-status" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {/* Chỉ cho chọn Hoạt động / Bị khóa; "Ngưng hoạt động" chỉ hiện khi tài khoản cũ đang ở trạng thái đó. */}
+                {/* Chß╗ë cho chß╗ìn Hoß║ít ─æß╗Öng / Bß╗ï kh├│a; "Ng╞░ng hoß║ít ─æß╗Öng" chß╗ë hiß╗çn khi t├ái khoß║ún c┼⌐ ─æang ß╗ƒ trß║íng th├íi ─æ├│. */}
                 {USER_STATUS_OPTIONS.filter((o) => o.value !== "INACTIVE" || values.status === "INACTIVE").map((o) => (
                   <SelectItem key={o.value} value={o.value}>
                     <span className={cn("mr-2 inline-block h-2 w-2 rounded-full", USER_STATUS_DOT_CLASS[o.value])} />
@@ -186,12 +186,12 @@ export function UserForm({ mode, values, errors, submitting, onChange, onSubmit,
             />
           </div>
           <div className="md:col-span-2">
-            <Field id="user-description" label="Mô tả" errors={errors.description}>
+            <Field id="user-description" label="M├┤ tß║ú" errors={errors.description}>
               <Textarea
                 id="user-description"
                 rows={4}
                 value={values.description}
-                placeholder="Ghi chú về người dùng"
+                placeholder="Ghi ch├║ vß╗ü ng╞░ß╗¥i d├╣ng"
                 onChange={(e) => onChange("description", e.target.value)}
               />
             </Field>
@@ -202,11 +202,11 @@ export function UserForm({ mode, values, errors, submitting, onChange, onSubmit,
       <CardFooter className="flex justify-end gap-2 px-0 pt-0">
         <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
           <ArrowLeft className="h-4 w-4" />
-          Quay lại
+          Quay lß║íi
         </Button>
         <Button type="submit" disabled={submitting}>
           <Save className="h-4 w-4" />
-          {submitting ? "Đang lưu..." : mode === "create" ? "Tạo người dùng" : "Lưu thay đổi"}
+          {submitting ? "─Éang l╞░u..." : mode === "create" ? "Tß║ío ng╞░ß╗¥i d├╣ng" : "L╞░u thay ─æß╗òi"}
         </Button>
       </CardFooter>
     </form>

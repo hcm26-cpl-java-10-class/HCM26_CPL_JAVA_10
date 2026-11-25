@@ -1,0 +1,16 @@
+package com.example.starter_project_2025.system.auth.audit;
+
+public enum AuthAuditAction {
+    LOGIN_SUCCESS,
+    LOGIN_FAILED,
+    LOGIN_GOOGLE_SUCCESS,
+    LOGIN_GOOGLE_FAILED,
+    LOGOUT,
+    REFRESH_SUCCESS,
+    REFRESH_FAILED,
+    PASSWORD_CHANGED,
+    PASSWORD_RESET,
+    SESSION_REVOKED,
+    OTHER_SESSIONS_REVOKED,
+    ADMIN_SESSIONS_REVOKED
+}

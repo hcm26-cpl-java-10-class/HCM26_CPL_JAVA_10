@@ -45,7 +45,7 @@ const AVATAR_COLORS = [
   "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300",
 ];
 
-/** Màu avatar cố định theo tên để mỗi người một màu. */
+/** M├áu avatar cß╗æ ─æß╗ïnh theo t├¬n ─æß╗â mß╗ùi ng╞░ß╗¥i mß╗Öt m├áu. */
 function avatarColor(seed: string): string {
   let h = 0;
   for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -74,7 +74,7 @@ function InfoRow({
       <div className="min-w-0">
         <div className="text-xs text-muted-foreground">{label}</div>
         <div className="mt-0.5 break-words text-sm font-medium">
-          {empty ? <span className="font-normal text-muted-foreground">Chưa cập nhật</span> : children}
+          {empty ? <span className="font-normal text-muted-foreground">Ch╞░a cß║¡p nhß║¡t</span> : children}
         </div>
       </div>
     </div>
@@ -118,7 +118,7 @@ export function UserDetailPage() {
   const canInspectLearning = hasAllPermissions(["ADMIN_ACCESS", "USER_READ", "USER_LEARNING_READ"]);
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const pathName = { users: "Người dùng", detail: "Chi tiết" };
+  const pathName = { users: "Ng╞░ß╗¥i d├╣ng", detail: "Chi tiß║┐t" };
 
   const userQuery = useQuery({
     queryKey: ["user", "detail", account.email, id],
@@ -151,17 +151,17 @@ export function UserDetailPage() {
     <MainLayout pathName={pathName}>
       <Card className="w-full">
         <CardHeader>
-          <CardTitle>Chi tiết người dùng</CardTitle>
-          <CardDescription>Thông tin chi tiết người dùng #{id}.</CardDescription>
+          <CardTitle>Chi tiß║┐t ng╞░ß╗¥i d├╣ng</CardTitle>
+          <CardDescription>Th├┤ng tin chi tiß║┐t ng╞░ß╗¥i d├╣ng #{id}.</CardDescription>
         </CardHeader>
 
         {!id ? (
           <CardContent>
-            <p className="text-sm text-destructive">Không xác định được người dùng cần xem.</p>
+            <p className="text-sm text-destructive">Kh├┤ng x├íc ─æß╗ïnh ─æ╞░ß╗úc ng╞░ß╗¥i d├╣ng cß║ºn xem.</p>
           </CardContent>
         ) : userQuery.isLoading ? (
           <CardContent>
-            <p className="text-sm text-muted-foreground">Đang tải dữ liệu...</p>
+            <p className="text-sm text-muted-foreground">─Éang tß║úi dß╗» liß╗çu...</p>
           </CardContent>
         ) : userQuery.isError ? (
           <CardContent>
@@ -173,8 +173,8 @@ export function UserDetailPage() {
             {canInspectLearning && id ? (
               <Tabs defaultValue="general" className="grid gap-5">
                 <TabsList className="group-data-[orientation=horizontal]/tabs:h-auto flex-wrap justify-start">
-                  <TabsTrigger className="h-auto min-h-9" value="general">Thông tin chung</TabsTrigger>
-                  <TabsTrigger className="h-auto min-h-9" value="learning">Lịch sử học tập</TabsTrigger>
+                  <TabsTrigger className="h-auto min-h-9" value="general">Th├┤ng tin chung</TabsTrigger>
+                  <TabsTrigger className="h-auto min-h-9" value="learning">Lß╗ïch sß╗¡ hß╗ìc tß║¡p</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="general">
@@ -195,8 +195,8 @@ export function UserDetailPage() {
                           {status !== "ACTIVE" && (
                             <p className="mt-2 text-xs font-medium text-red-700 dark:text-red-400">
                               {status === "LOCKED"
-                                ? "Tài khoản đang bị khóa, không thể đăng nhập."
-                                : "Tài khoản đã ngưng hoạt động, không thể đăng nhập."}
+                                ? "T├ái khoß║ún ─æang bß╗ï kh├│a, kh├┤ng thß╗â ─æ─âng nhß║¡p."
+                                : "T├ái khoß║ún ─æ├ú ng╞░ng hoß║ít ─æß╗Öng, kh├┤ng thß╗â ─æ─âng nhß║¡p."}
                             </p>
                           )}
                         </div>
@@ -204,35 +204,35 @@ export function UserDetailPage() {
                       </div>
                     </div>
 
-                    <Section title="Thông tin tài khoản">
+                    <Section title="Th├┤ng tin t├ái khoß║ún">
                       <InfoRow icon={AtSign} label="Username">
                         {user?.username}
                       </InfoRow>
-                      <InfoRow icon={Hash} label="Mã nhân viên">
+                      <InfoRow icon={Hash} label="M├ú nh├ón vi├¬n">
                         {user?.employeeCode}
                       </InfoRow>
                       <InfoRow icon={Mail} label="Email">
                         {user?.email}
                       </InfoRow>
-                      <InfoRow icon={Phone} label="Số điện thoại">
+                      <InfoRow icon={Phone} label="Sß╗æ ─æiß╗çn thoß║íi">
                         {user?.phone}
                       </InfoRow>
-                      <InfoRow icon={Building2} label="Phòng ban" className="sm:col-span-2">
+                      <InfoRow icon={Building2} label="Ph├▓ng ban" className="sm:col-span-2">
                         {deptNames.length > 0 ? <BadgeGroup names={deptNames} /> : null}
                       </InfoRow>
                       <InfoRow icon={ShieldCheck} label="Role" className="sm:col-span-2">
                         {roleNames.length > 0 ? <BadgeGroup names={roleNames} /> : null}
                       </InfoRow>
-                      <InfoRow icon={FileText} label="Mô tả" className="sm:col-span-2">
+                      <InfoRow icon={FileText} label="M├┤ tß║ú" className="sm:col-span-2">
                         {user?.description ? <p className="whitespace-pre-line font-normal leading-6">{user.description}</p> : null}
                       </InfoRow>
                     </Section>
 
                     <div className="flex flex-wrap gap-x-6 gap-y-2 px-1 text-xs text-muted-foreground">
-                      <MetaItem icon={CalendarDays} label="Ngày tạo" value={formatDate(user?.createdAt) || "—"} />
-                      <MetaItem icon={Clock} label="Cập nhật lần cuối" value={formatDate(user?.updatedAt) || "—"} />
+                      <MetaItem icon={CalendarDays} label="Ng├áy tß║ío" value={formatDate(user?.createdAt) || "—"} />
+                      <MetaItem icon={Clock} label="Cß║¡p nhß║¡t lß║ºn cuß╗æi" value={formatDate(user?.updatedAt) || "—"} />
                       {user?.lastLoginAt && (
-                        <MetaItem icon={Clock} label="Đăng nhập gần nhất" value={formatDate(user.lastLoginAt)} />
+                        <MetaItem icon={Clock} label="─É─âng nhß║¡p gß║ºn nhß║Ñt" value={formatDate(user.lastLoginAt)} />
                       )}
                     </div>
                   </div>
@@ -260,8 +260,8 @@ export function UserDetailPage() {
                       {status !== "ACTIVE" && (
                         <p className="mt-2 text-xs font-medium text-red-700 dark:text-red-400">
                           {status === "LOCKED"
-                            ? "Tài khoản đang bị khóa, không thể đăng nhập."
-                            : "Tài khoản đã ngưng hoạt động, không thể đăng nhập."}
+                            ? "T├ái khoß║ún ─æang bß╗ï kh├│a, kh├┤ng thß╗â ─æ─âng nhß║¡p."
+                            : "T├ái khoß║ún ─æ├ú ng╞░ng hoß║ít ─æß╗Öng, kh├┤ng thß╗â ─æ─âng nhß║¡p."}
                         </p>
                       )}
                     </div>
@@ -269,41 +269,41 @@ export function UserDetailPage() {
                   </div>
                 </div>
 
-                <Section title="Thông tin tài khoản">
+                <Section title="Th├┤ng tin t├ái khoß║ún">
                   <InfoRow icon={AtSign} label="Username">
                     {user?.username}
                   </InfoRow>
-                  <InfoRow icon={Hash} label="Mã nhân viên">
+                  <InfoRow icon={Hash} label="M├ú nh├ón vi├¬n">
                     {user?.employeeCode}
                   </InfoRow>
                   <InfoRow icon={Mail} label="Email">
                     {user?.email}
                   </InfoRow>
-                  <InfoRow icon={Phone} label="Số điện thoại">
+                  <InfoRow icon={Phone} label="Sß╗æ ─æiß╗çn thoß║íi">
                     {user?.phone}
                   </InfoRow>
-                  <InfoRow icon={Cake} label="Ngày sinh">
+                  <InfoRow icon={Cake} label="Ng├áy sinh">
                     {user?.dateOfBirth}
                   </InfoRow>
-                  <InfoRow icon={UserRound} label="Giới tính">
+                  <InfoRow icon={UserRound} label="Giß╗¢i t├¡nh">
                     {GENDER_OPTIONS.find((o) => o.value === user?.gender)?.label}
                   </InfoRow>
-                  <InfoRow icon={Building2} label="Phòng ban" className="sm:col-span-2">
+                  <InfoRow icon={Building2} label="Ph├▓ng ban" className="sm:col-span-2">
                     {deptNames.length > 0 ? <BadgeGroup names={deptNames} /> : null}
                   </InfoRow>
                   <InfoRow icon={ShieldCheck} label="Role" className="sm:col-span-2">
                     {roleNames.length > 0 ? <BadgeGroup names={roleNames} /> : null}
                   </InfoRow>
-                  <InfoRow icon={FileText} label="Mô tả" className="sm:col-span-2">
+                  <InfoRow icon={FileText} label="M├┤ tß║ú" className="sm:col-span-2">
                     {user?.description ? <p className="whitespace-pre-line font-normal leading-6">{user.description}</p> : null}
                   </InfoRow>
                 </Section>
 
                 <div className="flex flex-wrap gap-x-6 gap-y-2 px-1 text-xs text-muted-foreground">
-                  <MetaItem icon={CalendarDays} label="Ngày tạo" value={formatDate(user?.createdAt) || "—"} />
-                  <MetaItem icon={Clock} label="Cập nhật lần cuối" value={formatDate(user?.updatedAt) || "—"} />
+                  <MetaItem icon={CalendarDays} label="Ng├áy tß║ío" value={formatDate(user?.createdAt) || "—"} />
+                  <MetaItem icon={Clock} label="Cß║¡p nhß║¡t lß║ºn cuß╗æi" value={formatDate(user?.updatedAt) || "—"} />
                   {user?.lastLoginAt && (
-                    <MetaItem icon={Clock} label="Đăng nhập gần nhất" value={formatDate(user.lastLoginAt)} />
+                    <MetaItem icon={Clock} label="─É─âng nhß║¡p gß║ºn nhß║Ñt" value={formatDate(user.lastLoginAt)} />
                   )}
                 </div>
               </div>
@@ -314,14 +314,14 @@ export function UserDetailPage() {
         <CardFooter className="flex justify-end gap-2">
           <Button variant="outline" onClick={() => navigate("/users")}>
             <ArrowLeft className="h-4 w-4" />
-            Quay lại
+            Quay lß║íi
           </Button>
           {id && (
             <PermissionGate permission="USER_UPDATE">
               <Button asChild>
                 <Link to={`/users/${id}/edit`}>
                   <PenSquare className="h-4 w-4" />
-                  Chỉnh sửa
+                  Chß╗ënh sß╗¡a
                 </Link>
               </Button>
             </PermissionGate>

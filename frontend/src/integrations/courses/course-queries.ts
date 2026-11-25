@@ -4,6 +4,6 @@ import type { CoursePageOptions } from "./course-data";
 export const coursePageKey = (email: string, options: CoursePageOptions) => ["course-data", email, options] as const;
 
 export async function refreshCourseViews(client: QueryClient) {
-  await Promise.all(["course-data", "course-detail", "my-enrollments", "personal-learning", "admin-learning"]
+  await Promise.all(["course-data", "course-detail", "my-enrollments", "personal-learning", "admin-learning", "personal-learning-roadmap"]
     .map(key => client.invalidateQueries({ queryKey: [key] })));
 }

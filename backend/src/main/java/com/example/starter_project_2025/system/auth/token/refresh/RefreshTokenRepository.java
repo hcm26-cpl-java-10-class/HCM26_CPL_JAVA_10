@@ -1,9 +1,9 @@
 package com.example.starter_project_2025.system.auth.token.refresh;
 
-import io.lettuce.core.dynamic.annotation.Param;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
@@ -25,11 +25,12 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
 
     List<RefreshToken> findAllByUserId(Long userId);
 
-    /** True while the user has a sign-in that was not signed out and has not expired yet. */
-    boolean existsByUser_IdAndRevokedFalseAndExpiryDateAfter(Long userId, Instant now);
+    List<RefreshToken> findAllByUserIdAndRevokedFalseAndExpiryDateAfterOrderByCreatedAtDesc(
+            Long userId,
+            Instant now
+    );
 
-    /** Xóa toàn bộ refresh token của một user (cần trước khi xóa user vì có khóa ngoại). */
-    @Modifying(flushAutomatically = true)
-    @Query("DELETE FROM RefreshToken rt WHERE rt.user.id = ?1")
-    int deleteAllByUserId(Long userId);
+    List<RefreshToken> findAllBySessionIdAndRevokedFalse(String sessionId);
+
+    boolean existsBySessionIdAndRevokedFalseAndExpiryDateAfter(String sessionId, Instant now);
 }

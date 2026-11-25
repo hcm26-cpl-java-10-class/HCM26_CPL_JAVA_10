@@ -73,6 +73,7 @@ public class LocationServiceImpl
         }
 
         location.updateInfo(request.getName(), request.getDescription());
+        location.changeStatus(request.getStatus());
 
         Location newParent = resolveParent(request.getParentLocationId(), location.getId(), ctx);
         if (!ctx.hasErrors()) {
@@ -86,6 +87,9 @@ public class LocationServiceImpl
 
         if (location.getChildren() != null && !location.getChildren().isEmpty()) {
             ctx.add("id", "Cannot delete a location that still has child locations");
+        }
+        if (location.getUsers() != null && !location.getUsers().isEmpty()) {
+            ctx.add("id", "Cannot delete a location that still has assigned users");
         }
 
         ctx.throwIfErrors();
@@ -101,7 +105,7 @@ public class LocationServiceImpl
 
         // Lọc ra danh sách các nút gốc (Parent is null)
         List<Location> roots = allLocations.stream()
-                .filter(loc -> loc.getParent() == null)
+                .filter(loc -> loc.getParentLocation() == null)
                 .sorted(Comparator.comparing(Location::getName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
 
@@ -168,7 +172,7 @@ public class LocationServiceImpl
                 row.createCell(1).setCellValue(loc.getName() != null ? loc.getName() : "");
 
                 // Lấy Parent Code
-                String parentCode = (loc.getParent() != null) ? loc.getParent().getCode() : "";
+                String parentCode = (loc.getParentLocation() != null) ? loc.getParentLocation().getCode() : "";
                 row.createCell(2).setCellValue(parentCode);
 
                 row.createCell(3).setCellValue(loc.getDescription() != null ? loc.getDescription() : "");
@@ -227,12 +231,12 @@ public class LocationServiceImpl
                 .sum();
         int totalCalculated = directUsersCount + childrenUsersCount;
 
-        Long parentId = (loc.getParent() != null) ? loc.getParent().getId() : null;
-
         return LocationTreeDTO.builder()
                 .id(loc.getId())
                 .code(loc.getCode())
                 .name(loc.getName())
+                .description(loc.getDescription())
+                .parentLocationId(loc.getParentLocation() != null ? loc.getParentLocation().getId() : null)
                 .path(loc.getPath())
                 .level(loc.getLevel())
                 .status(loc.getStatus())
@@ -274,34 +278,11 @@ public class LocationServiceImpl
                     ctx.add("parentLocationId", "Parent location cannot be a descendant of this location");
                     return null;
                 }
-                cursor = cursor.getParent();
+                cursor = cursor.getParentLocation();
             }
         }
 
         return parent;
     }
 
-    @Transactional
-    public void assignUserToLocation(Long locationId, String email) {
-        Location location = locationRepository.findById(locationId)
-                .orElseThrow(() -> new IllegalArgumentException("Location not found"));
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("User with email " + email + " not found"));
-
-        location.addUser(user);
-        locationRepository.save(location);
-    }
-
-    @Transactional
-    public void unassignUserFromLocation(Long locationId, Long userId) {
-        Location location = locationRepository.findById(locationId)
-                .orElseThrow(() -> new IllegalArgumentException("Location not found"));
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
-
-        if (location.getUsers() != null) {
-            location.getUsers().remove(user);
-        }
-        locationRepository.save(location);
-    }
 }

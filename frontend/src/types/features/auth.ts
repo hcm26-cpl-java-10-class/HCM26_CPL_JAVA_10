@@ -6,6 +6,8 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
+    passwordChangeRequired?: boolean;
+    setupToken?: string;
   token: string;
   email: string;
   firstName: string;
@@ -14,6 +16,23 @@ export interface LoginResponse {
   roles: string[];
   permissions: string[];
   rolePermissions: Record<string, string[]>;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  revokeOtherSessions?: boolean;
+}
+
+export interface UserSessionDTO {
+  sessionId: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  rememberMe: boolean;
+  current: boolean;
+  createdAt?: string | null;
+  lastUsedAt?: string | null;
+  expiresAt?: string | null;
 }
 
 export interface AuthContextType {
@@ -61,4 +80,5 @@ export interface AuthState {
   permissions: string[];
   rolePermissions: Record<string, string[]>;
   isAuthenticated: boolean;
+  isAuthInitialized: boolean;
 }

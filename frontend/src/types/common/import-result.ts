@@ -5,44 +5,14 @@ export interface ImportError {
   message: string;
 }
 
-export interface GeneratedCredential {
-  rowNumber: number;
-  email: string;
-  temporaryPassword: string;
-}
-
 export interface ImportResult {
+
+  /** Tß╗òng sß╗æ d├▓ng dß╗» liß╗çu ─æß╗ìc ─æ╞░ß╗úc trong file import */
+  totalCount?: number;
 
   successCount: number;
 
   failureCount: number;
-
-  /** Existing records changed by the import (users: their password was updated). */
-  updatedCount?: number;
-
-  /** Rows skipped because nothing needed to change (users: existing account, no password given). */
-  skippedCount?: number;
-
-  /** Notification emails sent (account created, set-password link, password changed). */
-  emailsSent?: number;
-
-  /** Emails that could not be sent. The accounts were still created or updated. */
-  emailsFailed?: number;
-
-  /** Emails not sent because the per-import email limit was reached. */
-  emailsSkipped?: number;
-
-  /** Temporary passwords generated for rows without a password. Shown once; hand them out securely. */
-  credentials?: GeneratedCredential[];
-
-  /** True when the import had errors and saved nothing. */
-  rolledBack?: boolean;
-
-  /** Codes the file refers to that do not exist yet (for users: departments). */
-  missingCodes?: string[];
-
-  /** Explanation shown to the person who ran the import when nothing was saved. */
-  message?: string;
 
   errors: ImportError[];
 }

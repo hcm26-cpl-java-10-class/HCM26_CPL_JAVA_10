@@ -11,6 +11,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -29,6 +30,9 @@ public class LocationController
 
     LocationService locationService;
     LocationRepository locationRepository;
+    LocationAiService locationAiService;
+    LocationStaffService locationStaffService;
+    LocationImportService locationImportService;
 
     @Override
     protected BaseCrudService<Long, LocationDTO, LocationFilter> getService() {
@@ -48,6 +52,47 @@ public class LocationController
     @GetMapping("/tree")
     public ResponseEntity<List<LocationTreeDTO>> getTree() {
         return ResponseEntity.ok(locationService.getTree());
+    }
+
+    @GetMapping("/ai/status")
+    @PreAuthorize("hasAuthority('LOCATION_READ')")
+    public ResponseEntity<LocationAiService.Status> getAiStatus() {
+        return ResponseEntity.ok(locationAiService.getStatus());
+    }
+
+    @PostMapping("/ai/analyze")
+    @PreAuthorize("hasAuthority('LOCATION_READ')")
+    public ResponseEntity<LocationAiService.Analysis> analyzeWithAi() {
+        return ResponseEntity.ok(locationAiService.analyze());
+    }
+
+    @GetMapping("/{locationId}/assignable-users")
+    @PreAuthorize("hasAuthority('LOCATION_UPDATE')")
+    public ResponseEntity<List<LocationStaffService.StaffCandidate>> findAssignableUsers(
+            @PathVariable Long locationId,
+            @RequestParam(required = false, defaultValue = "") String search
+    ) {
+        return ResponseEntity.ok(locationStaffService.findAssignableUsers(locationId, search));
+    }
+
+    @PostMapping("/{locationId}/users")
+    @PreAuthorize("hasAuthority('LOCATION_UPDATE')")
+    public ResponseEntity<Void> assignUser(
+            @PathVariable Long locationId,
+            @RequestBody LocationStaffService.AssignRequest request
+    ) {
+        locationStaffService.assignUsers(locationId, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{locationId}/users/{userId}")
+    @PreAuthorize("hasAuthority('LOCATION_UPDATE')")
+    public ResponseEntity<Void> unassignUser(
+            @PathVariable Long locationId,
+            @PathVariable Long userId
+    ) {
+        locationStaffService.unassignUser(locationId, userId);
+        return ResponseEntity.noContent().build();
     }
 
     @Override
@@ -73,11 +118,23 @@ public class LocationController
     @Override
     @PostMapping(value = "/import", consumes = "multipart/form-data")
     public ImportResult importFile(@RequestParam("file") MultipartFile file) {
-        ImportResult result = importService.importFile(file, getEntityClass(), getRepository());
+        ImportResult result = importService.importFileAtomic(file, getEntityClass(), getRepository());
+
+        if (result.getFailureCount() > 0) {
+            return result;
+        }
 
         List<Location> allLocations = locationRepository.findAll();
         locationService.processImportedLocations(allLocations);
 
         return result;
+    }
+
+    @PostMapping(value = "/import/preview", consumes = "multipart/form-data")
+    @PreAuthorize("hasAuthority('LOCATION_CREATE') or hasAuthority('LOCATION_UPDATE')")
+    public ResponseEntity<LocationImportService.ImportPreview> previewImport(
+            @RequestParam("file") MultipartFile file
+    ) {
+        return ResponseEntity.ok(locationImportService.preview(file));
     }
 }

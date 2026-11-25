@@ -1,6 +1,6 @@
-import type { UserDTO, UserFilter } from "@/types";
-import axiosInstance from "../../axios";
+import type { StudentSummaryDTO, UserDTO, UserFilter } from "@/types";
 import { createBaseApiService } from "../../base-service.api";
+import axiosInstance from "../../axios";
 
 const path = "/users";
 
@@ -57,13 +57,18 @@ export const userApi = Object.assign({}, base, {
         return base.update(id, payload);
     },
 
-  /** Khóa tài khoản: PATCH /users/{id}/lock (chỉ ADMIN). */
-  lock: async (id: string | number): Promise<void> => {
-    await axiosInstance.patch(`${path}/${id}/lock`);
-  },
+    /** Kh├│a t├ái khoß║ún: PATCH /users/{id}/lock (chß╗ë ADMIN). */
+    lock: async (id: string | number): Promise<void> => {
+        await axiosInstance.patch(`${path}/${id}/lock`);
+    },
 
-  /** Mở khóa tài khoản: PATCH /users/{id}/unlock (chỉ ADMIN). */
-  unlock: async (id: string | number): Promise<void> => {
-    await axiosInstance.patch(`${path}/${id}/unlock`);
-  },
+    /** Mß╗ƒ kh├│a t├ái khoß║ún: PATCH /users/{id}/unlock (chß╗ë ADMIN). */
+    unlock: async (id: string | number): Promise<void> => {
+        await axiosInstance.patch(`${path}/${id}/unlock`);
+    },
+
+    getStudents: async (): Promise<StudentSummaryDTO[]> => {
+        const response = await axiosInstance.get<StudentSummaryDTO[]>(`${path}/students`);
+        return response.data;
+    },
 });

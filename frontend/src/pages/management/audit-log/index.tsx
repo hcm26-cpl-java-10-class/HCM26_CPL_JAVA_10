@@ -150,13 +150,13 @@ function AuditLogDetails({ log }: { log: AuditLogDTO }) {
             {fields.map(({ label, value }) => (
                 <div
                     key={label}
-                    className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 border-b border-slate-200 py-4"
+                    className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 border-b border-border py-4"
                 >
-          <span className="text-sm font-semibold text-slate-500">
+          <span className="text-sm font-semibold text-muted-foreground">
             {label}
           </span>
 
-                    <span className="break-words text-sm text-slate-800">
+                    <span className="break-words text-sm text-foreground">
             {value === null || value === undefined || value === ""
                 ? "N/A"
                 : value}
@@ -164,22 +164,22 @@ function AuditLogDetails({ log }: { log: AuditLogDTO }) {
                 </div>
             ))}
 
-            <div className="border-b border-slate-200 py-4">
-                <h3 className="mb-3 text-sm font-semibold text-slate-500">
+            <div className="border-b border-border py-4">
+                <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
                     Old Value
                 </h3>
 
-                <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+                <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-xs leading-5 text-foreground border border-border">
           {formatValue(log.oldValue)}
         </pre>
             </div>
 
             <div className="py-4">
-                <h3 className="mb-3 text-sm font-semibold text-slate-500">
+                <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
                     New Value
                 </h3>
 
-                <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+                <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-xs leading-5 text-foreground border border-border">
           {formatValue(log.newValue)}
         </pre>
             </div>
@@ -796,7 +796,7 @@ export default function AuditLogPage() {
                 "audit-log": "Audit Log",
             }}
         >
-            <div className="min-h-full bg-slate-50/70 px-4 py-4 md:px-6 lg:px-7">
+            <div className="flex h-full w-full min-w-0 max-w-full flex-col overflow-x-hidden space-y-4">
                 <div className="mx-auto max-w-none space-y-4">
                     {/* Filters and audit table */}
                     <div className="flex gap-1 border-b border-slate-200">
@@ -824,7 +824,7 @@ export default function AuditLogPage() {
                     {view === "logs" && (
                     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
 
-                        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 p-4 md:px-5">
+                        <div className="flex flex-wrap items-center gap-3 border-b border-border p-4 md:px-5">
                             {/* 1. Search */}
                             <div className="w-full shrink-0 lg:w-[420px]">
                                 <SearchInput
@@ -856,7 +856,7 @@ export default function AuditLogPage() {
                                     setPeriod(event.target.value as Period);
                                     setPage(0);
                                 }}
-                                className="h-9 min-w-[150px] rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                className="h-9 min-w-[150px] rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/20"
                                 aria-label="Filter by period"
                             >
                                 <option value="7days">Last 7 days</option>
@@ -876,7 +876,7 @@ export default function AuditLogPage() {
                                             setCustomFrom(event.target.value);
                                             setPage(0);
                                         }}
-                                        className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                        className="h-9 rounded-lg border border-border bg-background px-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/20"
                                         aria-label="From date"
                                     />
                                     <span className="text-slate-400">–</span>
@@ -888,7 +888,7 @@ export default function AuditLogPage() {
                                             setCustomTo(event.target.value);
                                             setPage(0);
                                         }}
-                                        className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                        className="h-9 rounded-lg border border-border bg-background px-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/20"
                                         aria-label="To date"
                                     />
                                 </div>
@@ -899,7 +899,7 @@ export default function AuditLogPage() {
                                 type="button"
                                 onClick={() => setShowExportModal(true)}
                                 disabled={logs.length === 0 || auditQuery.isPending}
-                                className="ml-auto inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="ml-auto inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-foreground shadow-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 <svg
                                     viewBox="0 0 24 24"
@@ -920,7 +920,7 @@ export default function AuditLogPage() {
                         </div>
 
                         {activeChips.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-2 md:px-5">
+                            <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2 md:px-5">
                                 {activeChips.map((chip) => (
                                     <span
                                         key={chip.key}
@@ -947,13 +947,13 @@ export default function AuditLogPage() {
                             </div>
                         )}
 
-                        <div className="border-t border-slate-200">
+                        <div className="border-t border-border">
                             <div className="flex flex-col gap-2 px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-5">
                                 <div>
-                                    <h2 className="text-sm font-semibold text-slate-800">
+                                    <h2 className="text-sm font-semibold text-foreground">
                                         Audit Records
                                     </h2>
-                                    <p className="mt-1 text-xs text-slate-500">
+                                    <p className="mt-1 text-xs text-muted-foreground">
                                         {totalElements} records found
                                     </p>
                                 </div>
@@ -962,7 +962,7 @@ export default function AuditLogPage() {
                                     type="button"
                                     onClick={() => auditQuery.refetch()}
                                     disabled={auditQuery.isFetching}
-                                    className="inline-flex h-9 items-center justify-center gap-2 self-start rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 sm:self-auto"
+                                    className="inline-flex h-9 items-center justify-center gap-2 self-start rounded-lg border border-border bg-card px-3 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50 sm:self-auto"
                                 >
                                     <svg
                                         viewBox="0 0 24 24"
@@ -1038,7 +1038,7 @@ export default function AuditLogPage() {
                                 <>
                                     <div className="overflow-x-auto">
                                         <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-                                            <thead className="border-b border-slate-200 bg-white text-sm text-slate-700">
+                                            <thead className="border-b border-border bg-muted/50 text-sm text-muted-foreground">
                                             <tr>
                                                 <th className="whitespace-nowrap px-5 py-3 font-semibold">
                                                     Time
@@ -1061,7 +1061,7 @@ export default function AuditLogPage() {
                                             </tr>
                                             </thead>
 
-                                            <tbody className="divide-y divide-slate-200">
+                                            <tbody className="divide-y divide-border">
                                             {filteredLogs.map((log) => (
                                                 <AuditLogRow
                                                     key={log.id}
@@ -1123,7 +1123,7 @@ export default function AuditLogPage() {
                             role="dialog"
                             aria-modal="true"
                             aria-labelledby="audit-detail-title"
-                            className="fixed inset-y-0 right-0 z-[120] flex w-full flex-col border-l border-slate-200 bg-white shadow-2xl sm:w-[560px] xl:w-[640px]"
+                            className="fixed inset-y-0 right-0 z-[120] flex w-full flex-col border-l border-border bg-card text-card-foreground shadow-2xl sm:w-[560px] xl:w-[640px]"
                             initial={{ x: "100%" }}
                             animate={{ x: 0 }}
                             exit={{ x: "100%" }}
@@ -1133,10 +1133,10 @@ export default function AuditLogPage() {
                                 ease: "easeInOut",
                             }}
                         >
-                            <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-4">
+                            <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
                                 <h2
                                     id="audit-detail-title"
-                                    className="text-base font-semibold text-slate-900"
+                                    className="text-base font-semibold text-foreground"
                                 >
                                     Detail
                                 </h2>
@@ -1145,7 +1145,7 @@ export default function AuditLogPage() {
                                     type="button"
                                     aria-label="Close details"
                                     onClick={() => setSelectedLog(null)}
-                                    className="rounded-md border border-slate-300 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                                    className="rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
                                 >
                                     <svg
                                         viewBox="0 0 24 24"
@@ -1185,9 +1185,9 @@ export default function AuditLogPage() {
                         role="dialog"
                         aria-modal="true"
                         aria-labelledby="audit-export-title"
-                        className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+                        className="w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl"
                     >
-                        <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
+                        <div className="flex items-start justify-between border-b border-border px-5 py-4">
                             <div>
                                 <h2
                                     id="audit-export-title"
@@ -1351,12 +1351,12 @@ export default function AuditLogPage() {
                             )}
                         </div>
 
-                        <div className="flex justify-end border-t border-slate-100 bg-slate-50/70 px-5 py-4">
+                        <div className="flex justify-end border-t border-border bg-muted/30 px-5 py-4">
                             <button
                                 type="button"
                                 disabled={exporting}
                                 onClick={() => setShowExportModal(false)}
-                                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+                                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
                             >
                                 Close
                             </button>
@@ -1388,16 +1388,16 @@ function AuditLogRow({
     const objectId = log.entityId ? `#${log.entityId}` : "";
 
     return (
-        <tr className="transition-colors hover:bg-slate-50/80">
-            <td className="whitespace-nowrap px-5 py-3.5 text-slate-600">
+        <tr className="transition-colors hover:bg-muted/50">
+            <td className="whitespace-nowrap px-5 py-3.5 text-muted-foreground">
                 {formatDate(log.createdAt)}
             </td>
 
             <td className="px-5 py-3.5">
-                <div className="font-medium text-slate-800">
+                <div className="font-medium text-foreground">
                     {log.actorEmail || "Unknown actor"}
                 </div>
-                <div className="mt-1 text-xs text-slate-400">
+                <div className="mt-1 text-xs text-muted-foreground">
                     ID: {log.actorId ?? "-"}
                 </div>
             </td>
@@ -1438,7 +1438,7 @@ function AuditLogRow({
                     onClick={onViewDetails}
                     title="View Details"
                     aria-label="View Details"
-                    className="inline-flex items-center justify-center rounded-md p-2 text-slate-500 transition hover:bg-slate-100 hover:text-blue-600"
+                    className="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground transition hover:bg-muted hover:text-primary"
                 >
                     <svg
                         xmlns="http://www.w3.org/2000/svg"

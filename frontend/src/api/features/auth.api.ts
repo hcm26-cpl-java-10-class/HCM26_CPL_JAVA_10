@@ -2,32 +2,19 @@ import axiosInstance from "../axios";
 import { getDeviceDescription } from "@/utils/device.utils";
 import { normalizeAuthRolePayload } from "@/utils/rbac.utils";
 import {
+    type ChangePasswordRequest,
     type ForgotPasswordEmailRequest,
     type ForgotPasswordRequest,
     type LoginRequest,
     type LoginResponse,
     type RegisterRequest,
+    type UserSessionDTO,
 } from "../../types/features/auth";
 
-/**
- * Thrown by login() when the password was right but the account still has a temporary password
- * (for example created by an Excel import without one). No session is created; the user must go to the
- * "create your password" page with `setupToken`.
- */
-export class PasswordChangeRequiredError extends Error {
-    setupToken: string;
-
-    constructor(setupToken: string) {
-        super("You must create your own password before signing in.");
-        this.name = "PasswordChangeRequiredError";
-        this.setupToken = setupToken;
-    }
-}
-
 interface BackendAuthenticationResponse {
+    accessToken?: string;
     passwordChangeRequired?: boolean;
     setupToken?: string;
-    accessToken: string;
     email: string;
     firstName: string;
     lastName: string;
@@ -46,9 +33,10 @@ const AUTH_STORAGE_KEYS = [
     "roles",
     "permissions",
     "rolePermissions",
+    "viewRole",
 ];
 
-const mapAuthResponse = (data: BackendAuthenticationResponse): LoginResponse => {
+export const mapAuthResponse = (data: BackendAuthenticationResponse): LoginResponse => {
     const normalized = normalizeAuthRolePayload({
         role: data.role,
         roles: data.roles,
@@ -57,7 +45,9 @@ const mapAuthResponse = (data: BackendAuthenticationResponse): LoginResponse => 
     });
 
     return {
-        token: data.accessToken,
+        token: data.accessToken ?? "",
+        passwordChangeRequired: data.passwordChangeRequired,
+        setupToken: data.setupToken,
         email: data.email,
         firstName: data.firstName,
         lastName: data.lastName,
@@ -68,23 +58,26 @@ const mapAuthResponse = (data: BackendAuthenticationResponse): LoginResponse => 
     };
 };
 
-const clearAuthStorage = () => {
+export const clearAuthStorage = () => {
     AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
 };
 
 export const authApi = {
     login: async (credentials: LoginRequest): Promise<LoginResponse> => {
-        const device = credentials.device || getDeviceDescription();
+        const device = credentials.device || (await getDeviceDescription());
         const response = await axiosInstance.post<BackendAuthenticationResponse>("/auth/login", {
             device,
             email: credentials.email,
             password: credentials.password,
+            rememberMe: Boolean(credentials.isRememberedMe),
         }, {
             headers: { "X-Device-Info": device },
         });
-        if (response.data.passwordChangeRequired && response.data.setupToken) {
-            throw new PasswordChangeRequiredError(response.data.setupToken);
-        }
+        return mapAuthResponse(response.data);
+    },
+
+    refreshSession: async (): Promise<LoginResponse> => {
+        const response = await axiosInstance.post<BackendAuthenticationResponse>("/auth/refresh", {});
         return mapAuthResponse(response.data);
     },
 
@@ -94,6 +87,28 @@ export const authApi = {
         } finally {
             clearAuthStorage();
         }
+    },
+
+    changePassword: async (payload: ChangePasswordRequest): Promise<void> => {
+        await axiosInstance.post("/auth/change-password", payload);
+    },
+
+    listSessions: async (): Promise<UserSessionDTO[]> => {
+        const response = await axiosInstance.get<UserSessionDTO[]>("/auth/sessions");
+        return response.data;
+    },
+
+    revokeSession: async (sessionId: string): Promise<void> => {
+        await axiosInstance.delete(`/auth/sessions/${encodeURIComponent(sessionId)}`);
+    },
+
+    revokeOtherSessions: async (): Promise<{ revokedCount: number }> => {
+        const response = await axiosInstance.post<{ revokedCount: number }>("/auth/sessions/revoke-others");
+        return response.data;
+    },
+
+    revokeUserSessions: async (userId: number): Promise<void> => {
+        await axiosInstance.post(`/users/${userId}/revoke-sessions`);
     },
 
     register: async (data: RegisterRequest): Promise<void> => {

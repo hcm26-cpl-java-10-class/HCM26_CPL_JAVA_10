@@ -19,31 +19,21 @@ import {
   ChevronsUpDown,
   BarChart3,
   Download,
+  Upload,
 } from "lucide-react";
 import { locationApi } from "@/api/features/rbac/location.api";
 import { LocationDashboardChart } from "./LocationDashboardChart";
-import { LocationFormModal, AssignUserModal, DeleteConfirmModal } from "./LocationModals";
+import { LocationFormModal, AssignUserModal } from "./LocationModals";
+import ConfirmDialog from "@/components/ui/confirmdialog";
+import { toast } from "sonner";
+import { LocationAiInsights } from "./LocationAiInsights";
+import { LocationImportModal } from "./LocationImportModal";
 import { findNodeById, filterTreeNodes, exportLocationUsersCsv } from "./locationUtils";
-
-export interface LocationUser {
-  id: number | string;
-  fullName?: string;
-  roleName?: string;
-  email?: string;
-  phone?: string;
-}
-
-export interface LocationNode {
-  id: number | string;
-  name: string;
-  code: string;
-  description?: string;
-  status?: string;
-  parentId?: number | string | null;
-  totalUsers?: number;
-  users?: LocationUser[];
-  children?: LocationNode[];
-}
+import type {
+  LocationNode,
+  LocationPayload,
+  LocationStaffCandidate,
+} from "@/types/features/rbac/location";
 
 interface LocationTreeProps {
   selectedLocationId?: number | string | null;
@@ -56,20 +46,36 @@ export const LocationTree: React.FC<LocationTreeProps> = ({ onSelectLocation }) 
   const [expandedIds, setExpandedIds] = useState<Record<string | number, boolean>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("ALL");
   const [activeNode, setActiveNode] = useState<LocationNode | null>(null);
   const [showChart, setShowChart] = useState(true);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingNode, setEditingNode] = useState<LocationNode | null>(null);
   const [targetParentId, setTargetParentId] = useState<number | null>(null);
-  const [formData, setFormData] = useState({ name: "", code: "", description: "", status: "ACTIVE" });
+  const [formData, setFormData] = useState<{
+    name: string;
+    code: string;
+    description: string;
+    status: "ACTIVE" | "INACTIVE";
+  }>({ name: "", code: "", description: "", status: "ACTIVE" });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [pendingUpdate, setPendingUpdate] = useState<{
+    node: LocationNode;
+    payload: LocationPayload;
+  } | null>(null);
 
   const [nodeToDelete, setNodeToDelete] = useState<LocationNode | null>(null);
+  const [nodeToUnassign, setNodeToUnassign] = useState<{ id: number | string; name: string } | null>(null);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-  const [assignEmailInput, setAssignEmailInput] = useState("");
+  const [assignSearch, setAssignSearch] = useState("");
+  const [assignCandidates, setAssignCandidates] = useState<LocationStaffCandidate[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  const [loadingCandidates, setLoadingCandidates] = useState(false);
+  const [submittingAssign, setSubmittingAssign] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const loadTreeData = useCallback(async () => {
     setLoading(true);
@@ -101,6 +107,20 @@ export const LocationTree: React.FC<LocationTreeProps> = ({ onSelectLocation }) 
     loadTreeData();
   }, [loadTreeData]);
 
+  useEffect(() => {
+    if (!isAssignModalOpen || !activeNode) return;
+    const timeout = window.setTimeout(() => {
+      setLoadingCandidates(true);
+      locationApi.getAssignableUsers(activeNode.id, assignSearch)
+        .then(setAssignCandidates)
+        .catch((error) =>
+          setAssignError(error?.response?.data?.message || "Unable to load assignable users.")
+        )
+        .finally(() => setLoadingCandidates(false));
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [isAssignModalOpen, activeNode, assignSearch]);
+
   const handleNodeClick = (node: LocationNode) => {
     const isSame = activeNode && String(activeNode.id) === String(node.id);
     setActiveNode(node);
@@ -126,7 +146,7 @@ export const LocationTree: React.FC<LocationTreeProps> = ({ onSelectLocation }) 
   const openModal = (node: LocationNode, isEdit: boolean, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingNode(isEdit ? node : null);
-    setTargetParentId(isEdit ? (node.parentId ? Number(node.parentId) : null) : Number(node.id));
+    setTargetParentId(isEdit ? (node.parentLocationId ?? null) : Number(node.id));
     setFormData(
       isEdit
         ? {
@@ -146,28 +166,47 @@ export const LocationTree: React.FC<LocationTreeProps> = ({ onSelectLocation }) 
     if (!formData.name.trim() || !formData.code.trim()) {
       return setErrorMessage("Tên và mã vị trí không được để trống!");
     }
+    setErrorMessage(null);
+    const payload: LocationPayload = {
+      name: formData.name.trim(),
+      code: formData.code.trim().toUpperCase(),
+      description: formData.description.trim(),
+      status: formData.status,
+      parentLocationId: targetParentId,
+    };
+
+    if (
+      editingNode &&
+      (editingNode.status !== formData.status ||
+        (editingNode.description || "") !== formData.description.trim())
+    ) {
+      setPendingUpdate({ node: editingNode, payload });
+      return;
+    }
+
+    await saveLocation(editingNode?.id, payload);
+  };
+
+  const saveLocation = async (locationId: number | undefined, payload: LocationPayload) => {
     setSubmitting(true);
     setErrorMessage(null);
     try {
-      const payload = {
-        name: formData.name.trim(),
-        code: formData.code.trim().toUpperCase(),
-        description: formData.description.trim(),
-        status: formData.status,
-        parentLocationId: targetParentId,
-      };
-      if (editingNode) {
-        await locationApi.update(editingNode.id as any, payload as any);
+      if (locationId != null) {
+        await locationApi.updateLocation(locationId, payload);
       } else {
-        await locationApi.create(payload as any);
+        await locationApi.createLocation(payload);
       }
       await loadTreeData();
+      setPendingUpdate(null);
       setIsModalOpen(false);
+      toast.success(locationId != null
+        ? "Location updated successfully."
+        : "Location created successfully.");
     } catch (err: any) {
       setErrorMessage(
         err?.response?.data?.message ||
-          err?.response?.data?.errors?.code ||
-          "Lưu vị trí thất bại. Mã Code có thể đã tồn tại!"
+        err?.response?.data?.errors?.code ||
+        "Lưu vị trí thất bại. Mã Code có thể đã tồn tại!"
       );
     } finally {
       setSubmitting(false);
@@ -177,11 +216,12 @@ export const LocationTree: React.FC<LocationTreeProps> = ({ onSelectLocation }) 
   const handleConfirmDelete = async () => {
     if (!nodeToDelete) return;
     try {
-      await locationApi.delete(nodeToDelete.id as any);
+      await locationApi.delete(String(nodeToDelete.id));
       if (activeNode?.id === nodeToDelete.id) setActiveNode(null);
       await loadTreeData();
+      toast.success(`Deleted location "${nodeToDelete.name}".`);
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Không thể xóa vị trí này!");
+      toast.error(err?.response?.data?.message || "Unable to delete this location.");
     } finally {
       setNodeToDelete(null);
     }
@@ -189,25 +229,33 @@ export const LocationTree: React.FC<LocationTreeProps> = ({ onSelectLocation }) 
 
   const handleAssignUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assignEmailInput.trim() || !activeNode) return;
+    if (!activeNode || selectedUserIds.length === 0) return;
+    setSubmittingAssign(true);
     try {
       setAssignError(null);
-      await (locationApi as any).assignUser?.(activeNode.id, assignEmailInput.trim());
-      setAssignEmailInput("");
+      await locationApi.assignUsers(activeNode.id, selectedUserIds);
+      setSelectedUserIds([]);
+      setAssignSearch("");
       setIsAssignModalOpen(false);
       await loadTreeData();
+      toast.success("Staff member assigned successfully.");
     } catch (err: any) {
       setAssignError(err?.response?.data?.message || "Không tìm thấy User với Email này!");
+    } finally {
+      setSubmittingAssign(false);
     }
   };
 
-  const handleUnassignUser = async (userId: number | string) => {
-    if (!activeNode || !confirm("Bỏ nhân sự này khỏi vị trí hiện tại?")) return;
+  const handleUnassignUser = async () => {
+    if (!activeNode || !nodeToUnassign) return;
     try {
-      await (locationApi as any).unassignUser?.(activeNode.id, userId);
+      await locationApi.unassignUser(activeNode.id, Number(nodeToUnassign.id));
       await loadTreeData();
+      toast.success(`Removed "${nodeToUnassign.name}" from this location.`);
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Hủy gán nhân sự thất bại!");
+      toast.error(err?.response?.data?.message || "Unable to unassign this staff member.");
+    } finally {
+      setNodeToUnassign(null);
     }
   };
 
@@ -215,15 +263,48 @@ export const LocationTree: React.FC<LocationTreeProps> = ({ onSelectLocation }) 
 
   const filteredActiveUsers = useMemo(() => {
     const list = activeNode?.users || [];
-    if (!userSearchQuery.trim()) return list;
-    const q = userSearchQuery.toLowerCase();
-    return list.filter(
-      (u) =>
+    const q = userSearchQuery.trim().toLowerCase();
+    return list.filter((u) => {
+      const matchesSearch =
+        !q ||
         u.fullName?.toLowerCase().includes(q) ||
         u.email?.toLowerCase().includes(q) ||
-        u.roleName?.toLowerCase().includes(q)
+        u.roleName?.toLowerCase().includes(q);
+      const matchesRole =
+        roleFilter === "ALL" ||
+        (u.roleName || "Unassigned").toUpperCase() === roleFilter;
+      return matchesSearch && matchesRole;
+    });
+  }, [activeNode, userSearchQuery, roleFilter]);
+
+  const roleOptions = useMemo(() => {
+    const roles = new Set(
+      (activeNode?.users || [])
+        .map((u) => (u.roleName || "Unassigned").toUpperCase())
+        .filter(Boolean)
     );
-  }, [activeNode, userSearchQuery]);
+    return ["ALL", ...Array.from(roles).sort()];
+  }, [activeNode]);
+
+  const locationStats = useMemo(() => {
+    let total = 0;
+    let inactive = 0;
+    let maxLevel = 0;
+    const staffIds = new Set<number>();
+
+    const traverse = (nodes: LocationNode[], level = 0) => {
+      nodes.forEach((node) => {
+        total += 1;
+        if (node.status === "INACTIVE") inactive += 1;
+        maxLevel = Math.max(maxLevel, level);
+        node.users?.forEach((user) => staffIds.add(user.id));
+        if (node.children?.length) traverse(node.children, level + 1);
+      });
+    };
+    traverse(treeData);
+    return { total, inactive, maxLevel, staff: staffIds.size };
+  }, [treeData]);
+
 
   const renderTreeNodes = (nodes: LocationNode[], depth = 0) => (
     <ul className={depth > 0 ? "pl-3.5 space-y-1 border-l border-border/60 ml-2.5 mt-1" : "space-y-1"}>
@@ -287,7 +368,7 @@ export const LocationTree: React.FC<LocationTreeProps> = ({ onSelectLocation }) 
                     {userCount}
                   </span>
                 )}
-                <div className="hidden group-hover:flex items-center gap-0.5 bg-background/90 border border-border rounded px-1 py-0.5 shadow-xs">
+                <div className="flex items-center gap-0.5 rounded border border-border bg-background/90 px-1 py-0.5 shadow-xs opacity-70 transition-opacity group-hover:opacity-100">
                   <button type="button" onClick={(e) => openModal(node, false, e)} title="Thêm vị trí con" className="p-0.5 hover:text-primary">
                     <Plus className="size-3" />
                   </button>
@@ -331,6 +412,23 @@ export const LocationTree: React.FC<LocationTreeProps> = ({ onSelectLocation }) 
 
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          { label: "Total locations", value: locationStats.total, icon: Building2, color: "text-primary" },
+          { label: "Assigned staff", value: locationStats.staff, icon: Users, color: "text-emerald-500" },
+          { label: "Hierarchy depth", value: locationStats.maxLevel + 1, icon: FolderOpen, color: "text-amber-500" },
+          { label: "Inactive locations", value: locationStats.inactive, icon: MapPin, color: "text-destructive" },
+        ].map((item) => (
+          <div key={item.label} className="rounded-xl border border-border bg-card p-4 shadow-xs">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">{item.label}</p>
+              <item.icon className={`size-4 ${item.color}`} />
+            </div>
+            <p className="mt-2 text-2xl font-bold tracking-tight">{item.value}</p>
+          </div>
+        ))}
+      </div>
+
       <div className="grid grid-cols-12 gap-4 h-[calc(100vh-200px)] min-h-[560px]">
         {/* Cột trái */}
         <div className="col-span-12 lg:col-span-4 bg-card border border-border rounded-xl p-3.5 shadow-xs flex flex-col h-full overflow-hidden">
@@ -350,6 +448,14 @@ export const LocationTree: React.FC<LocationTreeProps> = ({ onSelectLocation }) 
             </button>
             <button type="button" onClick={() => handleExpandAll(false)} title="Thu gọn toàn bộ" className="p-1.5 border border-input rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground shrink-0">
               <ChevronsDownUp className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsImportOpen(true)}
+              title="Import location hierarchy"
+              className="p-1.5 border border-input rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground shrink-0"
+            >
+              <Upload className="size-3.5" />
             </button>
           </div>
 
@@ -376,10 +482,25 @@ export const LocationTree: React.FC<LocationTreeProps> = ({ onSelectLocation }) 
                   <div>
                     <h2 className="text-base font-bold tracking-tight">{activeNode.name}</h2>
                     <p className="text-xs font-mono text-muted-foreground">Mã vị trí: {activeNode.code}</p>
+                    {activeNode.path && (
+                      <p className="mt-1 max-w-xl truncate text-[11px] text-muted-foreground">
+                        {activeNode.path}
+                      </p>
+                    )}
                   </div>
                 </div>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-medium">
-                  <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs border font-medium ${
+                    activeNode.status === "INACTIVE"
+                      ? "bg-destructive/10 text-destructive border-destructive/20"
+                      : "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                  }`}
+                >
+                  <span
+                    className={`size-1.5 rounded-full ${
+                      activeNode.status === "INACTIVE" ? "bg-destructive" : "bg-emerald-500"
+                    }`}
+                  />
                   {activeNode.status || "ACTIVE"}
                 </span>
               </div>
@@ -412,16 +533,29 @@ export const LocationTree: React.FC<LocationTreeProps> = ({ onSelectLocation }) 
                 </h3>
                 <div className="flex items-center gap-2">
                   {(activeNode.users?.length || 0) > 0 && (
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-2 size-3 text-muted-foreground" />
-                      <input
-                        type="text"
-                        placeholder="Lọc tên, email, role..."
-                        value={userSearchQuery}
-                        onChange={(e) => setUserSearchQuery(e.target.value)}
-                        className="bg-background text-xs rounded-lg pl-7 pr-2.5 py-1 border border-input focus:outline-none focus:ring-1 focus:ring-primary w-44"
-                      />
-                    </div>
+                    <>
+                      <select
+                        value={roleFilter}
+                        onChange={(e) => setRoleFilter(e.target.value)}
+                        className="h-[31px] rounded-lg border border-input bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary"
+                      >
+                        {roleOptions.map((role) => (
+                          <option key={role} value={role}>
+                            {role === "ALL" ? "All roles" : role}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-2 size-3 text-muted-foreground" />
+                        <input
+                          type="text"
+                          placeholder="Search staff..."
+                          value={userSearchQuery}
+                          onChange={(e) => setUserSearchQuery(e.target.value)}
+                          className="bg-background text-xs rounded-lg pl-7 pr-2.5 py-1 border border-input focus:outline-none focus:ring-1 focus:ring-primary w-44"
+                        />
+                      </div>
+                    </>
                   )}
                   <button
                     type="button"
@@ -433,7 +567,12 @@ export const LocationTree: React.FC<LocationTreeProps> = ({ onSelectLocation }) 
                   </button>
                   <button
                     type="button"
-                    onClick={() => setIsAssignModalOpen(true)}
+                    onClick={() => {
+                      setAssignSearch("");
+                      setSelectedUserIds([]);
+                      setAssignError(null);
+                      setIsAssignModalOpen(true);
+                    }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground text-xs font-medium rounded-lg hover:bg-primary/90 transition-colors shadow-xs"
                   >
                     <UserPlus className="size-3.5" />
@@ -490,7 +629,12 @@ export const LocationTree: React.FC<LocationTreeProps> = ({ onSelectLocation }) 
                           <td className="py-2.5 px-3.5 text-right">
                             <button
                               type="button"
-                              onClick={() => handleUnassignUser(usr.id)}
+                              onClick={() =>
+                                setNodeToUnassign({
+                                  id: usr.id,
+                                  name: usr.fullName || usr.email || "Staff member",
+                                })
+                              }
                               title="Bỏ gán khỏi vị trí này"
                               className="p-1.5 rounded-md hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors"
                             >
@@ -522,7 +666,8 @@ export const LocationTree: React.FC<LocationTreeProps> = ({ onSelectLocation }) 
         </div>
       </div>
 
-      {/* Khối Chart phía dưới */}
+      <LocationAiInsights />
+
       <div className="space-y-3 pt-1">
         <div className="flex items-center justify-between bg-card border border-border rounded-xl px-4 py-2.5 shadow-xs">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -556,16 +701,64 @@ export const LocationTree: React.FC<LocationTreeProps> = ({ onSelectLocation }) 
       />
       <AssignUserModal
         isOpen={isAssignModalOpen}
-        email={assignEmailInput}
-        setEmail={setAssignEmailInput}
+        search={assignSearch}
+        setSearch={setAssignSearch}
+        candidates={assignCandidates}
+        selectedUserIds={selectedUserIds}
+        setSelectedUserIds={setSelectedUserIds}
         error={assignError}
+        loadingCandidates={loadingCandidates}
+        submitting={submittingAssign}
         onClose={() => setIsAssignModalOpen(false)}
         onSubmit={handleAssignUser}
       />
-      <DeleteConfirmModal
-        node={nodeToDelete}
+      <LocationImportModal
+        open={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        onImported={loadTreeData}
+      />
+      <ConfirmDialog
+        open={pendingUpdate !== null}
+        title="Confirm location changes?"
+        description={
+          pendingUpdate
+            ? `Save status or description changes for "${pendingUpdate.node.name}"?`
+            : undefined
+        }
+        confirmLabel="Confirm and save"
+        loadingLabel="Saving..."
+        destructive={pendingUpdate?.payload.status === "INACTIVE"}
+        loading={submitting}
+        onCancel={() => setPendingUpdate(null)}
+        onConfirm={() => {
+          if (pendingUpdate) {
+            void saveLocation(pendingUpdate.node.id, pendingUpdate.payload);
+          }
+        }}
+      />
+      <ConfirmDialog
+        open={nodeToDelete !== null}
+        title="Delete location?"
+        description={
+          nodeToDelete
+            ? `Delete "${nodeToDelete.name}"? This location must have no child locations or assigned staff.`
+            : undefined
+        }
+        confirmLabel="Delete location"
         onCancel={() => setNodeToDelete(null)}
         onConfirm={handleConfirmDelete}
+      />
+      <ConfirmDialog
+        open={nodeToUnassign !== null}
+        title="Remove staff member?"
+        description={
+          nodeToUnassign
+            ? `Remove "${nodeToUnassign.name}" from ${activeNode?.name ?? "this location"}?`
+            : undefined
+        }
+        confirmLabel="Remove"
+        onCancel={() => setNodeToUnassign(null)}
+        onConfirm={handleUnassignUser}
       />
     </div>
   );

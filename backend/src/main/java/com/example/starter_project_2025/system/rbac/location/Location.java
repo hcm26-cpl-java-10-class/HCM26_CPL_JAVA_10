@@ -80,10 +80,10 @@ public class Location extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
-    private Location parent;
+    private Location parentLocation;
 
     @Builder.Default
-    @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "parentLocation", cascade = CascadeType.ALL)
     private Set<Location> children = new HashSet<>();
 
     // --- Many-To-Many Relationship ---
@@ -111,15 +111,17 @@ public class Location extends BaseEntity {
     }
 
     public void setParentLocation(Location newParent) {
-        if (newParent != null && Objects.equals(this.getId(), newParent.getId())) {
+        if (newParent != null
+                && this.getId() != null
+                && Objects.equals(this.getId(), newParent.getId())) {
             throw new IllegalArgumentException("Không thể chọn chính vị trí này làm vị trí cha");
         }
 
-        if (this.parent != null) {
-            this.parent.children.remove(this);
+        if (this.parentLocation != null) {
+            this.parentLocation.children.remove(this);
         }
 
-        this.parent = newParent;
+        this.parentLocation = newParent;
 
         if (newParent != null) {
             newParent.children.add(this);
@@ -133,12 +135,12 @@ public class Location extends BaseEntity {
     }
 
     public void recalculatePath() {
-        if (this.parent == null) {
+        if (this.parentLocation == null) {
             this.path = this.name;
         } else {
-            String parentPath = (this.parent.getPath() != null && !this.parent.getPath().isBlank())
-                    ? this.parent.getPath()
-                    : this.parent.getName();
+            String parentPath = (this.parentLocation.getPath() != null && !this.parentLocation.getPath().isBlank())
+                    ? this.parentLocation.getPath()
+                    : this.parentLocation.getName();
             this.path = parentPath + " / " + this.name;
         }
 
@@ -175,6 +177,17 @@ public class Location extends BaseEntity {
 
     public void activate() {
         this.status = LocationStatus.ACTIVE;
+    }
+
+    public void changeStatus(LocationStatus newStatus) {
+        if (newStatus == null) {
+            return;
+        }
+        if (newStatus == LocationStatus.INACTIVE) {
+            deactivate();
+        } else {
+            activate();
+        }
     }
 
     @Override
