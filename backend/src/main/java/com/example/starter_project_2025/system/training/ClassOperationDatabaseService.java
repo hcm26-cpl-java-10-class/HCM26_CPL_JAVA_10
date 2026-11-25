@@ -753,7 +753,7 @@ public class ClassOperationDatabaseService {
                 Map<String, Double> parsedScores = parseScoresJson(entity.getScoresJson());
                 Map<String, Double> alignedScores = new LinkedHashMap<>();
                 for (DynamicColumnSpec col : spec.columns()) {
-                    alignedScores.put(col.key(), parsedScores.getOrDefault(col.key(), 0.0));
+                    alignedScores.put(col.key(), resolveAlignedScore(parsedScores, col.key()));
                 }
                 double gpa = calculateWeightedTopicGpa(alignedScores, spec.columns());
 
@@ -1148,7 +1148,7 @@ public class ClassOperationDatabaseService {
             Map<String, Double> existingScores = parseScoresJson(mark.getScoresJson());
             Map<String, Double> alignedScores = new LinkedHashMap<>();
             for (DynamicColumnSpec col : spec.columns()) {
-                alignedScores.put(col.key(), existingScores.getOrDefault(col.key(), 0.0));
+                alignedScores.put(col.key(), resolveAlignedScore(existingScores, col.key()));
             }
             double gpa = calculateWeightedTopicGpa(alignedScores, spec.columns());
             mark.setTopicTitle(spec.title());
@@ -1162,6 +1162,45 @@ public class ClassOperationDatabaseService {
         if (!updated.isEmpty()) {
             topicMarkRepository.saveAll(updated);
         }
+    }
+
+    private double resolveAlignedScore(Map<String, Double> existingScores, String colKey) {
+        if (existingScores.containsKey(colKey)) {
+            return existingScores.get(colKey);
+        }
+        int qIdx = colKey.indexOf("_q");
+        if (qIdx > 0) {
+            String baseKey = colKey.substring(0, qIdx);
+            if (existingScores.containsKey(baseKey)) {
+                return existingScores.get(baseKey);
+            }
+            double sum = 0.0;
+            int count = 0;
+            String prefix = baseKey + "_q";
+            for (Map.Entry<String, Double> e : existingScores.entrySet()) {
+                if (e.getKey().startsWith(prefix)) {
+                    sum += e.getValue();
+                    count++;
+                }
+            }
+            if (count > 0) {
+                return Math.round((sum / count) * 10.0) / 10.0;
+            }
+            return 0.0;
+        }
+        String prefix = colKey + "_q";
+        double sum = 0.0;
+        int count = 0;
+        for (Map.Entry<String, Double> e : existingScores.entrySet()) {
+            if (e.getKey().startsWith(prefix)) {
+                sum += e.getValue();
+                count++;
+            }
+        }
+        if (count > 0) {
+            return Math.round((sum / count) * 10.0) / 10.0;
+        }
+        return 0.0;
     }
 
     @SuppressWarnings("unchecked")
@@ -1225,7 +1264,23 @@ public class ClassOperationDatabaseService {
                         : "Assessment " + colIdx;
                 double weight = parseDoubleOrDefault(item.get("weightedNumber"), 0.0);
                 int quantity = Math.max(1, parseIntOrDefault(item.get("quantity"), 1));
-                columns.add(new DynamicColumnSpec(key, name, weight, quantity));
+                if (quantity <= 1) {
+                    columns.add(new DynamicColumnSpec(key, name, weight, 1));
+                } else {
+                    double perCol = Math.floor((weight / quantity) * 10.0) / 10.0;
+                    double assigned = 0.0;
+                    for (int q = 1; q <= quantity; q++) {
+                        double colWeight = (q == quantity)
+                                ? Math.round((weight - assigned) * 10.0) / 10.0
+                                : perCol;
+                        assigned = Math.round((assigned + colWeight) * 10.0) / 10.0;
+                        String qKey = key + "_q" + q;
+                        while (!usedColKeys.add(qKey)) {
+                            qKey = key + "_q" + q + "_" + (keySuffix++);
+                        }
+                        columns.add(new DynamicColumnSpec(qKey, name + " " + q, colWeight, quantity));
+                    }
+                }
             }
 
             if (columns.isEmpty()) {
