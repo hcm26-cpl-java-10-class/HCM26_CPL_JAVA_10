@@ -95,6 +95,7 @@ public class LearningRoadmapService {
         }
         long budgetMinutes = saved.goal().hoursPerWeek() * saved.goal().targetWeeks() * 60L;
         var candidates = catalog.candidates(userId, saved.goal()).stream()
+                .filter(course -> RuleBasedRoadmap.matchesRequiredTechnology(saved.goal(), course))
                 .filter(course -> course.status() == RoadmapCatalog.Status.COMPLETED
                         || course.durationMinutes() <= budgetMinutes)
                 .toList();

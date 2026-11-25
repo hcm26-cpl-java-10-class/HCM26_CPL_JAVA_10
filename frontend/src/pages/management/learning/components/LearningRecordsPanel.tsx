@@ -50,9 +50,14 @@ export function LearningRecordsPanel({
   const progressById = new Map(courseProgress?.map(course => [course.id, course]));
   const inProgressList = allEnrolled.filter(course => progressById.get(course.courseId)?.status === "IN_PROGRESS");
   const completedList = allEnrolled.filter(course => progressById.get(course.courseId)?.status === "COMPLETED");
-  const inProgressCourses = backendRecords.inProgressCourses;
-  const completedCourses = backendRecords.completedCourses;
-  const calculatedOverallProgress = backendRecords.overallProgress;
+  const inProgressCourses = courseProgress ? inProgressList.length : backendRecords.inProgressCourses;
+  const completedCourses = courseProgress ? completedList.length : backendRecords.completedCourses;
+  const measuredPercents = allEnrolled
+    .map(course => progressById.get(course.courseId)?.progressPercent)
+    .filter((value): value is number => value != null);
+  const calculatedOverallProgress = courseProgress && measuredPercents.length > 0
+    ? Math.round(measuredPercents.reduce((sum, value) => sum + value, 0) / measuredPercents.length)
+    : backendRecords.overallProgress;
 
   const metrics = [
     ["Enrolled courses", allEnrolled.length],
@@ -120,6 +125,7 @@ export function LearningRecordsPanel({
                 </span>
               </div>
               {allEnrolled.slice(0, 4).map((course) => {
+                const tracked = progressById.get(course.courseId);
                 return (
                   <div
                     key={course.id}
@@ -135,7 +141,7 @@ export function LearningRecordsPanel({
                         {course.instructor && <span>By {course.instructor}</span>}
                         {course.instructor && <span>•</span>}
                         <span className="font-semibold text-blue-600 dark:text-blue-400">
-                          Progress is not available
+                          {tracked?.progressPercent != null ? `${tracked.progressPercent}% complete` : "Progress is not available"}
                         </span>
                       </div>
                     </div>
@@ -259,7 +265,7 @@ export function LearningRecordsPanel({
             </div>
 
             <aside className="min-w-0 space-y-6 lg:col-span-4" aria-label="Learning summary">
-              <LearningActivityCalendar activityData={null} />
+              {!userId && <LearningActivityCalendar account={email} />}
               <LearningStatisticsCard stats={null} />
               <RecentCertificatesSidebar certificates={null} onViewCertificate={() => {}} />
             </aside>

@@ -37,4 +37,8 @@ public final class ReportData {
         Mode mode, Language language, Set<Section> sections, Instant generatedAt, AnalysisStatus aiStatus, boolean retryable) {}
     public record Detail(Item report, Snapshot snapshot, Analysis analysis, Map<String, Number> evidence) {}
     public record History(List<Item> items, long matches, long totalSaved, long createdThisMonth, Instant lastGenerated) {}
+    public record PerformanceDashboard(LocalDate from, LocalDate to, String zone, Overview overview,
+        List<Course> courses, Roadmap roadmap, Assessments assessments, List<String> limitations) {}
+    public record GoalsHabitsDashboard(LocalDate from, LocalDate to, String zone, ReportStudy study,
+        ReportStudy.Objectives objectives, List<String> limitations) {}
 }

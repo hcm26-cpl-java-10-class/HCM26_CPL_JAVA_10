@@ -21,6 +21,22 @@ import static com.example.starter_project_2025.system.learning.report.ReportData
 public class ReportController {
     private final ReportService reports;
     private final ReportExport exports;
+    private final ReportAggregation aggregation;
+
+    @GetMapping("/performance")
+    public PerformanceDashboard performance(@AuthenticationPrincipal UserPrincipal principal,
+        @RequestParam(required = false) LocalDate from,
+        @RequestParam(required = false) LocalDate to,
+        @RequestParam(required = false) Long courseId) {
+        return aggregation.performanceDashboard(principal, from, to, courseId);
+    }
+
+    @GetMapping("/goals-habits")
+    public GoalsHabitsDashboard goalsHabits(@AuthenticationPrincipal UserPrincipal principal,
+        @RequestParam(required = false) LocalDate from,
+        @RequestParam(required = false) LocalDate to) {
+        return aggregation.goalsHabitsDashboard(principal, from, to);
+    }
 
     @GetMapping("/options")
     public Options options(@AuthenticationPrincipal UserPrincipal principal) { return reports.options(principal); }
