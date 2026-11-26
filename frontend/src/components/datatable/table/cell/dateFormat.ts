@@ -1,4 +1,6 @@
-// ─── Date format utilities for datatable ─────────────────────────────────────
+import { createLocaleFormatter, type LocaleFormatter } from "@/i18n/format";
+import { toLanguage } from "@/i18n/languages";
+import i18n from "@/i18n";
 
 export type DateFormatKey = "datetime" | "date" | "time" | "relative" | "iso";
 
@@ -14,36 +16,17 @@ export const DATE_FORMAT_LABELS: Record<DateFormatKey, string> = {
   datetime: "D/M HH:mm",
   date: "DD/MM/YYYY",
   time: "HH:mm:ss",
-  relative: "Tương đối",
+  relative: "Relative",
   iso: "ISO 8601",
 };
 
-function formatRelative(d: Date): string {
-  const diff = Date.now() - d.getTime();
-  const abs = Math.abs(diff);
-  const future = diff < 0;
+const formatterFor = (): LocaleFormatter => createLocaleFormatter(toLanguage(i18n.language));
 
-  if (abs < 60_000) return future ? "vài giây nữa" : "vừa xong";
-  if (abs < 3_600_000) {
-    const m = Math.round(abs / 60_000);
-    return future ? `${m} phút nữa` : `${m} phút trước`;
-  }
-  if (abs < 86_400_000) {
-    const h = Math.round(abs / 3_600_000);
-    return future ? `${h} giờ nữa` : `${h} giờ trước`;
-  }
-  if (abs < 86_400_000 * 30) {
-    const d = Math.round(abs / 86_400_000);
-    return future ? `${d} ngày nữa` : `${d} ngày trước`;
-  }
-  if (abs < 86_400_000 * 365) {
-    const mo = Math.round(abs / (86_400_000 * 30));
-    return future ? `${mo} tháng nữa` : `${mo} tháng trước`;
-  }
-  const yr = Math.round(abs / (86_400_000 * 365));
-  return future ? `${yr} năm nữa` : `${yr} năm trước`;
-}
-
+/**
+ * Định dạng giá trị ngày theo locale của ngôn ngữ đang chọn.
+ *
+ * Hàm thuần: gọi ở render để giá trị luôn khớp với ngôn ngữ hiện tại.
+ */
 export function formatDateValue(
   value: any,
   format: DateFormatKey = "datetime"
@@ -51,32 +34,20 @@ export function formatDateValue(
   if (!value) return "—";
   try {
     const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    const formatter = formatterFor();
     switch (format) {
       case "date":
-        return d.toLocaleDateString("vi-VN", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-        });
+        return formatter.formatDate(d);
       case "time":
-        return d.toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        });
+        return formatter.formatTime(d);
       case "relative":
-        return formatRelative(d);
+        return formatter.formatRelative(d);
       case "iso":
         return d.toISOString();
       case "datetime":
       default:
-        return d.toLocaleDateString("vi-VN", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
+        return formatter.formatDateTime(d);
     }
   } catch {
     return String(value);

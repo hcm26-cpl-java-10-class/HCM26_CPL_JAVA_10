@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface UseAutoPageSizeOptions {
-  /** Height of table header in pixels. Default: 41 */
+
   headerHeight?: number;
-  /** Height of each row in pixels. Default: 49 */
+
   rowHeight?: number;
-  /** Minimum page size. Default: 5 */
+
   minSize?: number;
-  /** Maximum page size. Default: 50 */
+
   maxSize?: number;
-  /** Callback when page size changes */
+
   onSizeChange?: (size: number) => void;
 }
 
@@ -31,12 +31,11 @@ export function useAutoPageSize(options: UseAutoPageSizeOptions = {}) {
 
     const containerHeight = containerRef.current.clientHeight;
     const availableHeight = containerHeight - headerHeight;
-    
+
     let size = Math.floor(availableHeight / rowHeight);
-    
-    // Clamp between min and max
+
     size = Math.max(minSize, Math.min(maxSize, size));
-    
+
     if (size !== lastSizeRef.current) {
       lastSizeRef.current = size;
       setCalculatedSize(size);
@@ -45,7 +44,6 @@ export function useAutoPageSize(options: UseAutoPageSizeOptions = {}) {
   }, [headerHeight, rowHeight, minSize, maxSize, onSizeChange]);
 
   useEffect(() => {
-    // Initial calculation with a small delay to ensure DOM is ready
     const timeoutId = setTimeout(calculatePageSize, 100);
 
     const resizeObserver = new ResizeObserver(() => {

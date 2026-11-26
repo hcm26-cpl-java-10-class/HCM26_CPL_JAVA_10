@@ -8,6 +8,7 @@ import lombok.experimental.NonFinal;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -52,6 +53,7 @@ public class SecurityConfig {
             "/actuator/health",
             "/swagger-ui.html",
             "/swagger-ui/**",
+            "/uploads/**",
             "/v3/api-docs/**",
             "/ws/**",
             "/public/**",
@@ -59,7 +61,20 @@ public class SecurityConfig {
             "/oauth2/**",
             "/login/oauth2/**",
             "/verify/**",
-            "/api/auth/**",
+            "/api/auth/login",
+            "/api/auth/register",
+            "/api/auth/refresh",
+            "/api/auth/logout",
+            "/api/auth/forgot-password",
+            "/api/auth/reset-password",
+            "/api/auth/resend-verification",
+            "/api/external/**",
+            "/api/public/**",
+            "/api/exams/verify-access/**",
+            "/api/exams/anonymous-session",
+            "/api/exams/anonymous/**",
+            "/api/i18n/translate",
+            "/api/i18n/languages",
             "/h2-console/**"
     };
 
@@ -81,11 +96,13 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers(PUBLIC_ENDPOINTS).permitAll();
+                    auth.requestMatchers(HttpMethod.GET, "/api/lesson-audio/**").permitAll();
+                    auth.requestMatchers(HttpMethod.GET, "/api/lesson-documents/**").permitAll();
                     auth.anyRequest().authenticated();
                 })
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)   // 401
-                        .accessDeniedHandler(jwtAccessDeniedHandler)             // 403
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler(jwtAccessDeniedHandler)
                 )
                 .oauth2Login(oauth2 -> oauth2
                         .successHandler(oAuth2AuthenticationSuccessHandler)
@@ -99,7 +116,13 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(frontendUrl, backendUrl, "http://localhost:5173", "http://localhost:8080"));
+        // Vite tự chọn port khi 5173 đã bận, nên pattern được dùng cho mọi port của localhost.
+        config.setAllowedOriginPatterns(List.of(
+                frontendUrl,
+                backendUrl,
+                "http://localhost:[*]",
+                "http://127.0.0.1:[*]"
+        ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

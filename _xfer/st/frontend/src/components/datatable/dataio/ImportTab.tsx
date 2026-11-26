@@ -1,0 +1,402 @@
+import { useRef, useState } from "react";
+import { toast } from "sonner";
+
+import { downloadTemplate } from "@/api/features/dataio/dataio-api";
+import type { ImportResult } from "@/types";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { TabsContent } from "@/components/ui/tabs";
+
+import {
+  FileSpreadsheet,
+  FileText,
+  Loader2,
+  Upload,
+  X,
+} from "lucide-react";
+
+const DEFAULT_EXTENSIONS = [
+  ".xlsx",
+  ".xls",
+  ".csv",
+];
+
+const DEFAULT_MAX_SIZE = 50 * 1024 * 1024;
+
+interface ImportTabProps {
+  loading: boolean;
+  onImport: (file: File) => Promise<void>;
+  entityName?: string;
+  allowedExtensions?: string[];
+  maxFileSizeBytes?: number;
+  /** @deprecated Use `maxFileSizeBytes` instead. Kept for existing call sites. */
+  maxFileSize?: number;
+  onDownloadTemplate?: () => Promise<void>;
+  /** Optional dry-run. When given, the file is checked first and Import is blocked until it has no errors. */
+  onPreview?: (file: File) => Promise<ImportResult>;
+}
+
+export function ImportTab({
+                            loading,
+                            onImport,
+                            entityName,
+                            allowedExtensions = DEFAULT_EXTENSIONS,
+                            maxFileSizeBytes,
+                            maxFileSize,
+                            onDownloadTemplate,
+                            onPreview,
+                          }: ImportTabProps) {
+  const [file, setFile] = useState<File | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [downloadingFormat, setDownloadingFormat] = useState<"xlsx" | "csv" | null>(null);
+
+  const [preview, setPreview] = useState<ImportResult | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const maxFileSizeLimit = maxFileSizeBytes ?? maxFileSize ?? DEFAULT_MAX_SIZE;
+  const accept = allowedExtensions.join(",");
+  const extensions = allowedExtensions.map((ext) => ext.toLowerCase());
+
+  const maxSizeLabel =
+      maxFileSizeLimit === DEFAULT_MAX_SIZE
+          ? "50 MB"
+          : `${Number((maxFileSizeLimit / 1_000_000).toFixed(2))} MB`;
+
+  function resetFileInput() {
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
+  }
+
+  function clearFile() {
+    setPreview(null);
+    setFile(null);
+    setError(null);
+    resetFileInput();
+  }
+
+  function rejectFile(message: string) {
+    setFile(null);
+    setError(message);
+    resetFileInput();
+  }
+
+  // =========================================
+  // FILE VALIDATION
+  // =========================================
+  function selectFile(selected: File | null) {
+    if (!selected || loading) {
+      return;
+    }
+
+    const validExtension = extensions.some((ext) =>
+        selected.name.toLowerCase().endsWith(ext)
+    );
+
+    if (!validExtension) {
+      rejectFile(`Only ${allowedExtensions.join(", ")} files are allowed.`);
+      return;
+    }
+
+    if (selected.size > maxFileSizeLimit) {
+      rejectFile(`File size must not exceed ${maxSizeLabel}.`);
+      return;
+    }
+
+    if (selected.size === 0) {
+      rejectFile("The selected file is empty.");
+      return;
+    }
+
+    setFile(selected);
+    setError(null);
+    void runPreview(selected);
+  }
+
+  async function runPreview(selected: File) {
+    setPreview(null);
+    if (!onPreview) {
+      return;
+    }
+    setPreviewing(true);
+    try {
+      setPreview(await onPreview(selected));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not check the file.");
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  const previewBlocksImport =
+      !!onPreview && (previewing || !preview || preview.failureCount > 0 || preview.errors.length > 0);
+
+  // =========================================
+  // IMPORT
+  // =========================================
+  async function handleImport() {
+    if (!file || loading) {
+      return;
+    }
+
+    try {
+      setError(null);
+      await onImport(file);
+      clearFile();
+    } catch (error: unknown) {
+      setError(
+          error instanceof Error
+              ? error.message
+              : "Failed to import data."
+      );
+    }
+  }
+
+  // =========================================
+  // TEMPLATE DOWNLOAD
+  // =========================================
+  async function handleDownloadTemplate(format: "xlsx" | "csv" = "xlsx") {
+    if (downloadingFormat !== null || loading) {
+      return;
+    }
+
+    if (!onDownloadTemplate && !entityName) {
+      return;
+    }
+
+    try {
+      setDownloadingFormat(format);
+
+      if (onDownloadTemplate) {
+        await onDownloadTemplate();
+      } else if (entityName) {
+        await downloadTemplate(entityName, format);
+      }
+
+      toast.success(`Downloaded ${format.toUpperCase()} template.`);
+    } catch {
+      toast.error("Unable to download template.");
+    } finally {
+      setDownloadingFormat(null);
+    }
+  }
+
+  return (
+      <TabsContent
+          value="import"
+          className="mt-4 flex flex-1 flex-col gap-4"
+      >
+        {/* DOWNLOAD TEMPLATE */}
+        {(entityName || onDownloadTemplate) && (
+            <div className="rounded-xl border border-border/80 bg-muted/30 p-3.5 space-y-2">
+              <p className="text-xs font-semibold text-foreground flex items-center justify-between">
+                <span>Step 1: Download sample format template</span>
+                <span className="text-[11px] font-normal text-muted-foreground">Required columns included</span>
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs gap-1.5"
+                    disabled={loading || downloadingFormat !== null}
+                    onClick={() => void handleDownloadTemplate("xlsx")}
+                >
+                  {downloadingFormat === "xlsx" ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                      <FileSpreadsheet className="size-3.5 text-emerald-500" />
+                  )}
+                  Excel Template (.xlsx)
+                </Button>
+
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs gap-1.5"
+                    disabled={loading || downloadingFormat !== null}
+                    onClick={() => void handleDownloadTemplate("csv")}
+                >
+                  {downloadingFormat === "csv" ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                      <FileText className="size-3.5 text-blue-500" />
+                  )}
+                  CSV Template (.csv)
+                </Button>
+              </div>
+            </div>
+        )}
+
+        {/* FILE UPLOAD */}
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-foreground">Step 2: Choose your file to upload</p>
+          {!file ? (
+              <div
+                  role="button"
+                  tabIndex={loading ? -1 : 0}
+                  aria-label="Select an import file"
+                  onClick={() => {
+                    if (!loading) {
+                      inputRef.current?.click();
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (
+                        !loading &&
+                        (
+                            event.key === "Enter" ||
+                            event.key === " "
+                        )
+                    ) {
+                      event.preventDefault();
+                      inputRef.current?.click();
+                    }
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    if (!loading) {
+                      setDragging(true);
+                    }
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setDragging(false);
+                    if (!loading) {
+                      selectFile(event.dataTransfer.files?.[0] ?? null);
+                    }
+                  }}
+                  className={`flex min-h-44 flex-1 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
+                      dragging
+                          ? "border-primary bg-accent/30"
+                          : "border-muted hover:border-primary hover:bg-accent/30"
+                  } ${
+                      loading
+                          ? "pointer-events-none opacity-50"
+                          : ""
+                  }`}
+              >
+                <div className="flex size-12 items-center justify-center rounded-full bg-primary/10">
+                  <Upload className="size-6 text-muted-foreground" />
+                </div>
+
+                <p className="text-sm font-medium">
+                  Click to upload or drag and drop
+                </p>
+
+                <p className="text-xs text-muted-foreground">
+                  {allowedExtensions.join(", ")}
+                  {" — max "}
+                  {maxSizeLabel}
+                </p>
+
+                <Input
+                    ref={inputRef}
+                    type="file"
+                    accept={accept}
+                    className="hidden"
+                    disabled={loading}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={(event) =>
+                        selectFile(event.target.files?.[0] ?? null)
+                    }
+                />
+              </div>
+          ) : (
+              /* SELECTED FILE */
+              <div className="flex flex-1 flex-col gap-4">
+                <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+                  <FileSpreadsheet className="size-5 shrink-0 text-primary" />
+
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">
+                      {file.name}
+                    </p>
+
+                    <p className="text-xs text-muted-foreground">
+                      {(file.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+
+                  <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={loading}
+                      aria-label="Remove selected file"
+                      onClick={clearFile}
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </div>
+
+                {onPreview && (
+                    <div className="rounded-lg border p-3 text-sm" aria-live="polite">
+                      {previewing && (
+                          <p className="flex items-center gap-2 text-muted-foreground">
+                            <Loader2 className="size-4 animate-spin" /> Checking file...
+                          </p>
+                      )}
+                      {!previewing && preview && preview.errors.length === 0 && (
+                          <p className="text-emerald-600">
+                            {preview.successCount} of {preview.totalCount} rows are valid and ready to import.
+                          </p>
+                      )}
+                      {!previewing && preview && preview.errors.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-destructive">
+                              {preview.errors.length} error{preview.errors.length === 1 ? "" : "s"} found in {preview.totalCount} rows.
+                              Nothing is imported until the file is fixed.
+                            </p>
+                            <ul className="max-h-40 space-y-1 overflow-y-auto text-xs">
+                              {preview.errors.slice(0, 100).map((e, i) => (
+                                  <li key={`${e.rowNumber}-${i}`}>
+                                    <span className="font-medium">Row {e.rowNumber}:</span> {e.message}
+                                  </li>
+                              ))}
+                            </ul>
+                          </div>
+                      )}
+                    </div>
+                )}
+
+                <Button
+                    type="button"
+                    className="mt-auto w-full"
+                    disabled={loading || previewBlocksImport}
+                    onClick={() => void handleImport()}
+                >
+                  {loading ? (
+                      <>
+                        <Loader2 className="mr-2 size-4 animate-spin" />
+                        Importing...
+                      </>
+                  ) : (
+                      <>
+                        <Upload className="mr-2 size-4" />
+                        Import File
+                      </>
+                  )}
+                </Button>
+              </div>
+          )}
+        </div>
+
+        {/* ERROR MESSAGE */}
+        {error && (
+            <p
+                role="alert"
+                className="text-sm text-destructive"
+            >
+              {error}
+            </p>
+        )}
+      </TabsContent>
+  );
+}

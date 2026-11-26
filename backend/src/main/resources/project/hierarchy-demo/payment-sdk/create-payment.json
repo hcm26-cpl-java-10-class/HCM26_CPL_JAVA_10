@@ -1,0 +1,6 @@
+{
+  "orderId": "DEMO-ORDER-001",
+  "amount": 120000,
+  "currency": "VND",
+  "idempotencyKey": "demo-payment-001"
+}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,8 @@ import { setLogin } from "@/store/slices/auth/authSlice";
 import { authApi } from "@/api/features/auth.api";
 import axios from "axios";
 import { Eye, EyeOff } from "lucide-react";
-import { getHomePathByRole } from "@/utils/rbac.utils";
+import { getHomePathByRole, resolveEffectivePermissions } from "@/utils/rbac.utils";
+import { useRoleSwitch } from "@/contexts/RoleSwitchContext";
 
 const URL_LOGIN_WITH_GOOGLE =
     import.meta.env.VITE_API_URL_FOR_GOOGLE || "http://localhost:8080/oauth2/authorization/google";
@@ -40,6 +42,7 @@ export const Login: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const dispatch = useDispatch();
+    const { setViewRole } = useRoleSwitch();
 
     useEffect(() => {
         const oauthErrorMessage = getOAuthErrorMessage(searchParams.get("error"));
@@ -53,11 +56,11 @@ export const Login: React.FC = () => {
         setError("");
         setIsLoading(true);
         const cleanEmail = email.trim();
-        const cleanPassword = password.trim();
         try {
-            const res = await authApi.login({ email: cleanEmail, password: cleanPassword, isRememberedMe });
+            const res = await authApi.login({ email: cleanEmail, password, isRememberedMe });
+            setViewRole(null);
             dispatch(setLogin(res));
-            navigate(getHomePathByRole(res.role), { replace: true });
+            navigate(getHomePathByRole(res.role, resolveEffectivePermissions(res.role, res.rolePermissions, res.permissions)), { replace: true });
         } catch (err) {
             if (axios.isAxiosError(err)) {
                 const backendMsg = err.response?.data?.message;
@@ -85,6 +88,7 @@ export const Login: React.FC = () => {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-background p-4">
+            <div className="fixed right-4 top-4 z-50"><LanguageSwitcher /></div>
             <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -125,6 +129,14 @@ export const Login: React.FC = () => {
                             <label htmlFor="password" className="text-sm font-medium leading-none">
                                 Password
                             </label>
+                            <Button
+                                type="button"
+                                variant="link"
+                                className="p-0 h-auto text-xs font-medium text-muted-foreground hover:text-foreground"
+                                onClick={() => navigate("/forgot-password")}
+                            >
+                                Forgot password?
+                            </Button>
                         </div>
                         <div className="flex justify-items-center">
                             <Input
@@ -147,7 +159,11 @@ export const Login: React.FC = () => {
                     </div>
 
                     <div className="flex items-center space-x-2">
-                        <Checkbox id="remember" onCheckedChange={(checked: boolean) => handleIsRememberMe(checked)} />
+                        <Checkbox
+                            id="remember"
+                            checked={isRememberedMe}
+                            onCheckedChange={(checked) => handleIsRememberMe(checked === true)}
+                        />
                         <label htmlFor="remember" className="text-sm font-medium leading-none cursor-pointer">
                             Remember me
                         </label>
@@ -197,23 +213,25 @@ export const Login: React.FC = () => {
                     </p>
                 </div>
 
-                <div className="mt-8 pt-6 border-t border-dashed">
-                    <p className="text-xs font-semibold uppercase text-muted-foreground mb-3">(Test Only):</p>
-                    <div className="space-y-2 text-sm bg-muted/50 p-3 rounded-lg border">
-                        <p className="flex justify-between">
-                            <span className="text-muted-foreground font-mono text-[11px]">ADMIN:</span>
-                            <span className="font-medium">admin@example.com / password123</span>
-                        </p>
-                        <p className="flex justify-between">
-                            <span className="text-muted-foreground font-mono text-[11px]">STUDENT:</span>
-                            <span className="font-medium">student@example.com / password123</span>
-                        </p>
-                        <p className="flex justify-between">
-                            <span className="text-muted-foreground font-mono text-[11px]">TEACHER:</span>
-                            <span className="font-medium">teacher@example.com / password123</span>
-                        </p>
+                {import.meta.env.DEV && (
+                    <div className="mt-8 pt-6 border-t border-dashed">
+                        <p className="text-xs font-semibold uppercase text-muted-foreground mb-3">(Dev Test Only):</p>
+                        <div className="space-y-2 text-sm bg-muted/50 p-3 rounded-lg border">
+                            <p className="flex justify-between">
+                                <span className="text-muted-foreground font-mono text-[11px]">ADMIN:</span>
+                                <span className="font-medium">admin@example.com / password123</span>
+                            </p>
+                            <p className="flex justify-between">
+                                <span className="text-muted-foreground font-mono text-[11px]">STUDENT:</span>
+                                <span className="font-medium">student@example.com / password123</span>
+                            </p>
+                            <p className="flex justify-between">
+                                <span className="text-muted-foreground font-mono text-[11px]">TEACHER:</span>
+                                <span className="font-medium">teacher@example.com / password123</span>
+                            </p>
+                        </div>
                     </div>
-                </div>
+                )}
             </motion.div>
         </div>
     );

@@ -22,7 +22,7 @@ export interface BaseFilter {
   createdRange?: [string, string];
 
   updatedRange?: [string, string];
-  
+
   createdBy?: number;
 
   updatedBy?: number;

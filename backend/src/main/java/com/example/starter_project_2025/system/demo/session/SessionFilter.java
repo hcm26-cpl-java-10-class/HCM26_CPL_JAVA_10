@@ -13,6 +13,7 @@ import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -22,17 +23,19 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SessionFilter extends BaseFilter {
 
-    @FilterField(entityField = "classId", operator = FilterOperator.EQUAL)
-    Long classId;
+    // The list screens offer multi-select filters: a repeated parameter (classId=1&classId=2) matches any of the
+    // values, while a single value (classId=1) keeps behaving exactly like an equality filter.
+    @FilterField(entityField = "classId", operator = FilterOperator.IN)
+    List<Long> classId;
 
-    @FilterField(entityField = "trainerId", operator = FilterOperator.EQUAL)
-    Long trainerId;
+    @FilterField(entityField = "trainerId", operator = FilterOperator.IN)
+    List<Long> trainerId;
 
     @FilterField(entityField = "topicId", operator = FilterOperator.EQUAL)
     Long topicId;
 
-    @FilterField(entityField = "status", operator = FilterOperator.EQUAL)
-    Session.SessionStatus status;
+    @FilterField(entityField = "status", operator = FilterOperator.IN)
+    List<Session.SessionStatus> status;
 
     @FilterField(entityField = "title", operator = FilterOperator.LIKE)
     String title;
@@ -45,4 +48,34 @@ public class SessionFilter extends BaseFilter {
 
     @FilterField(entityField = "endTime", operator = FilterOperator.LESS_OR_EQUAL)
     LocalDateTime toDate;
+
+    /**
+     * Build a calendar query filter without mutating fields through setters.
+     */
+    public static SessionFilter forCalendarRange(
+            LocalDateTime from,
+            LocalDateTime to,
+            String status,
+            Long classId,
+            Long trainerId,
+            Long topicId,
+            String location
+    ) {
+        List<Session.SessionStatus> statuses = null;
+        if (status != null && !status.isBlank()) {
+            try {
+                statuses = List.of(Session.SessionStatus.valueOf(status.trim().toUpperCase()));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        return SessionFilter.builder()
+                .fromDate(from)
+                .toDate(to)
+                .status(statuses)
+                .classId(classId != null ? List.of(classId) : null)
+                .trainerId(trainerId != null ? List.of(trainerId) : null)
+                .topicId(topicId)
+                .location(location)
+                .build();
+    }
 }

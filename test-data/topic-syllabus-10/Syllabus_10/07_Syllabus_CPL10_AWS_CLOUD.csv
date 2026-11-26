@@ -1,0 +1,54 @@
+﻿,,,,,,,,
+,,,,,,,,
+,Fresher / OJT Training Program,,,,,,,
+,AWS CLOUD ARCHITECTURE & SERVERLESS LAMBDA SYLLABUS,,,,,,,
+,,,,,,,,
+,,,,,Document Code,,,SYL-CPL10_AWS_CLOUD
+,,,,,Version,,,1.0
+,,,,,Effective Date,,,11/11/2026
+AWS Cloud Architecture & Serverless Lambda Syllabus,,,,,,,,
+1,Technical Group,Cloud,,,,,,
+2,Topic Name,AWS Cloud Architecture & Serverless Lambda,,,,,,
+3,Topic Code,CPL10_AWS_CLOUD,,,,,,
+4,Version,1.0,,,,,,
+5,Training Audience,Software Engineers preparing for cloud-native backend deployment,,,,,,
+6,Course Objectives,"Architect scalable cloud solutions on AWS using IAM least-privilege, VPC networking, S3, RDS, API Gateway, and Serverless Lambda functions.",,,,,,
+7,Topic Outline,"- Unit 1: IAM Security, VPC Networking & Compute
+- Unit 2: Storage, Managed Databases & Serverless
+- Unit 3: Cloud Cost Optimization & Observability
+- Unit 4: Cloud Architecture Assessment",,,,,,
+8,Time Allocation,Concept/Lecture,0.25,"Theory, architecture concepts",8 Sessions,,,
+,,Assignment/Lab,0.33,Hands-on coding & exercises,,,,
+,,Guides/Review,0.08,Code walkthrough & Q&A,,,,
+,,Seminar/Workshop,0.13,Interactive seminar & debugging,,,,
+,,Exam,0.21,Quizzes & practical defense exam,,,,
+9,Training Materials & Environments,Text book,Official Cloud Documentation & FAMS Guides,,,,,
+,,References,FAMS Internal LMS Knowledge Base,,,,,
+,,Technical requirements,"Modern IDE, Docker, Git, Browser DevTools",,,,,
+10,Assessment Scheme,Quizzes & Knowledge Tests,2,20,Short quizzes checking core theory (>= 6.0 / 10),,,
+,,Practical Lab Test,2,30,Hands-on lab assignments & Git code quality (>= 6.0 / 10),,,
+,,Final Practical Test,1,50,Capstone implementation & live defense (>= 6.0 / 10),,,
+,,Pass Criteria,6,Overall GPA >= 6.0 / 10; Complete 100% quizzes and final practical test,,,,
+11,Training Delivery Principles,Trainees,Completed prerequisite track; Active participation in daily labs,,,,,
+,Training Delivery Principles,Trainer,Senior Cloud Engineer / Technical Mentor,,,,,
+,Training Delivery Principles,Training,"- Concept lectures in morning or online
+- Hands-on lab exercises & reviews in afternoon
+- Max 4h (240 mins) per session",,,,,
+,Training Delivery Principles,Re-Test,2 - Allow up to 2 re-takes with different exam variants,,,,,
+,Training Delivery Principles,Marking,Evaluated by trainer against official FAMS rubric,,,,,
+,Training Delivery Principles,Waiver Criteria,Fast-track entry exam score >= 8.5 / 10,,,,,
+,,,,,,,,
+AWS Cloud Architecture & Serverless Lambda - Training Schedule,,,,,,,,
+Training Unit/Chapter,,Session,Content,Learning Objectives,Delivery Type,Duration (mins),Training Format,Training Materials / Logistics & General Notes
+1,"IAM Security, VPC Networking & Compute",1,AWS Well-Architected Framework & IAM Policies,"Design least-privilege IAM roles, security groups, and VPC subnets",Concept/Lecture,180,Offline - Sáng (Morning),Slide-AWS-IAM-VPC.pdf
+,,2,"VPC, ALB & EC2 Auto Scaling Architecture Lab",Deploy high-availability web tier across public/private subnets,Assignment/Lab,240,Offline - Chiều (Afternoon),Lab-01-AWS-VPC-ALB.pdf
+2,"Storage, Managed Databases & Serverless",3,"S3 Lifecycle, CloudFront CDN & RDS Multi-AZ","Configure presigned S3 uploads, caching headers, and RDS read replicas",Concept/Lecture,180,Online - Sáng (Morning),Slide-AWS-S3-RDS.pdf
+,,4,"Serverless API with AWS Lambda, API Gateway & SQS Lab",Build event-driven thumbnail/notification worker in AWS SAM,Assignment/Lab,240,Offline - Chiều (Afternoon),Lab-02-Lambda-SQS.zip
+3,Cloud Cost Optimization & Observability,5,"CloudWatch Alarms, Structured Logs & Cost Budgets",Set billing alerts and trace serverless cold starts,Seminar/Workshop,180,Online - Sáng (Morning),Workshop-CloudWatch-FinOps.pdf
+,,6,AWS Architecture Design Review,Critique sample production topologies for fault tolerance and cost,Guides/Review,120,Online - Chiều (Afternoon),Review-AWS-Diagrams.pdf
+4,Cloud Architecture Assessment,7,AWS Core Services & Security Quiz,"Test IAM evaluation, VPC routing, and serverless limits",Test/Quiz,120,Offline - Sáng (Morning),Quiz-AWS-Cloud.pdf
+,,8,Cloud Solution Architecture Blueprint Exam,Design and defend scalable AWS architecture for e-learning platform,Exam,180,Offline - Chiều (Afternoon),Exam-AWS-Rubric.pdf
+,,,,,,,,
+AUTHORSHIP,,,,,,,,
+,Role,Name,Account,Unit,Notes,,,
+,Course Lead,Le Minh Hoang,hoanglm26,Training Department,HCM26_CPL_JAVA_10,,,

@@ -1,0 +1,43 @@
+package com.example.starter_project_2025.system.demo.progress;
+
+import com.example.starter_project_2025.system.demo.lesson.LessonContentType;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+public record LessonProgressDTO(
+        Long enrollmentId,
+        Long courseId,
+        String courseName,
+        int totalLessons,
+        int completedLessons,
+        int progressPercentage,
+        Long lastLessonId,
+        LocalDateTime lastAccessedAt,
+        List<LessonItem> lessons,
+        boolean courseCompleted,
+        String assessmentStatus,
+        java.math.BigDecimal overallScore,
+        java.util.Map<Long, String> assessmentOutcomes
+) {
+    public record LessonItem(
+            Long lessonId,
+            Long sectionId,
+            String sectionTitle,
+            String title,
+            LessonContentType contentType,
+            String contentUrl,
+            String textContent,
+            Integer duration,
+            Integer orderIndex,
+            String studentAnswer,
+            boolean completed,
+            LocalDateTime completedAt,
+            LocalDateTime lastAccessedAt,
+            /** Tổng số giây học viên đã dành cho bài học này. */
+            Long studySeconds,
+            /** true = học viên được phép tua video của bài học này. */
+            boolean allowSeeking
+    ) {
+    }
+}

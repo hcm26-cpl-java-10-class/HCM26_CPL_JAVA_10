@@ -5,6 +5,7 @@ import {
   type EntitySchema,
   type FieldSchema,
 } from "@/types";
+import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 
 const moduleGroupSchema: EntitySchema = {
   entityName: "module-group",
@@ -39,3 +40,5 @@ export const entityConfig: EntityConfig = {
   api: moduleGroupApi,
   schema: moduleGroupSchema,
 };
+
+export default ModuleGroupModulePage;
