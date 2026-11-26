@@ -195,6 +195,7 @@ export interface ExternalClass {
     keyProgram?: string;
     globalSe?: string;
     jobRecommendation?: string;
+    hasSchedule?: boolean;
 }
 
 export interface ExternalTrainer {

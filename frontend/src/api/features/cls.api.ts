@@ -14,6 +14,7 @@ export type ClassStatus =
 
 export interface TrainingClass {
     traineeSource?: "internal";
+    hasSchedule?: boolean;
     id: number;
     code: string;
     name: string;
