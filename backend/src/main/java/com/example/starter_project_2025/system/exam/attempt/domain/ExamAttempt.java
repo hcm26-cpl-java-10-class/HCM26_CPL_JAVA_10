@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Set;
 import com.example.starter_project_2025.system.exam.core.domain.Exam;
 import com.example.starter_project_2025.system.exam.core.domain.LatePolicy;
+import com.example.starter_project_2025.system.exam.grading.domain.AiEssayGradingState;
 import com.example.starter_project_2025.system.exam.pool.domain.ExamQuestionPoolVersion;
 
 @Entity
@@ -99,6 +100,26 @@ public class ExamAttempt extends BaseEntity {
     private String lastClientId;
 
     private Instant lastClientSeenAt;
+
+    // ===== Batch AI Essay Grading + Human Review & Confirmation State =====
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ai_grading_state", length = 30)
+    private AiEssayGradingState aiGradingState;
+
+    @Column(name = "ai_proposed_essay_score", precision = 12, scale = 4)
+    private BigDecimal aiProposedEssayScore;
+
+    @Column(name = "ai_graded_at")
+    private Instant aiGradedAt;
+
+    @Column(name = "ai_grading_error", length = 1000)
+    private String aiGradingError;
+
+    @Column(name = "confirmed_by")
+    private Long confirmedBy;
+
+    @Column(name = "confirmed_at")
+    private Instant confirmedAt;
 
     @OneToMany(mappedBy = "attempt", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ExamAttemptAnswer> answers = new HashSet<>();

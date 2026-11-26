@@ -55,10 +55,11 @@ docker/.env
 *.log
 
 /backend.zip
-# Ignore vscode AI rules & Codacy (keep GitHub workflows & PR template tracked)
+# Ignore other local .github artifacts (keep workflows, PR template & path-scoped instructions tracked)
 .github/*
 !.github/pull_request_template.md
 !.github/workflows/
+!.github/instructions/
 .codacy/
 
 /backend/compile.log

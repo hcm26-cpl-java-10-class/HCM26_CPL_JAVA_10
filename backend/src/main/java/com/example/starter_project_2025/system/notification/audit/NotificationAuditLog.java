@@ -18,6 +18,12 @@ import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
 
+/**
+ * Immutable audit log snapshot recording notification policy, template, and bulk-email actions.
+ * Denormalized fields such as {@code actorEmail}, {@code beforeState}, and {@code afterState}
+ * intentionally capture the state at the moment the event occurred and are not a source of truth
+ * for current user or entity data.
+ */
 @Entity
 @Getter
 @Setter

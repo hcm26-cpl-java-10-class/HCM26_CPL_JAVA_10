@@ -1,4 +1,4 @@
-import { useContext } from "react";
+import { useCallback, useContext, useState } from "react";
 import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 import { examApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -16,6 +16,7 @@ import type { EssayAttemptStatus } from "@/types";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, Eye, RefreshCw, ShieldAlert } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
+import { BatchAiGradingPanel } from "./BatchAiGradingPanel";
 
 export const ESSAY_STATUS_LABEL: Record<EssayAttemptStatus, string> = {
     IN_PROGRESS: "In Progress",
@@ -40,6 +41,22 @@ export default function EssayAttemptListPage() {
         queryFn: () => examApi.listEssayAttempts(numericExamId),
         enabled: validId,
     });
+    const [isManualReloading, setIsManualReloading] = useState(false);
+
+    const handleBatchCompleted = useCallback(() => {
+        void attemptsQuery.refetch();
+    }, [attemptsQuery]);
+
+    const handleManualReload = async () => {
+        if (isManualReloading) return;
+        setIsManualReloading(true);
+        try {
+            await attemptsQuery.refetch();
+        } finally {
+            setIsManualReloading(false);
+        }
+    };
+
     const rows = [...(attemptsQuery.data ?? [])].sort(
         (a, b) => Number(a.status === "SUBMITTED") - Number(b.status === "SUBMITTED"),
     );
@@ -71,12 +88,19 @@ export default function EssayAttemptListPage() {
                             <ShieldAlert className="size-4 text-purple-600" />
                             AI Similarity Check
                         </Button>
-                        <Button variant="outline" onClick={() => void attemptsQuery.refetch()} disabled={attemptsQuery.isFetching}>
-                            <RefreshCw className="size-4" />
+                        <Button variant="outline" onClick={() => void handleManualReload()} disabled={isManualReloading}>
+                            <RefreshCw className={`size-4 ${isManualReloading ? "animate-spin" : ""}`} />
                             Reload
                         </Button>
                     </div>
                 </header>
+
+                {validId && (
+                    <BatchAiGradingPanel
+                        examId={numericExamId}
+                        onBatchCompleted={handleBatchCompleted}
+                    />
+                )}
 
                 <div className="overflow-hidden rounded-md border bg-background">
                     <Table>
