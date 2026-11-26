@@ -70,4 +70,35 @@ public class ExamAttemptAnswer extends BaseEntity {
 
     /** Thoi diem som nhat duoc thu cham lai tu dong. */
     private Instant nextGradeAt;
+
+    // ===== AI Essay Draft Grading Results (Never exposed to students until CONFIRMED) =====
+    @Column(name = "ai_proposed_score", precision = 12, scale = 4)
+    private BigDecimal aiProposedScore;
+
+    @Column(name = "ai_feedback", columnDefinition = "TEXT")
+    private String aiFeedback;
+
+    @Column(name = "ai_reasoning", columnDefinition = "TEXT")
+    private String aiReasoning;
+
+    @Column(name = "ai_analysis", columnDefinition = "TEXT")
+    private String aiAnalysis;
+
+    @Column(name = "ai_criterion_scores_json", columnDefinition = "TEXT")
+    private String aiCriterionScoresJson;
+
+    @Column(name = "ai_flag_ambiguous")
+    private Boolean aiFlagAmbiguous;
+
+    @Column(name = "ai_flag_reason", length = 1000)
+    private String aiFlagReason;
+
+    @Column(name = "ai_graded_at")
+    private Instant aiGradedAt;
+
+    @Column(name = "ai_grading_status", length = 30)
+    private String aiGradingStatus;
+
+    @Column(name = "ai_grading_error", length = 1000)
+    private String aiGradingError;
 }

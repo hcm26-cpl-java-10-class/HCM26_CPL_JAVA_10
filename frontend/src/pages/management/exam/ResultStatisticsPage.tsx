@@ -28,6 +28,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { IntegrityReportSection } from "./IntegrityReportSection"; // NEW (anti-cheat)
 import { ItemAnalysisSection } from "./ItemAnalysisSection";
+import { BatchAiGradingPanel } from "./grading/BatchAiGradingPanel";
 import { downloadBlob, getFilenameFromHeader } from "@/components/datatable/util/dataio.utils";
 
 
@@ -1071,6 +1072,16 @@ export default function ResultStatisticsPage({
                         )}
 
                         {tab === "attempts" && (
+                            <>
+                            {validExamId && (
+                                <BatchAiGradingPanel
+                                    examId={examId}
+                                    onBatchCompleted={() => {
+                                        void attemptsQuery.refetch();
+                                        void gradingQuery.refetch();
+                                    }}
+                                />
+                            )}
                             <section className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
                                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                                     <div>
@@ -1100,7 +1111,7 @@ export default function ResultStatisticsPage({
                                                 void attemptsQuery.refetch();
                                                 void gradingQuery.refetch();
                                             }}
-                                            disabled={attemptsQuery.isFetching || gradingQuery.isFetching}
+                                            disabled={attemptsQuery.isLoading || gradingQuery.isLoading}
                                         >
                                             <RefreshCw className="mr-2 size-4" />
                                             Reload
@@ -1330,6 +1341,7 @@ export default function ResultStatisticsPage({
                                     </>
                                 )}
                             </section>
+                            </>
                         )}
 
                         {tab === "attempts" && (

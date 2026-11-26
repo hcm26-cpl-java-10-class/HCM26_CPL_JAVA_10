@@ -205,8 +205,25 @@ export interface CourseExam {
 
 export type EssayAttemptStatus = "IN_PROGRESS" | "SUBMITTED" | "PENDING_REVIEW" | "EXPIRED";
 
+export type AiEssayGradingState =
+  | "PENDING"
+  | "PROCESSING"
+  | "AI_COMPLETED"
+  | "FAILED"
+  | "CONFIRMED"
+  | "SKIPPED";
+
+export type AiGradingBatchStatus =
+  | "PENDING"
+  | "PROCESSING"
+  | "COMPLETED"
+  | "PARTIAL_FAILED"
+  | "FAILED";
+
 export interface EssayGradingSummary {
   attemptId: number;
+  examId?: number;
+  examTitle?: string;
   studentId: number;
   studentName: string;
   studentEmail: string;
@@ -215,8 +232,19 @@ export interface EssayGradingSummary {
   submittedAt: string | null;
   essayCount: number;
   essayAnswered: number;
+  aiGradedEssayCount?: number;
   codingCount?: number;
   codingAnswered?: number;
+  aiGradingState?: AiEssayGradingState | null;
+  aiProposedScore?: number | null;
+  finalScore?: number | null;
+  aiGradedAt?: string | null;
+  aiGradingError?: string | null;
+  confirmedBy?: number | null;
+  confirmedAt?: string | null;
+  maxEssayScore?: number | null;
+  lowScoreFlagged?: boolean;
+  lowScoreReason?: string | null;
 }
 
 export interface EssayGradingItem {
@@ -237,6 +265,10 @@ export interface EssayGradingItem {
   rubric?: string | null;
   rubricSubmittedAt?: string | null;
   gradingCriteria?: EssayGradingCriterion[];
+  aiProposal?: AiQuestionProposal | null;
+  aiGradedAt?: string | null;
+  aiGradingStatus?: string | null;
+  aiGradingError?: string | null;
 }
 
 export interface QuestionGuidelineDTO {
@@ -266,6 +298,15 @@ export interface EssayGradingDetail {
   alreadyGraded?: boolean;
   /** Bài đã được sửa điểm tay: không cho chấm lại coding tự động. */
   scoreAdjusted?: boolean;
+  aiGradingState?: AiEssayGradingState | null;
+  aiProposedEssayScore?: number | null;
+  aiGradedAt?: string | null;
+  aiGradingError?: string | null;
+  confirmedBy?: number | null;
+  confirmedAt?: string | null;
+  maxEssayScore?: number | null;
+  lowScoreFlagged?: boolean;
+  lowScoreReason?: string | null;
   essays: EssayGradingItem[];
   codings?: CodingGradingItem[];
 }
@@ -383,4 +424,93 @@ export interface SimilarityReport {
   aiMessage?: string | null;
   scannedAt: string;
   pairs: SimilarPair[];
+}
+
+export interface BatchAiPreviewDTO {
+  examId: number;
+  examTitle: string;
+  totalSubmitted: number;
+  eligibleCount: number;
+  alreadyAiGradedCount: number;
+  ungradedCount: number;
+  failedCount: number;
+  confirmedCount: number;
+  ineligibleCount: number;
+  lowScoreFlaggedCount?: number;
+  autoConfirmableCount?: number;
+  activeBatchId?: number | null;
+  activeBatchStatus?: AiGradingBatchStatus | null;
+  savedReferenceAnswer?: string | null;
+  savedRubric?: string | null;
+}
+
+export type BatchAiScope = "UNGRADED_ONLY" | "FAILED_ONLY" | "ALL_ELIGIBLE";
+
+export interface StartBatchAiRequest {
+  scope?: BatchAiScope;
+  attemptIds?: number[];
+  forceRegrade?: boolean;
+  referenceAnswer?: string;
+  rubric?: string;
+  autoGenerateGuidelines?: boolean;
+}
+
+export interface BulkConfirmAiRequest {
+  confirmationText: string;
+  attemptIds?: number[];
+}
+
+export interface BulkConfirmAiResultDTO {
+  examId: number;
+  confirmedCount: number;
+  skippedLowScoreCount: number;
+  skippedFailedCount: number;
+  confirmedAttemptIds: number[];
+  skippedLowScoreAttemptIds: number[];
+  message: string;
+}
+
+export interface BatchAiItemDTO {
+  itemId: number;
+  attemptId: number;
+  examId: number;
+  studentId: number | null;
+  studentName: string;
+  status: AiEssayGradingState;
+  retryCount: number;
+  essayCount: number;
+  aiGradedEssayCount: number;
+  proposedTotalEssayScore?: number | null;
+  errorMessage?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+}
+
+export interface BatchAiStatusDTO {
+  batchId: number;
+  examId: number;
+  examTitle: string;
+  triggeredByUserId?: number | null;
+  scope: BatchAiScope;
+  status: AiGradingBatchStatus;
+  totalAttempts: number;
+  pendingCount: number;
+  processingCount: number;
+  completedCount: number;
+  failedCount: number;
+  skippedCount: number;
+  progressPercent: number;
+  notificationSent: boolean;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  lastError?: string | null;
+  items?: BatchAiItemDTO[];
+}
+
+export interface AiReviewQueuePage {
+  content: EssayGradingSummary[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
 }

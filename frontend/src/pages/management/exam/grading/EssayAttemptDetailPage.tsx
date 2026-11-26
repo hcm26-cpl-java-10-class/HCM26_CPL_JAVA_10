@@ -34,6 +34,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AiPercentTag, AiSignalsList } from "@/components/AiPercentTag";
+import { AiGradingStateBadge } from "./BatchAiGradingPanel";
 import { CodingGradingPanel } from "./CodingGradingPanel";
 import { ESSAY_STATUS_LABEL, formatDateTime } from "./EssayAttemptListPage";
 import { QuestionGuidelinesEditor } from "./QuestionGuidelinesEditor";
@@ -87,13 +88,30 @@ export default function EssayAttemptDetailPage() {
     useEffect(() => {
         if (!detail?.essays) return;
         const initial: Record<number, DraftGrade> = {};
+        const restoredProposals: Record<number, AiQuestionProposal> = {};
         for (const essay of detail.essays) {
+            if (essay.aiProposal) {
+                restoredProposals[essay.questionId] = essay.aiProposal;
+            }
+            const prefillScore =
+                essay.score != null
+                    ? String(essay.score)
+                    : essay.aiProposal?.proposedScore != null
+                        ? String(essay.aiProposal.proposedScore)
+                        : "";
+            const prefillFeedback =
+                essay.score != null
+                    ? essay.feedback ?? ""
+                    : essay.feedback || essay.aiProposal?.feedback || "";
             initial[essay.questionId] = {
-                score: essay.score != null ? String(essay.score) : "",
-                feedback: essay.feedback ?? "",
+                score: prefillScore,
+                feedback: prefillFeedback,
             };
         }
         setDraftGrades(initial);
+        if (Object.keys(restoredProposals).length > 0) {
+            setAiProposals((prev) => ({ ...restoredProposals, ...prev }));
+        }
     }, [detail]);
 
     const backToList = () => navigate(`/exams/${numericExamId}/grading`);
@@ -125,7 +143,9 @@ export default function EssayAttemptDetailPage() {
             setIsOverwriteModalOpen(false);
             void queryClient.invalidateQueries({ queryKey: ["essay-attempt", numericExamId, numericAttemptId] });
             void queryClient.invalidateQueries({ queryKey: ["essay-attempts", numericExamId] });
-            toast.success("Official grades saved successfully.");
+            void queryClient.invalidateQueries({ queryKey: ["ai-review-queue", numericExamId] });
+            void queryClient.invalidateQueries({ queryKey: ["batch-ai-preview", numericExamId] });
+            toast.success("Đã xác nhận và lưu điểm chính thức thành công.");
         },
         onError: (error) => {
             toast.error(getErrorMessage(error, "Failed to save official grades."));
@@ -319,19 +339,93 @@ export default function EssayAttemptDetailPage() {
                                         <span>{detail.studentEmail}</span>
                                     </div>
                                 </div>
-                                <Badge
-                                    variant={
-                                        detail.status === "EXPIRED"
-                                            ? "destructive"
-                                            : detail.status === "SUBMITTED"
-                                            ? "default"
-                                            : "secondary"
-                                    }
-                                    className="text-xs px-2.5 py-1"
-                                >
-                                    {ESSAY_STATUS_LABEL[detail.status] || detail.status}
-                                </Badge>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <AiGradingStateBadge
+                                        state={detail.aiGradingState}
+                                        lowScoreFlagged={detail.lowScoreFlagged}
+                                        lowScoreReason={detail.lowScoreReason}
+                                    />
+                                    <Badge
+                                        variant={
+                                            detail.status === "EXPIRED"
+                                                ? "destructive"
+                                                : detail.status === "SUBMITTED"
+                                                ? "default"
+                                                : "secondary"
+                                        }
+                                        className="text-xs px-2.5 py-1"
+                                    >
+                                        {ESSAY_STATUS_LABEL[detail.status] || detail.status}
+                                    </Badge>
+                                </div>
                             </div>
+
+                            {detail.lowScoreFlagged && !detail.alreadyGraded && (
+                                <div
+                                    className="mt-4 flex items-start gap-2.5 rounded-lg border border-rose-300 bg-rose-50/80 p-3.5 text-xs text-rose-950 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200"
+                                    data-testid="low-score-mandatory-review-banner"
+                                >
+                                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-rose-600" />
+                                    <div>
+                                        <p className="font-bold">
+                                            Cảnh báo bài điểm quá thấp / Fail — Bắt buộc giáo viên kiểm tra trực tiếp
+                                        </p>
+                                        <p className="mt-0.5">
+                                            {detail.lowScoreReason ||
+                                                "Bài thi này có điểm AI đề xuất dưới ngưỡng an toàn hoặc bị lỗi, hệ thống đã chặn xác nhận tự động hàng loạt. Giáo viên vui lòng đọc kỹ bài làm của học sinh, điều chỉnh điểm/nhận xét nếu cần rồi bấm Xác nhận kết quả."}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {detail.aiGradingState === "AI_COMPLETED" && !detail.alreadyGraded && (
+                                <div
+                                    className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50/70 p-3.5 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
+                                    data-testid="ai-draft-review-banner"
+                                >
+                                    <div className="flex items-start gap-2.5">
+                                        <Sparkles className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                                        <div>
+                                            <p className="font-semibold">
+                                                Bản nháp AI đã chấm xong — Đang chờ giáo viên kiểm tra và xác nhận
+                                            </p>
+                                            <p className="mt-0.5 text-amber-800/90 dark:text-amber-300/90">
+                                                Điểm AI đề xuất cho phần tự luận:{" "}
+                                                <strong>
+                                                    {detail.aiProposedEssayScore != null
+                                                        ? `${formatScore(detail.aiProposedEssayScore)} đ`
+                                                        : "Đã điền sẵn bên dưới"}
+                                                </strong>
+                                                . Bạn có thể giữ nguyên kết quả AI, chỉnh sửa điểm/nhận xét, rồi bấm{" "}
+                                                <strong>&ldquo;Xác nhận kết quả (Confirm &amp; Save)&rdquo;</strong> để công nhận điểm chính thức.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Button
+                                        size="sm"
+                                        className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                        onClick={handleInitiateSave}
+                                        disabled={saveGradeMutation.isPending}
+                                        data-testid="btn-quick-confirm-ai-grade"
+                                    >
+                                        <Check className="mr-1.5 size-4" />
+                                        Xác nhận kết quả
+                                    </Button>
+                                </div>
+                            )}
+
+                            {detail.aiGradingState === "CONFIRMED" && (
+                                <div
+                                    className="mt-4 flex items-center gap-2.5 rounded-lg border border-emerald-300 bg-emerald-50/70 p-3 text-xs text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200"
+                                    data-testid="ai-confirmed-banner"
+                                >
+                                    <Check className="size-4 shrink-0 text-emerald-600" />
+                                    <span>
+                                        Bài thi đã được giáo viên <strong>xác nhận điểm chính thức</strong>
+                                        {detail.confirmedAt ? ` lúc ${formatDateTime(detail.confirmedAt)}` : ""}. AI sẽ không bao giờ tự động ghi đè kết quả này.
+                                    </span>
+                                </div>
+                            )}
 
                             <div className="mt-5 grid grid-cols-2 gap-4 border-t pt-4 sm:grid-cols-4 text-sm">
                                 <div>
