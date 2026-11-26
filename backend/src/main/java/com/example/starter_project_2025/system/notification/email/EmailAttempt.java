@@ -20,6 +20,12 @@ import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
 
+/**
+ * Outbox queue record and immutable delivery snapshot for outbound emails.
+ * Fields such as {@code recipientEmail}, {@code templateCode}, {@code templateVersion},
+ * {@code subject}, and {@code renderedBodyHtml} intentionally freeze the rendered content
+ * and destination at enqueue time for audit history and safe retries.
+ */
 @Entity
 @Getter
 @Setter

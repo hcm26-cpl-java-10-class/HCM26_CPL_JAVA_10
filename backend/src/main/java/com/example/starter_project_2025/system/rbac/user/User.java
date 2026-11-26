@@ -121,7 +121,11 @@ public class User extends BaseEntity {
     @JoinTable(
             name = "user_departments",
             joinColumns = @JoinColumn(name = "user_id"),
-            inverseJoinColumns = @JoinColumn(name = "department_id")
+            inverseJoinColumns = @JoinColumn(name = "department_id"),
+            uniqueConstraints = @UniqueConstraint(
+                    name = "uk_user_departments_user_dept",
+                    columnNames = {"user_id", "department_id"}
+            )
     )
     Set<Department> departments = new HashSet<>();
 
@@ -129,9 +133,15 @@ public class User extends BaseEntity {
     @ManyToMany(fetch = FetchType.LAZY)
     @ExportField(name = "Roles", relation = true, path = "name")
     @ImportField(name = "Roles", lookupEntity = Role.class, lookupField = "name", separator = ",")
-    @JoinTable( name = "user_roles",
-                joinColumns = @JoinColumn(name = "user_id"),
-                inverseJoinColumns = @JoinColumn(name = "role_id"))
+    @JoinTable(
+            name = "user_roles",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "role_id"),
+            uniqueConstraints = @UniqueConstraint(
+                    name = "uk_user_roles_user_role",
+                    columnNames = {"user_id", "role_id"}
+            )
+    )
     Set<Role> roles = new HashSet<>();
 
     @Builder.Default

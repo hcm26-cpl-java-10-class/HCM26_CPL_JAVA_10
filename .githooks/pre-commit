@@ -1,0 +1,9 @@
+#!/bin/sh
+# Shared Git pre-commit hook: validates staged Markdown files against docs/ rules.
+# Enable once per clone: git config core.hooksPath .githooks
+
+if command -v node >/dev/null 2>&1; then
+  node scripts/check-docs-rule.mjs --staged
+else
+  echo "Warning: node not found in PATH; skipping local docs pre-commit check (CI will still validate)." >&2
+fi

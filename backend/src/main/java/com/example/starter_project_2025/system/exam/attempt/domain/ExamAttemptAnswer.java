@@ -32,11 +32,15 @@ public class ExamAttemptAnswer extends BaseEntity {
     @JoinColumn(name = "question_id", nullable = false)
     private ExamAttemptQuestion question;
 
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "exam_attempt_answer_option",
             joinColumns = @JoinColumn(name = "answer_id"),
-            inverseJoinColumns = @JoinColumn(name = "option_id")
+            inverseJoinColumns = @JoinColumn(name = "option_id"),
+            uniqueConstraints = @UniqueConstraint(
+                    name = "uk_exam_attempt_answer_option",
+                    columnNames = {"answer_id", "option_id"}
+            )
     )
     private Set<ExamAttemptOption> selectedOptions = new HashSet<>();
 
