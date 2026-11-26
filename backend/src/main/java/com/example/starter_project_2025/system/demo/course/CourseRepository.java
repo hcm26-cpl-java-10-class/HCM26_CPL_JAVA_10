@@ -20,6 +20,8 @@ public interface CourseRepository extends BaseCrudRepository<Course, Long> {
 
     boolean existsByName(String name);
 
+    boolean existsByThumbnailUrlEndingWith(String suffix);
+
     boolean existsBySyllabus_Id(Long syllabusId);
 
     boolean existsByCategories_Id(Long categoryId);

@@ -17,6 +17,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
+@EntityListeners(CourseCoverListener.class)
 @Getter
 @Setter
 @SuperBuilder
@@ -46,6 +47,10 @@ public class Course extends BaseEntity {
 
     @Column(length = 255)
     String thumbnailUrl;
+
+    /** Request-only selected image; never stored in a database column. */
+    @Transient
+    String coverImage;
 
     @Column(length = 100)
     String instructor;

@@ -38,6 +38,13 @@ public class CourseServiceImpl
         extends BaseCrudServiceImpl<Course, Long, CourseDTO, CourseFilter>
         implements CourseService {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    @lombok.experimental.NonFinal
+    CourseCoverService covers;
+    @org.springframework.beans.factory.annotation.Autowired
+    @lombok.experimental.NonFinal
+    CourseCoverCleanup coverCleanup;
+
     CourseMapper courseMapper;
     CourseRepository courseRepository;
     UserRepository userRepository;
@@ -87,6 +94,7 @@ public class CourseServiceImpl
 
     @Override
     protected void beforeUpdate(Course course, CourseDTO request, ValidationContext ctx) {
+        if (coverCleanup != null) coverCleanup.afterCommit(course.getThumbnailUrl());
         if (request.getName() != null &&
                 !request.getName().equals(course.getName()) &&
                 courseRepository.existsByName(request.getName())) {
@@ -113,7 +121,14 @@ public class CourseServiceImpl
     }
 
     @Override
+    protected void beforeDelete(Course course) {
+        if (coverCleanup != null) coverCleanup.afterCommit(course.getThumbnailUrl());
+    }
+
+    @Override
     protected void afterUpdate(Course course, CourseDTO request) {
+        if (covers != null) covers.ensureCover(course);
+        courseRepository.flush(); // Apply selected images even if only the transient image field changed.
         if (request.getStatus() == CourseStatus.PUBLISHED && course.getInstructorUser() != null) {
             notificationService.createOnce(
                     course.getInstructorUser().getId(),
