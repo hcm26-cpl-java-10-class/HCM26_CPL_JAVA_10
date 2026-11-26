@@ -74,7 +74,6 @@ export function ClassDetailView() {
     const activeTab: ClassDetailTabValue = isValidTab(requestedTab) ? requestedTab : DEFAULT_TAB;
 
     const [hasUnsavedTraineeChanges, setHasUnsavedTraineeChanges] = useState(false);
-    const [calendarDirty, setCalendarDirty] = useState(false);
     const [pendingNavigation, setPendingNavigation] = useState<PendingNavigation>(null);
 
     const query = useClasses({ classId: identifier ?? "" });
@@ -95,7 +94,7 @@ export function ClassDetailView() {
     const handleTabChange = (nextValue: string) => {
         if (!isValidTab(nextValue) || nextValue === activeTab) return;
 
-        if ((activeTab === "trainees" && hasUnsavedTraineeChanges) || (activeTab === "calendar" && calendarDirty)) {
+        if (activeTab === "trainees" && hasUnsavedTraineeChanges) {
             setPendingNavigation({ type: "tab", tab: nextValue });
             return;
         }
@@ -115,7 +114,6 @@ export function ClassDetailView() {
         const target = pendingNavigation;
         setPendingNavigation(null);
         setHasUnsavedTraineeChanges(false);
-        setCalendarDirty(false);
 
         if (target.type === "tab") {
             navigateToTab(target.tab);
@@ -220,7 +218,7 @@ export function ClassDetailView() {
                                 </TabsContent>
 
                                 <TabsContent value="calendar">
-                                    <ClassCalendarTab classItem={classItem} onDirtyChange={setCalendarDirty} />
+                                    <ClassCalendarTab classItem={classItem} />
                                 </TabsContent>
 
                                 <TabsContent value="budget">

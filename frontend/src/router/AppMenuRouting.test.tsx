@@ -49,6 +49,7 @@ beforeEach(() => {
     fakeHttp.on("get", "/classes/4/setup", { classId: 4, classCode: cls.code, savedProgram: cls.program, masterTrainer: cls.masterTrainer,
         startDate: cls.startDate, endDate: cls.endDate, programLink: null, subjects: [], assignments: [] });
     fakeHttp.on("get", "/external/trainers", []);
+    fakeHttp.on("get", "/topics/active", []);
     fakeHttp.on("get", "/external/audits", []);
     fakeHttp.on("get", "/external/data-source", { sampleData: true });
 });
@@ -84,6 +85,17 @@ it("renders Class as a direct sidebar item without Class List submenu and naviga
     expect(screen.queryByRole("link", { name: "Class List" })).not.toBeInTheDocument();
     await user.click(classLink);
     await waitFor(() => expect(window.location.pathname).toBe("/classes"));
+});
+
+it("renders a single unified Calendar sidebar item with Class Schedule and Weekly Timetable tabs", async () => {
+    const { user } = renderApp("/programs");
+    const calendarLink = await screen.findByRole("link", { name: "Calendar" });
+    expect(calendarLink).toHaveAttribute("href", "/calendar");
+    expect(screen.queryByRole("link", { name: "Weekly Timetable" })).not.toBeInTheDocument();
+    await user.click(calendarLink);
+    await waitFor(() => expect(window.location.pathname).toBe("/calendar"));
+    expect(await screen.findByRole("tab", { name: "Class Schedule" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Weekly Timetable" })).toBeInTheDocument();
 });
 
 it("navigates via the real Sidebar from Programs to Topics & Syllabus", async () => {

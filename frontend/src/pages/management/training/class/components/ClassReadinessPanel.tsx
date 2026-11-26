@@ -16,7 +16,7 @@ const guidance: Record<string, string> = {
     basic: "Saving Class Info does not link a training program. Open Class Setup and link an ACTIVE program to this internal class ID. Its code or name must match the saved Program.",
     trainer: "Master Trainer text does not create an assignment. Open Class Setup to create a MAIN assignment for this internal class and a subject of its linked program, covering all class dates and using a verified active trainer matching Master Trainer.",
     enrollment: "Open Trainee List and save at least one ACTIVE trainee. Active and reserved seats must fit within Planned Size.",
-    calendar: "Open Calendar > Manage Sessions and save a non-cancelled session for this internal class, within its start/end dates. The class date overview and draft calendar versions alone do not count as sessions.",
+    calendar: "Open the Calendar workspace from the sidebar and publish a non-cancelled session for this internal class, within its start/end dates. Draft calendar versions alone do not count as sessions.",
     operations: "In Class Info, enter Delivery Type and Format Type. Offline, Hybrid and Blended require an exact, unique room name and capacity at least Planned Size from the real room directory. Online requires an HTTP(S) meeting URL. A building name alone cannot identify a room.",
 };
 
