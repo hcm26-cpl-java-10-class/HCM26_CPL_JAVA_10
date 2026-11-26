@@ -34,7 +34,7 @@ function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
             icon: iconMap["graduation-cap"],
             disabled: !hasClassAccess,
         },
-        { title: "Weekly Timetable", url: "/calendar/preview", icon: iconMap.calendar },
+        { title: "Calendar", url: "/calendar", icon: iconMap.calendar },
         { title: "Topics & Syllabus", url: "/subjects", icon: iconMap["book-open"] },
         { title: "Training Programs", url: "/programs", icon: iconMap.layers },
     ];
@@ -50,6 +50,7 @@ function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
         const existing = remaining.find(
             (item) => item.title.toLowerCase() === section.title.toLowerCase() ||
                 (item.url && (item.url === section.url ||
+                    (section.url === "/calendar" && (item.url === "/calendar" || item.url === "/calendar/preview")) ||
                     (section.url === "/subjects" && (item.url === "/subjects" || item.url === "/training/content" || item.url === "/training/topics")) ||
                     (section.url === "/programs" && (item.url === "/programs" || item.url === "/training/programs"))
                 )),
@@ -85,6 +86,8 @@ function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
         !placeholders.some(
             (pl) => pl.title.toLowerCase() === item.title.toLowerCase() || (pl.url && pl.url === item.url),
         ) &&
+        item.url !== "/calendar/preview" &&
+        item.title.toLowerCase() !== "weekly timetable" &&
         item.url !== "/content" &&
         item.url !== "/training/content" &&
         item.url !== "/class-setup" &&

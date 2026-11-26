@@ -66,6 +66,7 @@ Topic Mark Gradebook | Sổ điểm theo chủ đề
 Topics & Syllabus | Chủ đề & Giáo trình
 Topics | Chủ đề
 Training Calendar | Lịch đào tạo
+Calendar | Lịch đào tạo
 Training Programs | Chương trình đào tạo
 Trainers | Giảng viên
 Trainer | Giảng viên
