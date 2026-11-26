@@ -11,6 +11,8 @@ public class TrainingClassDTO {
     private Long enrolledTrainees;
     @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
     private String traineeSource;
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private Boolean hasSchedule;
     @NotBlank @Pattern(regexp = "[A-Z0-9_-]{4,30}")
     private String code;
     @NotBlank @Size(max = 150)

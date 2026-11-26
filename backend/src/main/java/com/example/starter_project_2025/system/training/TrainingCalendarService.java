@@ -68,7 +68,12 @@ public class TrainingCalendarService {
         var entity = new TrainingCalendar();
         entity.setClassId(classId); entity.setRevision(revision);
         entity.setName(cls.getCode() + "_Calendar_" + revision);
-        entity.setHistoryChange(sourceId == null ? "Initial training calendar" : "Adjusted calendar version");
+        var requestedNote = body.path("historyChange");
+        String defaultNote = sourceId == null ? "Initial training calendar" : "Adjusted calendar version";
+        String historyNote = requestedNote.isTextual() && !requestedNote.asText().isBlank()
+            ? requestedNote.asText().trim()
+            : defaultNote;
+        entity.setHistoryChange(historyNote.length() > 200 ? historyNote.substring(0, 200) : historyNote);
         entity.setModifiedBy(actor());
         entity.setClassStartDate(cls.getStartDate());
         entity.setActualLearningStartDate(date(body, "actualLearningStartDate"));

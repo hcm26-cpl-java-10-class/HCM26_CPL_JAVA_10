@@ -81,6 +81,24 @@ public class Session extends BaseEntity {
     @ExportField(name = "Cancel Reason")
     String cancelReason;
 
+    @Column(name = "slot_number")
+    Integer slotNumber;
+
+    @Column(name = "session_order")
+    Integer sessionOrder;
+
+    @Column(name = "is_manual")
+    Boolean isManual;
+
+    @Column(name = "program_snapshot", length = 100)
+    String programSnapshot;
+
+    @Column(name = "class_start_snapshot")
+    java.time.LocalDate classStartSnapshot;
+
+    @Column(name = "actual_date")
+    java.time.LocalDate actualDate;
+
     /**
      * Last line of defence for writers that bypass the service layer (e.g. the generic file import):
      * a row never reaches the database without a status or with an end before its start.

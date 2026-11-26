@@ -59,7 +59,12 @@ public class TrainingClassService {
         };
         Sort order = Sort.by(Sort.Direction.fromString(direction), sort.equals("trainees") ? "plannedSize" : sort).and(Sort.by("id"));
         Page<TrainingClass> result = repository.findAll(spec, PageRequest.of(page, size, order));
-        return new ClassPage(result.map(this::dto).getContent(), result.getTotalElements(), result.getTotalPages(),
+        List<Long> ids = result.getContent().stream().map(TrainingClass::getId).filter(Objects::nonNull).toList();
+        Set<Long> scheduledClassIds = ids.isEmpty() ? Set.of() : new HashSet<>(sessions.findClassIdsWithActiveSessions(ids));
+        List<TrainingClassDTO> dtos = result.getContent().stream()
+                .map(entity -> dto(entity, scheduledClassIds.contains(entity.getId())))
+                .toList();
+        return new ClassPage(dtos, result.getTotalElements(), result.getTotalPages(),
                 page, size, repository.findPrograms());
     }
 
@@ -205,10 +210,16 @@ public class TrainingClassService {
     }
 
     private TrainingClassDTO dto(TrainingClass entity) {
+        boolean hasSchedule = entity.getId() != null && !sessions.findClassIdsWithActiveSessions(List.of(entity.getId())).isEmpty();
+        return dto(entity, hasSchedule);
+    }
+
+    private TrainingClassDTO dto(TrainingClass entity, boolean hasSchedule) {
         TrainingClassDTO dto = new TrainingClassDTO();
         BeanUtils.copyProperties(entity, dto);
         dto.setEnrolledTrainees(enrollments.occupiedSeats(entity.getId()));
         dto.setTraineeSource("internal");
+        dto.setHasSchedule(hasSchedule);
         return dto;
     }
 }
