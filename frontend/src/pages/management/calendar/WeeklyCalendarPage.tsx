@@ -72,7 +72,7 @@ function getCalendarDate(value: string | null) {
   return dayjs.tz(`${value}T00:00:00`, TIME_ZONE);
 }
 
-export default function WeeklyCalendarPage() {
+export default function WeeklyCalendarPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Chế độ xem: "week" | "month" | "list"
@@ -291,6 +291,10 @@ export default function WeeklyCalendarPage() {
   function resetFilters() {
     setKeyword("");
     const nextParams = new URLSearchParams();
+    const currentTab = searchParams.get("tab");
+    if (currentTab) {
+      nextParams.set("tab", currentTab);
+    }
     nextParams.set("view", viewMode);
     nextParams.set("date", dayjs().tz(TIME_ZONE).format("YYYY-MM-DD"));
     setSearchParams(nextParams);
@@ -484,10 +488,8 @@ export default function WeeklyCalendarPage() {
     return list;
   }, [viewMode, selectedDate, sessions]);
 
-  return (
-    <CalendarLookupContext.Provider value={{ getClassName, getClassCode, getTrainerName, getTopicName, getTopicCode }}>
-      <MainLayout dense mainClassName="overflow-y-hidden pt-0 pb-1.5" pathName={{ calendar: "Thời khoá biểu" }}>
-        <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-1.5 pt-0 pb-0.5">
+  const content = (
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-1.5 pt-0 pb-0.5">
           {/* Header 1 dòng gọn: Tiêu đề, khoảng ngày, số buổi & Nút xuất file */}
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b pb-1.5">
             <div className="flex flex-wrap items-center gap-2 min-w-0">
@@ -1008,7 +1010,17 @@ export default function WeeklyCalendarPage() {
             </>
           )}
         </div>
-      </MainLayout>
+  );
+
+  return (
+    <CalendarLookupContext.Provider value={{ getClassName, getClassCode, getTrainerName, getTopicName, getTopicCode }}>
+      {embedded ? (
+        content
+      ) : (
+        <MainLayout dense mainClassName="overflow-y-hidden pt-0 pb-1.5" pathName={{ calendar: "Thời khoá biểu" }}>
+          {content}
+        </MainLayout>
+      )}
     </CalendarLookupContext.Provider>
   );
 }

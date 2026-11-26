@@ -43,11 +43,13 @@ function renderApp(path = "/classes/42?tab=info&source=readiness#checks", grante
     window.history.replaceState({ usr: pageState, key: "test", idx: 0 }, "", path);
     const store = configureStore({
         reducer: { auth: authReducer },
-        preloadedState: { auth: {
-            ...authReducer(undefined, { type: "init" }), isAuthenticated: true, token: "test-token",
-            // ADMIN intentionally owns all UI permissions; use a limited operator to test denials.
-            role: "STAFF", roles: ["STAFF"], permissions: granted, rolePermissions: { STAFF: granted },
-        } },
+        preloadedState: {
+            auth: {
+                ...authReducer(undefined, { type: "init" }), isAuthenticated: true, isAuthInitialized: true, token: "test-token",
+                // ADMIN intentionally owns all UI permissions; use a limited operator to test denials.
+                role: "STAFF", roles: ["STAFF"], permissions: granted, rolePermissions: { STAFF: granted },
+            }
+        },
     });
     const user = userEvent.setup();
     render(<Provider store={store}><QueryClientProvider client={createTestQueryClient()}><App /></QueryClientProvider></Provider>);
@@ -59,15 +61,26 @@ beforeEach(() => {
     menuState.hideClasses = false;
     localStorage.clear();
     fakeHttp.on("get", "/classes", [classItem(42), classItem(87)]);
-    fakeHttp.on("get", "/classes/stats", { totalClasses: 2, inProgress: 0, upcomingClasses: 2, completedClasses: 0,
-        asOf: "2026-11-07", upcomingThrough: "2026-12-07", timezone: "Asia/Ho_Chi_Minh" });
+    fakeHttp.on("get", "/classes/stats", {
+        totalClasses: 2, inProgress: 0, upcomingClasses: 2, completedClasses: 0,
+        asOf: "2026-11-07", upcomingThrough: "2026-12-07", timezone: "Asia/Ho_Chi_Minh"
+    });
     for (const id of [42, 87]) {
         fakeHttp.on("get", `/classes/${id}`, classItem(id));
         fakeHttp.on("get", `/classes/${id}/readiness`, readiness(id));
         fakeHttp.on("get", `/classes/${id}/trainees`, []);
-        fakeHttp.on("get", `/classes/${id}/calendars`, []);
-        fakeHttp.on("get", `/classes/${id}/setup`, { classId: id, classCode: `NAV_${id}`, savedProgram: "FULLSTACK_JAVA", masterTrainer: "teacher@example.com",
-            startDate: "2026-11-14", endDate: "2027-01-13", programLink: null, subjects: [], assignments: [] });
+        fakeHttp.on("get", `/classes/${id}/schedule`, {
+            classInfo: { id, code: `NAV_${id}`, name: `Navigation class ${id}`, startDate: "2026-11-16" },
+            program: null,
+            config: { slotHours: 4, slots: [{ slot: 1, start: "08:00", end: "12:00" }, { slot: 2, start: "13:00", end: "17:00" }], workingDays: [1, 2, 3, 4, 5], holidays: [] },
+            hasSchedule: false,
+            outdated: false,
+            entries: [],
+        });
+        fakeHttp.on("get", `/classes/${id}/setup`, {
+            classId: id, classCode: `NAV_${id}`, savedProgram: "FULLSTACK_JAVA", masterTrainer: "teacher@example.com",
+            startDate: "2026-11-14", endDate: "2027-01-13", programLink: null, subjects: [], assignments: []
+        });
     }
     fakeHttp.on("get", "/programs", { content: [], totalPages: 1 });
     fakeHttp.on("get", "/external/trainers", []);
@@ -105,7 +118,7 @@ describe("Readiness navigation through the application router and RBAC", () => {
         expect(heading).toBeInTheDocument();
         expect(within(heading.closest("header")!).getByRole("link", { name: "Back to Class List" })).toHaveAttribute("href", `/classes?${pageState.listSearch}`);
         expect(screen.getAllByRole("tab")).toHaveLength(5);
-        await waitFor(() => expect(fakeHttp.callsTo("get", tab === "trainees" ? `/classes/${id}/trainees` : `/classes/${id}/calendars`)).toHaveLength(1));
+        await waitFor(() => expect(fakeHttp.callsTo("get", tab === "trainees" ? `/classes/${id}/trainees` : `/classes/${id}/schedule`)).toHaveLength(1));
     });
 
     it("opens the existing edit modal prefilled for this class without navigating or writing", async () => {
@@ -137,7 +150,7 @@ describe("Readiness navigation through the application router and RBAC", () => {
     });
 
     it("shows a calendar API 403 as Access denied in the current tab", async () => {
-        fakeHttp.on("get", "/classes/42/calendars", () => { throw httpError(403); });
+        fakeHttp.on("get", "/classes/42/schedule", () => { throw httpError(403); });
         const { user } = renderApp();
         await user.click(await screen.findByRole("button", { name: "Open Calendar" }));
         expect(await screen.findByRole("alert")).toHaveTextContent("Access denied");
@@ -145,25 +158,33 @@ describe("Readiness navigation through the application router and RBAC", () => {
         expect(new URLSearchParams(window.location.search).get("tab")).toBe("calendar");
     });
 
-    it("keeps the unsaved-changes guard and URL state when leaving a readiness calendar", async () => {
-        fakeHttp.on("get", "/classes/42/calendars", [{
-            id: 100, classId: 42, name: "Navigation calendar", version: "1.0", historyChange: "Initial",
-            lastModifiedDate: "2026-11-07T09:00:00", lastModifiedBy: "Admin", status: "active",
-        }]);
+    it("renders Class Calendar as read-only and routes to the Sidebar Calendar workspace with unsaved-changes guard", async () => {
+        fakeHttp.on("get", "/classes/42/schedule", {
+            classInfo: { id: 42, code: "NAV_42", name: "Navigation class 42", startDate: "2026-11-16", programCode: "BACKEND_JAVA" },
+            program: { id: 10, code: "BACKEND_JAVA", name: "Java Backend", courses: [{ id: 101, code: "JAVA-CORE", name: "Java Core", durationHours: 4, orderIndex: 1, slotsNeeded: 1 }] },
+            config: { slotHours: 4, slots: [{ slot: 1, start: "08:00", end: "12:00" }, { slot: 2, start: "13:00", end: "17:00" }], workingDays: [1, 2, 3, 4, 5], holidays: [] },
+            hasSchedule: true,
+            outdated: false,
+            entries: [{ id: "e-42", classId: 42, courseId: 101, courseCode: "JAVA-CORE", courseName: "Java Core", date: "2026-11-16", slot: 1, startTime: "08:00", endTime: "12:00", order: 1, isManual: false }],
+        });
         const { user } = renderApp(undefined, [...permissions, "SESSION_UPDATE"]);
         await user.click(await screen.findByRole("button", { name: "Open Calendar" }));
-        await user.click(await screen.findByRole("button", { name: "Edit calendar version 1.0" }));
-        await user.type(screen.getByLabelText("Calendar name for version 1.0"), "_draft");
-        await user.click(screen.getByRole("tab", { name: "Class Info" }));
+        expect(await screen.findByText("Read-only")).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /Manual Edit/ })).not.toBeInTheDocument();
+
+        const openInCalendar = screen.getByRole("link", { name: /Open in Calendar/i });
+        expect(openInCalendar).toHaveAttribute("href", "/calendar?tab=schedule&classId=42");
+        await user.click(openInCalendar);
+
+        expect(window.location.pathname).toBe("/calendar");
+        expect(new URLSearchParams(window.location.search).get("classId")).toBe("42");
+
+        await user.click(await screen.findByRole("button", { name: /Manual Edit/i }));
+        await user.click(screen.getAllByText(/Add session/i)[0]);
+        await user.click(screen.getByRole("button", { name: "Confirm" }));
+        await user.click(screen.getByRole("tab", { name: /Weekly Timetable/i }));
         await user.click(within(await screen.findByRole("dialog", { name: "Unsaved Changes" })).getByRole("button", { name: "Stay" }));
-        expect(screen.getByLabelText("Calendar name for version 1.0")).toHaveValue("Navigation calendar_draft");
-        expect(new URLSearchParams(window.location.search).get("tab")).toBe("calendar");
-        await user.click(screen.getByRole("tab", { name: "Class Info" }));
-        await user.click(within(await screen.findByRole("dialog", { name: "Unsaved Changes" })).getByRole("button", { name: "Leave" }));
-        expect(screen.getByRole("tab", { name: "Class Info" })).toHaveAttribute("data-state", "active");
-        expect(window.location.pathname + window.location.search + window.location.hash).toBe("/classes/42?tab=info&source=readiness#checks");
-        expect(window.history.state.usr).toEqual(pageState);
-        expect(fakeHttp.calls.every(call => call.method === "get")).toBe(true);
+        expect(new URLSearchParams(window.location.search).get("tab")).toBe("schedule");
     });
 
     it.each(["/classes", "/classes/42", "/class-details/87", "/training-operations/class-details/NAV_42"])(

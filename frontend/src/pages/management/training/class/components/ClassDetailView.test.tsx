@@ -113,24 +113,38 @@ beforeEach(() => {
 
 describe("ClassDetailView & TraineeListTab", () => {
     it("opens HCM02666 by its own ID and does not reuse the HCM026 calendar", async () => {
-        const first = { id: 1, code: "HCM026", name: "HCM026", status: "planning" };
-        const second = { id: 2, code: "HCM02666", name: "HCM02666", status: "planning" };
+        const first = { id: 1, code: "HCM026", name: "HCM026", status: "planning", startDate: "2026-11-09" };
+        const second = { id: 2, code: "HCM02666", name: "HCM02666", status: "planning", startDate: "2026-11-09" };
         fakeHttp.on("get", "/classes", [first, second]);
         fakeHttp.on("get", "/classes/1", first);
         fakeHttp.on("get", "/classes/2", second);
-        fakeHttp.on("get", "/classes/1/calendars", [{ id: 1, classId: 1, name: "HCM026_Calendar", version: "1.0", status: "draft", lastModifiedDate: "2026-11-09", historyChange: "Created", lastModifiedBy: "Admin" }]);
-        fakeHttp.on("get", "/classes/2/calendars", []);
+        fakeHttp.on("get", "/classes/1/schedule", {
+            classInfo: { id: 1, code: "HCM026", name: "HCM026", startDate: "2026-11-09" },
+            program: { id: 10, code: "BACKEND_JAVA", name: "Java", courses: [{ id: 101, code: "JAVA-ONLY-1", name: "Java Only 1", durationHours: 4, orderIndex: 1, slotsNeeded: 1 }] },
+            config: { slotHours: 4, slots: [{ slot: 1, start: "08:00", end: "12:00" }, { slot: 2, start: "13:00", end: "17:00" }], workingDays: [1, 2, 3, 4, 5], holidays: [] },
+            hasSchedule: true,
+            outdated: false,
+            entries: [{ id: "e-1", classId: 1, courseId: 101, courseCode: "JAVA-ONLY-1", courseName: "Java Only 1", date: "2026-11-09", slot: 1, startTime: "08:00", endTime: "12:00", order: 1, isManual: false }],
+        });
+        fakeHttp.on("get", "/classes/2/schedule", {
+            classInfo: { id: 2, code: "HCM02666", name: "HCM02666", startDate: "2026-11-09" },
+            program: null,
+            config: { slotHours: 4, slots: [{ slot: 1, start: "08:00", end: "12:00" }, { slot: 2, start: "13:00", end: "17:00" }], workingDays: [1, 2, 3, 4, 5], holidays: [] },
+            hasSchedule: false,
+            outdated: false,
+            entries: [],
+        });
         const { user } = renderClassFlow("/classes");
         await user.click(await screen.findByRole("link", { name: "HCM026" }));
         await user.click(await screen.findByRole("tab", { name: "Calendar" }));
-        await screen.findByRole("button", { name: "HCM026_Calendar" });
+        expect((await screen.findAllByText("JAVA-ONLY-1")).length).toBeGreaterThan(0);
         await user.click(screen.getAllByRole("link", { name: "Back to Class List" })[0]);
         await user.click(await screen.findByRole("link", { name: "HCM02666" }));
         await screen.findByRole("heading", { name: "Class Details : HCM02666" });
         await user.click(screen.getByRole("tab", { name: "Calendar" }));
-        await screen.findByText("No calendar versions available for this class yet.");
-        expect(screen.queryByRole("button", { name: "HCM026_Calendar" })).not.toBeInTheDocument();
-        expect(fakeHttp.callsTo("get", "/classes/2/calendars")).toHaveLength(1);
+        await screen.findByRole("heading", { name: "No schedule yet" });
+        expect(screen.queryByText("JAVA-ONLY-1")).not.toBeInTheDocument();
+        expect(fakeHttp.callsTo("get", "/classes/2/schedule")).toHaveLength(1);
     });
     it("navigates from Class List link to Class Details header and renders all 5 tabs", async () => {
         const { user } = renderClassFlow("/classes");

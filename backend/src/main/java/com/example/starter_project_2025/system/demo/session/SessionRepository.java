@@ -13,6 +13,14 @@ public interface SessionRepository extends BaseCrudRepository<Session,Long> {
 
     List<Session> findByClassId(Long classId);
 
+    @Query("""
+            select distinct s.classId from Session s
+            where s.isActive = true
+              and s.status <> com.example.starter_project_2025.system.demo.session.Session.SessionStatus.CANCELLED
+              and s.classId in :classIds
+            """)
+    List<Long> findClassIdsWithActiveSessions(@Param("classIds") java.util.Collection<Long> classIds);
+
     boolean existsByTopicId(Long topicId);
 
     /**

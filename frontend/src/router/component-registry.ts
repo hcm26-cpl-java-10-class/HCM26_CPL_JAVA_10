@@ -3,7 +3,7 @@ import RecommendedCoursesPage from "@/pages/student/RecommendedCoursesPage";
 import CourseLearnerGradesPage from "@/pages/management/demo/course/pages/CourseLearnerGradesPage";
 import ScoreManagementPage from "@/pages/management/exam/score-management";
 import ExamCurriculumPage from "@/pages/management/exam/curriculum/ExamCurriculumPage";
-import WeeklyCalendarPage from "@/pages/management/calendar/WeeklyCalendarPage";
+import CalendarPage from "@/pages/management/calendar/CalendarPage";
 import AuditPage from "@/pages/management/training/audit";
 import TraineePage from "@/pages/management/training/trainee";
 import LogWorkPage from "@/pages/management/training/log-work";
@@ -157,7 +157,8 @@ export const routes: RouteConfig[] = [
   { path: "/class-details/:classId", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
   { path: "/sessions/:sessionId", component: SessionDetailPage, requiredPermission: "SESSION_READ" },
   { path: "/sessions", component: SessionManagementPage, requiredPermission: "SESSION_READ" },
-  { path: "/calendar/preview", component: WeeklyCalendarPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
+  { path: "/calendar", component: CalendarPage, requiredPermission: "SESSION_READ" },
+  { path: "/calendar/preview", component: CalendarPage, requiredPermission: "SESSION_READ" },
   { path: "/courses/:id/grades", component: CourseLearnerGradesPage, requiredPermissions: ["COURSE_REPORT_READ", "EXAM_READ"] },
   { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ" },
   { path: "/management/alerts", component: ProjectAlertsPage, requiredPermission: "PROJECT_ALERT_READ" },
