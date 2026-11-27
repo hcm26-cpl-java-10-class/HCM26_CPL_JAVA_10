@@ -314,6 +314,7 @@ export function FormModal({
   };
 
   const renderField = (field: FieldSchema) => {
+    if (field.renderForm) return <div key={field.name}>{field.renderForm(form[field.name],form,updateField,relationOptions,isSubmitting)}{getFieldErrors(field.name)?.map((error,i)=><p key={i} role="alert" className="text-sm text-destructive">{error}</p>)}</div>;
     const modeOptions = resolveFieldOptions(field);
     const resolvedField = modeOptions ? { ...field, options: modeOptions } : field;
 

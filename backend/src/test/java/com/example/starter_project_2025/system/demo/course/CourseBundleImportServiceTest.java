@@ -44,6 +44,20 @@ class CourseBundleImportServiceTest {
         assertTrue(savedCourse.getValue().getCategories().contains(category));
     }
 
+    @Test
+    void blankImportedCoverPreservesPreviouslySelectedCoverOnRepeatedImports() throws Exception {
+        CourseRepository courses=mock(CourseRepository.class);
+        var category=Category.builder().code("JAVA").name("Java").build();
+        var categories=mock(CategoryRepository.class);
+        when(categories.findByCodeIgnoreCase("JAVA")).thenReturn(Optional.of(category));
+        var users=mock(UserRepository.class);
+        when(users.findByEmail("teacher@example.com")).thenReturn(Optional.of(User.builder().firstName("Teacher").lastName("User").build()));
+        Course existing=Course.builder().name("Java 21 Fundamentals").thumbnailUrl("https://example.test/selected.png").build();
+        when(courses.findByName(existing.getName())).thenReturn(Optional.of(existing));
+        var service=new CourseBundleImportService(courses,mock(SectionRepository.class),mock(LessonRepository.class),users,categories);
+        service.importBundle(workbook());service.importBundle(workbook());
+        org.junit.jupiter.api.Assertions.assertEquals("https://example.test/selected.png",existing.getThumbnailUrl());
+    }
     private MockMultipartFile workbook() throws Exception {
         try (var workbook = new XSSFWorkbook(); var output = new ByteArrayOutputStream()) {
             var courses = workbook.createSheet("Courses");
