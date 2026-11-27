@@ -1,3 +1,4 @@
+import { getCurrentLocale } from "@/i18n/format";
 import { certificateApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,7 @@ export default function CertificateDetailPage() {
 
     if (Number.isNaN(parsedDate.getTime())) return date;
 
-    return new Intl.DateTimeFormat("en-US", {
+    return new Intl.DateTimeFormat(getCurrentLocale(), {
       month: "long",
       day: "numeric",
       year: "numeric",

@@ -1,3 +1,5 @@
+import { learningCurriculum, type LearningItem } from "@/utils/learning-curriculum";
+import { AssessmentPreparationContent } from "@/pages/student/StudentExamPreparationPage";
 import { assessmentPreparationPath } from "@/utils/assessment-navigation";
 import { COURSE_GRADE_STATUS_LABEL } from "@/types/features/course-my-scores";
 
@@ -36,7 +38,8 @@ export function CourseLearningPage() {
   const enrollmentId = Number(id);
 
   // Deep link from the "your question was answered" email: ?lessonId=&questionId=
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedExamId = Number(searchParams.get("assessmentId")) || undefined;
   const requestedLessonId = Number(searchParams.get("lessonId")) || undefined;
   const requestedQuestionId = Number(searchParams.get("questionId")) || undefined;
 
@@ -70,11 +73,7 @@ export function CourseLearningPage() {
   });
 
   const openExam = (exam: CourseExam) => {
-    navigate(assessmentPreparationPath(exam.id, `/enrollments/${enrollmentId}/learn${activeLessonId ? `?lessonId=${activeLessonId}` : ""}`), {
-      state: {
-        returnTo: `/enrollments/${enrollmentId}/learn${activeLessonId ? `?lessonId=${activeLessonId}` : ""}`,
-      },
-    });
+    navigate(assessmentPreparationPath(exam.id, `/enrollments/${enrollmentId}/learn${exam.lessonId || activeLessonId ? `?lessonId=${exam.lessonId || activeLessonId}` : ""}`));
   };
 
   const certificateQuery = useQuery({
@@ -112,7 +111,7 @@ export function CourseLearningPage() {
 
     if (
         lessons.length &&
-        !lessons.some((lesson) => lesson.lessonId === activeLessonId)
+        (!lessons.some((lesson) => lesson.lessonId === activeLessonId) || (requestedLessonId != null && requestedLessonId !== activeLessonId))
     ) {
       const initialLesson =
           lessons.find((lesson) => lesson.lessonId === requestedLessonId) ??
@@ -156,15 +155,18 @@ export function CourseLearningPage() {
       (lesson) => lesson.lessonId === activeLessonId
   );
 
-  const currentLessonIndex =
-      progressQuery.data?.lessons.findIndex(
-          (lesson) => lesson.lessonId === activeLessonId
-      ) ?? -1;
-
   const currentLessonExams = (examsQuery.data ?? []).filter(
       (exam) => exam.lessonId === activeLessonId
   );
 
+  const embeddedExamId = requestedExamId ?? (["QUIZ", "EXAM", "ASSIGNMENT"].includes(currentLesson?.contentType ?? "") ? currentLessonExams[0]?.id : undefined);
+  const embeddedReturn = assessmentPreparationPath(embeddedExamId ?? 0, `/enrollments/${enrollmentId}/learn${activeLessonId ? `?lessonId=${activeLessonId}` : ""}`);
+  const curriculum = learningCurriculum(progressQuery.data?.lessons ?? [], examsQuery.data ?? []);
+  const itemIndex = curriculum.findIndex(item => embeddedExamId
+    ? "exam" in item && item.exam.id === embeddedExamId
+    : "lesson" in item && item.lesson.lessonId === activeLessonId);
+  const previousItem = itemIndex > 0 ? curriculum[itemIndex - 1] : undefined;
+  const nextItem = itemIndex >= 0 ? curriculum[itemIndex + 1] : undefined;
   const currentOutcome = lessonOutcome(currentLessonExams, progressQuery.data?.assessmentOutcomes ?? {});
 
   useEffect(() => {
@@ -193,13 +195,14 @@ export function CourseLearningPage() {
   });
 
   const selectLesson = (lesson: LessonProgressItem) => {
+    setSearchParams({ lessonId: String(lesson.lessonId) });
     setActiveLessonId(lesson.lessonId);
     recordAccess(lesson.lessonId);
   };
 
   // Ghi nhận thời gian học viên dành cho bài đang xem (mỗi 30s + khi rời bài).
   useStudyTimeTracker({
-    lessonId: activeLessonId,
+    lessonId: embeddedExamId ? undefined : activeLessonId,
     onTick: (seconds) => {
       if (!activeLessonId) return;
       progressApi
@@ -210,10 +213,10 @@ export function CourseLearningPage() {
     },
   });
 
-  const goToLesson = (index: number) => {
-    const lesson = progressQuery.data?.lessons[index];
-
-    if (lesson) selectLesson(lesson);
+  const selectItem = (item: LearningItem | undefined) => {
+    if (!item) return;
+    if ("exam" in item) openExam(item.exam);
+    else selectLesson(item.lesson);
   };
 
   return (
@@ -253,7 +256,7 @@ export function CourseLearningPage() {
                   Try again
                 </Button>
               </div>
-          ) : progressQuery.data.lessons.length === 0 ? (
+          ) : progressQuery.data.lessons.length === 0 && !requestedExamId ? (
               <div className="space-y-3">
                 <div className="rounded-2xl border border-dashed p-12 text-center">
                   <BookOpen className="mx-auto size-12 text-muted-foreground" />
@@ -270,6 +273,7 @@ export function CourseLearningPage() {
                 <LessonProgressSidebar
                     progress={progressQuery.data}
                     activeLessonId={activeLessonId}
+                    activeExamId={embeddedExamId}
                     onLessonSelect={selectLesson}
                     exams={examsQuery.data}
                     onExamOpen={openExam}
@@ -280,6 +284,7 @@ export function CourseLearningPage() {
                 <LessonProgressSidebar
                     progress={progressQuery.data}
                     activeLessonId={activeLessonId}
+                    activeExamId={embeddedExamId}
                     onLessonSelect={selectLesson}
                     exams={examsQuery.data}
                     onExamOpen={openExam}
@@ -306,7 +311,7 @@ export function CourseLearningPage() {
                               </p>
                             </div>
 
-                            <Button asChild>
+                            <Button asChild className="bg-green-600 text-white hover:bg-green-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700">
                               <Link
                                   to={`/my-certificates/${encodeURIComponent(
                                       courseCertificate.verificationToken
@@ -324,9 +329,13 @@ export function CourseLearningPage() {
                       />
                   }
 
-                  {currentLesson && (
+                  {embeddedExamId && examsQuery.isLoading ? <p role="status">Loading assessment selection…</p> : embeddedExamId && (examsQuery.isError || !examsQuery.data?.some(e => e.id === embeddedExamId)) ? <p role="alert" className="mt-4 rounded-xl border p-5">This assessment is unavailable in this course.</p> : embeddedExamId ? <AssessmentPreparationContent key={embeddedExamId} id={embeddedExamId} returnTo={embeddedReturn}
+                    onPrevious={previousItem ? () => selectItem(previousItem) : undefined}
+                    onNext={nextItem ? () => selectItem(nextItem) : undefined} /> : currentLesson && (
                       <div className="mt-3">
-                        <LessonPreview lesson={currentLesson} />
+                        {["QUIZ", "EXAM", "ASSIGNMENT"].includes(currentLesson.contentType)
+                          ? <div role="status" className="rounded-xl border p-5"><h1 className="text-xl font-semibold">{currentLesson.title}</h1><p>No linked assessment is currently available.</p></div>
+                          : <LessonPreview lesson={currentLesson} restrictSeeking />}
 
                         {canReport && (
                             <div className="mt-3 flex justify-end">
@@ -396,9 +405,9 @@ export function CourseLearningPage() {
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
                           <Button
                               variant="outline"
-                              disabled={currentLessonIndex <= 0}
+                              disabled={!previousItem || examsQuery.isLoading || examsQuery.isError}
                               onClick={() =>
-                                  goToLesson(currentLessonIndex - 1)
+                                  selectItem(previousItem)
                               }
                           >
                             <ChevronLeft className="size-4" /> Previous lesson
@@ -434,12 +443,10 @@ export function CourseLearningPage() {
                             <Button
                                 variant="outline"
                                 disabled={
-                                    currentLessonIndex < 0 ||
-                                    currentLessonIndex >=
-                                    progressQuery.data.lessons.length - 1
+                                    !nextItem || examsQuery.isLoading || examsQuery.isError
                                 }
                                 onClick={() =>
-                                    goToLesson(currentLessonIndex + 1)
+                                    selectItem(nextItem)
                                 }
                             >
                               Next lesson <ChevronRight className="size-4" />

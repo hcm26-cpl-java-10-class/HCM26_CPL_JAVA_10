@@ -51,4 +51,8 @@ public class GradebookPublishedItem extends BaseEntity {
 
     @Column(precision = 6, scale = 2)
     private BigDecimal score;
+
+    /** Diem bonus da duoc cong vao score (de sinh vien thay minh duoc cong bao nhieu). */
+    @Column(precision = 4, scale = 2)
+    private BigDecimal bonus;
 }

@@ -9,18 +9,18 @@ import java.util.UUID;
 public final class ProjectReportDtos {
     private ProjectReportDtos() { }
     public enum Status { DRAFT, PLANNING, ACTIVE, COMPLETED, CANCELLED }
-    public enum Risk { ALL, OVERDUE, INACTIVE_MEMBERS, NEEDS_ATTENTION, LATE_SUBMISSION }
+    public enum Risk { ALL, OVERDUE, NEEDS_ATTENTION, LATE_SUBMISSION }
     public record Filter(Long programId, Long cohortId, Long classId, Long mentorId, Long templateId,
                          Long sourceVersionId, Long teamId, Long projectId, Status status, Risk risk,
                          Boolean includeCancelled, LocalDate createdFrom, LocalDate createdTo,
-                         String q, Integer page, Integer size, Status masterStatus) {
+                         String q, Integer page, Integer size, Status masterStatus, Long masterId, Long workSprintId) {
         public Filter normalized() {
             return new Filter(programId, cohortId, classId, mentorId, templateId, sourceVersionId, teamId,
                     projectId, status, risk == null ? Risk.ALL : risk, includeCancelled == null || includeCancelled,
                     createdFrom, createdTo, q == null ? "" : q.trim(), page == null ? 0 : page,
-                    size == null ? 10 : size, masterStatus);
+                    size == null ? 10 : size, masterStatus, masterId, workSprintId);
         }
-        public static Filter empty() { return new Filter(null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null); }
+        public static Filter empty() { return new Filter(null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null); }
     }
     public record BacklogCounts(long todo, long inProgress, long review, long done, long other) {
         public long total() { return todo + inProgress + review + done + other; }
@@ -36,11 +36,11 @@ public final class ProjectReportDtos {
     public record ClassOption(Long id, String name, Long programId, Long cohortId) { }
     public record TeamOption(Long id, String name, Long classId) { }
     public record VersionOption(Long id, String name, Long templateId) { }
+    public record ProjectOption(Long id, String name, Long masterId, Long classId, Long teamId) { }
     public record Options(List<Option> programs, List<Option> cohorts, List<ClassOption> classes,
                           List<Option> mentors, List<Option> templates, List<VersionOption> versions,
-                          List<TeamOption> teams, boolean canExport, String timeZone, long inactiveDays) { }
-    public record InactiveMember(Long userId, String userCode, String name, Instant joinedAt,
-                                 Instant lastActivityAt, Instant pendingSince) { }
+                          List<TeamOption> teams, boolean canExport, String timeZone,
+                          List<ProjectOption> projects) { }
     public record MilestoneRow(UUID id, String title, String status, boolean mandatory, Instant deadline,
                                BacklogCounts backlog, Instant latestSubmittedAt,
                                boolean overdue, boolean lateSubmission) { }
@@ -53,7 +53,7 @@ public final class ProjectReportDtos {
                              Long sourceVersionId, String sourceVersion, Long workspaceId,
                              Status status, Status masterStatus, BacklogCounts backlog,
                              int acceptedMilestones, List<MilestoneRow> milestones,
-                             int overdueMilestones, int lateMilestones, List<InactiveMember> inactiveMembers,
+                             int overdueMilestones, int lateMilestones,
                              Instant createdAt, boolean contextOnly) { }
     public record Master(String key, Long id, String code, String name,
                          Long classId, String className, Long templateId, String templateName,
@@ -61,11 +61,38 @@ public final class ProjectReportDtos {
                          int scopedTeams, int matchingTeams, int subProjects, int matchingSubProjects,
                          SubProject project, List<SubProject> projects) { }
     public record Summary(long masters, long runningMasters, long classes, long cohorts, long teams,
-                          long subProjects, BacklogCounts backlog, long overdueProjects,
-                          long inactiveProjects, long inactiveMembers, long lateProjects) { }
+                          long subProjects, BacklogCounts backlog, long overdueProjects, long lateProjects) { }
+    public record Overview(long activeMasters, long activeTeams, Map<String,Long> milestoneStatuses,
+                           Map<String,Long> artifactStatuses, long overdueBacklogItems, long overdueSubtasks,
+                           long milestoneRisks) {
+        @com.fasterxml.jackson.annotation.JsonProperty("overdueTasks")
+        public long overdueTasks() { return overdueBacklogItems + overdueSubtasks; }
+        @com.fasterxml.jackson.annotation.JsonProperty("riskCount")
+        public long riskCount() { return milestoneRisks; }
+    }
+    public record SprintRow(Long id, String name, String status, Long projectId, String projectCode,
+                            String projectName, Long classId, String className, Long teamId, String teamName, Instant startAt, Instant endAt,
+                            BacklogCounts backlog) { }
+    public record WorkReport(BacklogCounts backlog, List<SprintRow> sprints, Long selectedSprintId) { }
+    public record DeliveryRow(UUID milestoneId, String title, Long projectId, String projectCode,
+                              String projectName, Long masterId, String masterName, Long classId, String className, Long teamId, String teamName,
+                              boolean mandatory, String milestoneStatus, String artifactStatus,
+                              UUID submissionId, Integer version, Instant deadline, Instant submittedAt,
+                              String reviewerName, int checklistCompleted, int checklistTotal, String attention) { }
+    public record RiskRow(String key, String kind, Long projectId, String projectName, String teamName,
+                          String subject, Instant deadline, String reason) { }
+    public record ActivityRow(String id, Instant occurredAt, Long projectId, String projectCode,
+                              String projectName, String masterName, Long teamId, String teamName,
+                              String actorName, String entityType, String entityId, String subject,
+                              String action, String beforeStatus, String afterStatus, String href) { }
+    public record ActivityPage(List<ActivityRow> content, int offset, int limit, boolean hasMore, Instant asOf) { }
+    public record ActivityHistory(List<ActivityRow> content, int page, int size, long total, Instant asOf,
+                                  LocalDate activityFrom, LocalDate activityTo) { }
     public record Dashboard(Summary summary, Map<Status,Long> statuses, List<Master> content, long total,
-                            int page, int size, Instant asOf, String timeZone, long inactiveDays) { }
+                            int page, int size, Instant asOf, String timeZone,
+                            Overview overview, WorkReport work, List<DeliveryRow> deliveries,
+                            List<RiskRow> risks, ActivityPage activities) { }
     public record ExportRequest(Filter filters, String format) { }
     public record ExportView(UUID id, String status, String format, String fileName, Instant createdAt,
-                             Instant generatedAt, Instant expiresAt, Long rowCount, String message) { }
+                             Instant generatedAt, Long rowCount, String message) { }
 }

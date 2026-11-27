@@ -1,3 +1,4 @@
+import { formatDateCustomNow, formatDateTimeCustomNow } from "@/i18n/format";
 import type {
   ProjectTemplateVersionDTO,
   ProjectTemplateVersionStatus,
@@ -10,7 +11,7 @@ export const formatDate = (value?: string | null) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
 
-  return date.toLocaleDateString("en-GB", {
+  return formatDateCustomNow(date, {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -24,7 +25,7 @@ export const formatDateTime = (value?: string | null) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
 
-  return date.toLocaleString("en-GB", {
+  return formatDateTimeCustomNow(date, {
     day: "2-digit",
     month: "short",
     year: "numeric",

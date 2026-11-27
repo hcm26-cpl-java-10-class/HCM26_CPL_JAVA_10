@@ -39,7 +39,7 @@ export function useCourseEnrollment() {
       queryClient.invalidateQueries({ queryKey: ["course-catalog"] }),
       queryClient.invalidateQueries({ queryKey: ["course-recommendations"] }),
       queryClient.invalidateQueries({ queryKey: ["course-detail"] }),
-      queryClient.invalidateQueries({ queryKey: notificationQueryKey }),
+      queryClient.invalidateQueries({ queryKey: notificationQueryKey(user?.email ?? "signed-out") }),
     ]);
 
   const enrollMutation = useMutation({

@@ -87,6 +87,10 @@ class WorkspacePersistenceIntegrationTest {
             });
             authenticate(context);
             first = context.getBean(WorkspaceService.class).createWorkspace(key, payload);
+            var charterService = context.getBean(com.example.starter_project_2025.system.project.charter.TeamCharterService.class);
+            var currentCharter = charterService.get(payload.getTeamId());
+            charterService.save(payload.getTeamId(), new com.example.starter_project_2025.system.project.dto.ProjectHubDtos.Charter(
+                    "Charter survives restart", "", "Slack", "", "", currentCharter.charter().version()));
             context.getBean(JdbcTemplate.class).update("UPDATE projects SET status = 'PLANNING' WHERE id = ?", payload.getProjectId());
         } finally { SecurityContextHolder.clearContext(); }
 
@@ -94,7 +98,13 @@ class WorkspacePersistenceIntegrationTest {
             authenticate(context);
             var service = context.getBean(WorkspaceService.class);
             var detail = service.getWorkspace(first.getId());
-            assertThat(detail.getSections()).hasSize(8);
+            assertThat(detail.getSections()).containsExactly("overview", "resources", "members", "milestones",
+                    "sprints", "backlog", "artifacts", "feedback", "activity");
+            var savedCharter = context.getBean(com.example.starter_project_2025.system.project.charter.TeamCharterService.class).get(payload.getTeamId());
+            assertThat(savedCharter.charter().mission()).isEqualTo("Charter survives restart");
+            assertThat(savedCharter.revision()).isEqualTo(1);
+            assertThat(context.getBean(com.example.starter_project_2025.system.project.charter.TeamCharterRevisionRepository.class)
+                    .countByTeam_Id(payload.getTeamId())).isEqualTo(1);
             assertThat(detail.getActivities()).isNull();
             assertThat(context.getBean(WorkspaceSectionService.class).read(first.getId(), "activity").items()).hasSize(1);
             assertThat(detail.getStatus()).isEqualTo(WorkspaceStatus.ACTIVE);

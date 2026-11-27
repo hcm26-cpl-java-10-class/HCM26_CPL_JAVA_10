@@ -88,7 +88,7 @@ public class SprintServiceImpl
 
     SprintMapper sprintMapper;
     SprintRepository sprintRepository;
-    com.example.starter_project_2025.system.project.template.assignment.hierarchy.AssignedProjectAccess assignmentAccess;
+    com.example.starter_project_2025.system.project.template.service.assignment.AssignedProjectAccess assignmentAccess;
     SprintAuditService sprintAuditService;
     SprintOutboxService sprintOutboxService;
     SprintBacklogRepository sprintBacklogRepository;

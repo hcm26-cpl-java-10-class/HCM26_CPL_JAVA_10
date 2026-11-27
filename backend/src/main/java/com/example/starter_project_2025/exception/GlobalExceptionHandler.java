@@ -1,7 +1,10 @@
 package com.example.starter_project_2025.exception;
 
 import com.example.starter_project_2025.exception.error.ErrorResponse;
+import com.example.starter_project_2025.exception.error.I18nErrorResponse;
 import com.example.starter_project_2025.exception.error.ValidationErrorResponse;
+import com.example.starter_project_2025.system.i18n.service.TooManyTextsException;
+import com.example.starter_project_2025.system.i18n.service.UnsupportedLanguageException;
 import com.example.starter_project_2025.system.project.StudentAlreadyAssignedException;
 import com.example.starter_project_2025.system.project.AllocationSessionConflictException;
 import com.example.starter_project_2025.system.project.IdempotencyKeyConflictException;
@@ -21,8 +24,10 @@ import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -217,6 +222,35 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(response);
     }
 
+    /**
+     * Ngôn ngữ đích không được hỗ trợ (chưa bật hoặc không tồn tại).
+     *
+     * <p>Giữ nguyên HTTP 400 như trước, thêm mã lỗi ổn định để frontend không phải so
+     * message.
+     */
+    @ExceptionHandler(UnsupportedLanguageException.class)
+    public ResponseEntity<I18nErrorResponse> handleUnsupportedLanguage(UnsupportedLanguageException ex) {
+        log.warn("[400] Unsupported i18n target language: {}", ex.getLanguage());
+        I18nErrorResponse error = new I18nErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "ERR_I18N_UNSUPPORTED_LANGUAGE",
+                ex.getMessage(),
+                LocalDateTime.now());
+        return ResponseEntity.badRequest().body(error);
+    }
+
+    /** Số chuỗi trong một request vượt quá giới hạn của backend. */
+    @ExceptionHandler(TooManyTextsException.class)
+    public ResponseEntity<I18nErrorResponse> handleTooManyTexts(TooManyTextsException ex) {
+        log.warn("[400] Too many i18n texts, limit is {}", ex.getLimit());
+        I18nErrorResponse error = new I18nErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "ERR_I18N_TOO_MANY_TEXTS",
+                ex.getMessage(),
+                LocalDateTime.now());
+        return ResponseEntity.badRequest().body(error);
+    }
+
     @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNoResourceFound(
             org.springframework.web.servlet.resource.NoResourceFoundException ex) {
@@ -276,6 +310,38 @@ public class GlobalExceptionHandler {
                 message,
                 LocalDateTime.now());
         return new ResponseEntity<>(error, ex.getStatusCode());
+    }
+
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ErrorResponse> handleUnauthorizedException(UnauthorizedException ex) {
+        log.warn("[401] Unauthorized: {}", ex.getMessage());
+        ErrorResponse error = new ErrorResponse(
+                HttpStatus.UNAUTHORIZED.value(),
+                ex.getMessage(),
+                LocalDateTime.now());
+        return new ResponseEntity<>(error, HttpStatus.UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<ErrorResponse> handleDisabledException(DisabledException ex) {
+        ErrorResponse error = new ErrorResponse(
+                HttpStatus.FORBIDDEN.value(),
+                ex.getMessage() != null && !ex.getMessage().isBlank()
+                        ? ex.getMessage()
+                        : "Account is deactivated or not active",
+                LocalDateTime.now()
+        );
+        return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLockingFailure(ObjectOptimisticLockingFailureException ex) {
+        log.warn("[409] OptimisticLockingFailure: {}", ex.getMessage());
+        ErrorResponse error = new ErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "Data has been modified by another request. Please reload and try again.",
+                LocalDateTime.now());
+        return new ResponseEntity<>(error, HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(LockedException.class)

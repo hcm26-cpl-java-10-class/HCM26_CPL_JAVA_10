@@ -1,7 +1,7 @@
 package com.example.starter_project_2025.system.demo.course;
 
 import java.util.List;
-import com.example.starter_project_2025.system.exam.dto.ExamDTO;
+import com.example.starter_project_2025.system.exam.core.dto.ExamDTO;
 
 /** Contracts for previewing and customizing a Course before any database writes. */
 public final class CourseFromSyllabusModels {

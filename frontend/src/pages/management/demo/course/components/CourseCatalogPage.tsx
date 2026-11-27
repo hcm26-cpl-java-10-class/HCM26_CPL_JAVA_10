@@ -1,3 +1,4 @@
+import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
 import { certificateApi, courseApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -20,6 +21,7 @@ import {
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   GraduationCap,
+  Sparkles,
   Search,
   SearchX,
   X,
@@ -31,7 +33,7 @@ import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
 import { CatalogPagination } from "./CatalogPagination.tsx";
 import { CourseCard, CourseCardSkeleton } from "./CourseCard.tsx";
 
-import { CourseRecommendations } from "./CourseRecommendations";
+
 
 const PAGE_SIZE = 12;
 const ALL = "all";
@@ -72,6 +74,7 @@ function flattenCategories(nodes: CategoryTreeDTO[], depth = 0): CategoryOption[
  */
 export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth();
+  const { activeRole, hasPermission } = usePermissions();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const urlSearch = searchParams.get("q") ?? "";
@@ -210,7 +213,7 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
         </section>
       )}
 
-      {!embedded && <CourseRecommendations search={urlSearch} />}
+      {!embedded && activeRole === "STUDENT" && hasPermission("ENROLLMENT_CREATE") && <Button size="lg" className="min-h-11 w-full whitespace-normal shadow-sm sm:w-auto" onClick={() => navigate("/student/recommendations")}><Sparkles aria-hidden="true" />For you · Recommended courses</Button>}
 
       <section className="space-y-1.5">
         <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_200px_170px_170px]">

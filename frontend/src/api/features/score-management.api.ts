@@ -25,6 +25,8 @@ export interface SmColumn {
   examTitle: string | null;
   /** False when the linked assessment's scores are not published to students yet. */
   published: boolean;
+  /** NO_ATTEMPTS / PENDING_GRADING / GRADED for the linked assessment (null without one). */
+  gradingState?: "NO_ATTEMPTS" | "PENDING_GRADING" | "GRADED" | null;
 }
 
 export type SmReleasePolicy =
@@ -48,6 +50,8 @@ export interface SmStudentRow {
   email: string;
   code: string | null;
   scores: Record<string, number>;
+  /** Bonus points already included in `scores`, per column id. */
+  bonuses: Record<string, number>;
   finalScore: number | null;
 }
 
@@ -61,6 +65,20 @@ export interface SmGradebook {
   savedAt: string | null;
   /** True when the table differs from the last saved version. */
   unsaved: boolean;
+}
+
+export interface SmBonusLog {
+  id: number;
+  columnId: number;
+  columnName: string;
+  studentId: number;
+  studentName: string;
+  points: number;
+  reason: string;
+  grantedByName: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+  revokedByName: string | null;
 }
 
 export interface SmSaveLog {
@@ -165,6 +183,12 @@ export const scoreManagementApi = {
     (await axiosInstance.put<SmGradebook>(`${base}/columns/${columnId}`, { weightPercent, type })).data,
   deleteColumn: async (columnId: number): Promise<SmGradebook> =>
     (await axiosInstance.delete<SmGradebook>(`${base}/columns/${columnId}`)).data,
+  bonusLog: async (courseId: number): Promise<SmBonusLog[]> =>
+    (await axiosInstance.get<SmBonusLog[]>(`${base}/courses/${courseId}/bonuses`)).data,
+  addBonus: async (courseId: number, body: { columnId: number; studentId: number; points: number; reason: string }): Promise<SmBonusLog[]> =>
+    (await axiosInstance.post<SmBonusLog[]>(`${base}/courses/${courseId}/bonuses`, body)).data,
+  revokeBonus: async (bonusId: number): Promise<SmBonusLog[]> =>
+    (await axiosInstance.post<SmBonusLog[]>(`${base}/bonuses/${bonusId}/revoke`)).data,
   history: async (courseId: number): Promise<SmSaveLog[]> =>
     (await axiosInstance.get<SmSaveLog[]>(`${base}/courses/${courseId}/history`)).data,
   availableExams: async (courseId: number, type?: SmColumnType | null): Promise<SmAvailableExam[]> =>

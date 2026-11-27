@@ -15,7 +15,7 @@ public class TeamAllocationSessionStateService {
     public void closeAsPublishedWhenNoDrafts(Long sessionId) {
         TeamAllocationSession session = sessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow();
-        if (teamRepository.existsByAllocationSession_IdAndStatus(
+        if (teamRepository.existsByAllocationSession_IdAndIsActiveTrueAndStatus(
                 sessionId, ProjectTeamStatus.DRAFT)) {
             return;
         }

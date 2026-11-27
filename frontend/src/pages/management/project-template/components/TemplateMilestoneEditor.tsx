@@ -1,3 +1,4 @@
+import { formatNumberNow } from "@/i18n/format";
 import { FieldError } from "@/components/datatable/modal/form/FieldError";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -90,7 +91,7 @@ export function TemplateMilestoneEditor({ milestone, index, count, disabled, edi
             <Textarea {...fieldProps("description")} maxLength={maxDescriptionLength} rows={3} value={milestone.description}
               onChange={(event) => onChange({ description: event.target.value })} placeholder="Describe the expected outcome (optional)." />
             <p className="text-right text-xs tabular-nums text-muted-foreground">
-              {milestone.description.length.toLocaleString("en-US")} / {maxDescriptionLength.toLocaleString("en-US")} characters
+              {formatNumberNow(milestone.description.length)} / {formatNumberNow(maxDescriptionLength)} characters
             </p>
           </MilestoneField>
           <div className="grid gap-4 sm:grid-cols-3">
@@ -110,9 +111,9 @@ export function TemplateMilestoneEditor({ milestone, index, count, disabled, edi
                 onChange={(event) => onChange({ weight: event.target.value })} placeholder="E.g. 25" />
             </MilestoneField>}
           </div>
-          <p className="text-xs text-muted-foreground">{weighted
-            ? "Due after the project start date. One week equals 7 days."
-            : "Due after the project is assigned. One week equals 7 days."}</p>
+          <p className="text-xs text-muted-foreground">
+            The milestone starts at official publication. The due date is calculated from that time. One week equals 7 days.
+          </p>
           <div className="flex items-center gap-2">
             <Checkbox {...fieldProps("mandatory")} checked={milestone.mandatory} disabled={disabled}
               onCheckedChange={(checked) => onChange({ mandatory: checked === true })} />

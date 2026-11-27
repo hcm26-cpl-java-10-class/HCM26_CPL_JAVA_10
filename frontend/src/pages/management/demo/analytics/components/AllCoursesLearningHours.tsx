@@ -1,3 +1,4 @@
+import { formatDateNow, formatNumberNow } from "@/i18n/format";
 import { courseReportApi } from "@/api/features/demo/course-report.api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,7 +34,7 @@ import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 const formatDate = (value?: string | null) => {
     if (!value) return "—";
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-US");
+    return Number.isNaN(date.getTime()) ? value : formatDateNow(date);
 };
 
 const formatHours = (value?: number | null) => {
@@ -44,7 +45,7 @@ const formatHours = (value?: number | null) => {
 };
 
 const formatNumber = (value?: number | null) =>
-    value === null || value === undefined ? "—" : value.toLocaleString("en-US");
+    value === null || value === undefined ? "—" : formatNumberNow(value);
 
 /**
  * Learning hours across ALL courses (moved here from the Enrollments page).

@@ -5,6 +5,7 @@ import { CheckCircle2, Circle, ClipboardList, Lock, CircleAlert, Clock3 } from "
 interface LessonProgressSidebarProps {
   progress: EnrollmentProgress;
   activeLessonId?: number;
+  activeExamId?: number;
   onLessonSelect: (lesson: LessonProgressItem) => void;
   exams?: CourseExam[];
   onExamOpen?: (exam: CourseExam) => void;
@@ -29,15 +30,16 @@ export function lessonOutcome(exams: CourseExam[], outcomes: Record<string, Outc
   if (states.length && states.every(s=>s==="PASSED" || s==="COMPLETED")) return "COMPLETED";
   return undefined;
 }
-function ExamRow({ exam, onOpen, outcome }: { exam: CourseExam; onOpen?: (exam: CourseExam) => void; outcome?: Outcome }) {
+function ExamRow({ exam, onOpen, outcome, active }: { exam: CourseExam; onOpen?: (exam: CourseExam) => void; outcome?: Outcome; active?: boolean }) {
   return (
       <button
           type="button"
+          aria-current={active ? "page" : undefined}
           aria-disabled={exam.locked}
           title={exam.locked ? (exam.lockReason ?? "Locked") : undefined}
           onClick={() => onOpen?.(exam)}
           className={`ml-6 flex w-[calc(100%-1.5rem)] min-w-0 items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-left text-sm ${
-              exam.locked ? "cursor-not-allowed opacity-60" : "hover:bg-muted/60"
+              active ? "border-primary bg-primary/10" : exam.locked ? "cursor-not-allowed opacity-60" : "hover:bg-muted/60"
           }`}
       >
         {outcome && outcome !== "NOT_STARTED" ? <AssessmentIndicator outcome={outcome} /> : exam.locked ? (
@@ -58,6 +60,7 @@ function ExamRow({ exam, onOpen, outcome }: { exam: CourseExam; onOpen?: (exam: 
 export function LessonProgressSidebar({
                                         progress,
                                         activeLessonId,
+                                        activeExamId,
                                         onLessonSelect,
                                         exams = [],
                                         onExamOpen,
@@ -91,7 +94,7 @@ export function LessonProgressSidebar({
                 </h2>
                 <div className="space-y-1">
                   {lessons.map((lesson) => {
-                    const active = lesson.lessonId === activeLessonId;
+                    const active = !activeExamId && lesson.lessonId === activeLessonId;
                     const lessonExams = exams.filter((e) => e.lessonId === lesson.lessonId);
                     return (
                         <div key={lesson.lessonId} className="space-y-1">
@@ -102,6 +105,7 @@ export function LessonProgressSidebar({
                           >
                             <button
                                 type="button"
+                                aria-current={active ? "page" : undefined}
                                 className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm"
                                 onClick={() => onLessonSelect(lesson)}
                             >
@@ -114,7 +118,7 @@ export function LessonProgressSidebar({
                             </button>
                           </div>
                           {lessonExams.map((exam) => (
-                              <ExamRow key={exam.id} exam={exam} outcome={outcomes[exam.id]} onOpen={onExamOpen} />
+                              <ExamRow key={exam.id} active={exam.id === activeExamId} exam={exam} outcome={outcomes[exam.id]} onOpen={onExamOpen} />
                           ))}
                         </div>
                     );
@@ -122,7 +126,7 @@ export function LessonProgressSidebar({
                   {exams
                       .filter((e) => e.sectionId === sectionId && e.lessonId == null)
                       .map((exam) => (
-                          <ExamRow key={exam.id} exam={exam} outcome={outcomes[exam.id]} onOpen={onExamOpen} />
+                          <ExamRow key={exam.id} active={exam.id === activeExamId} exam={exam} outcome={outcomes[exam.id]} onOpen={onExamOpen} />
                       ))}
                 </div>
               </section>
@@ -141,7 +145,7 @@ export function LessonProgressSidebar({
                       .filter((exam) => exam.category === "FINAL_TEST")
                       .filter((exam) => exam.sectionId == null && exam.lessonId == null)
                       .map((exam) => (
-                          <ExamRow key={exam.id} exam={exam} outcome={outcomes[exam.id]} onOpen={onExamOpen} />
+                          <ExamRow key={exam.id} active={exam.id === activeExamId} exam={exam} outcome={outcomes[exam.id]} onOpen={onExamOpen} />
                       ))}
                 </div>
               </section>

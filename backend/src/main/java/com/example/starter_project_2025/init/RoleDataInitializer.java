@@ -42,6 +42,8 @@ public class RoleDataInitializer implements CommandLineRunner {
     public void run(String... args) {
         ensurePermission("COURSE_REPORT", "READ");
         ensurePermission("STUDENT_ANALYTICS", "READ");
+        ensurePermission("PROJECT_ANALYTICS", "READ");
+        ensurePermission("PROJECT_ANALYTICS", "EXPORT");
         ensurePermission("PEO", "TEAM_ALLOCATE");
         ensurePermission("EXAM", "TAKE");
         ensurePermission("ARTIFACT", "DRAFT_WRITE");
@@ -91,6 +93,7 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "MILESTONE_READ", "SPRINT_READ", "TASK_WRITE", "ARTIFACT_READ", "ARTIFACT_SUBMIT",
                         "ARTIFACT_DRAFT_WRITE",
                         "FEEDBACK_READ", "WORKSPACE_ACTIVITY_READ",
+                        "PROJECT_ANALYTICS_READ", "PROJECT_ANALYTICS_EXPORT",
                         "PROGRAM_READ",
                         "SUBJECT_READ",
                         "SESSION_READ"
@@ -148,7 +151,7 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "WORKSPACE_READ", "WORKSPACE_CREATE", "WORKSPACE_MEMBER_READ", "TEAM_READ", "TEAM_UPDATE",
                         "MILESTONE_READ", "MILESTONE_WRITE", "SPRINT_READ", "SPRINT_WRITE",
                         "ARTIFACT_READ", "ARTIFACT_WRITE", "ARTIFACT_REVIEW", "FEEDBACK_READ", "FEEDBACK_WRITE",
-                        "WORKSPACE_ACTIVITY_READ",
+                        "WORKSPACE_ACTIVITY_READ", "PROJECT_ANALYTICS_READ", "PROJECT_ANALYTICS_EXPORT",
                         "PROGRAM_READ", "PROGRAM_CREATE", "PROGRAM_UPDATE", "PROGRAM_DELETE",
                         "SUBJECT_READ", "SUBJECT_CREATE", "SUBJECT_UPDATE", "SUBJECT_DELETE",
                         "SESSION_CREATE", "SESSION_READ", "SESSION_UPDATE", "SESSION_DELETE"
@@ -160,7 +163,8 @@ public class RoleDataInitializer implements CommandLineRunner {
             pm.getPermissions().addAll(findPermissions("WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
                     "MILESTONE_READ", "MILESTONE_WRITE", "SPRINT_READ", "SPRINT_WRITE",
                     "ARTIFACT_READ", "ARTIFACT_WRITE", "ARTIFACT_SUBMIT", "ARTIFACT_REVIEW",
-                    "FEEDBACK_READ", "FEEDBACK_WRITE", "WORKSPACE_ACTIVITY_READ"));
+                    "FEEDBACK_READ", "FEEDBACK_WRITE", "WORKSPACE_ACTIVITY_READ",
+                    "PROJECT_ANALYTICS_READ", "PROJECT_ANALYTICS_EXPORT"));
             roleRepository.save(pm);
         });
         ensureAllocationPermissionForRole(
@@ -172,6 +176,9 @@ public class RoleDataInitializer implements CommandLineRunner {
         grantWorkspaceLogAccess("MENTOR");
         grantWorkspaceLogAccess("PROGRAM_MANAGER");
         grantWorkspaceLogAccess("CLASS_ADMIN");
+        grantProjectAnalyticsAccess("MENTOR");
+        grantProjectAnalyticsAccess("PROGRAM_MANAGER");
+        grantProjectAnalyticsAccess("CLASS_ADMIN");
 
         log.info("Ensured roles and permission mappings: ADMIN, STUDENT, TEACHER.");
     }
@@ -230,6 +237,14 @@ public class RoleDataInitializer implements CommandLineRunner {
         roleRepository.findByName(roleName).ifPresent(role -> {
             role.getPermissions().addAll(findPermissions("WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
                     "MILESTONE_READ", "SPRINT_READ", "WORKSPACE_ACTIVITY_READ"));
+            roleRepository.save(role);
+        });
+    }
+
+    /** US-ANL-001 / US-ANL-010: mentor/PM roles may view and export project Analytics. */
+    private void grantProjectAnalyticsAccess(String roleName) {
+        roleRepository.findByName(roleName).ifPresent(role -> {
+            role.getPermissions().addAll(findPermissions("PROJECT_ANALYTICS_READ", "PROJECT_ANALYTICS_EXPORT"));
             roleRepository.save(role);
         });
     }

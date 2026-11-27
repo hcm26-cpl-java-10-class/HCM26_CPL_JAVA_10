@@ -43,6 +43,13 @@ public class Lesson extends BaseEntity {
     @Column
     Integer duration;
 
+    /**
+     * Cho phép người học tua (seek) video của bài học hay không.
+     * null (bài học cũ) được coi là KHÔNG cho tua.
+     */
+    @Column(name = "allow_seeking")
+    Boolean allowSeeking;
+
     @Column(name = "order_index", nullable = false)
     Integer orderIndex;
 }

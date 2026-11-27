@@ -39,7 +39,7 @@ public class CourseCatalogService {
     private final CourseEnrollmentRepository enrollmentRepository;
     private final CourseContentAccessGuard contentAccessGuard;
     private final CourseReviewRepository courseReviewRepository;
-    private final com.example.starter_project_2025.system.exam.domain.ExamRepository examRepository;
+    private final com.example.starter_project_2025.system.exam.core.domain.ExamRepository examRepository;
 
     public Page<CatalogCourseDTO> search(String keyword, Long categoryId, CourseLevel level, Pageable pageable, Long userId) {
         Pageable safePageable = sanitize(pageable);
@@ -107,7 +107,8 @@ public class CourseCatalogService {
                     Boolean.TRUE.equals(course.getIsFree()),
                     enrolledIds.contains(course.getId()),
                     averageRating,
-                    totalReviews
+                    totalReviews,
+                    list.stream().map(Category::getName).toList()
             );
         });
     }

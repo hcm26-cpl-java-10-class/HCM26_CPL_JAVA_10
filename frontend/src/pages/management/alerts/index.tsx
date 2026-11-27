@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { Bell, RefreshCw } from "lucide-react";
+import { Bell, RefreshCw, Search, X } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { CustomFilterPopover } from "@/components/datatable/toolbar/filter/CustomFilterPopover";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,7 +30,7 @@ function FilterSelect({ name, value, values, disabled, onChange }: {
   name: string; value?: number; values: { id: number; name: string }[]; disabled: boolean; onChange: (value: string) => void;
 }) {
   const plural = name === "Class" ? "classes" : name.toLowerCase() + "s";
-  return <div className="min-w-0 space-y-2"><Label>{name}</Label><Select value={value ? String(value) : "all"} disabled={disabled} onValueChange={onChange}>
+  return <div className="grid min-w-0 gap-1.5"><Label className="text-xs text-muted-foreground">{name}</Label><Select value={value ? String(value) : "all"} disabled={disabled} onValueChange={onChange}>
     <SelectTrigger aria-label={name} className="w-full min-w-0"><SelectValue placeholder={"All " + plural} /></SelectTrigger>
     <SelectContent><SelectItem value="all">All {plural}</SelectItem>{values.map(option =>
       <SelectItem key={option.id} value={String(option.id)}>{option.name}</SelectItem>)}</SelectContent>
@@ -155,12 +156,14 @@ function AlertConsole() {
     && (!filters.cohortId || team.cohortId === filters.cohortId) && (!filters.classId || team.classId === filters.classId));
   const selectedClass = catalog.find(c => c.id === filters.classId);
   const scopeKey = JSON.stringify({ ...filters, page: 0 });
+  const activeFilterCount = [filters.programId, filters.cohortId, filters.classId, filters.teamId].filter(value => value != null).length;
   const changed = () => { void client.invalidateQueries({ queryKey: ["project-alerts", owner] }); void client.invalidateQueries({ queryKey: ["project-alert-history", owner] }); };
   return <section className="min-w-0 space-y-5"><header><h1 className="flex items-center gap-2 text-xl font-semibold"><Bell className="size-5" />Alerts</h1>
     <p className="mt-1 text-sm text-muted-foreground">Find overdue tasks and at-risk milestones, then send alerts to the team's workspace.</p></header>
     {options.isPending ? <p role="status">Loading class and team filters...</p> : options.isError ? <Card><CardContent className="space-y-3 pt-6"><p role="alert">{getAlertError(options.error).message}</p>
       <Button variant="outline" onClick={() => void options.refetch()}>Try again</Button></CardContent></Card> : <>
-      <Card><CardContent className="space-y-4 pt-6"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="space-y-3"><div className="flex min-w-0 flex-wrap items-center gap-2">
+      <CustomFilterPopover activeFilterCount={activeFilterCount} disabled={busy} onClear={() => setSearch({ view: kind })}>
         <FilterSelect name="Program" value={filters.programId} values={unique(catalog.map(c => ({ id: c.programId, name: c.programName })))} disabled={busy}
           onChange={value => update("programId", value, ["cohortId", "classId", "teamId", "teamSearch"])} />
         <FilterSelect name="Cohort" value={filters.cohortId} values={unique(programClasses.map(c => ({ id: c.cohortId, name: c.cohortName })))} disabled={busy}
@@ -169,12 +172,16 @@ function AlertConsole() {
           onChange={value => update("classId", value, ["teamId", "teamSearch"])} />
         <FilterSelect name="Team" value={filters.teamId} values={classTeams.map(team => ({ id: team.id, name: team.name + " · " + team.classCode }))} disabled={busy}
           onChange={value => update("teamId", value, ["teamSearch"])} />
-      </div><div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="alert-team-search">Search teams</Label>
-        <Input id="alert-team-search" placeholder="Team name or code..." disabled={busy} value={filters.teamSearch} onChange={event => update("teamSearch", event.target.value, ["teamId"])} /></div>
-        <div className="space-y-2"><Label>Alert criteria</Label><p className="rounded-md border px-3 py-2 text-sm">{kind === "MILESTONE"
-          ? "In progress · Due within 48 hours · Below 80% Done" : "Overdue · Not Done · Active sprint or no sprint"}</p></div>
-      </div><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Times shown in your browser's local time. Deadline calculations use {options.data.timeZone}.</p>
-        <Button variant="ghost" disabled={busy} onClick={() => setSearch({ view: kind })}>Clear filters</Button></div></CardContent></Card>
+      </CustomFilterPopover>
+      <div className="relative min-w-40 flex-1 lg:max-w-[420px]"><Search size={16} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Input id="alert-team-search" aria-label="Search teams" placeholder="Search..." className="pl-8 pr-8" disabled={busy} value={filters.teamSearch} onChange={event => update("teamSearch", event.target.value, ["teamId"])} />
+        {filters.teamSearch && <button type="button" aria-label="Clear search" disabled={busy} onClick={() => update("teamSearch", "", ["teamId"])} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X size={14} /></button>}
+      </div>
+      {(activeFilterCount > 0 || filters.teamSearch) && <Button variant="ghost" disabled={busy} onClick={() => setSearch({ view: kind })}>Clear filters</Button>}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground"><p><span className="font-medium text-foreground">Alert criteria: </span>{kind === "MILESTONE"
+          ? "In progress · Due within 48 hours · Below 80% Done" : "Overdue · Not Done · Active sprint or no sprint"}</p>
+        <p>Times shown in your browser's local time. Deadline calculations use {options.data.timeZone}.</p></div></div>
       {selectedClass && selectedClass.teamCount === 0 && <Card><CardContent className="space-y-3 pt-6">
         <p role="status">{selectedClass.studentCount} enrolled student(s). This class has no active published teams yet.</p>
         <p className="text-sm text-muted-foreground">Publish teams using the existing class roster before sending alerts.</p>
@@ -197,5 +204,5 @@ function AlertConsole() {
 }
 export default function ProjectAlertsPage() {
   const { user, activeRole } = usePermissions();
-  return <MainLayout pathName={{ management: "Management", alerts: "Alerts" }}><AlertConsole key={user.email + ":" + activeRole} /></MainLayout>;
+  return <MainLayout ignorePaths={["management"]} pathName={{ alerts: "Alerts" }}><AlertConsole key={user.email + ":" + activeRole} /></MainLayout>;
 }

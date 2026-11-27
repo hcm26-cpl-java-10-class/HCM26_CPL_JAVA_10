@@ -1,3 +1,4 @@
+import { formatDateTimeNow } from "@/i18n/format";
 import { taskApi } from "@/api/features/task.api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,7 +57,7 @@ export function TaskActivityFeed({ taskId }: { taskId: string }) {
                 <p className="text-sm font-medium">{activityDescription(activity)}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {activity.actorName || "Member"} ·{" "}
-                  {new Date(activity.occurredAt).toLocaleString("en-US")}
+                  {formatDateTimeNow(activity.occurredAt)}
                 </p>
               </li>
             ))}

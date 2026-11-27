@@ -23,7 +23,7 @@ public class JpaProjectCompletionAdapter implements ProjectCompletionPort {
     private final ProjectRepository projects;
     private final EntityManager entityManager;
     private final com.example.starter_project_2025.system.project.workspace.service.WorkspaceAccessService access;
-    private final com.example.starter_project_2025.system.project.template.assignment.hierarchy.MasterProjectAccess masterAccess;
+    private final com.example.starter_project_2025.system.project.template.service.assignment.MasterProjectAccess masterAccess;
 
     @Override
     public void requireRead(Long projectId, Long tenantId, Long teamId) {

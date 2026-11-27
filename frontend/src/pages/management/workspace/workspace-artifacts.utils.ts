@@ -1,3 +1,4 @@
+import { formatDateTimeNow } from "@/i18n/format";
 import type { MilestoneListItem, MilestonePageResponse } from "@/types";
 
 export const ARTIFACT_REVIEW_STATES = {
@@ -23,7 +24,7 @@ export function artifactReviewState(status: string | null | undefined): Artifact
 export function artifactDeadline(value: string | null | undefined, now = Date.now()) {
   const date = value ? new Date(value) : null;
   if (!date || Number.isNaN(date.getTime())) return null;
-  return { date, label: date.toLocaleString("en-GB"), past: now > date.getTime() };
+  return { date, label: formatDateTimeNow(date), past: now > date.getTime() };
 }
 
 /** Filters run only after every API page has loaded, never on a truncated page. */

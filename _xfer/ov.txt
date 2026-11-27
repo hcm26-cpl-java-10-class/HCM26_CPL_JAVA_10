@@ -1,0 +1,5 @@
+backend/src/main/java/com/example/starter_project_2025/system/question/importexport/controller/QuestionImportController.java
+frontend/src/api/features/exam.api.ts
+frontend/src/pages/management/exam/index.tsx
+frontend/src/pages/management/exam/score-management/index.tsx
+frontend/src/router/component-registry.ts

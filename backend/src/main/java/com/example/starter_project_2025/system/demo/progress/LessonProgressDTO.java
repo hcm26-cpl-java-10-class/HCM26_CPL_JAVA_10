@@ -35,7 +35,9 @@ public record LessonProgressDTO(
             LocalDateTime completedAt,
             LocalDateTime lastAccessedAt,
             /** Tổng số giây học viên đã dành cho bài học này. */
-            Long studySeconds
+            Long studySeconds,
+            /** true = học viên được phép tua video của bài học này. */
+            boolean allowSeeking
     ) {
     }
 }

@@ -1,3 +1,4 @@
+import { formatDateTimeNow } from "@/i18n/format";
 import { departmentApi, roleApi, userApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { PermissionGate } from "@/components/PermissionGate";
@@ -15,7 +16,7 @@ import { extractServerErrors } from "../user-form.utils";
 function formatDate(value?: string): string {
   if (!value) return "-";
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleString("vi-VN");
+  return Number.isNaN(d.getTime()) ? value : formatDateTimeNow(d);
 }
 
 const STATUS_VARIANT: Record<UserStatus, "default" | "secondary" | "destructive"> = {
@@ -28,7 +29,8 @@ function Item({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid gap-1">
       <span className="font-medium text-muted-foreground">{label}</span>
-      <div>{children || "-"}</div>
+      {/* Giá trị lấy từ DB không được máy dịch. */}
+      <div data-no-translate>{children || "-"}</div>
     </div>
   );
 }

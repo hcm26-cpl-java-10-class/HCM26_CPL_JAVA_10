@@ -24,6 +24,30 @@ import java.util.List;
 @Slf4j
 public class ProjectHubController {
     private final ProjectHubService service;
+    private final com.example.starter_project_2025.system.project.charter.TeamCharterService charterService;
+
+    @GetMapping("/teams/{id}/charter")
+    @PreAuthorize("hasAnyAuthority('TEAM_READ', 'WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
+    public ProjectHubDtos.CharterView charter(@PathVariable Long id, @RequestParam(required = false) Long workspaceId) {
+        return charterService.getInWorkspace(id, workspaceId);
+    }
+
+    @GetMapping("/charter-teams")
+    @PreAuthorize("hasAnyAuthority('TEAM_READ', 'WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
+    public List<ProjectHubDtos.CharterView> charterTeams() { return charterService.list(); }
+
+    @PostMapping("/teams/{id}/charter/confirm")
+    @PreAuthorize("hasAnyAuthority('TEAM_READ', 'WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
+    public ProjectHubDtos.CharterView confirmCharter(@PathVariable Long id, @Valid @RequestBody ProjectHubDtos.ConfirmCharter request) {
+        return charterService.confirm(id, request);
+    }
+
+    @GetMapping("/teams/{id}/charter/history")
+    @PreAuthorize("hasAnyAuthority('TEAM_READ', 'WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
+    public org.springframework.data.domain.Page<ProjectHubDtos.CharterHistory> charterHistory(@PathVariable Long id,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size) {
+        return charterService.history(id, page, size);
+    }
     @GetMapping("/teams")
     @PreAuthorize("hasAuthority('TEAM_READ')")
     public List<ProjectHubDtos.TeamView> teams() { return service.getTeams(); }
@@ -39,7 +63,7 @@ public class ProjectHubController {
     }
 
     @PutMapping("/teams/{id}/charter")
-    @PreAuthorize("hasAuthority('TEAM_UPDATE')")
+    @PreAuthorize("hasAnyAuthority('TEAM_UPDATE', 'TEAM_READ', 'WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
     public ProjectHubDtos.TeamView saveCharter(@PathVariable Long id, @Valid @RequestBody ProjectHubDtos.Charter request) {
         return service.saveCharter(id, request);
     }
@@ -48,6 +72,13 @@ public class ProjectHubController {
     public ResponseEntity<ErrorResponse> statusError(ResponseStatusException exception) {
         return ResponseEntity.status(exception.getStatusCode()).body(new ErrorResponse(
                 exception.getStatusCode().value(), exception.getReason(), LocalDateTime.now()));
+    }
+
+    @ExceptionHandler({org.springframework.dao.OptimisticLockingFailureException.class,
+            jakarta.persistence.OptimisticLockException.class})
+    public ResponseEntity<ErrorResponse> conflict(Exception exception) {
+        return ResponseEntity.status(409).body(new ErrorResponse(409,
+                "The team or charter has changed. Reload and compare before saving.", LocalDateTime.now()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

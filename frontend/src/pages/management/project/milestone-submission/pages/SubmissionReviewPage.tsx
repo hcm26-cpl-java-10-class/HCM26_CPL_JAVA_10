@@ -1,3 +1,4 @@
+import { formatDateTimeNow } from "@/i18n/format";
 import styles from "../components/SubmissionReview.module.css";
 import { milestoneSubmissionApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -19,12 +20,13 @@ import { outcomeOf, resultPath, reviewPath } from "../review-outcome";
 import { SubmissionReviewForm, type ReviewFormError } from "../components/SubmissionReviewForm";
 import { ExecutionStatusBadge, SubmissionStatusBadge } from "../components/SubmissionStatusBadge";
 
-const date = (value?: string | null) => value ? new Date(value).toLocaleString("en-GB") : "—";
+const date = (value?: string | null) => value ? formatDateTimeNow(value) : "—";
 const RETURN_PREFIXES = ["/milestone-submissions", "/teams/", "/management/workspaces/", "/team-allocation/classes/"];
 /** Where to go back to: the in-app page that opened the review (validated), else the review queue. */
 function returnTarget(state: unknown) {
   const returnTo = (state as { returnTo?: string } | null)?.returnTo;
-  return returnTo && RETURN_PREFIXES.some(prefix => returnTo.startsWith(prefix)) ? returnTo : "/milestone-submissions";
+  return returnTo && (RETURN_PREFIXES.some(prefix => returnTo.startsWith(prefix))
+    || returnTo === "/management/reports/projects" || returnTo.startsWith("/management/reports/projects?")) ? returnTo : "/milestone-submissions";
 }
 /** Pages that show the review outcome banner themselves, so the toast would only repeat it. */
 function showsOutcomeBanner(target: string) {

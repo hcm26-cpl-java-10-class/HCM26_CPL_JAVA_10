@@ -1,7 +1,6 @@
 package com.example.starter_project_2025.system.demo.course;
 
 import com.example.starter_project_2025.exception.BusinessValidationException;
-import com.example.starter_project_2025.system.demo.course.CourseFromSyllabusModels.*;
 import com.example.starter_project_2025.system.demo.lesson.LessonDTO;
 import com.example.starter_project_2025.system.demo.lesson.LessonContentType;
 import com.example.starter_project_2025.system.demo.lesson.Lesson;
@@ -25,6 +24,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import com.example.starter_project_2025.system.demo.course.CourseFromSyllabusModels.*;
 import com.example.starter_project_2025.system.demo.syllabus.entity.Syllabus;
 import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusRepository;
 import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusSection;
@@ -45,20 +45,20 @@ class CourseFromSyllabusServiceTest {
     @Mock SyllabusRepository syllabuses;
     @Mock SyllabusSectionRepository sections;
     @Mock SyllabusTopicRepository topics;
-    @Mock com.example.starter_project_2025.system.exam.service.ExamServiceImpl examService;
+    @Mock com.example.starter_project_2025.system.exam.core.service.ExamServiceImpl examService;
     @Mock jakarta.validation.Validator validator;
     @InjectMocks CourseFromSyllabusService service;
 
-    private static com.example.starter_project_2025.system.exam.dto.ExamDTO quizConfig() {
-        var config = new com.example.starter_project_2025.system.exam.dto.ExamDTO();
+    private static com.example.starter_project_2025.system.exam.core.dto.ExamDTO quizConfig() {
+        var config = new com.example.starter_project_2025.system.exam.core.dto.ExamDTO();
         config.setTitle("Quiz heading");
         config.setDurationMinutes(15);
-        config.setCategory(com.example.starter_project_2025.system.exam.domain.ExamCategory.QUIZ);
-        config.setExamType(com.example.starter_project_2025.system.exam.domain.ExamType.MULTIPLE_CHOICE);
+        config.setCategory(com.example.starter_project_2025.system.exam.core.domain.ExamCategory.QUIZ);
+        config.setExamType(com.example.starter_project_2025.system.exam.core.domain.ExamType.MULTIPLE_CHOICE);
         return config;
     }
 
-    private static DraftSection assessmentOutline(com.example.starter_project_2025.system.exam.dto.ExamDTO config) {
+    private static DraftSection assessmentOutline(com.example.starter_project_2025.system.exam.core.dto.ExamDTO config) {
         return new DraftSection("Database Basics", List.of("Quiz heading"), null,
                 List.of("Read the instructions before starting."), List.of(LessonContentType.QUIZ),
                 List.of(""), List.of(0), List.of(config));
@@ -76,9 +76,9 @@ class CourseFromSyllabusServiceTest {
         config.setQuestionIds(List.of(99L));
         assertThrows(BusinessValidationException.class, () -> CourseFromSyllabusService.normalizeAndValidateOutline(List.of(assessmentOutline(config))));
         config.setQuestionIds(null);
-        config.setCategory(com.example.starter_project_2025.system.exam.domain.ExamCategory.ASSIGNMENT);
+        config.setCategory(com.example.starter_project_2025.system.exam.core.domain.ExamCategory.ASSIGNMENT);
         assertThrows(BusinessValidationException.class, () -> CourseFromSyllabusService.normalizeAndValidateOutline(List.of(assessmentOutline(config))));
-        config.setCategory(com.example.starter_project_2025.system.exam.domain.ExamCategory.QUIZ);
+        config.setCategory(com.example.starter_project_2025.system.exam.core.domain.ExamCategory.QUIZ);
         config.setLessonId(123L);
         assertThrows(BusinessValidationException.class, () -> CourseFromSyllabusService.normalizeAndValidateOutline(List.of(assessmentOutline(config))));
         verifyNoInteractions(courseService, lessonService, examService);
@@ -97,7 +97,7 @@ class CourseFromSyllabusServiceTest {
             assertThrows(org.springframework.security.access.AccessDeniedException.class, () -> service.createCustomized(request));
             verifyNoInteractions(courseService, lessonService, examService);
             context.setAuthentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("teacher", "", List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("EXAM_CREATE"))));
-            when(validator.validate(any(com.example.starter_project_2025.system.exam.dto.ExamDTO.class), eq(com.example.starter_project_2025.base.crud.dto.OnCreate.class))).thenReturn(java.util.Set.of());
+            when(validator.validate(any(com.example.starter_project_2025.system.exam.core.dto.ExamDTO.class), eq(com.example.starter_project_2025.base.crud.dto.OnCreate.class))).thenReturn(java.util.Set.of());
             var created = CourseDTO.builder().build(); created.setId(11L);
             var course = new Course(); course.setId(11L);
             when(courseService.create(any())).thenReturn(created);
@@ -108,7 +108,7 @@ class CourseFromSyllabusServiceTest {
             var lesson = new LessonDTO(); lesson.setId(33L);
             when(lessonService.create(any())).thenReturn(lesson);
             assertSame(created, service.createCustomized(request));
-            var captor = ArgumentCaptor.forClass(com.example.starter_project_2025.system.exam.dto.ExamDTO.class);
+            var captor = ArgumentCaptor.forClass(com.example.starter_project_2025.system.exam.core.dto.ExamDTO.class);
             verify(examService).create(captor.capture());
             assertEquals(11L, captor.getValue().getCourseId());
             assertEquals(22L, captor.getValue().getSectionId());

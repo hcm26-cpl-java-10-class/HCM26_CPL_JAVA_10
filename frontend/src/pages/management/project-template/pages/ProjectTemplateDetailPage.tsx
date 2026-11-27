@@ -1,5 +1,7 @@
+import { formatDateTimeNow } from "@/i18n/format";
 import { projectTemplateApi } from "@/api/features/project-template.api";
 import { projectTemplateVersionApi } from "@/api/features/project-template-version.api";
+import { aiTemplateReviewApi } from "@/api/features/ai-template-review.api";
 import { TemplateDeleteDialog } from "../components/TemplateDeleteDialog";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -7,9 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CalendarDays, ClipboardList, FileText, Flag, FolderOpen, FolderTree, History, Layers3, LockKeyhole, Pen, Tags, Users } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Bot, CalendarDays, ClipboardList, FileText, Flag, FolderOpen, FolderTree, History, Layers3, Loader2, LockKeyhole, Pen, Tags, Users } from "lucide-react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import { ProjectTemplateHeader } from "../components/ProjectTemplateHeader";
 import { ProjectTemplateError, ProjectTemplateLoading } from "../components/ProjectTemplateState";
 import { ProjectTemplateStatusBadge } from "../components/ProjectTemplateStatusBadge";
@@ -65,6 +68,31 @@ export function ProjectTemplateDetailPage() {
   });
   const resourceVersion = resourceVersions.data?.find(version => version.isActive
     && version.status === (template?.status === "ACTIVE" ? "PUBLISHED" : template?.status));
+  const canReviewTemplate = options.hasPermission("PROJECT_TEMPLATE_REVIEW");
+  const reviewVersions = useQuery({
+    queryKey: ["project-template-versions", "review-source", template?.id, options.user.email, options.activeRole],
+    queryFn: () => projectTemplateVersionApi.getByTemplate(template!.id),
+    enabled: !!template && canReviewTemplate,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const reviewSourceVersion = reviewVersions.data?.find(version => version.isActive
+    && version.status === (template?.status === "ACTIVE" ? "PUBLISHED" : template?.status));
+  const reviewMutation = useMutation({
+    mutationFn: async () => {
+      if (!template || !reviewSourceVersion?.id) {
+        throw new Error("No current template snapshot is available to review.");
+      }
+      return aiTemplateReviewApi.createReview(template.id, reviewSourceVersion.id);
+    },
+    onSuccess: async report => {
+      await queryClient.invalidateQueries({ queryKey: ["ai-template-review", template?.id] });
+      navigate(`/project-templates/${report.templateId}/reviews/${report.reportId}`);
+    },
+    onError: error => {
+      toast.error(error instanceof Error ? error.message : "Could not start the AI review.");
+    },
+  });
 
   const versionId = Number(searchParams.get("version"));
   const versionQuery = useQuery({
@@ -89,7 +117,7 @@ export function ProjectTemplateDetailPage() {
   const canArchive = options.isSuccess && options.data?.canArchive === true && !query.isError
     && template?.readOnly !== true
     && template?.status === "ACTIVE" && options.hasPermission("PROJECT_TEMPLATE_ARCHIVE");
-  const formatDate = (value: string) => new Date(value).toLocaleString("en-GB");
+  const formatDate = (value: string) => formatDateTimeNow(value);
   const selectTab = (value: string) => setSearchParams((current) => {
     const next = new URLSearchParams(current);
     if (value === "overview") next.delete("tab");
@@ -112,6 +140,23 @@ export function ProjectTemplateDetailPage() {
             <ProjectTemplateStatusBadge status={headingTemplate.status} />
           </div>}>
             <Button variant="outline" onClick={() => navigate("/project-templates")}><ArrowLeft /> Back to templates</Button>
+            {canReviewTemplate && tab !== "versions" && (
+              <>
+                <Button
+                  onClick={() => reviewMutation.mutate()}
+                  disabled={!reviewSourceVersion || reviewVersions.isPending || reviewMutation.isPending || template?.status === "ARCHIVED"}
+                  title={reviewVersions.isError ? "Could not load a current snapshot" : undefined}
+                >
+                  {reviewMutation.isPending || reviewVersions.isPending
+                    ? <Loader2 className="animate-spin" />
+                    : <Bot />}
+                  {reviewMutation.isPending ? "Reviewing…" : "Review with AI"}
+                </Button>
+                <Button variant="outline" onClick={() => template && navigate(`/project-templates/${template.id}/reviews`)}>
+                  <History /> Review history
+                </Button>
+              </>
+            )}
             {template?.parentTemplateId && <Button variant="outline" onClick={() => navigate(`/project-templates/${template.parentTemplateId}/detail?tab=modules`)}>
               <ArrowLeft />Parent template</Button>}
             {tab === "versions" && <Button variant="outline" onClick={() => selectTab("overview")}>Current template</Button>}
@@ -134,6 +179,21 @@ export function ProjectTemplateDetailPage() {
               void queryClient.invalidateQueries({ queryKey: ["project-template-versions"] });
             }} />}
         </ProjectTemplateHeader>
+        {canReviewTemplate && reviewVersions.isError && (
+          <Alert variant="destructive">
+            <LockKeyhole />
+            <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+              <span>Could not load a current template snapshot, so an AI review cannot be started.</span>
+              <Button size="sm" variant="outline" onClick={() => void reviewVersions.refetch()}>Retry</Button>
+            </AlertDescription>
+          </Alert>
+        )}
+        {canReviewTemplate && reviewVersions.isSuccess && !reviewSourceVersion && template && template.status !== "ARCHIVED" && (
+          <Alert>
+            <LockKeyhole />
+            <AlertDescription>No current snapshot is available to review. Create or publish a template version first.</AlertDescription>
+          </Alert>
+        )}
         {!options.canRead ? <ProjectTemplateError denied />
           : options.isLoading || (options.isSuccess && query.isLoading) ? <ProjectTemplateLoading />
           : options.isError || query.isError ? <ProjectTemplateError error={options.error ?? query.error}

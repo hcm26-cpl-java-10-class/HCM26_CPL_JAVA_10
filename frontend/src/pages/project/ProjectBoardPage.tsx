@@ -1,4 +1,7 @@
 import { projectBoardApi } from "@/api/features/project-board.api";
+import { createLocaleFormatter } from "@/i18n/format";
+import { toLanguage } from "@/i18n/languages";
+import i18n from "@/i18n";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -192,27 +195,18 @@ function getStatusUpdateError(error: unknown) {
 }
 
 function formatDate(value: string | null) {
-  if (!value) return "Chưa thiết lập";
+  if (!value) return i18n.t("Not set");
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Ngày không hợp lệ";
+  if (Number.isNaN(date.getTime())) return i18n.t("Invalid date");
 
-  return new Intl.DateTimeFormat("vi-VN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+  return createLocaleFormatter(toLanguage(i18n.language)).formatDate(date);
 }
 
 function formatDateTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
 
-  return new Intl.DateTimeFormat("vi-VN", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+  return createLocaleFormatter(toLanguage(i18n.language)).formatDateTime(date);
 }
 
 function formatAction(action: string) {

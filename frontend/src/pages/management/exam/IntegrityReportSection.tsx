@@ -2,15 +2,19 @@
 // CHANGED: chi thong ke (khong co xem xet/ghi chu/export). Chi co 1 co duy nhat "Bi gan co" = co vi pham,
 // de sau nay lam tinh nang sua diem cho sinh vien bi gan co. Loc duoc theo tung loai vi pham.
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 import {
     getEntryPhoto,
     getIntegrityEvents,
     getIntegrityReport,
+    reviewIntegrityFlags,
     type IntegrityReportRow,
 } from "@/api/exam.api";
+import type { IntegrityReviewStatus } from "@/types";
 import { formatScore } from "@/utils/examScore";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -181,6 +185,74 @@ function EventList({ examId, attemptId }: { examId: number; attemptId: number })
                     ))}
                 </tbody>
             </table>
+        </div>
+    );
+}
+
+const REVIEW_STATUS_LABEL: Record<IntegrityReviewStatus, string> = {
+    UNREVIEWED: "Unreviewed",
+    CLEARED: "Cleared (Valid)",
+    CONFIRMED_VIOLATION: "Confirmed Violation",
+};
+
+function IntegrityReviewPanel({ examId, row }: { examId: number; row: IntegrityReportRow }) {
+    const queryClient = useQueryClient();
+    const [status, setStatus] = useState<IntegrityReviewStatus>(row.reviewStatus ?? "UNREVIEWED");
+    const [note, setNote] = useState<string>(row.reviewNote ?? "");
+
+    const mutation = useMutation({
+        mutationFn: () => reviewIntegrityFlags(examId, row.attemptId, { status, note }),
+        onSuccess: () => {
+            toast.success("Integrity review saved");
+            void queryClient.invalidateQueries({ queryKey: ["exam-integrity-report", examId] });
+        },
+        onError: () => {
+            toast.error("Failed to save review. A note is required when confirming a violation.");
+        },
+    });
+
+    return (
+        <div className="mt-4 rounded-md border bg-background p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium">Reviewer Disposition (BR-UNI-19)</p>
+                {row.reviewedAt && (
+                    <span className="text-xs text-muted-foreground">
+                        Last reviewed: {fmtDate(row.reviewedAt)}
+                    </span>
+                )}
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+                Flags are advisory signals only. Record an explicit human review decision and note.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+                {(["UNREVIEWED", "CLEARED", "CONFIRMED_VIOLATION"] as IntegrityReviewStatus[]).map((option) => (
+                    <Button
+                        key={option}
+                        type="button"
+                        size="sm"
+                        variant={status === option ? "default" : "outline"}
+                        onClick={() => setStatus(option)}
+                    >
+                        {REVIEW_STATUS_LABEL[option]}
+                    </Button>
+                ))}
+            </div>
+            <Textarea
+                className="mt-2 min-h-16 text-sm"
+                placeholder="Reviewer note (required if confirming a violation)..."
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+            />
+            <div className="mt-2 flex justify-end">
+                <Button
+                    type="button"
+                    size="sm"
+                    disabled={mutation.isPending}
+                    onClick={() => mutation.mutate()}
+                >
+                    {mutation.isPending ? "Saving..." : "Save Review"}
+                </Button>
+            </div>
         </div>
     );
 }
@@ -395,13 +467,20 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                                                     </div>
                                                 </td>
                                                 <td className="px-3 py-3">
-                                                    {r.flagged ? (
-                                                        <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800 dark:bg-red-950 dark:text-red-300">
-                                                            Flagged
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-xs text-muted-foreground">—</span>
-                                                    )}
+                                                    <div className="flex flex-col items-start gap-1">
+                                                        {r.flagged ? (
+                                                            <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-medium text-white dark:bg-slate-100 dark:text-slate-900">
+                                                                Flagged
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">—</span>
+                                                        )}
+                                                        {r.reviewStatus && r.reviewStatus !== "UNREVIEWED" && (
+                                                            <span className="rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-700 dark:border-slate-700 dark:text-slate-300">
+                                                                {REVIEW_STATUS_LABEL[r.reviewStatus]}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                             {open && (
@@ -446,6 +525,7 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                                                         )}
                                                         <p className="mb-2 mt-3 text-sm font-medium">Event details</p>
                                                         <EventList examId={examId} attemptId={r.attemptId} />
+                                                        <IntegrityReviewPanel examId={examId} row={r} />
                                                     </td>
                                                 </tr>
                                             )}

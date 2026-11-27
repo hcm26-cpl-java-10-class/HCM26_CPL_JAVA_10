@@ -273,7 +273,8 @@ public class LessonProgressService {
                 progress != null && progress.isCompleted(),
                 progress == null ? null : progress.getCompletedAt(),
                 progress == null ? null : progress.getLastAccessedAt(),
-                progress == null ? null : progress.getStudySeconds()
+                progress == null ? null : progress.getStudySeconds(),
+                Boolean.TRUE.equals(lesson.getAllowSeeking())
         );
     }
 }

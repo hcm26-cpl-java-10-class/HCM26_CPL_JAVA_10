@@ -1,8 +1,8 @@
 package com.example.starter_project_2025.system.exam.review.domain;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
-import com.example.starter_project_2025.system.exam.domain.Exam;
-import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
+import com.example.starter_project_2025.system.exam.core.domain.Exam;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttempt;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

@@ -7,12 +7,11 @@ import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course.CourseRepository;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
-import com.example.starter_project_2025.system.exam.domain.Exam;
-import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
-import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
-import com.example.starter_project_2025.system.exam.domain.ExamRepository;
-import com.example.starter_project_2025.system.exam.gradebook.GradebookDTOs.*;
-import com.example.starter_project_2025.system.exam.service.ExamAccessGuard;
+import com.example.starter_project_2025.system.exam.core.domain.Exam;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttempt;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptRepository;
+import com.example.starter_project_2025.system.exam.core.domain.ExamRepository;
+import com.example.starter_project_2025.system.exam.core.service.ExamAccessGuard;
 import com.example.starter_project_2025.system.rbac.user.User;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -23,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
+import com.example.starter_project_2025.system.exam.gradebook.GradebookDTOs.*;
 
 /**
  * Bang diem (gradebook) cua tung course: cot diem, ti trong, nhap tay, lay diem
@@ -43,7 +43,8 @@ public class GradebookService {
     private final ExamAttemptRepository attemptRepository;
     private final ExamAccessGuard accessGuard;
     private final GradebookStateRepository stateRepository;
-    private final com.example.starter_project_2025.system.exam.service.ExamResultAccessService resultAccess;
+    private final GradebookBonusRepository bonusRepository;
+    private final com.example.starter_project_2025.system.exam.result.service.ExamResultAccessService resultAccess;
     private final GradebookSaveLogRepository saveLogRepository;
     private final com.example.starter_project_2025.system.notification.NotificationService notificationService;
     private final GradebookPublishedItemRepository publishedRepository;
@@ -126,6 +127,11 @@ public class GradebookService {
             byStudent.computeIfAbsent(s.getStudent().getId(), k -> new HashMap<>())
                     .put(s.getColumn().getId(), s.getScore());
         }
+        Map<Long, Map<Long, BigDecimal>> bonusByStudent = new HashMap<>();
+        for (GradebookBonus b : bonusRepository.findActiveByCourse(course.getId())) {
+            bonusByStudent.computeIfAbsent(b.getStudent().getId(), k -> new HashMap<>())
+                    .merge(b.getColumn().getId(), b.getPoints(), BigDecimal::add);
+        }
         BigDecimal totalWeight = BigDecimal.ZERO;
         List<ColumnDto> colDtos = new ArrayList<>();
         for (GradebookColumn c : columns) {
@@ -133,12 +139,15 @@ public class GradebookService {
             Exam e = c.getSourceExam();
             colDtos.add(new ColumnDto(c.getId(), c.getName(), c.getType(), c.getWeightPercent(),
                     e == null ? null : e.getId(), e == null ? null : e.getTitle(),
-                    e == null || resultAccess.canStudentSeeScoreOnMyScores(e)));
+                    e == null || resultAccess.canStudentSeeScoreOnMyScores(e), gradingState(e)));
         }
         List<StudentRow> rows = new ArrayList<>();
         for (CourseEnrollment en : enrollmentRepository.findActiveStudentsByCourse(course.getId())) {
             User u = en.getUser();
-            Map<Long, BigDecimal> scores = byStudent.getOrDefault(u.getId(), Map.of());
+            Map<Long, BigDecimal> scores = new HashMap<>(byStudent.getOrDefault(u.getId(), Map.of()));
+            Map<Long, BigDecimal> bonuses = bonusByStudent.getOrDefault(u.getId(), Map.of());
+            // diem hien thi = diem goc + bonus (toi da 10); chi cong khi sinh vien da co diem goc
+            bonuses.forEach((colId, pts) -> scores.computeIfPresent(colId, (k, base) -> base.add(pts).min(TEN)));
             BigDecimal sum = BigDecimal.ZERO;
             for (GradebookColumn c : columns) {
                 BigDecimal sc = scores.get(c.getId());
@@ -147,7 +156,8 @@ public class GradebookService {
             }
             BigDecimal finalScore = columns.isEmpty() ? null
                     : sum.divide(HUNDRED, 2, RoundingMode.HALF_UP).min(TEN);
-            rows.add(new StudentRow(u.getId(), u.getFullName(), u.getEmail(), u.getUserCode(), scores, finalScore));
+            rows.add(new StudentRow(u.getId(), u.getFullName(), u.getEmail(), u.getUserCode(), scores,
+                    bonuses, finalScore));
         }
         java.time.LocalDateTime savedAt = stateRepository.findByCourse_Id(course.getId())
                 .map(GradebookState::getSavedAt).orElse(null);
@@ -236,6 +246,7 @@ public class GradebookService {
                         .examTitle(c.examTitle())
                         .weightPercent(c.weightPercent())
                         .score(s.scores().get(c.id()))
+                        .bonus(s.bonuses().get(c.id()))
                         .build());
             }
         }
@@ -261,12 +272,12 @@ public class GradebookService {
             if (c.getSourceExam() != null)
                 linked.add(c.getSourceExam().getId());
 
-        List<com.example.starter_project_2025.system.exam.domain.ExamCategory> order = List.of(
-                com.example.starter_project_2025.system.exam.domain.ExamCategory.ASSIGNMENT,
-                com.example.starter_project_2025.system.exam.domain.ExamCategory.QUIZ,
-                com.example.starter_project_2025.system.exam.domain.ExamCategory.MIDTERM,
-                com.example.starter_project_2025.system.exam.domain.ExamCategory.FINAL_TEST);
-        List<Exam> exams = new ArrayList<>(examRepository.findByCourseLink(courseId, null, null, true));
+        List<com.example.starter_project_2025.system.exam.core.domain.ExamCategory> order = List.of(
+                com.example.starter_project_2025.system.exam.core.domain.ExamCategory.ASSIGNMENT,
+                com.example.starter_project_2025.system.exam.core.domain.ExamCategory.QUIZ,
+                com.example.starter_project_2025.system.exam.core.domain.ExamCategory.MIDTERM,
+                com.example.starter_project_2025.system.exam.core.domain.ExamCategory.FINAL_TEST);
+        List<Exam> exams = new ArrayList<>(examRepository.findByCourseLink(courseId, null, null, false));
         exams.sort(Comparator.comparingInt((Exam e) -> order.indexOf(e.getCategory())).thenComparing(Exam::getId));
         List<Exam> toCreate = new ArrayList<>();
         for (Exam e : exams) {
@@ -308,7 +319,25 @@ public class GradebookService {
 
         int pos = existing.size();
         List<GradebookColumn> created = new ArrayList<>();
+        // A manually added column of the same type that has no scores yet is filled by the scan
+        // instead of creating a duplicate column next to it.
+        Set<Long> columnsWithScores = new HashSet<>();
+        for (GradebookScore sc : scoreRepository.findAllByCourse(courseId))
+            columnsWithScores.add(sc.getColumn().getId());
+        Set<Long> reusedIds = new HashSet<>();
         for (Exam e : toCreate) {
+            GradebookColumn reusable = existing.stream()
+                    .filter(c -> c.getSourceExam() == null
+                            && e.getCategory().name().equals(c.getType())
+                            && !columnsWithScores.contains(c.getId())
+                            && !reusedIds.contains(c.getId()))
+                    .findFirst().orElse(null);
+            if (reusable != null) {
+                reusable.setSourceExam(e);
+                created.add(columnRepository.save(reusable));
+                reusedIds.add(reusable.getId());
+                continue;
+            }
             GradebookColumn c = GradebookColumn.builder()
                     .course(course)
                     .name("-")
@@ -326,7 +355,7 @@ public class GradebookService {
         List<ImportReport> reports = new ArrayList<>();
         int refreshed = 0;
         for (GradebookColumn c : existing) {
-            if (c.getSourceExam() != null
+            if (c.getSourceExam() != null && !reusedIds.contains(c.getId())
                     && exams.stream().anyMatch(x -> x.getId().equals(c.getSourceExam().getId()))) {
                 reports.add(compute(c, c.getSourceExam(), true, true));
                 refreshed++;
@@ -375,6 +404,7 @@ public class GradebookService {
         GradebookColumn c = column(columnId);
         Course course = checkCourse(c.getCourse().getId(), principal);
         scoreRepository.deleteByColumn(columnId);
+        bonusRepository.deleteAll(bonusRepository.findByColumn(columnId));
         columnRepository.delete(c);
         columnRepository.flush();
         renameColumns(course.getId());
@@ -448,7 +478,7 @@ public class GradebookService {
                 + (cat != null ? " and e.category = :cat" : "") + " order by e.id desc", Exam.class)
                 .setParameter("cid", courseId).setParameter("uid", uid);
         if (cat != null)
-            query.setParameter("cat", com.example.starter_project_2025.system.exam.domain.ExamCategory.valueOf(cat));
+            query.setParameter("cat", com.example.starter_project_2025.system.exam.core.domain.ExamCategory.valueOf(cat));
         List<Exam> exams = query.getResultList();
         List<AvailableExam> out = new ArrayList<>();
         for (Exam e : exams) {
@@ -491,6 +521,18 @@ public class GradebookService {
      * So khop theo user id: co diem + co trong lop -> add; co diem nhung khong
      * trong lop -> thua; trong lop khong co diem -> thieu.
      */
+    /** NO_ATTEMPTS / PENDING_GRADING / GRADED for the linked exam (null when the column has no exam). */
+    private String gradingState(Exam exam) {
+        if (exam == null)
+            return null;
+        List<ExamAttempt> attempts = attemptRepository.findAllByExam_Id(exam.getId());
+        if (attempts.isEmpty())
+            return "NO_ATTEMPTS";
+        boolean pending = attempts.stream()
+                .anyMatch(a -> !com.example.starter_project_2025.system.demo.course.CourseAssessmentService.fullyGraded(a));
+        return pending ? "PENDING_GRADING" : "GRADED";
+    }
+
     private ImportReport compute(GradebookColumn c, Exam exam, boolean apply) {
         return compute(c, exam, apply, false);
     }
@@ -567,7 +609,7 @@ public class GradebookService {
         return columnRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Column not found"));
     }
 
-    private Course checkCourse(Long courseId, UserPrincipal principal) {
+    Course checkCourse(Long courseId, UserPrincipal principal) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
         if (accessGuard.isAdmin(principal))
