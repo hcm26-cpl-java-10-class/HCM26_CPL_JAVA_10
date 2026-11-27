@@ -21,9 +21,10 @@ import java.util.Map;
  */
 final class CourseAiComparisonMetrics {
 
-    /** 8 module của trang so sánh, đúng thứ tự hiển thị. */
+    /** 9 module của trang so sánh, đúng thứ tự hiển thị. */
     static final List<String> MODULE_KEYS = List.of(
-            "funnel", "trend", "activity", "reviews", "departments", "ranking", "content", "study-time");
+            "funnel", "trend", "activity", "reviews", "departments", "ranking", "content", "study-time",
+            "exams");
 
     /**
      * Một chỉ số: tên field, chiều đánh giá, và module nó thuộc về.
@@ -80,7 +81,13 @@ final class CourseAiComparisonMetrics {
 
             // ===== 7. Thời gian học =====
             new Metric("studyAverageHours", true, "study-time"),
-            new Metric("studyTotalHours", true, "study-time")
+            new Metric("studyTotalHours", true, "study-time"),
+
+            // ===== 8. Bài thi =====
+            new Metric("examPassRate", true, "exams"),
+            new Metric("examFailRate", false, "exams"),
+            new Metric("examAverageScore", true, "exams"),
+            new Metric("examGradedAttempts", true, "exams")
     );
 
     /**
@@ -95,7 +102,8 @@ final class CourseAiComparisonMetrics {
             "departments", List.of("departmentGap", "departmentBestRate"),
             "ranking", List.of("overallScore", "completionRate", "dropOffRate"),
             "content", List.of("contentAnswerRate", "contentResolvedRate", "contentOpenReports", "contentAverageResponseHours"),
-            "study-time", List.of("studyAverageHours")
+            "study-time", List.of("studyAverageHours"),
+            "exams", List.of("examPassRate", "examAverageScore")
     );
 
     private static final Map<String, Metric> BY_KEY = METRICS.stream()
@@ -157,6 +165,14 @@ final class CourseAiComparisonMetrics {
 
         map.put("studyAverageHours", item.studyAverageHours());
 
+        map.put("examTotal", item.examTotal());
+        map.put("examAttempts", item.examAttempts());
+        map.put("examGradedAttempts", item.examGradedAttempts());
+        map.put("examParticipants", item.examParticipants());
+        map.put("examAverageScore", item.examAverageScore());
+        map.put("examPassRate", item.examPassRate());
+        map.put("examFailRate", item.examFailRate());
+
         map.put("overallScore", item.overallScore());
         map.put("overallVerdict", item.overallVerdict());
         return map;
@@ -196,6 +212,10 @@ final class CourseAiComparisonMetrics {
             case "contentAverageResponseHours" -> item.contentAverageResponseHours();
             case "studyAverageHours" -> item.studyAverageHours();
             case "studyTotalHours" -> item.studyTotalHours();
+            case "examPassRate" -> item.examPassRate();
+            case "examFailRate" -> item.examFailRate();
+            case "examAverageScore" -> item.examAverageScore();
+            case "examGradedAttempts" -> (double) item.examGradedAttempts();
             default -> null;
         };
     }

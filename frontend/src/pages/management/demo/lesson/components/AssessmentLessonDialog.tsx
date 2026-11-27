@@ -58,6 +58,7 @@ export function AssessmentLessonDialog(props: Props) {
       <DialogHeader><DialogTitle>Create {props.type === "QUIZ" ? "Quiz" : props.type === "EXAM" ? "Exam" : "Assignment"} lesson</DialogTitle>
         <DialogDescription>Create an assessment using the Assessment Management form. It will be linked automatically to this lesson in section #{props.sectionId}.</DialogDescription></DialogHeader>
       <div className="min-h-0 space-y-4 overflow-y-auto p-1">
+        <p className="text-sm text-muted-foreground">Save this lesson first. Then use Configure assessment in Curriculum to edit its questions and course weight.</p>
         {!hasPermission("EXAM_CREATE") && <p role="alert" className="text-destructive">You need assessment creation permission to create this lesson and its assessment.</p>}
         <ExamConfigFields title={title} setTitle={setTitle} duration={duration} setDuration={setDuration}
           cfg={cfg} setCfg={setCfg} showErrors={showErrors} showCourseLink={false} categoryOptions={categories} />

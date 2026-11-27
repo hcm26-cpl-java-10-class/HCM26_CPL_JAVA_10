@@ -137,6 +137,9 @@ export interface FieldSchema {
 
   renderCell?: (value: any, row: any) => React.ReactNode;
 
+  renderForm?: (value: any, form: Record<string, any>, onChange: (name: string, value: any) => void,
+    relationOptions: Record<string, any[]>, disabled: boolean) => React.ReactNode;
+
   /** Value used when creating a new record (defaults to "" / false). */
   defaultValue?: any;
 

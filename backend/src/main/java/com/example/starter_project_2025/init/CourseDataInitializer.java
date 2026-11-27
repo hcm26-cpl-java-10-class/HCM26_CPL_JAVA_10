@@ -246,7 +246,54 @@ public class CourseDataInitializer implements CommandLineRunner {
                         link("Software Testing with JUnit - Applied practice further learning", "https://junit.org/junit5/docs/current/user-guide/", 4, 300))
         );
 
-        log.info("Published demo courses and curricula ensured.");
+        // Bảo đảm mọi khóa học đã xuất bản trong hệ thống đều có chương trình học,
+        // để các initializer khác (Course Analytics, Exam) quét được toàn bộ khóa
+        // học chứ không chỉ 4 khóa demo mặc định ban đầu.
+        int curriculumFilled = ensureCurriculumForAllCourses(teacher);
+
+        log.info("Published demo courses and curricula ensured (extra curricula filled: {}).", curriculumFilled);
+    }
+
+    /**
+     * Bổ sung chương trình học mặc định cho các khóa học đã xuất bản nhưng chưa
+     * có bài học nào.
+     *
+     * <p>Idempotent: khóa học đã có bài học thì không bị đụng tới. Nội dung mẫu
+     * dùng chung cho mọi khóa (generic) - chỉ mang tính chất "khung" để các API
+     * thống kê có dữ liệu tiến độ học tập để đọc.
+     */
+    private int ensureCurriculumForAllCourses(User teacher) {
+        int filled = 0;
+        for (Course course : courseRepository.findAll()) {
+            if (Boolean.FALSE.equals(course.getIsActive())) {
+                continue;
+            }
+            if (course.getStatus() != CourseStatus.PUBLISHED) {
+                continue;
+            }
+            if (!lessonRepository.findByCourseIdOrdered(course.getId()).isEmpty()) {
+                continue;
+            }
+            if (course.getInstructorUser() == null) {
+                course.setInstructorUser(teacher);
+                course.setInstructor(teacher.getFullName());
+                courseRepository.save(course);
+            }
+            seedCurriculum(course,
+                    section("Overview", 0,
+                            video(course.getName() + " - Tổng quan", "https://www.youtube.com/watch?v=iCYoaTvE9vo", 0, 600),
+                            text(course.getName() + " - Bài đọc", "Đọc và ghi chú các khái niệm nền tảng của khóa học.", 1, 420),
+                            document(course.getName() + " - Tài liệu tham khảo", DOCUMENT_URL, 2, 300),
+                            link(course.getName() + " - Tài liệu mở rộng", "https://docs.oracle.com/javase/tutorial/", 3, 300)),
+                    section("Applied Practice", 1,
+                            video(course.getName() + " - Thực hành", "https://www.youtube.com/watch?v=efC0Nw5rdA4", 0, 720),
+                            text(course.getName() + " - Bài tập", "Giải và trình bày bài tập cuối khóa.", 1, 480),
+                            document(course.getName() + " - Bài tập tài liệu", DOCUMENT_URL, 2, 300),
+                            link(course.getName() + " - Tài liệu mở rộng", "https://docs.spring.io/spring-boot/index.html", 3, 300))
+            );
+            filled++;
+        }
+        return filled;
     }
 
     private Course upsertCourse(
