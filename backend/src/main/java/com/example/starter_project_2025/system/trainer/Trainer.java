@@ -89,7 +89,11 @@ public class Trainer extends BaseEntity {
     @JoinTable(
         name = "trainer_teaching_topics",
         joinColumns = @JoinColumn(name = "trainer_id"),
-        inverseJoinColumns = @JoinColumn(name = "subject_id")
+        inverseJoinColumns = @JoinColumn(name = "subject_id"),
+        uniqueConstraints = @UniqueConstraint(
+            name = "uk_trainer_topics_trainer_subj",
+            columnNames = {"trainer_id", "subject_id"}
+        )
     )
     Set<Subject> teachingTopics = new LinkedHashSet<>();
 

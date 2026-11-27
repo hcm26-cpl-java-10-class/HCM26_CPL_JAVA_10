@@ -21,6 +21,12 @@ public interface SessionRepository extends BaseCrudRepository<Session,Long> {
             """)
     List<Long> findClassIdsWithActiveSessions(@Param("classIds") java.util.Collection<Long> classIds);
 
+    List<Session> findByIsActiveTrueAndStatusAndStartTimeBetweenOrderByStartTimeAsc(
+            Session.SessionStatus status,
+            LocalDateTime from,
+            LocalDateTime to
+    );
+
     boolean existsByTopicId(Long topicId);
 
     /**

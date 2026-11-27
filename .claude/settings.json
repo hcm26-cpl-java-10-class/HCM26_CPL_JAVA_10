@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/check-docs-rule.mjs --hook-claude",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

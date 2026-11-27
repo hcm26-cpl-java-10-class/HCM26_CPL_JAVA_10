@@ -71,9 +71,16 @@ public class Task {
     TaskStatus status = TaskStatus.TODO;
 
     @Builder.Default
-    @ManyToMany
-    @JoinTable(name = "task_tag", joinColumns = @JoinColumn(name = "task_id"),
-            inverseJoinColumns = @JoinColumn(name = "tag_id"))
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "task_tag",
+            joinColumns = @JoinColumn(name = "task_id"),
+            inverseJoinColumns = @JoinColumn(name = "tag_id"),
+            uniqueConstraints = @UniqueConstraint(
+                    name = "uk_task_tag_task_tag",
+                    columnNames = {"task_id", "tag_id"}
+            )
+    )
     Set<Tag> tags = new LinkedHashSet<>();
 
     @Version

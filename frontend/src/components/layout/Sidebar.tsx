@@ -118,9 +118,13 @@ export function SidebarMenu({
     const dispatch = useDispatch();
     const queryClient = useQueryClient();
     const { toggleSidebar, state } = useSidebar();
-    const { activeRole } = usePermissions();
+    const { activeRole, hasPermission } = usePermissions();
     // Exam Supervisor API chỉ cho phép ADMIN / TEACHER.
     const canSupervise = [ADMIN_ROLE, TEACHER_ROLE].includes(normalizeRole(activeRole));
+    const canReadEmailLogs = hasPermission("EMAIL_LOG_READ");
+    const canSendEmails = hasPermission("EMAIL_SEND");
+    const canReadEmailTemplates = hasPermission("EMAIL_TEMPLATE_READ");
+    const canManageNotificationPolicies = hasPermission("NOTIFICATION_POLICY_MANAGE");
     const {
         data: moduleGroups = [],
         isPending: isMenuLoading,
@@ -191,7 +195,7 @@ export function SidebarMenu({
             }
         }
 
-        return consolidatedGroups
+        const mappedGroups = consolidatedGroups
             .map((group) => {
                 const groupNameLower = (group.name ?? "").toLowerCase();
                 const isAssessmentGroup =
@@ -295,7 +299,61 @@ export function SidebarMenu({
                 };
             })
             .filter((group) => !group.hiddenInMenu && group.items.length > 0);
-    }, [location.pathname, moduleGroups, canSupervise]);
+
+        const commItems: NavItem[] = [];
+        if (canReadEmailLogs) {
+            commItems.push({
+                title: "Email History",
+                url: "/communications/email-history",
+                icon: resolveIcon("mail"),
+                isActive: location.pathname.startsWith("/communications/email-history"),
+            });
+        }
+        if (canSendEmails) {
+            commItems.push({
+                title: "Compose Email",
+                url: "/communications/email-compose",
+                icon: resolveIcon("send"),
+                isActive: location.pathname.startsWith("/communications/email-compose"),
+            });
+        }
+        if (canReadEmailTemplates) {
+            commItems.push({
+                title: "Email Templates",
+                url: "/communications/email-templates",
+                icon: resolveIcon("file-text"),
+                isActive: location.pathname.startsWith("/communications/email-templates"),
+            });
+        }
+        if (canManageNotificationPolicies) {
+            commItems.push({
+                title: "Notification Policies",
+                url: "/communications/policies",
+                icon: resolveIcon("shield-check"),
+                isActive: location.pathname.startsWith("/communications/policies"),
+            });
+        }
+
+        return commItems.length > 0
+            ? [
+                ...mappedGroups,
+                {
+                    id: "communications-static",
+                    name: "Communications",
+                    hiddenInMenu: false,
+                    items: commItems,
+                },
+            ]
+            : mappedGroups;
+    }, [
+        location.pathname,
+        moduleGroups,
+        canSupervise,
+        canReadEmailLogs,
+        canSendEmails,
+        canReadEmailTemplates,
+        canManageNotificationPolicies,
+    ]);
 
     // Restore the menu scroll position after remounts (each page renders its own layout),
     // then make sure the active item is visible.

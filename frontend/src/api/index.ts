@@ -34,6 +34,7 @@ export * from "./features/training-class.api";
 export * from "./features/student.api";
 export * from "./features/demo/certificate.api";
 export * from "./features/notification.api";
+export * from "./features/communication.api";
 export * from "./features/demo/qna.api";
 export * from "./features/score-appeal.api";
 export * from "./features/demo/lesson-report.api";

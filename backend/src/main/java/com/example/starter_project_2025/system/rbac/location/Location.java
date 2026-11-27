@@ -93,7 +93,11 @@ public class Location extends BaseEntity {
     @JoinTable(
             name = "user_locations",
             joinColumns = @JoinColumn(name = "location_id"),
-            inverseJoinColumns = @JoinColumn(name = "user_id")
+            inverseJoinColumns = @JoinColumn(name = "user_id"),
+            uniqueConstraints = @UniqueConstraint(
+                    name = "uk_user_locations_loc_user",
+                    columnNames = {"location_id", "user_id"}
+            )
     )
     private Set<User> users = new HashSet<>();
 

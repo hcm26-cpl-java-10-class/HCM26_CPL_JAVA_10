@@ -17,6 +17,8 @@ public class EssayGradingDTO {
     @Setter
     public static class Summary {
         private Long attemptId;
+        private Long examId;
+        private String examTitle;
         private Long studentId;
         private String studentName;
         private String studentEmail;
@@ -25,8 +27,19 @@ public class EssayGradingDTO {
         private Instant submittedAt;
         private int essayCount;
         private int essayAnswered;
+        private int aiGradedEssayCount;
         private int codingCount;
         private int codingAnswered;
+        private String aiGradingState;
+        private BigDecimal aiProposedScore;
+        private BigDecimal finalScore;
+        private Instant aiGradedAt;
+        private String aiGradingError;
+        private Long confirmedBy;
+        private Instant confirmedAt;
+        private BigDecimal maxEssayScore;
+        private boolean lowScoreFlagged;
+        private String lowScoreReason;
     }
 
     @Getter
@@ -51,6 +64,15 @@ public class EssayGradingDTO {
         private List<CodingItem> codings;
         /** Bai da duoc giao vien sua diem tay (co diem 1/diem 2): khong cho cham lai coding tu dong. */
         private boolean scoreAdjusted;
+        private String aiGradingState;
+        private BigDecimal aiProposedEssayScore;
+        private Instant aiGradedAt;
+        private String aiGradingError;
+        private Long confirmedBy;
+        private Instant confirmedAt;
+        private BigDecimal maxEssayScore;
+        private boolean lowScoreFlagged;
+        private String lowScoreReason;
     }
 
     @Getter
@@ -69,6 +91,10 @@ public class EssayGradingDTO {
         private com.example.starter_project_2025.system.question.core.dto.CodeSpecDTO spec;
         /** null = da co diem; PENDING = dang cham nen; RETRYING = may cham loi, se tu thu lai; FAILED = het luot, can cham tay. */
         private String autoGradeState;
+        /** Estimated % AI-written (null = too short / not analysed). */
+        private Integer aiPercent;
+        private String aiLevel;
+        private List<String> aiSignals;
         /** Trang thai tung test (OK, WRONG_ANSWER, ...) cua lan cham tu dong da luu; null neu chua co. */
         private List<String> testStatuses;
     }
@@ -105,6 +131,10 @@ public class EssayGradingDTO {
         private int points;
         private BigDecimal maxScore;
         private String answerText;
+        /** Estimated % AI-written (null = too short / not analysed). */
+        private Integer aiPercent;
+        private String aiLevel;
+        private List<String> aiSignals;
         private BigDecimal score;
         private String feedback;
         private String referenceAnswer;
@@ -115,6 +145,10 @@ public class EssayGradingDTO {
         private boolean guidelineFrozen;
         private Instant guidelineSnapshotAt;
         private List<GradingCriterion> gradingCriteria;
+        private AiQuestionProposal aiProposal;
+        private Instant aiGradedAt;
+        private String aiGradingStatus;
+        private String aiGradingError;
     }
 
     @Getter
@@ -204,5 +238,98 @@ public class EssayGradingDTO {
         private List<CriterionScore> criterionScores;
         private Boolean flagAmbiguous;
         private String flagReason;
+    }
+
+    @Getter
+    @Setter
+    public static class BatchPreviewDTO {
+        private Long examId;
+        private String examTitle;
+        private int totalSubmitted;
+        private int eligibleCount;
+        private int alreadyAiGradedCount;
+        private int ungradedCount;
+        private int failedCount;
+        private int confirmedCount;
+        private int ineligibleCount;
+        private int lowScoreFlaggedCount;
+        private int autoConfirmableCount;
+        private Long activeBatchId;
+        private String activeBatchStatus;
+        private String savedReferenceAnswer;
+        private String savedRubric;
+    }
+
+    @Getter
+    @Setter
+    public static class StartBatchRequest {
+        /** UNGRADED_ONLY (default), FAILED_ONLY, ALL_ELIGIBLE */
+        private String scope;
+        private List<Long> attemptIds;
+        private Boolean forceRegrade;
+        private String referenceAnswer;
+        private String rubric;
+        private Boolean autoGenerateGuidelines;
+    }
+
+    @Getter
+    @Setter
+    public static class BulkConfirmRequest {
+        /** Phai truyen "APPLY ALL" (khong phan biet hoa thuong) de tranh bam nham. */
+        private String confirmationText;
+        private List<Long> attemptIds;
+    }
+
+    @Getter
+    @Setter
+    public static class BulkConfirmResultDTO {
+        private Long examId;
+        private int confirmedCount;
+        private int skippedLowScoreCount;
+        private int skippedFailedCount;
+        private List<Long> confirmedAttemptIds;
+        private List<Long> skippedLowScoreAttemptIds;
+        private String message;
+    }
+
+    @Getter
+    @Setter
+    public static class BatchStatusDTO {
+        private Long batchId;
+        private Long examId;
+        private String examTitle;
+        private Long triggeredByUserId;
+        private String scope;
+        private String status;
+        private int totalAttempts;
+        private int pendingCount;
+        private int processingCount;
+        private int completedCount;
+        private int failedCount;
+        private int skippedCount;
+        private double progressPercent;
+        private boolean notificationSent;
+        private Instant startedAt;
+        private Instant completedAt;
+        private String lastError;
+        private List<BatchItemDTO> items;
+    }
+
+    @Getter
+    @Setter
+    public static class BatchItemDTO {
+        private Long itemId;
+        private Long attemptId;
+        private Long examId;
+        private Long studentId;
+        private String studentName;
+        private String status;
+        private int retryCount;
+        private int essayCount;
+        private int aiGradedEssayCount;
+        private BigDecimal proposedTotalEssayScore;
+        private String errorMessage;
+        private Instant startedAt;
+        private Instant finishedAt;
     }
 }

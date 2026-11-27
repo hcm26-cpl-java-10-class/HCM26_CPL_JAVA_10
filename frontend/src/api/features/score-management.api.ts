@@ -61,6 +61,8 @@ export interface SmGradebook {
   columns: SmColumn[];
   totalWeight: number;
   students: SmStudentRow[];
+  /** Took a linked assessment but not enrolled (e.g. via link). Same columns and weights as the main table. */
+  extraStudents?: SmStudentRow[];
   /** Last time the teacher confirmed with "Save scores" (ISO string) or null. */
   savedAt: string | null;
   /** True when the table differs from the last saved version. */

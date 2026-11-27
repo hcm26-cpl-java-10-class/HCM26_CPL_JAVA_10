@@ -126,6 +126,32 @@ public final class CourseComparisonDTO {
             double studyMaxHours,
             int studyRank,
 
+            // ===== 9. Bài thi =====
+            /** Số đề thi đang active thuộc khóa học. */
+            long examTotal,
+            /** Tổng số lượt thi (mọi lượt, kể cả lượt thi lại). */
+            long examAttempts,
+            /** Số lượt thi đã được chấm điểm. */
+            long examGradedAttempts,
+            /** Số học viên có ít nhất một lượt thi. */
+            long examParticipants,
+            /** Điểm trung bình của các lượt thi đã chấm. */
+            double examAverageScore,
+            /** Điểm cao nhất. */
+            double examHighestScore,
+            /** Điểm thấp nhất. */
+            double examLowestScore,
+            /** Số lượt thi đạt điểm đạt. */
+            long examPassedAttempts,
+            /** Tỉ lệ đạt (0-100). */
+            double examPassRate,
+            /** Số lượt thi không đạt. */
+            long examFailedAttempts,
+            /** Tỉ lệ không đạt (0-100). */
+            double examFailRate,
+            /** Thứ hạng của khóa học trong module bài thi (1 = tốt nhất). */
+            int examRank,
+
             // ===== Tổng hợp =====
             /** Điểm tổng hợp 0-100 (cao = khóa học hoạt động tốt hơn). */
             double overallScore,

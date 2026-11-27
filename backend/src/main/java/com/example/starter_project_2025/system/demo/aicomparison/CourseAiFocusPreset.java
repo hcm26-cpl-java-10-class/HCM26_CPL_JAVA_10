@@ -29,7 +29,10 @@ public enum CourseAiFocusPreset {
     CONTENT("content",
             "Focus on the learning content (content module): lessons, content types and coverage."),
     STUDY_TIME("study-time",
-            "Focus on study time (study-time module): how much time learners spend compared with peers.");
+            "Focus on study time (study-time module): how much time learners spend compared with peers."),
+    EXAMS("exams",
+            "Focus on assessment outcomes (exams module): pass rate, average score and how many learners "
+                    + "participated in the exams compared with peers.");
 
     private final String key;
     private final String instruction;

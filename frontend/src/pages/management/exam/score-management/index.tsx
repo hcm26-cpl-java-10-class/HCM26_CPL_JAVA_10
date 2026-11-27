@@ -30,9 +30,10 @@ const csvCell = (v: string | number | null | undefined) => `"${String(v ?? "").r
 
 function exportCsv(g: SmGradebook) {
   const head = ["Student", "Email", ...g.columns.map((c) => `${c.name} (${fmt(c.weightPercent)}%)`), "Final"];
-  const rows = g.students.map((s) => [
-    s.name, s.email, ...g.columns.map((c) => s.scores[String(c.id)] ?? ""), s.finalScore ?? "",
-  ]);
+  const toRow = (s: SmStudentRow, tag = "") => [
+    s.name + tag, s.email, ...g.columns.map((c) => s.scores[String(c.id)] ?? ""), s.finalScore ?? "",
+  ];
+  const rows = [...g.students.map((s) => toRow(s)), ...(g.extraStudents ?? []).map((s) => toRow(s, " (extra)"))];
   const text = [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
   const url = URL.createObjectURL(new Blob(["\ufeff" + text], { type: "text/csv;charset=utf-8" }));
   const a = document.createElement("a");
@@ -91,14 +92,15 @@ function BonusDialog({ data, open, preset, onClose, onChanged }: {
   const remaining = (s: SmStudentRow) => Math.max(0, +(BONUS_CAP - used(s)).toFixed(2));
 
   const needle = q.trim().toLowerCase();
+  const everyone = [...data.students, ...(data.extraStudents ?? [])];
   const rows = columnId
-    ? data.students
+    ? everyone
         .filter((s) => s.scores[columnId] != null)
         .filter((s) => !needle || `${s.name} ${s.email}`.toLowerCase().includes(needle))
     : [];
   const canReceive = (s: SmStudentRow) => remaining(s) >= (pointsOk ? pts : 0.05);
   const eligible = rows.filter(canReceive);
-  const chosen = data.students.filter((s) => selected.includes(s.id) && s.scores[columnId] != null && canReceive(s));
+  const chosen = everyone.filter((s) => selected.includes(s.id) && s.scores[columnId] != null && canReceive(s));
   const allEligibleSelected = eligible.length > 0 && eligible.every((s) => selected.includes(s.id));
   const toggle = (id: number) => setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   const valid = columnId && chosen.length > 0 && pointsOk && reason.trim().length >= 5;
@@ -420,13 +422,6 @@ function ScanRowDetail({ column, scored, onClose }: { column: SmColumn; scored: 
             rows={report.missing}
             defaultOpen
           />
-          <PeopleTable
-            title="Extra students"
-            description="Took the assessment but are not in this course's student list. Their scores were skipped."
-            rows={report.extra}
-            showScore
-            defaultOpen
-          />
         </>
       )}
       <div className="flex justify-end">
@@ -434,6 +429,95 @@ function ScanRowDetail({ column, scored, onClose }: { column: SmColumn; scored: 
           <ChevronUp className="size-4" /> Less
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Score table of the EXTRA students (took a linked assessment, e.g. through a link, but are not enrolled).
+ * It has no column editing: columns, weights and linked assessments always follow the main table,
+ * and "Save scores" stores both tables.
+ */
+function ExtraGradebook({ data, q, onBonus }: { data: SmGradebook; q: string; onBonus: (columnId: number, studentId: number) => void }) {
+  const extras = data.extraStudents ?? [];
+  const [open, setOpen] = useState(true);
+  const visible = q ? extras.filter((s) => `${s.name} ${s.email}`.toLowerCase().includes(q)) : extras;
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className="flex items-center gap-1 text-base font-semibold" onClick={() => setOpen((o) => !o)}>
+          {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+          Extra students
+        </button>
+        <Badge variant="outline">{extras.length}</Badge>
+        <span className="text-xs text-muted-foreground">
+          Took the assessments without being enrolled (e.g. through a link). Columns and weights follow the main table above; saving stores both tables.
+        </span>
+      </div>
+      {open && (
+        <div className="max-h-[50vh] overflow-auto rounded-md border">
+          <table className="w-full caption-bottom text-sm">
+            <TableHeader className="sticky top-0 z-20 bg-background [&_th]:bg-background">
+              <TableRow>
+                <TableHead className="sticky left-0 z-30 min-w-40 bg-background px-2">Student</TableHead>
+                {data.columns.map((c) => (
+                  <TableHead key={c.id} className="px-2 align-top">
+                    <div className="flex w-24 flex-col gap-0.5">
+                      <span className="truncate font-semibold" title={c.name}>{c.name}</span>
+                      <span className="text-xs font-normal text-muted-foreground">{fmt(c.weightPercent)}%</span>
+                      <span className="truncate text-xs font-normal text-muted-foreground" title={c.examTitle ?? undefined}>{c.examTitle ?? "No assessment"}</span>
+                      {c.examId != null && !c.published && (
+                        <Badge variant="outline" className="w-fit border-amber-400 bg-amber-50 px-1.5 py-0 text-[10px] font-medium text-amber-700">Not published</Badge>
+                      )}
+                    </div>
+                  </TableHead>
+                ))}
+                <TableHead className="sticky right-0 z-30 w-16 bg-background px-2 text-right">Final</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {extras.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={data.columns.length + 2} className="text-center text-sm text-muted-foreground">
+                    No extra students. People who take an assessment without being enrolled appear here after you scan.
+                  </TableCell>
+                </TableRow>
+              ) : visible.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={data.columns.length + 2} className="text-center text-sm text-muted-foreground">No students match your search.</TableCell>
+                </TableRow>
+              ) : (
+                visible.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell className="sticky left-0 z-10 bg-background px-2 py-1">
+                      <div className="font-medium leading-tight">{s.name}</div>
+                      <div className="text-xs text-muted-foreground">{s.email}</div>
+                    </TableCell>
+                    {data.columns.map((c) => (
+                      <TableCell key={c.id} className="px-2 py-1">
+                        <div
+                          className={`relative flex h-8 w-16 items-center justify-center rounded-md border bg-muted/30 text-sm tabular-nums ${s.scores[String(c.id)] != null ? "cursor-pointer hover:border-primary" : ""}`}
+                          title={s.scores[String(c.id)] == null ? undefined
+                            : s.bonuses?.[String(c.id)] ? `Includes +${fmt(s.bonuses[String(c.id)])} bonus. Click to give more bonus.` : "Click to give bonus points"}
+                          onClick={s.scores[String(c.id)] != null ? () => onBonus(c.id, s.id) : undefined}
+                        >
+                          {fmt(s.scores[String(c.id)])}
+                          {s.bonuses?.[String(c.id)] ? (
+                            <span className="absolute -right-1 -top-2 rounded bg-amber-500 px-1 text-[10px] font-medium leading-4 text-white">
+                              +{fmt(s.bonuses[String(c.id)])}
+                            </span>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                    ))}
+                    <TableCell className="sticky right-0 z-10 bg-background px-2 py-1 text-right font-semibold">{fmt(s.finalScore)}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -464,7 +548,7 @@ function ScanSummary({ data }: { data: SmGradebook }) {
         {empty > 0 && <Badge variant="outline" className="text-muted-foreground">{empty} no scores yet</Badge>}
       </div>
       <p className="text-xs text-muted-foreground">
-        Click a row to see which students are missing a score and which students took the assessment but are not in this course.
+        Click a row to see which enrolled students are missing a score. Students who took the assessment without being enrolled are listed in the Extra students table below.
       </p>
       <ul className="divide-y rounded-md border">
         {rows.map(({ c, scored, status }) => {
@@ -890,6 +974,8 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
           </TableBody>
         </table>
       </div>
+
+      <ExtraGradebook data={data} q={q} onBonus={(columnId, studentId) => { setBonusPreset({ columnId, studentId }); setBonusOpen(true); }} />
 
       <ScanSummary data={data} />
 
