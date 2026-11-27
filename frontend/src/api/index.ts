@@ -45,3 +45,4 @@ export * from "./features/i18n.api";
 
 export * from "./features/exam-supervisor.api";
 export * from "./features/demo/certificate-insights.api"
+export * from "./features/audit/audit-log.api";

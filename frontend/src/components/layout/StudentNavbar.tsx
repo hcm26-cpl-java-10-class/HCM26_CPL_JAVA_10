@@ -510,7 +510,7 @@ export function StudentNavbar() {
 
             {/* EXISTING ROLE SWITCHER */}
             <div className="min-w-0 max-w-full [&>div]:flex-wrap">
-              <HeaderRight compact />
+              <HeaderRight />
             </div>
 
             {/* SECURITY & SESSIONS */}

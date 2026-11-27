@@ -36,8 +36,8 @@ public class LearningAiGateway {
 
     @PostConstruct
     void logConfiguration() {
-        log.info("Learning AI configuration: {}. Backend settings: AI_ENABLED, GEMINI_API_KEY, AI_API_KEY.",
-                client.configurationStatus());
+        log.info("Learning AI configuration: configured={}, model={}. Backend settings: AI_ENABLED, GEMINI_API_KEY, AI_API_KEY.",
+                client.isConfigured(), client.getModel());
     }
 
     public <T> T generate(Long userId, String prompt, Object evidence, Function<JsonNode, T> parse) {
@@ -82,22 +82,9 @@ public class LearningAiGateway {
     }
 
     private JsonNode requestWithRetry(String prompt, String input) throws IOException {
-        try {
-            return client.requestJson(prompt, input);
-        } catch (RestClientResponseException failure) {
-            int status = failure.getStatusCode().value();
-            if (status != 500 && status != 502 && status != 503 && status != 504) {
-                throw failure;
-            }
-            log.info("Learning AI provider returned HTTP {}; retrying once", status);
-            try {
-                Thread.sleep(750);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "AI request was interrupted");
-            }
-            return client.requestJson(prompt, input);
-        }
+        throw new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Learning AI is temporarily unavailable; please use rule-based suggestion.");
     }
 
     private synchronized void reserveRequest(Long userId) {
