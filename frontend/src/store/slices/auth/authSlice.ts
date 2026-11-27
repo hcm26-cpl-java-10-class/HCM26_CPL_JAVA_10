@@ -86,8 +86,15 @@ const authSlice = createSlice({
             sessionStorage.removeItem("fams.auth.tab");
             LEGACY_AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
         },
+        updateUserProfile: (
+            state,
+            action: PayloadAction<{ firstName?: string; lastName?: string; fullName?: string }>,
+        ) => {
+            if (action.payload.firstName !== undefined) state.firstName = action.payload.firstName;
+            if (action.payload.lastName !== undefined) state.lastName = action.payload.lastName;
+        },
     },
 });
 
-export const { setLogin, setLogout, setAuthInitialized } = authSlice.actions;
+export const { setLogin, setLogout, setAuthInitialized, updateUserProfile } = authSlice.actions;
 export default authSlice.reducer;
