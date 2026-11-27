@@ -27,6 +27,10 @@ public class CourseDTO extends BaseDTO {
     @Size(max = 255, message = "Thumbnail URL must not exceed 255 characters")
     String thumbnailUrl;
 
+    @Size(max = 2800000, message = "Cover image must be 2 MB or smaller")
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
+    String coverImage;
+
     @Size(max = 100, message = "Instructor must not exceed 100 characters")
     String instructor;
 

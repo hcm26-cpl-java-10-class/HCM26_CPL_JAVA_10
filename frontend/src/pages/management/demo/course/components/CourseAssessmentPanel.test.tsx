@@ -46,3 +46,17 @@ it("does not render the recursive manage link inside mapping",()=>{
  render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><CourseAssessmentPanel courseId={7} showManageLinks={false}/></MemoryRouter></QueryClientProvider>);
  expect(screen.queryByRole("link",{name:"Manage assessment links"})).not.toBeInTheDocument();
 });
+
+it("focuses the assessment linked to the requested lesson and retains a precise Curriculum return path",async()=>{
+ vi.mocked(examApi.listByCourse).mockResolvedValue([{id:1,title:"Other",courseWeight:70,lessonId:8},{id:2,title:"Target",courseWeight:30,lessonId:9}] as never);
+ render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><MemoryRouter initialEntries={["/courses/7?assessmentLessonId=9&assessmentSectionId=3#course-assessments"]}><CourseAssessmentPanel courseId={7}/></MemoryRouter></QueryClientProvider>);
+ const target=await screen.findByLabelText("Configure Target");await waitFor(()=>expect(target).toHaveFocus());
+ expect(screen.getByRole("link",{name:"Back to Curriculum"})).toHaveAttribute("href","/curriculum?courseId=7&sectionId=3&lessonId=9");
+ await userEvent.click(screen.getByRole("button",{name:"Edit assessment weight"}));
+ expect(screen.getByRole("textbox",{name:"Weight (%) for Target"})).toHaveFocus();
+ expect(api.put).not.toHaveBeenCalled();
+});
+it("routes an unlinked assessment lesson to the existing mapping workflow without creating records",async()=>{
+ render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><MemoryRouter initialEntries={["/courses/7?assessmentLessonId=999#course-assessments"]}><CourseAssessmentPanel courseId={7}/></MemoryRouter></QueryClientProvider>);
+ expect(await screen.findByText(/This lesson has no linked assessment yet/)).toBeInTheDocument();expect(screen.getByRole("link",{name:"Configure its assessment link"})).toHaveAttribute("href",expect.stringContaining("/exams/curriculum?courseId=7"));expect(api.put).not.toHaveBeenCalled();
+});

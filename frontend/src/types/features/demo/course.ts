@@ -11,6 +11,8 @@ export interface CourseDTO extends BaseDTO {
   name?: string;
   description?: string;
   thumbnailUrl?: string;
+  /** Request-only selected image; uploaded at course save, never persisted as base64. */
+  coverImage?: string | null;
   instructor?: string;
   instructorId?: number;
   categoryIds?: number[];

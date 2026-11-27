@@ -27,6 +27,7 @@ public class CourseAssessmentService {
     private final ExamResultAccessService access;
     private final LessonRepository lessons;
     private final com.example.starter_project_2025.system.exam.gradebook.GradebookPublishedItemRepository publishedRepository;
+    private final com.example.starter_project_2025.system.exam.gradebook.GradebookTemplateProvider templateProvider;
     public record Plan(BigDecimal totalWeight,boolean ready,List<String> issues) {}
     public record Grade(BigDecimal overallScore,String status,List<CourseGradeItemDTO> items) {}
 
@@ -63,7 +64,7 @@ public class CourseAssessmentService {
     }
     public Grade grade(Long courseId,Long studentId) {
         var published=publishedRepository.findByCourse_IdAndStudent_IdOrderByPositionAsc(courseId,studentId);
-        if (published.isEmpty()) published=publishedRepository.templateForCourse(courseId);
+        if (published.isEmpty()) published=templateProvider.forCourse(courseId);
         if (!published.isEmpty()) return calculatePublished(published);
         return calculate(exams.findByCourseLink(courseId,null,null,false),
                 best(attempts.findAllByStudent_IdOrderByStartedAtDesc(studentId)),access::canStudentSeeScoreOnMyScores);

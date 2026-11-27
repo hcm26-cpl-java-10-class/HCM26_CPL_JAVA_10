@@ -203,10 +203,16 @@ public class Exam extends BaseEntity {
     @OnDelete(action = OnDeleteAction.SET_NULL)
     private Lesson lesson;
 
-    @ManyToMany
-    @JoinTable(name = "exam_question",
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "exam_question",
             joinColumns = @JoinColumn(name = "exam_id"),
-            inverseJoinColumns = @JoinColumn(name = "question_id"))
+            inverseJoinColumns = @JoinColumn(name = "question_id"),
+            uniqueConstraints = @UniqueConstraint(
+                    name = "uk_exam_question_exam_question",
+                    columnNames = {"exam_id", "question_id"}
+            )
+    )
     private Set<Question> questions = new HashSet<>();
 
     @OneToMany(

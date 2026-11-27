@@ -296,14 +296,14 @@ public class AiEssayGradingClient {
             if (payload.referenceAnswer() != null && !payload.referenceAnswer().isBlank()) {
                 sb.append(payload.referenceAnswer().trim()).append("\n\n");
             } else {
-                sb.append("[None provided - do not invent a reference answer]\n\n");
+                sb.append("[AUTO-GENERATE FROM QUESTION PROMPT: Teacher left Reference Answer blank. First derive an objective academic reference/model answer directly from the Question Prompt, then evaluate the student submission against it.]\n\n");
             }
 
             sb.append("Grading Rubric & Point Allocation:\n");
             if (payload.rubric() != null && !payload.rubric().isBlank()) {
                 sb.append(payload.rubric().trim()).append("\n\n");
             } else {
-                sb.append("[None provided - do not invent a rubric]\n\n");
+                sb.append("[AUTO-GENERATE FROM QUESTION PROMPT: Teacher left Grading Rubric blank. Automatically break down the Maximum Points into 2-4 logical academic criteria in criterionScores and evaluate the student submission against them.]\n\n");
             }
 
             sb.append("<student_submission>\n");

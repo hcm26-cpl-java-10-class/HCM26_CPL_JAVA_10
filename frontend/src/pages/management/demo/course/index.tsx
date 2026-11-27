@@ -1,3 +1,4 @@
+import { CourseCoverEditor } from "./components/CourseCoverEditor";
 import { categoryApi, courseApi, userApi } from "@/api";
 import { syllabusApi } from "@/api/features/demo/syllabus.api";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -124,7 +125,8 @@ const courseSchema: EntitySchema = {
     },
     {
       name: "thumbnailUrl",
-      label: "Thumbnail URL",
+      label: "Course cover",
+      renderForm: (value, form, onChange, options, disabled) => <CourseCoverEditor value={value} form={form} onChange={onChange} categories={options.categoryIds ?? []} disabled={disabled} />,
       hint: "Link to the cover image, e.g. https://example.com/cover.jpg",
       type: "text",
       sortable: false,

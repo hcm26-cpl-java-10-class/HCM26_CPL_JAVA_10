@@ -14,7 +14,7 @@ class CourseAssessmentOutcomeTest {
     ExamRepository exams=mock(ExamRepository.class);
     ExamAttemptRepository attempts=mock(ExamAttemptRepository.class);
     ExamResultAccessService access=mock(ExamResultAccessService.class);
-    CourseAssessmentService service=new CourseAssessmentService(exams,attempts,access,mock(LessonRepository.class),mock(GradebookPublishedItemRepository.class));
+    CourseAssessmentService service=new CourseAssessmentService(exams,attempts,access,mock(LessonRepository.class),mock(GradebookPublishedItemRepository.class),mock(com.example.starter_project_2025.system.exam.gradebook.GradebookTemplateProvider.class));
     Exam exam=new Exam();
     CourseAssessmentOutcomeTest(){exam.setId(5L);exam.setPassScore(new BigDecimal("90"));when(exams.findByCourseLink(1L,null,null,true)).thenReturn(List.of(exam));}
     ExamAttempt attempt(String score){var a=new ExamAttempt();a.setExam(exam);a.setStatus(ExamAttemptStatus.SUBMITTED);a.setSubmittedAt(Instant.now());a.setMaxScore(new BigDecimal("100"));a.setFinalScore(new BigDecimal(score));a.setPassScore(new BigDecimal("60"));return a;}

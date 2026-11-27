@@ -1,0 +1,7 @@
+backend/src/main/java/com/example/starter_project_2025/system/demo/course/CourseMyScoresService.java
+backend/src/main/java/com/example/starter_project_2025/system/exam/gradebook/GradebookBonusService.java
+backend/src/main/java/com/example/starter_project_2025/system/exam/gradebook/GradebookDTOs.java
+backend/src/main/java/com/example/starter_project_2025/system/exam/gradebook/GradebookPublishedItemRepository.java
+backend/src/main/java/com/example/starter_project_2025/system/exam/gradebook/GradebookService.java
+frontend/src/api/features/score-management.api.ts
+frontend/src/pages/management/exam/score-management/index.tsx

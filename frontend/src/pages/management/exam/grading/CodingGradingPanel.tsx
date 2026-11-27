@@ -1,3 +1,4 @@
+import { AiPercentTag, AiSignalsList } from "@/components/AiPercentTag";
 import { examApi } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -138,6 +139,8 @@ function CodingCard({
 
             <div>
                 <span className="text-xs font-medium uppercase text-muted-foreground">Code của sinh viên</span>
+                <AiPercentTag percent={item.aiPercent} signals={item.aiSignals} className="ml-2" />
+                {item.aiPercent != null && item.aiPercent >= 30 && <AiSignalsList signals={item.aiSignals} />}
                 {item.code.trim() ? (
                     <pre className="mt-1 max-h-96 overflow-auto rounded-lg border bg-muted/40 p-4 font-mono text-xs leading-relaxed">
                         {item.code}

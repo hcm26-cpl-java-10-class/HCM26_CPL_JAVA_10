@@ -30,8 +30,15 @@ public class Trainer extends BaseEntity {
     private String specialization;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20)
     private TrainerStatus status = TrainerStatus.ACTIVE;
-    @ManyToMany
-    @JoinTable(name = "trainer_teaching_topics", joinColumns = @JoinColumn(name = "trainer_id"),
-        inverseJoinColumns = @JoinColumn(name = "subject_id"))
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "trainer_teaching_topics",
+            joinColumns = @JoinColumn(name = "trainer_id"),
+            inverseJoinColumns = @JoinColumn(name = "subject_id"),
+            uniqueConstraints = @UniqueConstraint(
+                    name = "uk_trainer_topics_trainer_subj",
+                    columnNames = {"trainer_id", "subject_id"}
+            )
+    )
     private Set<Subject> teachingTopics = new LinkedHashSet<>();
 }

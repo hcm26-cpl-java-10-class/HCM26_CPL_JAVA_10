@@ -3,6 +3,9 @@ import axiosInstance from "@/api/axios";
 import type {
   AiGradingRequest,
   AiGradingResponse,
+  AiReviewQueuePage,
+  BatchAiPreviewDTO,
+  BatchAiStatusDTO,
   CodingRunResult,
   EssayGradingDetail,
   EssayGradingSummary,
@@ -17,6 +20,7 @@ import type {
   QuestionFilter,
   QuestionGuidelineDTO,
   SimilarityReport,
+  StartBatchAiRequest,
   FileFormat,
   ImportResult
 } from "@/types";
@@ -291,6 +295,44 @@ export const examApi = {
   },
   scanExamSimilarity: async (examId: number): Promise<SimilarityReport> => {
     const response = await axiosInstance.post<SimilarityReport>(`/exams/${examId}/grading/similarity/scan`);
+    return response.data;
+  },
+  previewBatchAiGrading: async (examId: number): Promise<BatchAiPreviewDTO> => {
+    const response = await axiosInstance.get<BatchAiPreviewDTO>(`/exams/${examId}/grading/batch-ai/preview`);
+    return response.data;
+  },
+  startBatchAiGrading: async (examId: number, payload?: StartBatchAiRequest): Promise<BatchAiStatusDTO> => {
+    const response = await axiosInstance.post<BatchAiStatusDTO>(
+      `/exams/${examId}/grading/batch-ai/start`,
+      payload || {}
+    );
+    return response.data;
+  },
+  getLatestBatchAiStatus: async (examId: number): Promise<BatchAiStatusDTO | null> => {
+    const response = await axiosInstance.get<BatchAiStatusDTO | null>(`/exams/${examId}/grading/batch-ai/latest`);
+    return response.data || null;
+  },
+  getBatchAiStatus: async (examId: number, batchId: number): Promise<BatchAiStatusDTO> => {
+    const response = await axiosInstance.get<BatchAiStatusDTO>(`/exams/${examId}/grading/batch-ai/${batchId}`);
+    return response.data;
+  },
+  listAiReviewQueue: async (
+    examId: number,
+    params?: { state?: string; search?: string; page?: number; size?: number }
+  ): Promise<AiReviewQueuePage> => {
+    const response = await axiosInstance.get<AiReviewQueuePage>(`/exams/${examId}/grading/ai-review-queue`, {
+      params,
+    });
+    return response.data;
+  },
+  bulkConfirmBatchAiGrades: async (
+    examId: number,
+    payload: { confirmationText: string; attemptIds?: number[] }
+  ): Promise<import("@/types").BulkConfirmAiResultDTO> => {
+    const response = await axiosInstance.post<import("@/types").BulkConfirmAiResultDTO>(
+      `/exams/${examId}/grading/batch-ai/confirm-all`,
+      payload
+    );
     return response.data;
   },
   duplicate: async (examId: number): Promise<ExamDTO> => {

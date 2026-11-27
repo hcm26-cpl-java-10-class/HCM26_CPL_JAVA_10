@@ -47,7 +47,7 @@ final class CourseAiPrompts {
               Copy from this list when you build "biggestGaps"; never invent a gap.
             - "overallComputed": the overall verdict (STRONGER / SIMILAR / WEAKER), rank and outOf,
               already computed by the backend. Treat it as authoritative.
-            - "moduleKeys": funnel, trend, activity, reviews, departments, ranking, content, study-time.
+            - "moduleKeys": funnel, trend, activity, reviews, departments, ranking, content, study-time, exams.
 
             HOW TO ANALYSE
             1. Use ONLY numbers that appear in the input. Never calculate new statistics, never invent values,
@@ -78,7 +78,7 @@ final class CourseAiPrompts {
               },
               "modules": [
                 {
-                  "moduleKey": "funnel | trend | activity | reviews | departments | ranking | content | study-time",
+                  "moduleKey": "funnel | trend | activity | reviews | departments | ranking | content | study-time | exams",
                   "position": "ABOVE | AT_PAR | BELOW",
                   "finding": "<1-2 sentences>",
                   "evidence": [

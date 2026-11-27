@@ -1,3 +1,4 @@
+import { ConfigureAssessmentLink } from "./ConfigureAssessmentLink";
 import { lessonApi } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -166,6 +167,7 @@ export function SectionLessons({ sectionId, deepLink, onDeepLinkConsumed }: Sect
                   <TableCell>{formatDuration(lesson.duration)}</TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
+                      <ConfigureAssessmentLink lesson={lesson} />
                       <Button
                         size="icon-sm"
                         variant="ghost"
