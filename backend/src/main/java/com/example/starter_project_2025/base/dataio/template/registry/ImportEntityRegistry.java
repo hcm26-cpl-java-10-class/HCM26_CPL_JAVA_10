@@ -29,9 +29,7 @@ public class ImportEntityRegistry {
 
         for (Class<?> clazz : entities) {
             ImportEntity annotation = clazz.getAnnotation(ImportEntity.class);
-            if (annotation != null && annotation.value() != null) {
-                entityMap.put(annotation.value().toLowerCase(), clazz);
-            }
+            entityMap.put(annotation.value().toLowerCase(), clazz);
         }
     }
 

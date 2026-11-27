@@ -10,16 +10,15 @@ interface NotFoundPageProps {
 
 export default function NotFoundPage({ isAuthenticated }: NotFoundPageProps) {
     const navigate = useNavigate();
-    const { isAuthenticated: authState, role, permissions } = useSelector((state: RootState) => state.auth);
     const location = useLocation();
-     const requestedPath = (location.state as { requestedPath?: string } | null)?.requestedPath;
-    const { activeRole, effectivePermissions } = usePermissions();
-    const resolvedAuth = isAuthenticated ?? authState;
-    const homePath = getHomePathByRole(activeRole ?? role, effectivePermissions ?? permissions);
-
-    if (requestedPath && requestedPath !== location.pathname && /^\/topic-marks(?:\/|$)/.test(requestedPath)) {
+    const requestedPath = (location.state as { requestedPath?: string } | null)?.requestedPath;
+    if (requestedPath && requestedPath.startsWith("/topic-marks")) {
         return <Navigate to={requestedPath} replace />;
     }
+    const { isAuthenticated: authState, role } = useSelector((state: RootState) => state.auth);
+    const { activeRole, effectivePermissions } = usePermissions();
+    const resolvedAuth = isAuthenticated ?? authState;
+    const homePath = getHomePathByRole(activeRole ?? role, effectivePermissions);
 
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">

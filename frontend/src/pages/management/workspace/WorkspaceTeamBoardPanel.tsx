@@ -1,3 +1,4 @@
+import { getCurrentLocale } from "@/i18n/format";
 import { refreshBacklogItem } from "@/lib/refresh-backlog-item";
 import { workItemAssigneeLabel, workItemAssigneeOptions } from "@/lib/work-item-assignee";
 import { teamBacklogApi } from "@/api/features/team-backlog.api";
@@ -51,13 +52,13 @@ function preferredSprint(sprints: SprintDTO[]): SprintDTO | undefined {
 function formatDate(value?: string | null) {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" }).format(date);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(getCurrentLocale(), { day: "2-digit", month: "short" }).format(date);
 }
 
 function formatDateTime(value?: string | null) {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en-GB", {
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(getCurrentLocale(), {
     day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
   }).format(date);
 }

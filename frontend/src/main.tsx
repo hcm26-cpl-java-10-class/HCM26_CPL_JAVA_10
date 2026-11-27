@@ -1,10 +1,11 @@
-import { isolateQuerySession } from "./lib/query-session";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { Provider } from "react-redux";
 import App from "./App";
 import "./index.css";
+import "./i18n";
+import { DomTranslator } from "./i18n/DomTranslator";
 import { store } from "./store/store";
 import { setAuthInitialized, setLogin, setLogout } from "./store/slices/auth/authSlice";
 import { installAuthTabSessionBridge } from "./store/slices/auth/authTabSession";
@@ -12,7 +13,6 @@ import { authApi } from "./api/features/auth.api";
 import { installCrossTabLogoutListener } from "./utils/auth-logout";
 
 export const queryClient = new QueryClient();
-isolateQuerySession(queryClient, store);
 
 const THEME_STORAGE_KEY = "theme";
 const SYSTEM_THEME_QUERY = "(prefers-color-scheme: dark)";
@@ -55,6 +55,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <Provider store={store}>
         <QueryClientProvider client={queryClient}>
             <App />
+            <DomTranslator />
         </QueryClientProvider>
     </Provider>
   </React.StrictMode>

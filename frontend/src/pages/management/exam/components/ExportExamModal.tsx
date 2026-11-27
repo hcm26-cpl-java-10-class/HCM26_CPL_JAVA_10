@@ -61,10 +61,10 @@ export function ExportExamModal({ open, onOpenChange, filters, totalCount = 0 }:
       setLoading(true);
       const ext = selectedFormat === "EXCEL" ? "xlsx" : selectedFormat.toLowerCase();
       const blob = await examApi.exportExams(selectedFormat, filters);
-
+      
       const dateStr = new Date().toISOString().slice(0, 10);
       downloadBlob(blob, `assessments_${dateStr}.${ext}`);
-
+      
       toast.success(`Exported assessments successfully as .${ext}`);
       onOpenChange(false);
     } catch (err: any) {

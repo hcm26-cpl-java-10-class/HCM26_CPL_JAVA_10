@@ -3,7 +3,6 @@ package com.example.starter_project_2025.system.exam.ai;
 import java.math.BigDecimal;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.system.exam.grading.dto.EssayGradingDTO;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -62,25 +61,8 @@ public class AiEssayGradingClient {
         return properties.isEnabled() && properties.getApiKey() != null && !properties.getApiKey().isBlank();
     }
 
-    public String configurationStatus() {
-        if (!properties.isEnabled()) return "DISABLED";
-        return isConfigured() ? "CONFIGURED" : "MISSING_KEY";
-    }
-
     public String getModel() {
         return properties.getModel();
-    }
-
-    public JsonNode requestJson(String systemInstruction, String input) throws JsonProcessingException {
-        if (!isConfigured()) {
-            throw new IllegalStateException("AI provider is not configured");
-        }
-        boolean gemini = isGeminiEndpoint(properties.getEndpoint());
-        RestTemplate client = buildRestTemplate();
-        String response = gemini
-                ? callGeminiNative(client, systemInstruction, input)
-                : callOpenAiCompatible(client, systemInstruction, input);
-        return objectMapper.readTree(cleanJsonContent(extractRawContentText(response, gemini)));
     }
 
     public EssayGradingDTO.AiGradingResponse requestProposal(List<EssayQuestionPayload> payloads) {
@@ -314,14 +296,14 @@ public class AiEssayGradingClient {
             if (payload.referenceAnswer() != null && !payload.referenceAnswer().isBlank()) {
                 sb.append(payload.referenceAnswer().trim()).append("\n\n");
             } else {
-                sb.append("[None provided - do not invent a reference answer]\n\n");
+                sb.append("[AUTO-GENERATE FROM QUESTION PROMPT: Teacher left Reference Answer blank. First derive an objective academic reference/model answer directly from the Question Prompt, then evaluate the student submission against it.]\n\n");
             }
 
             sb.append("Grading Rubric & Point Allocation:\n");
             if (payload.rubric() != null && !payload.rubric().isBlank()) {
                 sb.append(payload.rubric().trim()).append("\n\n");
             } else {
-                sb.append("[None provided - do not invent a rubric]\n\n");
+                sb.append("[AUTO-GENERATE FROM QUESTION PROMPT: Teacher left Grading Rubric blank. Automatically break down the Maximum Points into 2-4 logical academic criteria in criterionScores and evaluate the student submission against them.]\n\n");
             }
 
             sb.append("<student_submission>\n");
@@ -492,7 +474,7 @@ public class AiEssayGradingClient {
         return result;
     }
 
-    private String extractRawContentText(String responseJson, boolean isGemini) throws JsonProcessingException {
+    private String extractRawContentText(String responseJson, boolean isGemini) throws Exception {
         JsonNode root = objectMapper.readTree(responseJson);
         if (isGemini) {
             JsonNode candidates = root.path("candidates");
@@ -503,13 +485,7 @@ public class AiEssayGradingClient {
             if (!parts.isArray() || parts.isEmpty()) {
                 throw new BadRequestException("Empty content received from Gemini candidates");
             }
-            StringBuilder content = new StringBuilder();
-            for (JsonNode part : parts) {
-                if (!part.path("thought").asBoolean()) {
-                    content.append(part.path("text").asText(""));
-                }
-            }
-            return content.toString();
+            return parts.get(0).path("text").asText("");
         } else {
             JsonNode choices = root.path("choices");
             if (!choices.isArray() || choices.isEmpty()) {

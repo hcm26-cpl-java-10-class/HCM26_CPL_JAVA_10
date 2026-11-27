@@ -1,8 +1,10 @@
+import { formatNumberNow } from "@/i18n/format";
 import {
   BarChart3,
   Building2,
   Clock,
   ClipboardList,
+  GraduationCap,
   LineChart,
   MessageSquareWarning,
   Star,
@@ -50,12 +52,12 @@ export type ComparisonModuleDef = {
 };
 
 const pct = (value: number) => `${value.toFixed(1)}%`;
-const num = (value: number) => value.toLocaleString("en-US");
+const num = (value: number) => formatNumberNow(value);
 const hours = (value: number) => `${value.toFixed(2)}h`;
 const stars = (value: number) => `${value.toFixed(2)}★`;
 
 /**
- * Cấu hình 9 module (8 module + tổng quan) của trang so sánh.
+ * Cấu hình 10 module (9 module + tổng quan) của trang so sánh.
  * Mỗi module đều có đủ: chỉ số so sánh, biểu đồ và bảng xếp hạng.
  */
 export const COMPARISON_MODULES: ComparisonModuleDef[] = [
@@ -264,6 +266,33 @@ export const COMPARISON_MODULES: ComparisonModuleDef[] = [
       { key: "studyMaxHours", label: "Max hours", format: (item) => hours(item.studyMaxHours) },
     ],
     rankKey: "studyRank",
+  },
+  {
+    key: "exams",
+    title: "Exams",
+    shortTitle: "Exams",
+    description:
+      "Assessment coverage, average score and pass rate across the exams of each course.",
+    icon: GraduationCap,
+    chart: {
+      label: "Exam pass rate",
+      format: (value) => pct(value),
+      higherIsBetter: true,
+      getValue: (item) => item.examPassRate,
+    },
+    metrics: [
+      { key: "examPassRate", label: "Pass rate", format: (item) => pct(item.examPassRate) },
+      { key: "examFailRate", label: "Fail rate", format: (item) => pct(item.examFailRate), higherIsBetter: false },
+      { key: "examAverageScore", label: "Avg score", format: (item) => num(item.examAverageScore) },
+      { key: "examHighestScore", label: "Highest", format: (item) => num(item.examHighestScore) },
+      { key: "examLowestScore", label: "Lowest", format: (item) => num(item.examLowestScore) },
+      { key: "examPassedAttempts", label: "Passed", format: (item) => num(item.examPassedAttempts) },
+      { key: "examFailedAttempts", label: "Failed", format: (item) => num(item.examFailedAttempts) },
+      { key: "examGradedAttempts", label: "Graded", format: (item) => num(item.examGradedAttempts) },
+      { key: "examParticipants", label: "Participants", format: (item) => num(item.examParticipants) },
+      { key: "examTotal", label: "Exams", format: (item) => num(item.examTotal) },
+    ],
+    rankKey: "examRank",
   },
 ];
 

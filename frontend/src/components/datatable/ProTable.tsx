@@ -337,7 +337,7 @@ export function ProTable<TData = any>({
                             <colgroup>
                                 {isExpandable && <col style={{ width: 40 }} />}
                                 {selectable && <col style={{ width: 20 }} />}
-                                {showIndex && <col style={{ width: schema.indexColumnWidth || 50 }} />}
+                                {showIndex && <col style={{ width: 50 }} />}
                                 {table.visibleFields.map((f: any) => (
                                     <col key={f.name} style={{ width: columnWidths[f.name] || 150 }} />
                                 ))}
@@ -352,8 +352,8 @@ export function ProTable<TData = any>({
                                         </TableHead>
                                     )}
                                     {showIndex && (
-                                        <TableHead style={{ width: schema.indexColumnWidth || 50 }} className="text-center">
-                                            {schema.indexColumnTitle || "#"}
+                                        <TableHead style={{ width: 50 }} className="text-center">
+                                            #
                                         </TableHead>
                                     )}
                                     {table.visibleFields.map((f: any) => (
@@ -452,10 +452,8 @@ export function ProTable<TData = any>({
                                                     )}
 
                                                     {showIndex && (
-                                                        <TableCell className="text-center text-muted-foreground font-medium">
-                                                            {schema.renderIndex
-                                                                ? schema.renderIndex(row, index, table.page, table.size)
-                                                                : (table.page || 0) * (table.size || 10) + index + 1}
+                                                        <TableCell className="text-center text-muted-foreground">
+                                                            {(table.page || 0) * (table.size || 10) + index + 1}
                                                         </TableCell>
                                                     )}
 
@@ -477,7 +475,7 @@ export function ProTable<TData = any>({
                                                                 }}
                                                                 dateFormat={
                                                                     f.type === "date"
-                                                                        ? (dateFormats[f.name] ?? "date")
+                                                                        ? (dateFormats[f.name] ?? "datetime")
                                                                         : undefined
                                                                 }
                                                             />

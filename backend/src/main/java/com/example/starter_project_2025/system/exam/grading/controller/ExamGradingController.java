@@ -3,10 +3,13 @@ package com.example.starter_project_2025.system.exam.grading.controller;
 import com.example.starter_project_2025.system.exam.grading.dto.EssayGradingDTO;
 import com.example.starter_project_2025.system.exam.grading.dto.ReturnForRevisionRequest;
 import com.example.starter_project_2025.system.exam.integrity.dto.ExamSimilarityDTO;
+import com.example.starter_project_2025.system.exam.grading.service.BatchAiEssayGradingService;
 import com.example.starter_project_2025.system.exam.grading.service.ExamEssayGradingService;
 import com.example.starter_project_2025.system.exam.integrity.service.ExamSimilarityService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -26,6 +30,7 @@ import java.util.List;
 public class ExamGradingController {
 
     private final ExamEssayGradingService service;
+    private final BatchAiEssayGradingService batchAiService;
     private final ExamSimilarityService similarityService;
 
     @GetMapping("/attempts")
@@ -134,5 +139,64 @@ public class ExamGradingController {
     @PostMapping("/similarity/scan")
     public ResponseEntity<ExamSimilarityDTO.SimilarityReport> triggerSimilarityScan(@PathVariable Long examId) {
         return ResponseEntity.ok(similarityService.scanExamSimilarity(examId));
+    }
+
+    /** Xem thong tin thong ke truoc khi khoi chay AI cham hang loat. */
+    @GetMapping("/batch-ai/preview")
+    public ResponseEntity<EssayGradingDTO.BatchPreviewDTO> previewBatchAi(@PathVariable Long examId) {
+        return ResponseEntity.ok(batchAiService.previewBatch(examId));
+    }
+
+    /** Khoi chay AI cham hang loat (asynchronous background batch). */
+    @PostMapping("/batch-ai/start")
+    public ResponseEntity<EssayGradingDTO.BatchStatusDTO> startBatchAi(
+            @PathVariable Long examId,
+            @RequestBody(required = false) EssayGradingDTO.StartBatchRequest request
+    ) {
+        return ResponseEntity.ok(batchAiService.startBatch(examId, request));
+    }
+
+    /** Lay trang thai batch AI moi nhat cua ky thi. */
+    @GetMapping("/batch-ai/latest")
+    public ResponseEntity<EssayGradingDTO.BatchStatusDTO> getLatestBatchAiStatus(@PathVariable Long examId) {
+        EssayGradingDTO.BatchStatusDTO latest = batchAiService.getLatestBatchStatus(examId);
+        return ResponseEntity.ok(latest);
+    }
+
+    /** Lay trang thai chi tiet cua mot batch AI theo batchId. */
+    @GetMapping("/batch-ai/{batchId}")
+    public ResponseEntity<EssayGradingDTO.BatchStatusDTO> getBatchAiStatus(
+            @PathVariable Long examId,
+            @PathVariable Long batchId
+    ) {
+        return ResponseEntity.ok(batchAiService.getBatchStatus(examId, batchId));
+    }
+
+    /** Danh sach bai thi cho giao vien kiem tra va xac nhan ket qua AI cham (co phan trang va bo loc). */
+    @GetMapping("/ai-review-queue")
+    public ResponseEntity<Page<EssayGradingDTO.Summary>> listAiReviewQueue(
+            @PathVariable Long examId,
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, Math.min(100, size));
+        return ResponseEntity.ok(batchAiService.listReviewQueue(
+                examId,
+                state,
+                search,
+                PageRequest.of(safePage, safeSize)
+        ));
+    }
+
+    /** Xac nhan hang loat tat ca cac bai AI da cham dat yeu cau (yeu cau confirmationText = 'APPLY ALL', giu lai bai diem thap/fail de GV check tay). */
+    @PostMapping("/batch-ai/confirm-all")
+    public ResponseEntity<EssayGradingDTO.BulkConfirmResultDTO> bulkConfirmAiGrades(
+            @PathVariable Long examId,
+            @RequestBody EssayGradingDTO.BulkConfirmRequest request
+    ) {
+        return ResponseEntity.ok(batchAiService.bulkConfirmAiGrades(examId, request));
     }
 }

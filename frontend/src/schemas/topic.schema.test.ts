@@ -72,3 +72,4 @@ describe("topicFormSchema & helpers", () => {
     expect(getTechnicalGroupBadgeClass(undefined)).toContain("gray");
   });
 });
+

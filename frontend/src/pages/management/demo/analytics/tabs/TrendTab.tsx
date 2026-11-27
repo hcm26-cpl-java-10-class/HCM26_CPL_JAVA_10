@@ -25,24 +25,23 @@ import {
 } from "@/pages/management/demo/analytics/lib/chart-helpers";
 import type { CourseAnalyticsGranularity } from "@/types";
 import { AnalyticsLoading } from "@/pages/management/demo/analytics/components/AnalyticsLoading";
+import { daysAgoIsoDate, todayIsoDate } from "@/utils/date.utils";
 
 type Props = {
   courseId: number;
 };
 
-const todayIso = () =>
-  new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+/**
+ * Ngày hôm nay theo múi giờ Việt Nam, định dạng ISO (`yyyy-MM-dd`).
+ *
+ * <p>`Intl.DateTimeFormat` trả về định dạng theo locale (`25/11/2026` với `vi-VN`,
+ * `11/25/2026` với `en-US`), nên không dùng được cho `<input type="date">` và cũng không
+ * parse lại được bằng `new Date(...)`. Vì vậy ngày được dựng thẳng từ các thành phần.
+ */
+const todayIso = () => todayIsoDate();
 
-const daysAgoIso = (days: number) => {
-  const date = new Date(`${todayIso()}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() - days);
-  return date.toISOString().slice(0, 10);
-};
+/** Ngày cách `days` ngày trước, định dạng ISO (`yyyy-MM-dd`). */
+const daysAgoIso = (days: number) => daysAgoIsoDate(days);
 
 const GRANULARITIES: Array<{ value: CourseAnalyticsGranularity; label: string }> = [
   { value: "DAY", label: "Daily" },

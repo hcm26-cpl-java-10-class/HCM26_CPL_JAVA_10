@@ -410,3 +410,4 @@ class HostedAppsClient:
         except json.JSONDecodeError:
             return None
         return value if isinstance(value, dict) else None
+

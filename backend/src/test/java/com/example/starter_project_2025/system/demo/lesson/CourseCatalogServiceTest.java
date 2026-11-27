@@ -82,6 +82,16 @@ class CourseCatalogServiceTest {
         );
     }
 
+    @Test
+    void recommendationCatalogExposesAllAssignedCategoryNames() {
+        var programming=com.example.starter_project_2025.system.demo.category.Category.builder().id(1L).name("Programming").build();
+        var mobile=com.example.starter_project_2025.system.demo.category.Category.builder().id(2L).name("Mobile").build();
+        course.setCategories(java.util.Set.of(programming,mobile));
+        when(courseRepository.findRecommendationCatalog()).thenReturn(List.of(course));
+        var result=service.recommendationCatalog(null);
+        assertEquals(List.of("Mobile","Programming"),result.getFirst().categoryNames());
+    }
+
     private void stubCourseContent() {
         when(courseRepository.findById(10L)).thenReturn(Optional.of(course));
         when(sectionRepository.findByCourse_IdOrderByOrderIndexAsc(10L)).thenReturn(List.of(section));

@@ -5,6 +5,10 @@ import { ModulesPage } from "@/pages/management/fams/ModulesPage";
 import { LocationPage } from "@/pages/management/rbac/location";
 import AuditLogPage from "@/pages/management/audit-log";
 import NotificationCenterPage from "@/pages/notifications/NotificationCenterPage";
+import EmailHistoryPage from "@/pages/communications/EmailHistoryPage";
+import EmailComposePage from "@/pages/communications/EmailComposePage";
+import EmailTemplatesPage from "@/pages/communications/EmailTemplatesPage";
+import NotificationPoliciesPage from "@/pages/communications/NotificationPoliciesPage";
 import RecommendedCoursesPage from "@/pages/student/RecommendedCoursesPage";
 import CourseLearnerGradesPage from "@/pages/management/demo/course/pages/CourseLearnerGradesPage";
 import ScoreManagementPage from "@/pages/management/exam/score-management";
@@ -204,10 +208,22 @@ export const routes: RouteConfig[] = [
   { path: "/project-templates/:templateId/reviews/:reportId", component: ProjectTemplateReviewPage, requiredPermission: "PROJECT_TEMPLATE_REVIEW" },
 
   // FAMS MODULE GROUP MODULE
-  { path: "/fams/module-group-module", component: ModuleGroupModulePage, requiredPermission: "MENU_READ" },
-  { path: "/module-group-module", component: ModuleGroupModulePage, requiredPermission: "MENU_READ" },
+  {
+    path: "/fams/module-group-module",
+    component: ModuleGroupModulePage,
+    isPublic: true,
+  },
+  {
+    path: "/module-group-module",
+    component: ModuleGroupModulePage,
+    isPublic: true,
+  },
 
   // ROLE HOME
+  {
+    path: "/dashboard",
+    component: Dashboard,
+  },
   {
     path: "/student",
     component: StudentLandingPage,
@@ -218,7 +234,11 @@ export const routes: RouteConfig[] = [
   },
 
   // DASHBOARD
-  { path: "/dashboard", component: Dashboard, requiredPermission: "USER_READ", isModuleDriven: false },
+  {
+    path: "/dashboard",
+    component: Dashboard,
+    isModuleDriven: true,
+  },
 
   // RBAC
   {
@@ -252,7 +272,7 @@ export const routes: RouteConfig[] = [
   },
 
   {
-    path: "/management/exam/templates",
+    path: "/exams/templates",
     component: ExamTemplatesPage,
     requiredPermission: "EXAM_UPDATE",
   },
@@ -519,8 +539,37 @@ export const routes: RouteConfig[] = [
   },
 
   { path: "/notifications", component: NotificationCenterPage, isModuleDriven: false },
+  {
+    path: "/communications/email-history",
+    component: EmailHistoryPage,
+    requiredPermission: "EMAIL_LOG_READ",
+    isModuleDriven: false,
+  },
+  {
+    path: "/communications/email-compose",
+    component: EmailComposePage,
+    requiredPermission: "EMAIL_SEND",
+    isModuleDriven: false,
+  },
+  {
+    path: "/communications/email-templates",
+    component: EmailTemplatesPage,
+    requiredPermission: "EMAIL_TEMPLATE_READ",
+    isModuleDriven: false,
+  },
+  {
+    path: "/communications/policies",
+    component: NotificationPoliciesPage,
+    requiredPermission: "NOTIFICATION_POLICY_MANAGE",
+    isModuleDriven: false,
+  },
   { path: "/student/recommendations", component: RecommendedCoursesPage, requiredPermission: "ENROLLMENT_CREATE", isModuleDriven: false },
   // STUDENT
+  {
+    path: "/student",
+    component: StudentLandingPage,
+    requiredPermission: "BOOK_READ",
+  },
   {
     path: "/student/exams",
     component: StudentExamList,
@@ -597,6 +646,11 @@ export const routes: RouteConfig[] = [
   },
 
   // TEACHER
+  {
+    path: "/teacher",
+    component: TeacherLandingPage,
+    requiredPermission: "BOOK_UPDATE",
+  },
 
   // DYNAMIC ENTITY ROUTES
   ...buildEntityRoutes(),

@@ -1,6 +1,8 @@
 import type { RootState } from "@/store/store";
 import {
+  ADMIN_ROLE,
   normalizePermission,
+  normalizeRole,
   resolveEffectivePermissions,
 } from "@/utils/rbac.utils";
 import { useMemo } from "react";
@@ -22,6 +24,7 @@ export const usePermissions = () => {
     () => new Set(effectivePermissions.map((permission) => normalizePermission(permission))),
     [effectivePermissions],
   );
+  const isAdminView = normalizeRole(activeRole) === ADMIN_ROLE;
 
   const user = {
     email,
@@ -34,7 +37,7 @@ export const usePermissions = () => {
   };
 
   const hasPermission = (permission: string): boolean =>
-    effectivePermissionSet.has(normalizePermission(permission));
+    isAdminView || effectivePermissionSet.has(normalizePermission(permission));
 
   const hasAnyPermission = (requiredPermissions: string[]): boolean =>
     requiredPermissions.some((permission) => hasPermission(permission));
@@ -47,7 +50,6 @@ export const usePermissions = () => {
 
   return {
     user,
-    canLearn: permissions.includes("LEARNER_ACCESS") && permissions.includes("LEARNING_SELF_READ"),
     activeRole,
     viewRole,
     availableRoles,

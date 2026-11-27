@@ -2,12 +2,9 @@ export interface LoginRequest {
   email: string;
   password: string;
   isRememberedMe?: boolean;
-  device?: string;
 }
 
 export interface LoginResponse {
-    passwordChangeRequired?: boolean;
-    setupToken?: string;
   token: string;
   email: string;
   firstName: string;

@@ -426,6 +426,32 @@ export interface CourseComparisonItem {
   studyMaxHours: number;
   studyRank: number;
 
+  // ===== 9. Bài thi =====
+  /** Số đề thi đang active thuộc khóa học. */
+  examTotal: number;
+  /** Tổng số lượt thi (mọi lượt, kể cả lượt thi lại). */
+  examAttempts: number;
+  /** Số lượt thi đã được chấm điểm. */
+  examGradedAttempts: number;
+  /** Số học viên có ít nhất một lượt thi. */
+  examParticipants: number;
+  /** Điểm trung bình của các lượt thi đã chấm. */
+  examAverageScore: number;
+  /** Điểm cao nhất. */
+  examHighestScore: number;
+  /** Điểm thấp nhất. */
+  examLowestScore: number;
+  /** Số lượt thi đạt điểm đạt. */
+  examPassedAttempts: number;
+  /** Tỉ lệ đạt (0-100). */
+  examPassRate: number;
+  /** Số lượt thi không đạt. */
+  examFailedAttempts: number;
+  /** Tỉ lệ không đạt (0-100). */
+  examFailRate: number;
+  /** Thứ hạng trong module bài thi (1 = tốt nhất). */
+  examRank: number;
+
   // ===== Tổng hợp =====
   /** Điểm tổng hợp 0-100 (cao = khóa học hoạt động tốt hơn). */
   overallScore: number;

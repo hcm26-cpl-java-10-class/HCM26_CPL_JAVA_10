@@ -29,3 +29,4 @@ public class SubjectSyllabusDTO {
 
     List<Map<String, Object>> assessmentScheme;
 }
+

@@ -109,6 +109,7 @@ const FOCUS_OPTIONS: { value: string; label: string }[] = [
   { value: "ranking", label: "Ranking among peers" },
   { value: "content", label: "Learning content" },
   { value: "study-time", label: "Study time" },
+  { value: "exams", label: "Exam results" },
 ];
 
 export function CourseAiComparisonPanel({
@@ -226,7 +227,7 @@ export function CourseAiComparisonPanel({
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Pick a topic for the AI to focus on, or keep the default to analyse all 8 modules.
+                Pick a topic for the AI to focus on, or keep the default to analyse all 9 modules.
               </p>
             </div>
           </div>

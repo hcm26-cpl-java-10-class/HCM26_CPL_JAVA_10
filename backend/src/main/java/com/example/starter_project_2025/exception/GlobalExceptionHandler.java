@@ -1,7 +1,10 @@
 package com.example.starter_project_2025.exception;
 
 import com.example.starter_project_2025.exception.error.ErrorResponse;
+import com.example.starter_project_2025.exception.error.I18nErrorResponse;
 import com.example.starter_project_2025.exception.error.ValidationErrorResponse;
+import com.example.starter_project_2025.system.i18n.service.TooManyTextsException;
+import com.example.starter_project_2025.system.i18n.service.UnsupportedLanguageException;
 import com.example.starter_project_2025.system.project.StudentAlreadyAssignedException;
 import com.example.starter_project_2025.system.project.AllocationSessionConflictException;
 import com.example.starter_project_2025.system.project.IdempotencyKeyConflictException;
@@ -217,6 +220,35 @@ public class GlobalExceptionHandler {
                 LocalDateTime.now()
         );
         return ResponseEntity.badRequest().body(response);
+    }
+
+    /**
+     * Ngôn ngữ đích không được hỗ trợ (chưa bật hoặc không tồn tại).
+     *
+     * <p>Giữ nguyên HTTP 400 như trước, thêm mã lỗi ổn định để frontend không phải so
+     * message.
+     */
+    @ExceptionHandler(UnsupportedLanguageException.class)
+    public ResponseEntity<I18nErrorResponse> handleUnsupportedLanguage(UnsupportedLanguageException ex) {
+        log.warn("[400] Unsupported i18n target language: {}", ex.getLanguage());
+        I18nErrorResponse error = new I18nErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "ERR_I18N_UNSUPPORTED_LANGUAGE",
+                ex.getMessage(),
+                LocalDateTime.now());
+        return ResponseEntity.badRequest().body(error);
+    }
+
+    /** Số chuỗi trong một request vượt quá giới hạn của backend. */
+    @ExceptionHandler(TooManyTextsException.class)
+    public ResponseEntity<I18nErrorResponse> handleTooManyTexts(TooManyTextsException ex) {
+        log.warn("[400] Too many i18n texts, limit is {}", ex.getLimit());
+        I18nErrorResponse error = new I18nErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "ERR_I18N_TOO_MANY_TEXTS",
+                ex.getMessage(),
+                LocalDateTime.now());
+        return ResponseEntity.badRequest().body(error);
     }
 
     @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)

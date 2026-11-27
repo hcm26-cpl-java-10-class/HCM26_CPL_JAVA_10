@@ -1,6 +1,7 @@
 // NEW (anti-cheat): bao cao vi pham cua ky thi, hien trong trang Thong ke ket qua.
 // CHANGED: chi thong ke (khong co xem xet/ghi chu/export). Chi co 1 co duy nhat "Bi gan co" = co vi pham,
 // de sau nay lam tinh nang sua diem cho sinh vien bi gan co. Loc duoc theo tung loai vi pham.
+import { AiPercentTag } from "@/components/AiPercentTag";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
@@ -444,6 +445,7 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                                                             : "No score yet"}
                                                     </div>
                                                     <div className="text-xs text-muted-foreground">Took {fmtDuration(r.durationSeconds)}</div>
+                                                    <AiPercentTag percent={r.aiPercent} signals={r.aiSignals} className="mt-1" />
                                                     {r.extremeDuration && (
                                                         <span
                                                             className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300"

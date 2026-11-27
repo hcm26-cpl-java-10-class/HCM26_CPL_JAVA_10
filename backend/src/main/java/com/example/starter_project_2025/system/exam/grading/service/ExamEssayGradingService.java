@@ -10,6 +10,7 @@ import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptAn
 import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptQuestion;
 import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptRepository;
 import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus;
+import com.example.starter_project_2025.system.exam.grading.domain.AiEssayGradingState;
 import com.example.starter_project_2025.system.exam.grading.domain.ExamQuestionGradingConfig;
 import com.example.starter_project_2025.system.exam.grading.domain.ExamQuestionGradingConfigRepository;
 import com.example.starter_project_2025.system.exam.core.domain.ExamRepository;
@@ -20,7 +21,14 @@ import com.example.starter_project_2025.system.question.core.domain.QuestionType
 import com.example.starter_project_2025.system.question.core.dto.CodeSpecDTO;
 import com.example.starter_project_2025.system.question.core.service.CodeSpecSupport;
 import com.example.starter_project_2025.system.rbac.user.User;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import com.example.starter_project_2025.security.UserPrincipal;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,6 +57,14 @@ public class ExamEssayGradingService {
     private final AnonymousExamService anonymousExamService;
     private final CodeJudgeService codeJudgeService;
     private final ExamQuestionGradingConfigRepository gradingConfigRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.starter_project_2025.system.notification.NotificationService notificationService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private UserRepository userRepository;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public List<EssayGradingDTO.Summary> listPending(Long examId) {
         requireExam(examId);
@@ -85,6 +101,15 @@ public class ExamEssayGradingService {
         detail.setFinalScore(attempt.getFinalScore());
         detail.setScoreAdjusted(attempt.getFirstScore() != null);
         detail.setAlreadyGraded(attempt.getFinalScore() != null || attempt.getStatus() == ExamAttemptStatus.SUBMITTED);
+        detail.setAiGradingState(resolveAiGradingState(attempt));
+        detail.setAiProposedEssayScore(resolveAiProposedEssayScore(attempt));
+        detail.setAiGradedAt(attempt.getAiGradedAt());
+        detail.setAiGradingError(attempt.getAiGradingError());
+        detail.setConfirmedBy(attempt.getConfirmedBy());
+        detail.setConfirmedAt(attempt.getConfirmedAt());
+        detail.setMaxEssayScore(computeMaxEssayScore(attempt));
+        detail.setLowScoreFlagged(isLowScoreOrFailFlagged(attempt));
+        detail.setLowScoreReason(resolveLowScoreReason(attempt));
         detail.setEssays(attempt.getQuestions().stream()
                 .filter(question -> question.getType() == QuestionType.ESSAY)
                 .sorted(Comparator.comparingInt(ExamAttemptQuestion::getDisplayOrder))
@@ -369,6 +394,7 @@ public class ExamEssayGradingService {
             }
             answer.setScore(stored);
             answer.setFeedback(grade != null && grade.getFeedback() != null ? grade.getFeedback().trim() : "");
+            answer.setAiGradingStatus(AiEssayGradingState.CONFIRMED.name());
         }
 
         BigDecimal objectiveScore = attempt.getObjectiveScore() != null ? attempt.getObjectiveScore() : BigDecimal.ZERO;
@@ -377,6 +403,12 @@ public class ExamEssayGradingService {
         BigDecimal penalized = ExamScoring.applyPenalty(unpenalizedTotal, attempt.getLatePenaltyPercentApplied());
         attempt.setFinalScore(ExamScoring.clamp(penalized, maxScore));
         attempt.setStatus(ExamAttemptStatus.SUBMITTED);
+        attempt.setAiGradingState(AiEssayGradingState.CONFIRMED);
+        attempt.setConfirmedAt(Instant.now());
+        Long currentUserId = currentUserIdOrNull();
+        if (currentUserId != null) {
+            attempt.setConfirmedBy(currentUserId);
+        }
         attempt.setRevisionNote(null);
         attempt.setRevisionDeadline(null);
         attemptRepository.save(attempt);
@@ -417,6 +449,16 @@ public class ExamEssayGradingService {
         attempt.setDeadlineAt(newDeadline);
         attemptRepository.save(attempt);
 
+        if (notificationService != null && attempt.getStudent() != null && attempt.getStudent().getId() != null) {
+            notificationService.createOnce(
+                    attempt.getStudent().getId(),
+                    "exam.revision.attempt." + attempt.getId() + "." + newDeadline.getEpochSecond(),
+                    "Exam returned for revision",
+                    "Your submission for \"" + attempt.getExam().getTitle() + "\" requires revision: " + note,
+                    "/student/exams"
+            );
+        }
+
         return getDetail(examId, attemptId);
     }
 
@@ -424,6 +466,7 @@ public class ExamEssayGradingService {
         return requestAiGrading(examId, attemptId, null);
     }
 
+    @Transactional
     public EssayGradingDTO.AiGradingResponse requestAiGrading(
             Long examId,
             Long attemptId,
@@ -438,12 +481,27 @@ public class ExamEssayGradingService {
                 || attempt.getStatus() == ExamAttemptStatus.NOT_STARTED) {
             throw new BadRequestException("Bài làm chưa được nộp");
         }
+        if (attempt.getAiGradingState() == AiEssayGradingState.CONFIRMED
+                || (attempt.getFinalScore() != null && attempt.getStatus() == ExamAttemptStatus.SUBMITTED)) {
+            throw new BadRequestException("Bài làm đã được xác nhận điểm chính thức, AI không thể ghi đè kết quả đã xác nhận.");
+        }
 
-        List<AiEssayGradingClient.EssayQuestionPayload> payloads = attempt.getQuestions().stream()
+        List<AiEssayGradingClient.EssayQuestionPayload> payloads = buildEssayPayloads(examId, attempt, request);
+
+        EssayGradingDTO.AiGradingResponse response = aiClient.requestProposal(payloads);
+        persistAiDraftProposals(attempt, response);
+        return response;
+    }
+
+    public List<AiEssayGradingClient.EssayQuestionPayload> buildEssayPayloads(
+            Long examId,
+            ExamAttempt attempt,
+            EssayGradingDTO.AiGradingRequest request
+    ) {
+        return attempt.getQuestions().stream()
                 .filter(q -> q.getType() == QuestionType.ESSAY)
                 .sorted(Comparator.comparingInt(ExamAttemptQuestion::getDisplayOrder))
                 .map(q -> {
-                    // Ưu tiên nạp phiên bản Reference & Rubric đã submit vào database theo cặp (examId, questionId)
                     ExamQuestionGradingConfig config = effectiveGuideline(examId, q);
 
                     String refAnswer = (config != null && config.getReferenceAnswer() != null && !config.getReferenceAnswer().isBlank())
@@ -455,7 +513,6 @@ public class ExamEssayGradingService {
                                 : rubric + "\n\nAdditional teacher guidance:\n" + config.getRubric().trim();
                     }
 
-                    // Tương thích ngược: nếu database chưa có nhưng request truyền vào
                     if (refAnswer == null && request != null && request.getQuestions() != null) {
                         EssayGradingDTO.QuestionContext ctx = request.getQuestions().get(q.getSourceQuestionId());
                         if (ctx != null && ctx.getReferenceAnswer() != null && !ctx.getReferenceAnswer().isBlank()) {
@@ -487,8 +544,77 @@ public class ExamEssayGradingService {
                     );
                 })
                 .toList();
+    }
 
-        return aiClient.requestProposal(payloads);
+    public void persistAiDraftProposals(ExamAttempt attempt, EssayGradingDTO.AiGradingResponse response) {
+        if (response == null || response.getProposals() == null || response.getProposals().isEmpty()) {
+            return;
+        }
+        // Bảo vệ tuyệt đối: Không bao giờ ghi đè bài đã CONFIRMED chính thức
+        if (attempt.getAiGradingState() == AiEssayGradingState.CONFIRMED
+                || (attempt.getFinalScore() != null && attempt.getStatus() == ExamAttemptStatus.SUBMITTED)) {
+            return;
+        }
+        Instant now = Instant.now();
+        Map<Long, EssayGradingDTO.AiQuestionProposal> proposalMap = new HashMap<>();
+        for (EssayGradingDTO.AiQuestionProposal p : response.getProposals()) {
+            if (p != null && p.getQuestionId() != null) {
+                proposalMap.put(p.getQuestionId(), p);
+            }
+        }
+
+        BigDecimal maxScore = ExamScoring.effectiveMax(attempt.getMaxScore());
+        BigDecimal totalProposed = BigDecimal.ZERO;
+        List<ExamAttemptQuestion> essayQuestions = attempt.getQuestions().stream()
+                .filter(q -> q.getType() == QuestionType.ESSAY)
+                .toList();
+
+        for (ExamAttemptQuestion q : essayQuestions) {
+            EssayGradingDTO.AiQuestionProposal prop = proposalMap.get(q.getSourceQuestionId());
+            if (prop == null) {
+                continue;
+            }
+            BigDecimal cap = ExamScoring.gradingCap(maxScore, q.getPoints(), attempt.getTotalPoints());
+            BigDecimal proposed = prop.getProposedScore();
+            if (proposed == null || proposed.signum() < 0 || proposed.compareTo(cap) > 0) {
+                throw new BadRequestException("Điểm AI đề xuất không hợp lệ cho câu " + q.getDisplayOrder() + ": " + proposed);
+            }
+            BigDecimal scaled = proposed.setScale(ExamScoring.STORE_SCALE, java.math.RoundingMode.HALF_UP);
+            totalProposed = totalProposed.add(scaled);
+
+            ExamAttemptAnswer answer = findAnswer(attempt, q);
+            if (answer == null) {
+                answer = new ExamAttemptAnswer();
+                answer.setAttempt(attempt);
+                answer.setQuestion(q);
+                answer.setTextAnswer("");
+                attempt.getAnswers().add(answer);
+            }
+            answer.setAiProposedScore(scaled);
+            answer.setAiFeedback(prop.getFeedback());
+            answer.setAiReasoning(prop.getReasoning());
+            answer.setAiAnalysis(prop.getAnalysis());
+            answer.setAiFlagAmbiguous(prop.getFlagAmbiguous());
+            answer.setAiFlagReason(prop.getFlagReason());
+            answer.setAiGradedAt(now);
+            answer.setAiGradingStatus(AiEssayGradingState.AI_COMPLETED.name());
+            answer.setAiGradingError(null);
+            if (prop.getCriterionScores() != null && !prop.getCriterionScores().isEmpty()) {
+                try {
+                    answer.setAiCriterionScoresJson(objectMapper.writeValueAsString(prop.getCriterionScores()));
+                } catch (Exception ignored) {
+                    answer.setAiCriterionScoresJson("[]");
+                }
+            } else {
+                answer.setAiCriterionScoresJson("[]");
+            }
+        }
+
+        attempt.setAiProposedEssayScore(totalProposed);
+        attempt.setAiGradingState(AiEssayGradingState.AI_COMPLETED);
+        attempt.setAiGradedAt(now);
+        attempt.setAiGradingError(null);
+        attemptRepository.save(attempt);
     }
 
     private String formatGradingCriteria(List<EssayGradingCriterion> criteria) {
@@ -500,24 +626,86 @@ public class ExamEssayGradingService {
                 .collect(java.util.stream.Collectors.joining("\n"));
     }
 
-    private Exam requireExam(Long examId) {
-        return examRepository.findById(examId)
+    public Exam requireExam(Long examId) {
+        Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+        checkCanGradeExam(exam);
+        return exam;
     }
 
-    private EssayGradingDTO.Summary toSummary(ExamAttempt attempt) {
+    public void checkCanGradeExam(Exam exam) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+            return;
+        }
+        if (!(auth.getPrincipal() instanceof UserPrincipal principal) || principal.getUser() == null) {
+            return;
+        }
+        User currentUser = principal.getUser();
+        boolean isAdmin = currentUser.getRoles() != null && currentUser.getRoles().stream()
+                .anyMatch(r -> "ADMIN".equalsIgnoreCase(r.getName()));
+        boolean isTeacher = currentUser.getRoles() != null && currentUser.getRoles().stream()
+                .anyMatch(r -> "TEACHER".equalsIgnoreCase(r.getName()));
+        if (!isAdmin && !isTeacher) {
+            throw new AccessDeniedException("Bạn không có quyền truy cập chức năng chấm thi.");
+        }
+        if (isAdmin) {
+            return;
+        }
+        Long currentUserId = currentUser.getId();
+        if (exam.getCreatedBy() == null || Objects.equals(exam.getCreatedBy(), currentUserId)) {
+            return;
+        }
+        if (exam.getCourse() != null && exam.getCourse().getInstructorUser() != null
+                && Objects.equals(exam.getCourse().getInstructorUser().getId(), currentUserId)) {
+            return;
+        }
+        // Nếu người tạo là một giáo viên khác (không phải ADMIN demo seed), chặn quyền truy cập
+        if (userRepository != null) {
+            User creator = userRepository.findById(exam.getCreatedBy()).orElse(null);
+            if (creator != null && creator.getRoles() != null) {
+                boolean creatorIsAdmin = creator.getRoles().stream()
+                        .anyMatch(r -> "ADMIN".equalsIgnoreCase(r.getName()));
+                if (creatorIsAdmin) {
+                    return;
+                }
+            }
+        }
+        throw new AccessDeniedException("Bạn không có quyền chấm hoặc xác nhận bài thi của giáo viên khác.");
+    }
+
+    public Long currentUserIdOrNull() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof UserPrincipal principal && principal.getUser() != null) {
+            return principal.getUser().getId();
+        }
+        return null;
+    }
+
+    public EssayGradingDTO.Summary toSummary(ExamAttempt attempt) {
         EssayGradingDTO.Summary summary = new EssayGradingDTO.Summary();
         summary.setAttemptId(attempt.getId());
+        if (attempt.getExam() != null) {
+            summary.setExamId(attempt.getExam().getId());
+            summary.setExamTitle(attempt.getExam().getTitle());
+        }
         fillStudent(attempt.getStudent(), summary::setStudentId, summary::setStudentName, summary::setStudentEmail);
         summary.setAttemptNumber(attempt.getAttemptNumber());
         summary.setStatus(attempt.getStatus());
         summary.setSubmittedAt(attempt.getSubmittedAt());
+        summary.setFinalScore(attempt.getFinalScore());
         List<ExamAttemptQuestion> essays = attempt.getQuestions().stream()
                 .filter(question -> question.getType() == QuestionType.ESSAY)
                 .toList();
         summary.setEssayCount(essays.size());
         summary.setEssayAnswered((int) essays.stream()
                 .filter(question -> !answerText(attempt, question).isBlank())
+                .count());
+        summary.setAiGradedEssayCount((int) essays.stream()
+                .filter(question -> {
+                    ExamAttemptAnswer ans = findAnswer(attempt, question);
+                    return ans != null && ans.getAiProposedScore() != null;
+                })
                 .count());
         List<ExamAttemptQuestion> codings = attempt.getQuestions().stream()
                 .filter(question -> question.getType() == QuestionType.CODING)
@@ -526,7 +714,227 @@ public class ExamEssayGradingService {
         summary.setCodingAnswered((int) codings.stream()
                 .filter(question -> !answerText(attempt, question).isBlank())
                 .count());
+        summary.setAiGradingState(resolveAiGradingState(attempt));
+        summary.setAiProposedScore(resolveAiProposedEssayScore(attempt));
+        summary.setAiGradedAt(attempt.getAiGradedAt());
+        summary.setAiGradingError(attempt.getAiGradingError());
+        summary.setConfirmedBy(attempt.getConfirmedBy());
+        summary.setConfirmedAt(attempt.getConfirmedAt());
+        summary.setMaxEssayScore(computeMaxEssayScore(attempt));
+        summary.setLowScoreFlagged(isLowScoreOrFailFlagged(attempt));
+        summary.setLowScoreReason(resolveLowScoreReason(attempt));
         return summary;
+    }
+
+    /**
+     * Tinh tong diem toi da cua tat ca cac cau hoi tu luan trong luot lam bai.
+     */
+    public BigDecimal computeMaxEssayScore(ExamAttempt attempt) {
+        if (attempt == null || attempt.getQuestions() == null) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal maxScore = ExamScoring.effectiveMax(attempt.getMaxScore());
+        return attempt.getQuestions().stream()
+                .filter(q -> q.getType() == QuestionType.ESSAY)
+                .map(q -> ExamScoring.gradingCap(maxScore, q.getPoints(), attempt.getTotalPoints()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * Kiem tra bai thi co bi flag diem qua thap (< 50% diem tu luan hoac duoi diem dat / 0 diem) hay khong.
+     * Nhung bai bi flag nay hoac FAILED khong duoc phep xac nhan hang loat ma bat buoc giao vien kiem tra tay.
+     */
+    public boolean isLowScoreOrFailFlagged(ExamAttempt attempt) {
+        return resolveLowScoreReason(attempt) != null;
+    }
+
+    public String resolveLowScoreReason(ExamAttempt attempt) {
+        if (attempt == null) {
+            return null;
+        }
+        String state = resolveAiGradingState(attempt);
+        if (AiEssayGradingState.FAILED.name().equals(state)) {
+            return "Chấm AI lỗi — bắt buộc giáo viên kiểm tra và chấm trực tiếp.";
+        }
+        BigDecimal aiScore = resolveAiProposedEssayScore(attempt);
+        if (aiScore == null) {
+            return null;
+        }
+        BigDecimal maxEssay = computeMaxEssayScore(attempt);
+        if (aiScore.signum() <= 0) {
+            return "Điểm AI đề xuất = 0đ (Fail) — bắt buộc giáo viên kiểm tra trực tiếp.";
+        }
+        if (maxEssay.signum() > 0) {
+            BigDecimal halfMaxEssay = maxEssay.multiply(new BigDecimal("0.50"));
+            if (aiScore.compareTo(halfMaxEssay) < 0) {
+                return String.format(
+                        "Điểm tự luận quá thấp (%s / %s đ < 50%%) — bắt buộc giáo viên kiểm tra trực tiếp.",
+                        aiScore.stripTrailingZeros().toPlainString(),
+                        maxEssay.stripTrailingZeros().toPlainString()
+                );
+            }
+        }
+        BigDecimal objective = attempt.getObjectiveScore() != null ? attempt.getObjectiveScore() : BigDecimal.ZERO;
+        BigDecimal projectedTotal = ExamScoring.clamp(
+                ExamScoring.applyPenalty(objective.add(aiScore), attempt.getLatePenaltyPercentApplied()),
+                ExamScoring.effectiveMax(attempt.getMaxScore())
+        );
+        BigDecimal passScore = ExamScoring.effectivePassScore(attempt);
+        if (passScore != null && passScore.signum() > 0 && projectedTotal.compareTo(passScore) < 0) {
+            return String.format(
+                    "Tổng điểm dự kiến (%s đ) dưới mức điểm đạt (%s đ - Fail) — bắt buộc giáo viên kiểm tra trực tiếp.",
+                    projectedTotal.stripTrailingZeros().toPlainString(),
+                    passScore.stripTrailingZeros().toPlainString()
+            );
+        }
+        return null;
+    }
+
+    /**
+     * Luu hoac tu dong sinh tieu chi cham & cau tra loi mau cho cac cau hoi tu luan cua ky thi
+     * khi giao vien khoi chay Batch AI Grading.
+     */
+    @Transactional
+    public void applyOrAutoGenerateExamGuidelines(
+            Long examId,
+            String customReferenceAnswer,
+            String customRubric,
+            boolean autoGenerateIfBlank
+    ) {
+        String trimmedRef = customReferenceAnswer != null ? customReferenceAnswer.trim() : "";
+        String trimmedRubric = customRubric != null ? customRubric.trim() : "";
+        List<ExamAttempt> attempts = attemptRepository.findAllByExam_Id(examId);
+
+        Map<Long, ExamAttemptQuestion> essayQuestionsById = new LinkedHashMap<>();
+        for (ExamAttempt att : attempts) {
+            if (att.getQuestions() == null) continue;
+            for (ExamAttemptQuestion q : att.getQuestions()) {
+                if (q.getType() == QuestionType.ESSAY && q.getSourceQuestionId() != null) {
+                    essayQuestionsById.putIfAbsent(q.getSourceQuestionId(), q);
+                }
+            }
+        }
+
+        Instant now = Instant.now();
+        for (Map.Entry<Long, ExamAttemptQuestion> entry : essayQuestionsById.entrySet()) {
+            Long qId = entry.getKey();
+            ExamAttemptQuestion sampleQ = entry.getValue();
+            ExamQuestionGradingConfig config = gradingConfigRepository
+                    .findByExamIdAndQuestionId(examId, qId)
+                    .orElseGet(() -> ExamQuestionGradingConfig.builder()
+                            .examId(examId)
+                            .questionId(qId)
+                            .build());
+
+            boolean changed = false;
+            if (!trimmedRef.isEmpty()) {
+                config.setReferenceAnswer(trimmedRef);
+                config.setReferenceSubmittedAt(now);
+                changed = true;
+            } else if (autoGenerateIfBlank && (config.getReferenceAnswer() == null || config.getReferenceAnswer().isBlank())) {
+                String qContent = sampleQ.getContent() != null ? sampleQ.getContent().trim() : "Câu hỏi tự luận #" + sampleQ.getDisplayOrder();
+                config.setReferenceAnswer(
+                        "[AI Tự động thiết lập đáp án mẫu chuẩn từ đề bài]: Trình bày đầy đủ khái niệm cốt lõi, giải thích rõ nguyên lý hoạt động, phân tích đúng các bước giải quyết vấn đề và nêu ví dụ minh họa thực tế bám sát yêu cầu đề bài: \"" + qContent + "\"."
+                );
+                config.setReferenceSubmittedAt(now);
+                changed = true;
+            }
+
+            if (!trimmedRubric.isEmpty()) {
+                config.setRubric(trimmedRubric);
+                config.setRubricSubmittedAt(now);
+                changed = true;
+            } else if (autoGenerateIfBlank && (config.getRubric() == null || config.getRubric().isBlank())) {
+                String existingCriteria = formatGradingCriteria(sampleQ.getGradingCriteria());
+                if (existingCriteria != null && !existingCriteria.isBlank()) {
+                    config.setRubric(existingCriteria);
+                } else {
+                    config.setRubric(
+                            "1. Độ chính xác học thuật & nắm vững kiến thức trọng tâm (40%)\n" +
+                            "2. Lập luận logic, phân tích đầy đủ các ý theo yêu cầu đề bài (40%)\n" +
+                            "3. Ví dụ minh họa rõ ràng, trình bày mạch lạc & thuật ngữ chuẩn xác (20%)"
+                    );
+                }
+                config.setRubricSubmittedAt(now);
+                changed = true;
+            }
+
+            if (changed) {
+                gradingConfigRepository.save(config);
+            }
+        }
+    }
+
+    /**
+     * Xac nhan diem chinh thuc cho 1 bai thi tu ket qua AI da cham nhap (dung trong Bulk Confirm).
+     */
+    @Transactional
+    public void confirmAiDraftAsOfficialGrade(Long examId, ExamAttempt attempt) {
+        if (attempt == null) return;
+        String state = resolveAiGradingState(attempt);
+        if (!AiEssayGradingState.AI_COMPLETED.name().equals(state)) {
+            throw new BadRequestException("Bài thi #" + attempt.getId() + " chưa có kết quả chấm nháp AI hoàn tất.");
+        }
+        if (isLowScoreOrFailFlagged(attempt)) {
+            throw new BadRequestException("Bài thi #" + attempt.getId() + " bị gắn cờ điểm thấp/Fail, bắt buộc giáo viên kiểm tra và xác nhận thủ công.");
+        }
+        List<ExamAttemptQuestion> essayQuestions = attempt.getQuestions().stream()
+                .filter(q -> q.getType() == QuestionType.ESSAY)
+                .toList();
+        List<EssayGradingDTO.QuestionGrade> grades = new ArrayList<>();
+        for (ExamAttemptQuestion q : essayQuestions) {
+            ExamAttemptAnswer ans = findAnswer(attempt, q);
+            if (ans == null || ans.getAiProposedScore() == null) {
+                throw new BadRequestException("Bài thi #" + attempt.getId() + " thiếu điểm AI đề xuất ở câu hỏi " + q.getDisplayOrder());
+            }
+            EssayGradingDTO.QuestionGrade g = new EssayGradingDTO.QuestionGrade();
+            g.setQuestionId(q.getSourceQuestionId());
+            g.setScore(ans.getAiProposedScore());
+            g.setFeedback(ans.getAiFeedback() != null ? ans.getAiFeedback() : "");
+            grades.add(g);
+        }
+        EssayGradingDTO.GradeSubmissionRequest req = new EssayGradingDTO.GradeSubmissionRequest();
+        req.setGrades(grades);
+        req.setConfirmOverwrite(false);
+        submitOfficialGrade(examId, attempt.getId(), req);
+    }
+
+    public String resolveAiGradingState(ExamAttempt attempt) {
+        if (attempt.getAiGradingState() != null) {
+            return attempt.getAiGradingState().name();
+        }
+        if (attempt.getFinalScore() != null && attempt.getStatus() == ExamAttemptStatus.SUBMITTED) {
+            return AiEssayGradingState.CONFIRMED.name();
+        }
+        boolean hasAiDraft = attempt.getQuestions().stream()
+                .filter(q -> q.getType() == QuestionType.ESSAY)
+                .anyMatch(q -> {
+                    ExamAttemptAnswer ans = findAnswer(attempt, q);
+                    return ans != null && ans.getAiProposedScore() != null;
+                });
+        if (hasAiDraft) {
+            return AiEssayGradingState.AI_COMPLETED.name();
+        }
+        return null;
+    }
+
+    public BigDecimal resolveAiProposedEssayScore(ExamAttempt attempt) {
+        if (attempt.getAiProposedEssayScore() != null) {
+            return attempt.getAiProposedEssayScore();
+        }
+        List<ExamAttemptQuestion> essays = attempt.getQuestions().stream()
+                .filter(q -> q.getType() == QuestionType.ESSAY)
+                .toList();
+        boolean anyAi = false;
+        BigDecimal sum = BigDecimal.ZERO;
+        for (ExamAttemptQuestion q : essays) {
+            ExamAttemptAnswer ans = findAnswer(attempt, q);
+            if (ans != null && ans.getAiProposedScore() != null) {
+                anyAi = true;
+                sum = sum.add(ans.getAiProposedScore());
+            }
+        }
+        return anyAi ? sum : null;
     }
 
     private EssayGradingDTO.CodingItem toCodingItem(ExamAttempt attempt, ExamAttemptQuestion question) {
@@ -539,6 +947,7 @@ public class ExamEssayGradingService {
         item.setCode(answerText(attempt, question));
         item.setSpec(CodeSpecSupport.forTeacher(question.getCodeSpec()));
         ExamAttemptAnswer answer = findAnswer(attempt, question);
+        applyAi(item::setAiPercent, item::setAiLevel, item::setAiSignals, answer, true);
         if (answer != null) {
             item.setScore(answer.getScore());
             item.setFeedback(answer.getFeedback());
@@ -574,6 +983,14 @@ public class ExamEssayGradingService {
             }
             q.setGuidelineSnapshotAt(now);
         }
+    }
+
+    public List<ExamQuestionGradingConfig> findExamGradingConfigs(Long examId) {
+        if (gradingConfigRepository == null) {
+            return List.of();
+        }
+        List<ExamQuestionGradingConfig> list = gradingConfigRepository.findByExamId(examId);
+        return list != null ? list : List.of();
     }
 
     /** Reference / Rubric dung de cham cau nay: ban da chup neu co, nguoc lai ban dang luu (chua cham). */
@@ -620,12 +1037,59 @@ public class ExamEssayGradingService {
         }
 
         ExamAttemptAnswer answer = findAnswer(attempt, question);
+        applyAi(item::setAiPercent, item::setAiLevel, item::setAiSignals, answer, false);
         if (answer != null) {
             item.setScore(answer.getScore());
             item.setFeedback(answer.getFeedback());
+            item.setAiGradedAt(answer.getAiGradedAt());
+            item.setAiGradingStatus(answer.getAiGradingStatus());
+            item.setAiGradingError(answer.getAiGradingError());
+            if (answer.getAiProposedScore() != null) {
+                EssayGradingDTO.AiQuestionProposal proposal = new EssayGradingDTO.AiQuestionProposal();
+                proposal.setQuestionId(question.getSourceQuestionId());
+                proposal.setProposedScore(answer.getAiProposedScore());
+                proposal.setFeedback(answer.getAiFeedback() != null ? answer.getAiFeedback() : "");
+                proposal.setReasoning(answer.getAiReasoning() != null ? answer.getAiReasoning() : "");
+                proposal.setAnalysis(answer.getAiAnalysis() != null ? answer.getAiAnalysis() : "");
+                proposal.setFlagAmbiguous(answer.getAiFlagAmbiguous());
+                proposal.setFlagReason(answer.getAiFlagReason());
+                if (answer.getAiCriterionScoresJson() != null && !answer.getAiCriterionScoresJson().isBlank()) {
+                    try {
+                        proposal.setCriterionScores(objectMapper.readValue(
+                                answer.getAiCriterionScoresJson(),
+                                new TypeReference<List<EssayGradingDTO.CriterionScore>>() {}
+                        ));
+                    } catch (Exception ignored) {
+                        proposal.setCriterionScores(List.of());
+                    }
+                } else {
+                    proposal.setCriterionScores(List.of());
+                }
+                item.setAiProposal(proposal);
+            }
         }
 
         return item;
+    }
+
+    /** Stored AI estimate; falls back to computing it for answers submitted before this feature existed. */
+    private void applyAi(java.util.function.Consumer<Integer> pct, java.util.function.Consumer<String> level,
+                         java.util.function.Consumer<List<String>> signals, ExamAttemptAnswer answer, boolean code) {
+        if (answer == null) return;
+        Integer p = answer.getAiPercent();
+        List<String> sig = null;
+        if (p != null && answer.getAiSignals() != null) {
+            sig = List.of(answer.getAiSignals().split(" \\| "));
+        } else if (p == null) {
+            var r = com.example.starter_project_2025.system.exam.integrity.ai.AiContentDetector
+                    .analyze(answer.getTextAnswer(), code);
+            if (r != null) { p = r.percent(); sig = r.signals(); }
+        }
+        if (p == null) return;
+        pct.accept(p);
+        level.accept(p >= com.example.starter_project_2025.system.exam.integrity.ai.AiContentDetector.HIGH ? "HIGH"
+                : p >= com.example.starter_project_2025.system.exam.integrity.ai.AiContentDetector.MEDIUM ? "MEDIUM" : "LOW");
+        signals.accept(sig);
     }
 
     private ExamAttemptAnswer findAnswer(ExamAttempt attempt, ExamAttemptQuestion question) {

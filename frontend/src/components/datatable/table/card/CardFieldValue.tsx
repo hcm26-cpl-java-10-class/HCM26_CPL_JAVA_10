@@ -3,6 +3,8 @@ import { TruncatedText } from "@/components/datatable/common/TruncatedText";
 import { BadgeList } from "@/components/datatable/common/BadgeList";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { iconMap } from "@/components/datatable/iconMap";
+import { useLocaleFormat } from "@/i18n/format";
+import { useTranslation } from "react-i18next";
 import type { FieldSchema } from "@/types";
 
 interface CardFieldValueProps {
@@ -22,9 +24,12 @@ export function CardFieldValue({
   onBooleanToggle,
   disableBooleanToggle = false,
 }: CardFieldValueProps) {
+  const { t } = useTranslation();
+  const { formatDateTime } = useLocaleFormat();
+
   if (field.type === "boolean") {
     const labels = field.booleanLabels || { true: "Yes", false: "No" };
-    const label = value ? labels.true : labels.false;
+    const label = value ? t(labels.true) : t(labels.false);
     const disableToggle = disableBooleanToggle || !onBooleanToggle || !!field.dynamicChild;
 
     return (
@@ -112,37 +117,13 @@ export function CardFieldValue({
   }
 
   if (field.type === "date" && value) {
-    try {
-      const date = new Date(value);
-      const formatted = field.name === "dateOfBirth"
-        ? date.toLocaleDateString("vi-VN", {
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-          })
-        : date.toLocaleDateString("vi-VN", {
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-      return (
-        <TruncatedText
-          content={formatted}
-          bold={field.bold}
-          className="text-sm"
-        />
-      );
-    } catch {
-      return (
-        <TruncatedText
-          content={String(value)}
-          bold={field.bold}
-          className="text-sm"
-        />
-      );
-    }
+    return (
+      <TruncatedText
+        content={formatDateTime(value)}
+        bold={field.bold}
+        className="text-sm"
+      />
+    );
   }
 
   if (Array.isArray(value)) {
@@ -161,7 +142,7 @@ export function CardFieldValue({
       return (
         <TooltipWrapper content={optionsText}>
           <span className="text-xs text-muted-foreground cursor-help">
-            {value.length} option{value.length !== 1 ? "s" : ""}
+            {value.length} {t(value.length === 1 ? "option" : "options")}
           </span>
         </TooltipWrapper>
       );

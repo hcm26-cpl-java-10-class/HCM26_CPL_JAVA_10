@@ -1,0 +1,14 @@
+backend/src/main/java/com/example/starter_project_2025/system/exam/attempt/domain/ExamAttemptAnswer.java
+backend/src/main/java/com/example/starter_project_2025/system/exam/attempt/service/ExamAttemptGradingFlow.java
+backend/src/main/java/com/example/starter_project_2025/system/exam/grading/dto/EssayGradingDTO.java
+backend/src/main/java/com/example/starter_project_2025/system/exam/grading/service/ExamEssayGradingService.java
+backend/src/main/java/com/example/starter_project_2025/system/exam/integrity/ai/
+backend/src/main/java/com/example/starter_project_2025/system/exam/integrity/ai/AiContentDetector.java
+backend/src/main/java/com/example/starter_project_2025/system/exam/integrity/dto/ExamIntegrityReportDTO.java
+backend/src/main/java/com/example/starter_project_2025/system/exam/integrity/service/ExamIntegrityService.java
+frontend/src/api/exam.api.ts
+frontend/src/components/AiPercentTag.tsx
+frontend/src/pages/management/exam/IntegrityReportSection.tsx
+frontend/src/pages/management/exam/grading/CodingGradingPanel.tsx
+frontend/src/pages/management/exam/grading/EssayAttemptDetailPage.tsx
+frontend/src/types/features/exam.ts

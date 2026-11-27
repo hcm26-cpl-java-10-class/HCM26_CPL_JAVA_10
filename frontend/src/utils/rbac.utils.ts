@@ -118,7 +118,6 @@ export const resolveEffectivePermissions = (
   allPermissions: string[],
 ): string[] => {
   const role = normalizeRole(activeRole);
-  const accountGrants = new Set(uniquePermissions(allPermissions));
 
   if (role === TEACHER_ROLE) {
     const teacherDefaults = new Set([
@@ -135,30 +134,23 @@ export const resolveEffectivePermissions = (
       "COURSE_READ",
       "COURSE_UPDATE",
       "COURSE_DELETE",
-      "ADMIN_ACCESS",
     ]);
 
     return uniquePermissions([
-      ...uniquePermissions(rolePermissions[role] ?? []).filter((permission) => accountGrants.has(permission)),
+      ...(rolePermissions[role] ?? []),
       ...allPermissions.filter((permission) => teacherDefaults.has(permission)),
     ]);
   }
 
   if (role && rolePermissions[role]?.length) {
-    return uniquePermissions(rolePermissions[role]).filter((permission) => accountGrants.has(permission));
+    return uniquePermissions(rolePermissions[role]);
   }
 
   if (role === STUDENT_ROLE) {
-    const learnerPermissions = new Set([
-      "MENU_READ", "BOOK_READ", "COURSE_READ", "LESSON_READ", "EXAM_TAKE",
-      "ENROLLMENT_READ", "ENROLLMENT_CREATE", "ENROLLMENT_DELETE",
-      "LEARNER_ACCESS", "LEARNING_SELF_READ", "ENROLL_COURSE",
-      "LESSON_PROGRESS_READ", "LESSON_PROGRESS_UPDATE", "CERTIFICATE_READ", "INVITATION_READ",
-    ]);
     return uniquePermissions(
       allPermissions.filter(
         (permission) =>
-          learnerPermissions.has(permission),
+          permission.endsWith("_READ") || permission === "ENROLL_COURSE",
       ),
     );
   }
@@ -167,7 +159,7 @@ export const resolveEffectivePermissions = (
 };
 
 export const formatRoleLabel = (role: string): string =>
-  (normalizeRole(role) === STUDENT_ROLE ? "LEARNER" : normalizeRole(role))
+  normalizeRole(role)
     .toLowerCase()
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -175,26 +167,22 @@ export const formatRoleLabel = (role: string): string =>
 
 export const getHomePathByRole = (role?: string | null, permissions?: string[]): string => {
   const normalizedRole = normalizeRole(role);
-  if (!normalizedRole) return "/profile";
 
   if (normalizedRole === STUDENT_ROLE) {
-    return !permissions || permissions.includes("LEARNING_SELF_READ") ? "/my-learning" : permissions.includes("COURSE_READ") ? "/courses" : "/profile";
+    return "/student";
   }
 
   if (normalizedRole === TEACHER_ROLE) {
     return "/teacher";
   }
 
+  // The Dashboard menu requires USER_READ. Workspace-only roles cannot open it.
   const grantedPermissions = new Set(uniquePermissions(permissions));
   if (!grantedPermissions.has("USER_READ") && grantedPermissions.has("WORKSPACE_READ")) {
     return "/management/workspaces/candidates";
   }
 
-  if (!permissions || permissions.includes("USER_READ")) return "/dashboard";
-  if (permissions.includes("BOOK_UPDATE")) return "/teacher";
-  const landing = [["COURSE_READ", "/courses"], ["BOOK_READ", "/books"], ["EXAM_READ", "/exams"], ["ROLE_READ", "/roles"]]
-    .find(([permission]) => permissions.includes(permission));
-  return landing?.[1] ?? "/profile";
+  return "/dashboard";
 };
 
 export const canAccessByPermission = (

@@ -1,3 +1,4 @@
+import { ConfigureAssessmentLink } from "./ConfigureAssessmentLink";
 import { AssessmentLessonDialog } from "./AssessmentLessonDialog";
 import { lessonApi } from "@/api";
 import { aiCourseBuilderApi } from "@/api/features/demo/ai-course-builder.api";
@@ -602,7 +603,8 @@ export function LessonFormModal({
           )}
         </div>
 
-        <DialogFooter className="sm:justify-between">
+        <ConfigureAssessmentLink lesson={{ ...lesson, contentType: form.contentType, sectionId }} />
+      <DialogFooter className="sm:justify-between">
           <Button
             type="button"
             variant="ghost"

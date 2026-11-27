@@ -44,7 +44,7 @@ class GradebookCourseWeightsTest {
         return exam;
     }
     @Test void freshGradebookUsesCreatorsConfiguredCourseWeights() {
-        when(exams.findByCourseLink(1L,null,null,true)).thenReturn(List.of(
+        when(exams.findByCourseLink(1L,null,null,false)).thenReturn(List.of(
                 exam(1,ExamCategory.QUIZ,"20"),exam(2,ExamCategory.FINAL_TEST,"80")));
         when(columns.save(any())).thenAnswer(call->call.getArgument(0));
         service.autoScan(1L,principal);
@@ -58,7 +58,7 @@ class GradebookCourseWeightsTest {
         GradebookColumn existing=GradebookColumn.builder().id(3L).course(Course.builder().id(1L).build()).sourceExam(quiz)
                 .type("QUIZ").weightPercent(new BigDecimal("35")).build();
         when(columns.findByCourse_IdOrderByPositionAscIdAsc(1L)).thenReturn(List.of(existing));
-        when(exams.findByCourseLink(1L,null,null,true)).thenReturn(List.of(quiz,finalExam));
+        when(exams.findByCourseLink(1L,null,null,false)).thenReturn(List.of(quiz,finalExam));
         when(columns.save(any())).thenAnswer(call->call.getArgument(0));
         service.autoScan(1L,principal);
         assertEquals(new BigDecimal("35"),existing.getWeightPercent());

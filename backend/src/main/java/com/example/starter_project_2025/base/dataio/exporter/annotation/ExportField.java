@@ -20,7 +20,4 @@ public @interface ExportField {
     boolean relation() default false;
 
     String separator() default ", ";
-
-    /** Excel export: note shown when the cell of this column is selected (an input message, nothing is restricted). */
-    String hint() default "";
 }

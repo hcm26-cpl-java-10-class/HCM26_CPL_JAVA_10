@@ -89,3 +89,4 @@ class SubjectSyllabusServiceTest {
         assertThrows(ResourceNotFoundException.class, () -> syllabusService.getSyllabus(999L));
     }
 }
+

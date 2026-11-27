@@ -13,7 +13,6 @@ import {
   ChevronUp,
   ClipboardCheck,
   FolderOpen,
-  GraduationCap,
   Plus,
   Search,
   Unlink,
@@ -252,26 +251,32 @@ export default function ExamCurriculumPage() {
   };
 
   return (
-    <MainLayout>
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="flex flex-col gap-6">
-          <div><Button asChild variant="outline"><Link to={backToCourse}><ArrowLeft className="size-4" />{courseId > 0 ? "Back to course" : "Back to courses"}</Link></Button></div>
-          {/* Header */}
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b pb-6">
-            <div>
-              <div className="flex items-center gap-2">
-                <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <GraduationCap className="size-5" />
-                </div>
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                  Curriculum Assessment Mapping
-                </h1>
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Add a quiz to a lesson and place the final exam after all course lessons.
-              </p>
-            </div>
+    <MainLayout pathName={{ exams: "Assessment Management", curriculum: "Curriculum Mapping" }}>
+      <section className="flex flex-col gap-5">
+
+        {/* Header – same pattern as ExamManagementPage */}
+        <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
+          <div>
+            <p className="text-sm text-muted-foreground">Assessment Management</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight">
+              Curriculum Assessment Mapping
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Add a quiz to a lesson and place the final exam after all course lessons.
+            </p>
           </div>
+
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link to={backToCourse}>
+                <ArrowLeft className="mr-1.5 size-4" />
+                {courseId > 0 ? "Back to course" : "Back to courses"}
+              </Link>
+            </Button>
+          </div>
+        </header>
+
+        <div className="flex flex-col gap-6">
 
           {/* ----------------- When NO Course Selected: Course Catalogue / Picker ----------------- */}
           {!courseId ? (
@@ -623,7 +628,7 @@ export default function ExamCurriculumPage() {
             />
           )}
         </div>
-      </div>
+      </section>
     </MainLayout>
   );
 }

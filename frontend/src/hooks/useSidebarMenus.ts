@@ -3,7 +3,6 @@ import { usePermissions } from "@/hooks/usePermissions";
 import type { ModuleDTO, ModuleGroupDTO, Pagination } from "@/types";
 import {
     canAccessByPermission,
-    canAccessPath,
     getMovedMenuGroupName,
     isMenuGroupHiddenInMenu,
     isModuleHiddenInMenu,
@@ -51,14 +50,14 @@ const modulePagination: Pagination = {
 };
 
 export function useActiveModuleGroups(enabled = true) {
-    const { activeRole, effectivePermissions, hasPermission, user } = usePermissions();
+    const { activeRole, effectivePermissions, hasPermission } = usePermissions();
     const permissionCacheKey = useMemo(
         () => [...effectivePermissions].sort().join("|"),
         [effectivePermissions],
     );
 
     return useQuery<SidebarModuleGroup[]>({
-        queryKey: ["sidebar-menu", "active-module-groups", activeRole, permissionCacheKey, user?.email],
+        queryKey: ["sidebar-menu", "active-module-groups", activeRole, permissionCacheKey],
         enabled: enabled && !!activeRole,
         /**
          * Keep the previous role's menu while the new role's menu is loading.
@@ -86,20 +85,13 @@ export function useActiveModuleGroups(enabled = true) {
                         "/management/project-teams",
                     ].some((path) => url.startsWith(path));
 
-                if (isExcludedPath || url === "/tasks" || url === "/management/tasks" || url === "/team-allocation") {
-                    return false;
-                }
-
-                if (!canAccessPath(url, activeRole, effectivePermissions ?? user?.permissions ?? [])) {
-                    return false;
-                }
-
-                if (url === "/admin/audit-log") {
-                    return normalizeRole(activeRole) === ADMIN_ROLE;
-                }
-
-                return canAccessByPermission(module.requiredPermission, hasPermission);
-            });
+                    return (
+                        !isExcludedPath &&
+                        url !== "/tasks" && url !== "/management/tasks" &&
+                        url !== "/team-allocation" &&
+                        canAccessByPermission(module.requiredPermission, hasPermission)
+                    );
+                });
 
             const groupedModules = modules.reduce<Record<string, SidebarModule[]>>((acc, module) => {
                 if (!module.moduleGroupId) return acc;
@@ -116,7 +108,7 @@ export function useActiveModuleGroups(enabled = true) {
 
                 acc[module.moduleGroupId].push({
                     ...module,
-                    url: /^\/projects\/[^/]+\/milestones$/.test(module.url ?? "") ? "/milestones" : module.url,
+                    url: /^\/projects\/[^/]+\/milestones$/.test(module.url??"") ? "/milestones" : module.url,
                     title: menuTitle,
                     name: menuTitle,
                 });
@@ -155,50 +147,6 @@ export function useActiveModuleGroups(enabled = true) {
                     icon: "mail",
                     displayOrder: 2,
                     requiredPermission: "INVITATION_READ",
-                    isActive: true,
-                });
-            }
-
-            // Ensure Audit Log menu under RBAC Management if permitted and not already in DB
-            const hasAuditLogInDb = modules.some((m) => m.url === "/admin/audit-log");
-
-            if (
-                !hasAuditLogInDb &&
-                normalizeRole(activeRole) === ADMIN_ROLE &&
-                canAccessPath("/admin/audit-log", activeRole, effectivePermissions ?? user?.permissions ?? [])
-            ) {
-                let rbacGroup = groups.find(
-                    (g) => (g.name || "").toLowerCase() === "rbac management",
-                );
-
-                if (!rbacGroup) {
-                    const fallbackGroup: ModuleGroupDTO = {
-                        id: 10000,
-                        name: "RBAC Management",
-                        description: "Role-Based Access Control",
-                        displayOrder: 5,
-                        isActive: true,
-                    };
-
-                    groups.push(fallbackGroup);
-                    rbacGroup = fallbackGroup;
-                }
-
-                const groupId = String(rbacGroup.id ?? 10000);
-
-                if (!groupedModules[groupId]) {
-                    groupedModules[groupId] = [];
-                }
-
-                groupedModules[groupId].push({
-                    id: 100000,
-                    moduleGroupId: groupId,
-                    title: "Audit Log",
-                    name: "Audit Log",
-                    url: "/admin/audit-log",
-                    icon: "history",
-                    displayOrder: 4,
-                    requiredPermission: "ADMIN",
                     isActive: true,
                 });
             }
@@ -297,8 +245,8 @@ export function useActiveModuleGroups(enabled = true) {
                     const draftTeamModule: SidebarModule = {
                         id: 100007,
                         moduleGroupId: String(draftTeamGroup?.id ?? 100000),
-                        title: "Nh├│m nh├íp cß╗ºa t├┤i",
-                        name: "Nh├│m nh├íp cß╗ºa t├┤i",
+                        title: "Nhóm nháp của tôi",
+                        name: "Nhóm nháp của tôi",
                         url: draftTeamUrl,
                         icon: "users",
                         description: "Assign the official project template to your draft team",
@@ -390,7 +338,7 @@ export function useActiveModuleGroups(enabled = true) {
             ];
 
             for (const projectModule of projectWorkspaceModules) {
-                if (!canAccessByPermission(projectModule.requiredPermission, hasPermission)) continue;
+                if (!canAccessByPermission(projectModule.requiredPermission,hasPermission)) continue;
                 const alreadyExists = modules.some((module) => module.url === projectModule.url)
                     || groupedModules[projectGroupId].some((module) => module.url === projectModule.url);
 

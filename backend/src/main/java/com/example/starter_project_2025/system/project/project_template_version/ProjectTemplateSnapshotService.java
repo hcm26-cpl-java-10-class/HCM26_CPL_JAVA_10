@@ -103,3 +103,4 @@ public interface ProjectTemplateSnapshotService
      */
     void updateContentJsonForSuggestion(Long snapshotId, String contentJson);
 }
+

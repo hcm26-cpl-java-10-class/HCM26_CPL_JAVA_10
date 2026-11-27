@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Recommendation } from "@/api/features/recommendations.api";
-import { filterAndSortRecommendations, recommendationFiltersFromParams } from "./recommendation-filters";
+import { filterAndSortRecommendations, recommendationCategoryNames, recommendationFiltersFromParams } from "./recommendation-filters";
 
 const item = (id: number, category: string, level: "BEGINNER" | "INTERMEDIATE" | "ADVANCED", duration: number, rating: number, reviews: number): Recommendation => ({
   course: { id, name: `Course ${id}`, categoryName: category, level, totalDuration: duration, averageRating: rating, totalReviews: reviews, lessonCount: 1, isFree: true, enrolled: false },
@@ -27,4 +27,15 @@ describe("recommendation filters", () => {
   it("restores supported URL state and ignores unknown values", () => {
     expect(recommendationFiltersFromParams(new URLSearchParams("category=Java,Data&level=BEGINNER,NOPE&duration=under-2h&rating=4.5-plus&sort=rating"))).toEqual({ categories: ["Java", "Data"], levels: ["BEGINNER"], durations: ["under-2h"], ratings: ["4.5-plus"], sort: "rating" });
   });
+});
+
+it("matches every assigned category and descendant topics without double-counting parents",()=>{
+ const tree=[{id:1,name:"Programming",code:"PROGRAMMING",children:[{id:2,name:"Mobile",code:"MOBILE_DEV",children:[]},{id:3,name:"Web",code:"WEB_DEV",children:[]}]}] as import("@/types").CategoryTreeDTO[];
+ const mobile=item(4,"Programming","BEGINNER",300,0,0);mobile.course.categoryNames=["Programming","Mobile"];
+ const web=item(5,"Web","BEGINNER",300,0,0);
+ const filters={categories:["Mobile"],levels:[],durations:[],ratings:[],sort:"best" as const};
+ expect(filterAndSortRecommendations([mobile,web],"",filters,tree).map(x=>x.course.id)).toEqual([4]);
+ expect(filterAndSortRecommendations([mobile,web],"",{...filters,categories:["Programming"]},tree).map(x=>x.course.id)).toEqual([4,5]);
+ expect(recommendationCategoryNames(mobile.course,tree).filter(x=>x==="Programming")).toHaveLength(1);
+ expect(filterAndSortRecommendations([mobile,web],"",{...filters,categories:["Languages"]},tree)).toEqual([]);
 });

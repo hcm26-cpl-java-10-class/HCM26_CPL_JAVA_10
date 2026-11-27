@@ -7,15 +7,12 @@ export type CourseLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
 export type CourseStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
 export interface CourseDTO extends BaseDTO {
-  categoryName?: string;
-  category?: string;
-  courseLevel?: string;
-  publicationStatus?: string;
-  instructorEmail?: string;
   courseType?: CourseType;
   name?: string;
   description?: string;
   thumbnailUrl?: string;
+  /** Request-only selected image; uploaded at course save, never persisted as base64. */
+  coverImage?: string | null;
   instructor?: string;
   instructorId?: number;
   categoryIds?: number[];
@@ -55,6 +52,7 @@ export interface CatalogCourse {
   instructor?: string | null;
   categoryId?: number | null;
   categoryName?: string | null;
+  categoryNames?: string[];
   level?: CourseLevel | null;
   lessonCount: number;
   /** Tổng thời lượng, đơn vị giây (cùng đơn vị với Lesson.duration). */

@@ -1,3 +1,4 @@
+import { formatDateTimeNow } from "@/i18n/format";
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { workspaceApi } from "@/api/features/workspace.api";
@@ -40,7 +41,7 @@ export function WorkspaceBusinessSectionPanel({ workspaceId, projectId, teamId, 
         : <div className="divide-y">{data.items.map(item => <div key={item.id} className="space-y-2 py-4">
           <div className="flex items-start justify-between gap-3"><p className="font-medium">{item.title}</p><Badge variant="outline">{item.status}</Badge></div>
           <p className="whitespace-pre-wrap text-sm text-muted-foreground">{item.description || "No information available"}</p>
-          {item.occurredAt && <p className="text-xs text-muted-foreground">{new Date(item.occurredAt).toLocaleString("en-GB")}</p>}
+          {item.occurredAt && <p className="text-xs text-muted-foreground">{formatDateTimeNow(item.occurredAt)}</p>}
           {item.score != null && <p className="text-sm">Score: {item.score}/10</p>}
           {section === "backlog" && access.actions.createTask && <Button type="button" variant="outline" size="sm" disabled title="Not available yet">Edit task</Button>}
         </div>)}</div>}</CardContent>

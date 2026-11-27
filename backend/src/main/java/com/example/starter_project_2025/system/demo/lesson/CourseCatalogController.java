@@ -53,7 +53,7 @@ public class CourseCatalogController {
     @GetMapping("/categories")
     @PreAuthorize("hasAuthority('COURSE_READ')")
     public ResponseEntity<List<CategoryTreeDTO>> getCategories() {
-        return ResponseEntity.ok(categoryService.getTree(true));
+        return ResponseEntity.ok(categoryService.getCatalogTree());
     }
 
     @GetMapping("/{id}")

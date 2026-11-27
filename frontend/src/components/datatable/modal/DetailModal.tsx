@@ -1,3 +1,4 @@
+import { formatDateCustomNow } from "@/i18n/format";
 import {
   Sheet,
   SheetContent,
@@ -113,14 +114,7 @@ export function DetailModal({
       case "datetime": {
         try {
           const date = new Date(value);
-          if (field.name === "dateOfBirth") {
-            return date.toLocaleDateString("vi-VN", {
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-            });
-          }
-          return date.toLocaleDateString("vi-VN", {
+          return formatDateCustomNow(date, {
             year: "numeric",
             month: "2-digit",
             day: "2-digit",
@@ -203,7 +197,7 @@ export function DetailModal({
                   <span className="text-sm font-medium text-muted-foreground min-w-[140px] shrink-0">
                     {field.label}
                   </span>
-                  <div className="text-sm break-all flex-1">
+                  <div className="text-sm break-all flex-1" data-no-translate>
                     {renderValue(field)}
                   </div>
                 </div>

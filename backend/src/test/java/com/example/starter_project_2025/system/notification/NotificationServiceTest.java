@@ -32,7 +32,7 @@ class NotificationServiceTest {
 
         service.createOnce(7L, "course-completed:40", "Completed", "Done", "/courses/10");
 
-        verify(notificationWriter, never()).insert(any(), any(), any(), any(), any());
+        verify(notificationWriter, never()).insert(any(), any(), any(), any(), any(), any());
         verify(notificationWriter).updateTargetUrl(7L, "course-completed:40", "/courses/10");
         verify(notificationRepository, never()).existsByUser_IdAndEventKey(8L, "course-completed:40");
     }
@@ -41,7 +41,7 @@ class NotificationServiceTest {
     void concurrentDuplicateIsRecoveredOutsideTheProducerTransaction() {
         when(notificationRepository.existsByUser_IdAndEventKey(7L, "event")).thenReturn(false, true);
         doThrow(new DataIntegrityViolationException("duplicate"))
-                .when(notificationWriter).insert(7L, "event", "Title", "Message", "/target");
+                .when(notificationWriter).insert(7L, null, "event", "Title", "Message", "/target");
 
         service.createOnce(7L, "event", "Title", "Message", "/target");
 
@@ -52,7 +52,7 @@ class NotificationServiceTest {
     void nonDuplicateInsertFailureIsNotHidden() {
         when(notificationRepository.existsByUser_IdAndEventKey(7L, "event")).thenReturn(false);
         doThrow(new DataIntegrityViolationException("foreign key"))
-                .when(notificationWriter).insert(7L, "event", "Title", "Message", "/target");
+                .when(notificationWriter).insert(7L, null, "event", "Title", "Message", "/target");
 
         assertThrows(DataIntegrityViolationException.class,
                 () -> service.createOnce(7L, "event", "Title", "Message", "/target"));

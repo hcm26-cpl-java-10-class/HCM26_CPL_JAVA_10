@@ -41,7 +41,6 @@ public class ExportMetadataCache {
                     .path(ann.path())
                     .relation(ann.relation())
                     .separator(ann.separator())
-                    .hint(ann.hint())
                     .build());
         }
 

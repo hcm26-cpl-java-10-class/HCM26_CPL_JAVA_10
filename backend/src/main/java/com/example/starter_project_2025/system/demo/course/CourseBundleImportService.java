@@ -99,7 +99,11 @@ public class CourseBundleImportService {
 
                 course.setCategories(categories);
 
-                course.setThumbnailUrl(optionalValue(row, columns, "Thumbnail URL"));
+                String suppliedCover = optionalValue(row, columns, "Thumbnail URL");
+                if (suppliedCover != null && !suppliedCover.isBlank()
+                        && (course.getThumbnailUrl() == null || course.getThumbnailUrl().isBlank())) {
+                    course.setThumbnailUrl(suppliedCover);
+                }
                 course.setStatus(enumValue(value(row, columns, "Status"), CourseStatus.class, CourseStatus.PUBLISHED));
                 course.setLevel(enumValue(value(row, columns, "Level"), CourseLevel.class, CourseLevel.BEGINNER));
                 course.setIsActive(booleanValue(row, columns, "Active", true));

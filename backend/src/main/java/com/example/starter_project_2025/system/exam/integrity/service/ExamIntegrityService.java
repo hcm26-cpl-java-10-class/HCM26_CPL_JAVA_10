@@ -281,12 +281,41 @@ public class ExamIntegrityService {
         r.setMaxScore(ExamScoring.effectiveMax(a.getMaxScore()));
 
         applyCounts(r, events);
+        applyAiEstimate(r, a);
         if (a.getStartedAt() != null && a.getSubmittedAt() != null) {
             r.setDurationSeconds(Math.max(0, Duration.between(a.getStartedAt(), a.getSubmittedAt()).getSeconds()));
             r.setExtremeDuration(isExtremeDuration(r.getDurationSeconds(), a.getExam().getDurationMinutes(),
                     a.getExam().fastSubmitPercentOrDefault()));
         }
         return r;
+    }
+
+    /** Highest stored AI estimate over the attempt's essay / code answers (warning tag only, does not flag). */
+    private static void applyAiEstimate(ExamIntegrityReportDTO.Row r, ExamAttempt a) {
+        Integer best = null;
+        String signals = null;
+        for (var ans : a.getAnswers()) {
+            Integer p = ans.getAiPercent();
+            if (p == null) {
+                var type = ans.getQuestion().getType();
+                if (type != com.example.starter_project_2025.system.question.core.domain.QuestionType.ESSAY
+                        && type != com.example.starter_project_2025.system.question.core.domain.QuestionType.CODING) continue;
+                var res = com.example.starter_project_2025.system.exam.integrity.ai.AiContentDetector.analyze(
+                        ans.getTextAnswer(),
+                        type == com.example.starter_project_2025.system.question.core.domain.QuestionType.CODING);
+                if (res == null) continue;
+                p = res.percent();
+                if (best == null || p > best) { best = p; signals = String.join(" | ", res.signals()); }
+            } else if (best == null || p > best) {
+                best = p;
+                signals = ans.getAiSignals();
+            }
+        }
+        if (best == null) return;
+        r.setAiPercent(best);
+        r.setAiLevel(best >= com.example.starter_project_2025.system.exam.integrity.ai.AiContentDetector.HIGH ? "HIGH"
+                : best >= com.example.starter_project_2025.system.exam.integrity.ai.AiContentDetector.MEDIUM ? "MEDIUM" : "LOW");
+        if (signals != null) r.setAiSignals(java.util.Arrays.asList(signals.split(" \\| ")));
     }
 
     /** Nop bai duoi `percent`% tong thoi luong bai thi. Chi canh bao, khong tinh la vi pham va khong gan co. */
