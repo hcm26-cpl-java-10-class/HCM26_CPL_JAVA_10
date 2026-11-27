@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { toast } from "sonner";
@@ -17,7 +17,9 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ExamConfigFields } from "@/pages/management/exam/ExamConfigFields";
 import { DEFAULT_CONFIG, buildExamRequest, validateConfig, type ExamConfigForm } from "@/pages/management/exam/examConfig";
-import type { ExamCategory } from "@/types";
+import type { ExamCategory, QuestionDTO } from "@/types";
+import ExamDetailPage from "@/pages/management/exam/ExamDetailPage";
+import { allowedQuestionTypes } from "@/pages/management/exam/ExamQuestionsPanel";
 import { courseApi, type CourseSyllabusPreview, type CourseAiSuggestion, type CourseAiResource, type CourseAiJob } from "@/api/features/demo/course.api";
 import { syllabusExtrasApi } from "@/api/features/demo/syllabus-extras.api";
 import { lessonApi } from "@/api/features/demo/lesson.api";
@@ -37,7 +39,7 @@ import { readWorkspaceDraft, syncWorkspaceDraft, clearWorkspaceDraft } from "./S
 import { allSourceTopicIds, buildCourseOutline, scopeSignature, suggestFocusedCourseTitle, type CourseScopeMode } from "./courseFromSyllabusScope";
 
 type AssessmentType = "QUIZ" | "EXAM" | "ASSIGNMENT";
-type AssessmentDraft = { cfg: ExamConfigForm; duration: string; instructions: string };
+type AssessmentDraft = { cfg: ExamConfigForm; duration: string; instructions: string; questions?: QuestionDTO[] };
 type DraftLesson = { key: string; title: string; sourceTopicId?: number | null; material?: string; contentType?: LessonContentType; contentUrl?: string; duration?: number; planned?: boolean; assessment?: AssessmentDraft };
 const assessmentCategories = (type: AssessmentType): ExamCategory[] => type === "EXAM" ? ["MIDTERM", "FINAL_TEST"] : [type];
 const MAX_ASSESSMENT_MINUTES = Math.floor(2147483647 / 60);
@@ -68,7 +70,7 @@ function draftSaveIssue(lesson: DraftLesson): string | null {
   const issue = lessonDraftSaveIssue(lesson);
   if (issue) return issue;
   if (isAssessmentLesson(type)) {
-    if (lesson.planned && !lesson.assessment) return null;
+    if (!lesson.assessment) return null;
     return assessmentIssue(type as AssessmentType, lesson.title, lesson.assessment);
   }
   return null;
@@ -85,7 +87,7 @@ function AssessmentPreviewDialog({ lesson, type, onClose, onApply }: { lesson: D
   return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
     <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-4xl">
       <DialogHeader><DialogTitle>Configure {type === "QUIZ" ? "Quiz" : type === "EXAM" ? "Exam" : "Assignment"} lesson</DialogTitle>
-        <DialogDescription>Configuration stays in this Course preview until Create Draft Course. Questions are managed in Assessment Management.</DialogDescription></DialogHeader>
+        <DialogDescription>Configuration stays in this Course preview until Create Draft Course. Use Manage questions to select questions.</DialogDescription></DialogHeader>
       <div className="min-h-0 space-y-4 overflow-y-auto p-1">
         <ExamConfigFields title={title} setTitle={setTitle} duration={duration} setDuration={setDuration} cfg={cfg} setCfg={setCfg} showErrors={showErrors} showCourseLink={false} categoryOptions={assessmentCategories(type)} />
         <label className="grid gap-2 text-sm font-medium">Assessment instructions
@@ -170,6 +172,7 @@ export default function CreateCourseFromSyllabusPage() {
   const syllabusId = Number(id);
   const validId = Number.isSafeInteger(syllabusId) && syllabusId > 0;
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const allowed = ["SYLLABUS_READ", "COURSE_CREATE", "SECTION_CREATE", "LESSON_CREATE"].every(hasPermission);
@@ -220,6 +223,10 @@ export default function CreateCourseFromSyllabusPage() {
   const [draftSections, setDraftSections] = useState<DraftSection[]>([]);
   const [assessmentEditor, setAssessmentEditor] = useState<{ sectionKey: string; lessonKey: string; type: AssessmentType } | null>(null);
   const editingAssessmentLesson = assessmentEditor ? draftSections.find(s => s.key === assessmentEditor.sectionKey)?.lessons.find(l => l.key === assessmentEditor.lessonKey) : undefined;
+  const questionSection = searchParams.get("draftSection");
+  const questionLesson = searchParams.get("draftQuestions");
+  const questionTarget = questionSection && questionLesson ? draftSections.find(s => s.key === questionSection)?.lessons.find(l => l.key === questionLesson) : undefined;
+  const questionDraft = questionTarget?.assessment;
   const [expanded, setExpanded] = useState<string[]>([]);
   const [uploadingLessonKey, setUploadingLessonKey] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -337,6 +344,7 @@ export default function CreateCourseFromSyllabusPage() {
     lesson => !isAssessmentLesson(lesson.contentType ?? "TEXT")));
   const courseError = useMemo(() => validateDraft(courseName, description, draftSections)
     ?? (draftSections.some(s => s.lessons.some(l => isAssessmentLesson(l.contentType ?? "TEXT") && Boolean(l.assessment))) && !hasPermission("EXAM_CREATE") ? "Assessment creation permission is required." : null)
+    ?? (draftSections.some(s => s.lessons.some(l => Boolean(l.assessment?.questions?.length))) && !hasPermission("QUESTION_READ") ? "Question library permission is required." : null)
     ?? (appliedResources.length > 0 && !hasLearningLesson
       ? "Remove the external references or add a learning Lesson to attach them." : null),
     [courseName, description, draftSections, appliedResources.length, hasLearningLesson, hasPermission]);
@@ -475,7 +483,7 @@ export default function CreateCourseFromSyllabusPage() {
         lessonTypes: section.lessons.map((lesson) => lesson.contentType ?? "TEXT"),
         lessonUrls: section.lessons.map((lesson) => requiresResourceUrl(lesson.contentType ?? "TEXT") ? lesson.contentUrl?.trim() ?? "" : ""),
         lessonDurations: section.lessons.map((lesson) => isAssessmentLesson(lesson.contentType ?? "TEXT") && lesson.assessment ? Number(lesson.assessment.duration) * 60 : lesson.duration ?? 0),
-        lessonAssessments: section.lessons.map((lesson) => isAssessmentLesson(lesson.contentType ?? "TEXT") && lesson.assessment ? buildExamRequest(clean(lesson.title), lesson.assessment.duration, lesson.assessment.cfg, true) : null),
+        lessonAssessments: section.lessons.map((lesson) => isAssessmentLesson(lesson.contentType ?? "TEXT") && lesson.assessment ? { ...buildExamRequest(clean(lesson.title), lesson.assessment.duration, lesson.assessment.cfg, true), questionIds: lesson.assessment.questions?.length ? lesson.assessment.questions.map(q => q.id) : undefined } : null),
       })),
       selectedTopicIds: effectiveTopicIds,
       resources: appliedResources,
@@ -649,7 +657,15 @@ export default function CreateCourseFromSyllabusPage() {
     createMutation.mutate();
   };
 
-  return (
+  const closeQuestions = () => {
+    const params = new URLSearchParams(searchParams);
+    params.delete("draftSection"); params.delete("draftQuestions");
+    setSearchParams(params, { replace: true });
+  };
+  const questionsOpen = Boolean(!createMutation.isPending && allowed && hasPermission("EXAM_CREATE") && hasPermission("QUESTION_READ") && questionTarget && questionDraft && isAssessmentLesson(questionTarget.contentType ?? "TEXT") && !assessmentIssue(questionTarget.contentType as AssessmentType, questionTarget.title, questionDraft));
+  return (<>
+    {/* Keep the existing Course form mounted, including native disclosure and AI state. */}
+    <div className={questionsOpen ? "hidden" : "contents"}>
     <MainLayout pathName={{ syllabuses: "Syllabuses", "create-course": "Create Course" }}>
       <div className="w-full min-w-0 space-y-4 pb-8">
         <Link to={`/syllabuses/${id ?? ""}`} onClick={(event) => { if (!confirmLeaving()) event.preventDefault(); }} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
@@ -853,7 +869,7 @@ export default function CreateCourseFromSyllabusPage() {
                 <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {[["Sections", draftSections.length], ["Lessons", lessonCount], ["Content-ready Lessons", `${materialCount}/${lessonCount}`], ["Topics covered", `${new Set(mappedTopicIds).size}/${effectiveTopicIds.length}`]].map(([label, value]) => <div key={label} className="min-w-0 rounded-md border bg-muted/20 p-2"><p className="text-base font-semibold tabular-nums">{value}</p><p className="text-xs text-muted-foreground">{label}</p></div>)}
                 </div>
-                <CourseCoveragePanel source={source} selectedIds={effectiveTopicIds} draft={draftSections.map(section => ({ ...section, lessons: section.lessons.map(lesson => ({ ...lesson, assessmentIssue: isAssessmentLesson(lesson.contentType ?? "TEXT") ? draftLessonIssue(lesson) : null })) }))} focused={scopeMode === "FOCUSED"} />
+                <CourseCoveragePanel source={source} selectedIds={effectiveTopicIds} draft={draftSections.map(section => ({ ...section, lessons: section.lessons.map(lesson => ({ ...lesson, assessmentIssue: isAssessmentLesson(lesson.contentType ?? "TEXT") && lesson.assessment ? draftLessonIssue(lesson) : null })) }))} focused={scopeMode === "FOCUSED"} />
                 {appliedResources.length > 0 && <div className="mb-3 space-y-2 rounded-lg border p-3 text-xs">
                   <strong>External learning references ({appliedResources.length})</strong>
                   <p className="text-muted-foreground">{hasLearningLesson ? "These verified references are attached to the first non-assessment Lesson. Individual media links remain editable below." : "Remove these references or add a learning Lesson before saving. Assessment headings never contain learning references."}</p>
@@ -882,6 +898,7 @@ export default function CreateCourseFromSyllabusPage() {
                             const assessment = isAssessmentLesson(type);
                             const issue = draftLessonIssue(lesson);
                             const planned = Boolean(lesson.planned && issue && !draftSaveIssue(lesson));
+                            const optionalAssessment = assessment && !lesson.assessment;
                             return (
                               <div key={lesson.key} className="min-w-0 rounded-lg border bg-background px-3 py-2">
                                 <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -898,11 +915,11 @@ export default function CreateCourseFromSyllabusPage() {
                                 </div>
                                 <details className="group mt-2 rounded-md border border-border/70 bg-muted/10 px-3 py-2">
                                   <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-xs font-medium text-foreground hover:text-primary [&::-webkit-details-marker]:hidden">
-                                    <span className="min-w-0 break-words">Lesson details <span className="font-normal text-muted-foreground">· {planned ? "Planned" : issue ? "Needs setup" : assessment ? "Configured" : "Ready"}</span></span>
+                                    <span className="min-w-0 break-words">Lesson details <span className="font-normal text-muted-foreground">· {optionalAssessment ? "Not configured" : planned ? "Planned" : issue ? "Needs setup" : assessment ? "Configured" : "Ready"}</span></span>
                                     <CourseDisclosureChevron native />
                                   </summary>
                                   <div className="mt-3 space-y-3 border-t pt-3">
-                                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                    <div className={assessment ? "grid items-end gap-3 md:grid-cols-[minmax(180px,1fr)_minmax(0,2fr)]" : "grid gap-3 sm:grid-cols-2 lg:grid-cols-3"}>
                                       <div className="min-w-0 space-y-1.5">
                                         <label className="text-xs font-medium" htmlFor={`lesson-type-${lesson.key}`}>Content type</label>
                                         <Select value={type} onValueChange={(value) => {
@@ -924,7 +941,12 @@ export default function CreateCourseFromSyllabusPage() {
                                       </div>}
                                       {assessment && <div className="min-w-0 flex flex-wrap items-center gap-2">
                                         {!lesson.assessment && lesson.planned && <span className="text-xs text-muted-foreground">Estimated {Math.ceil((lesson.duration ?? 0) / 60)} min</span>}
-                                        <Button type="button" variant="outline" size="sm" disabled={createMutation.isPending || !hasPermission("EXAM_CREATE")} onClick={() => setAssessmentEditor({ sectionKey: section.key, lessonKey: lesson.key, type: type as AssessmentType })}>{lesson.assessment ? "Edit assessment" : "Configure assessment"}</Button>
+                                        <Button type="button" variant="outline" className="h-9" disabled={createMutation.isPending || !hasPermission("EXAM_CREATE")} onClick={() => setAssessmentEditor({ sectionKey: section.key, lessonKey: lesson.key, type: type as AssessmentType })}>{lesson.assessment ? "Edit assessment" : "Configure assessment"}</Button>
+                                        <Button type="button" variant="outline" className="h-9" disabled={createMutation.isPending || Boolean(uploadingLessonKey) || !hasPermission("EXAM_CREATE") || !hasPermission("QUESTION_READ") || !lesson.assessment || Boolean(issue)} title={!lesson.assessment ? "Configure assessment before selecting questions" : !hasPermission("QUESTION_READ") ? "Question library permission is required" : undefined} onClick={() => {
+                                          const params = new URLSearchParams(searchParams);
+                                          params.set("draftSection", section.key); params.set("draftQuestions", lesson.key);
+                                          setSearchParams(params);
+                                        }}>Manage questions ({lesson.assessment?.questions?.length ?? 0})</Button>
                                       </div>}
                                     </div>
                                     {requiresResourceUrl(type) && <div className="space-y-1.5">
@@ -942,7 +964,7 @@ export default function CreateCourseFromSyllabusPage() {
                                       </div>}
                                     </div>}
                                     {assessment ? <div className="space-y-1 text-xs text-muted-foreground">
-                                      <p className={issue && !planned ? "text-destructive" : undefined}>{planned ? "Planned assessment · configure before publishing." : issue ?? `Configured · ${lesson.assessment?.duration} min · ${lesson.assessment?.cfg.category}. Questions and grading stay in Assessment Management.`}</p>
+                                      <p className={issue && !optionalAssessment ? "text-destructive" : undefined}>{optionalAssessment ? "Assessment not configured · Optional for draft" : issue ?? `Configured · ${lesson.assessment?.duration} min · ${lesson.assessment?.questions?.length ?? 0} questions`}</p>
                                       {(lesson.material?.trim() || lesson.contentUrl?.trim()) && <p>Previous learning content is kept in this preview if you switch back, but will not be saved with this assessment.</p>}
                                     </div> : <div className="space-y-1.5">
                                       <label htmlFor={`lesson-material-${lesson.key}`} className="text-xs font-medium">{type === "TEXT" ? "Lesson content" : "Learning notes (optional)"}</label>
@@ -977,7 +999,7 @@ export default function CreateCourseFromSyllabusPage() {
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <p className="flex items-center gap-2 text-sm font-medium"><Check className="size-4 text-green-600" /> Course will be created as Draft</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Text requires learning content. AI-planned resource and assessment headings may be saved in Draft; complete them before publishing. Configured assessments still use the native Assessment Management form. All edits stay in this Course Draft, not the Syllabus.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Text requires learning content. Assessment headings and AI-planned resources may be saved in Draft; complete them before publishing. Configured assessments still use the native Assessment Management form. All edits stay in this Course Draft, not the Syllabus.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button type="button" variant="outline" disabled={createMutation.isPending} onClick={() => { if (confirmLeaving()) navigate(`/syllabuses/${syllabusId}`); }}>Cancel</Button>
@@ -992,10 +1014,24 @@ export default function CreateCourseFromSyllabusPage() {
         )}
         {assessmentEditor && editingAssessmentLesson && <AssessmentPreviewDialog key={`${assessmentEditor.lessonKey}-${assessmentEditor.type}`} lesson={editingAssessmentLesson} type={assessmentEditor.type}
           onClose={() => setAssessmentEditor(null)} onApply={(title, assessment) => {
-            updateSection(assessmentEditor.sectionKey, row => ({ ...row, lessons: row.lessons.map(item => item.key === assessmentEditor.lessonKey ? { ...item, title, assessment } : item) }));
+            const previous = editingAssessmentLesson.assessment?.questions ?? [];
+            const allowedTypes = allowedQuestionTypes(assessment.cfg.examType || undefined);
+            const questions = previous.filter(q => allowedTypes.includes(q.type));
+            if (questions.length !== previous.length && !window.confirm("Changing the question format removes incompatible selected questions. Continue?")) return;
+            updateSection(assessmentEditor.sectionKey, row => ({ ...row, lessons: row.lessons.map(item => item.key === assessmentEditor.lessonKey ? { ...item, title, assessment: { ...assessment, questions } } : item) }));
             setAssessmentEditor(null);
           }} />}
       </div>
     </MainLayout>
-  );
+    </div>
+    {questionsOpen && questionTarget && questionDraft && questionSection && questionLesson && <ExamDetailPage key={`${questionSection}:${questionLesson}`} preview={{
+      exam: { ...buildExamRequest(clean(questionTarget.title), questionDraft.duration, questionDraft.cfg, true), courseName },
+      selected: questionDraft.questions ?? [],
+      onBack: () => { if (window.confirm("Return to Course Preview? Unapplied question selections will be discarded.")) closeQuestions(); },
+      onSave: questions => {
+        updateSection(questionSection, row => ({ ...row, lessons: row.lessons.map(item => item.key === questionLesson && item.assessment ? { ...item, assessment: { ...item.assessment, questions } } : item) }));
+        closeQuestions();
+      },
+    }} />}
+  </>);
 }

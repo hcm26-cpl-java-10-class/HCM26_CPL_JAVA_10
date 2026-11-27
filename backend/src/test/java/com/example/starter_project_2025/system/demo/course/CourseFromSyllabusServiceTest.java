@@ -65,7 +65,7 @@ class CourseFromSyllabusServiceTest {
     }
 
     @Test
-    void configuredAssessmentUsesMinutesAndRejectsForeignIdsWrongCategoryAndQuestions() {
+    void configuredAssessmentUsesMinutesAndRejectsForeignIdsWrongCategoryAndInvalidQuestions() {
         var config = quizConfig();
         var normalized = CourseFromSyllabusService.normalizeAndValidateOutline(List.of(assessmentOutline(config))).getFirst();
         assertEquals(List.of(900), normalized.lessonDurations());
@@ -74,7 +74,11 @@ class CourseFromSyllabusServiceTest {
         assertThrows(BusinessValidationException.class, () -> CourseFromSyllabusService.normalizeAndValidateOutline(List.of(assessmentOutline(config))));
         config.setDurationMinutes(15);
         config.setQuestionIds(List.of(99L));
-        assertThrows(BusinessValidationException.class, () -> CourseFromSyllabusService.normalizeAndValidateOutline(List.of(assessmentOutline(config))));
+        assertEquals(List.of(99L), CourseFromSyllabusService.normalizeAndValidateOutline(List.of(assessmentOutline(config))).getFirst().lessonAssessments().getFirst().getQuestionIds());
+        for (var invalid : List.of(List.of(0L), List.of(-1L), List.of(99L, 99L))) {
+            config.setQuestionIds(invalid);
+            assertThrows(BusinessValidationException.class, () -> CourseFromSyllabusService.normalizeAndValidateOutline(List.of(assessmentOutline(config))));
+        }
         config.setQuestionIds(null);
         config.setCategory(com.example.starter_project_2025.system.exam.core.domain.ExamCategory.ASSIGNMENT);
         assertThrows(BusinessValidationException.class, () -> CourseFromSyllabusService.normalizeAndValidateOutline(List.of(assessmentOutline(config))));
@@ -114,6 +118,44 @@ class CourseFromSyllabusServiceTest {
             assertEquals(22L, captor.getValue().getSectionId());
             assertEquals(33L, captor.getValue().getLessonId());
             assertNull(captor.getValue().getQuestionIds());
+        } finally { org.springframework.security.core.context.SecurityContextHolder.setContext(previous); }
+    }
+
+    @Test
+    void selectedQuestionsRequireLibraryPermissionAndReachNativeService() {
+        var context = org.springframework.security.core.context.SecurityContextHolder.createEmptyContext();
+        var previous = org.springframework.security.core.context.SecurityContextHolder.getContext();
+        org.springframework.security.core.context.SecurityContextHolder.setContext(context);
+        try {
+            Syllabus syllabus = new Syllabus();
+            syllabus.setId(7L); syllabus.setStatus(SyllabusStatus.PUBLISHED); syllabus.setIsActive(true);
+            when(syllabuses.findById(7L)).thenReturn(Optional.of(syllabus));
+            var config = quizConfig();
+            config.setQuestionIds(List.of(99L, 100L));
+            var request = new CreateRequest(CourseDTO.builder().syllabusId(7L).name("Database Course").build(), List.of(assessmentOutline(config)));
+            assertThrows(org.springframework.security.access.AccessDeniedException.class, () -> service.createCustomized(request));
+            verifyNoInteractions(courseService, lessonService, examService);
+            context.setAuthentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("teacher", "", List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("EXAM_CREATE"))));
+            assertThrows(org.springframework.security.access.AccessDeniedException.class, () -> service.createCustomized(request));
+            verifyNoInteractions(courseService, lessonService, examService);
+            context.setAuthentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("teacher", "", List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("EXAM_CREATE"), new org.springframework.security.core.authority.SimpleGrantedAuthority("QUESTION_READ"))));
+            when(validator.validate(any(com.example.starter_project_2025.system.exam.core.dto.ExamDTO.class), eq(com.example.starter_project_2025.base.crud.dto.OnCreate.class))).thenReturn(java.util.Set.of());
+            var created = CourseDTO.builder().build(); created.setId(11L);
+            var course = new Course(); course.setId(11L);
+            when(courseService.create(any())).thenReturn(created);
+            when(courses.findById(11L)).thenReturn(Optional.of(course));
+            when(courseMapper.toResponse(course)).thenReturn(created);
+            var section = SectionDTO.builder().build(); section.setId(22L);
+            when(sectionService.create(any())).thenReturn(section);
+            var lesson = new LessonDTO(); lesson.setId(33L);
+            when(lessonService.create(any())).thenReturn(lesson);
+            assertSame(created, service.createCustomized(request));
+            var captor = ArgumentCaptor.forClass(com.example.starter_project_2025.system.exam.core.dto.ExamDTO.class);
+            verify(examService).create(captor.capture());
+            assertEquals(11L, captor.getValue().getCourseId());
+            assertEquals(22L, captor.getValue().getSectionId());
+            assertEquals(33L, captor.getValue().getLessonId());
+            assertEquals(List.of(99L, 100L), captor.getValue().getQuestionIds());
         } finally { org.springframework.security.core.context.SecurityContextHolder.setContext(previous); }
     }
 
@@ -344,9 +386,15 @@ class CourseFromSyllabusServiceTest {
         SyllabusTopic topic = new SyllabusTopic(); topic.setId(30L); topic.setIsActive(true);
         when(topics.findBySection_IdOrderByOrderIndexAsc(20L)).thenReturn(List.of(topic));
         CourseDTO input = CourseDTO.builder().syllabusId(7L).name("New Course").build();
-        assertThrows(BusinessValidationException.class, () -> service.createCustomized(new CreateRequest(input,
-                List.of(new DraftSection("Section One", List.of("Manual Lesson"), java.util.Arrays.asList((Long) null))),
+        BusinessValidationException exception = assertThrows(BusinessValidationException.class,
+                () -> service.createCustomized(new CreateRequest(input,
+                List.of(new DraftSection("Section One", List.of("Manual Lesson"),
+                        java.util.Arrays.asList((Long) null),
+                        List.of("This lesson explains the main concepts, provides practical examples, and includes exercises for learners to apply their knowledge."))),
                 List.of(30L))));
+
+        assertTrue(exception.getErrors().getOrDefault("sections", List.of())
+                .stream().anyMatch(message -> message.contains("Every selected Topic needs at least one linked Lesson")));
         verifyNoInteractions(courseService, lessonService);
     }
 

@@ -422,8 +422,15 @@ public class CourseFromSyllabusService {
                     }
                     if (config.getExamType() == null) ctx.add(field, "Select a question format");
                     if (config.getId() != null || config.getCourseId() != null || config.getSectionId() != null
-                            || config.getLessonId() != null || (config.getQuestionIds() != null && !config.getQuestionIds().isEmpty())) {
-                        ctx.add(field, "Only a new assessment configuration without existing IDs or questions is allowed");
+                            || config.getLessonId() != null) {
+                        ctx.add(field, "Only a new assessment configuration without existing IDs is allowed");
+                    }
+                    if (config.getQuestionIds() != null) {
+                        var ids = config.getQuestionIds();
+                        if (ids.stream().anyMatch(id -> id == null || id <= 0)
+                                || new java.util.HashSet<>(ids).size() != ids.size()) {
+                            ctx.add(field + ".questionIds", "Question IDs must be positive and unique");
+                        }
                     }
                     if (material.isEmpty() || material.length() > 12000) {
                         ctx.add(field, "Assessment instructions must contain 1-12000 characters");
@@ -489,6 +496,10 @@ public class CourseFromSyllabusService {
                 if (authentication == null || authentication.getAuthorities().stream()
                         .noneMatch(a -> "EXAM_CREATE".equals(a.getAuthority()))) {
                     throw new AccessDeniedException("Assessment creation permission is required");
+                }
+                if (config.getQuestionIds() != null && !config.getQuestionIds().isEmpty()
+                        && authentication.getAuthorities().stream().noneMatch(a -> "QUESTION_READ".equals(a.getAuthority()))) {
+                    throw new AccessDeniedException("Question library permission is required");
                 }
                 validator.validate(config, OnCreate.class).forEach(v ->
                         ctx.add("lessonAssessments." + v.getPropertyPath(), v.getMessage()));
@@ -622,7 +633,10 @@ public class CourseFromSyllabusService {
                             throw new IllegalStateException("Created Lesson has no ID for assessment linking");
                         }
                         assessment.setId(null);
-                        assessment.setQuestionIds(null);
+                        // Native ExamService treats null as no questions, but rejects an empty list.
+                        if (assessment.getQuestionIds() != null && assessment.getQuestionIds().isEmpty()) {
+                            assessment.setQuestionIds(null);
+                        }
                         assessment.setIsActive(true);
                         assessment.setTitle(source.lessons().get(topicIndex));
                         assessment.setCourseId(course.getId());
