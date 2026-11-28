@@ -7,7 +7,10 @@ import { AnimatePresence, motion } from "framer-motion";
 import { SearchInput } from "@/components/datatable/toolbar/SearchInput";
 import { FilterPopover } from "@/components/datatable/toolbar/filter/FilterPopover";
 import { Pagination } from "@/components/datatable/table/Pagination";
-import { EntityHistoryDialog } from "@/components/audit/EntityHistoryDialog";
+import {
+    AuditHistoryExplorer,
+    type AuditHistoryScope,
+} from "@/components/audit/AuditHistoryExplorer";
 import {
     getActionBadgeClass,
     getActionDotClass,
@@ -16,6 +19,7 @@ import {
 } from "@/components/audit/auditActions";
 import { AuditStatsDashboard } from "./AuditStatsDashboard";
 import { AuditSecurityPanel } from "@/components/audit/AuditSecurityPanel";
+import { securityAlertApi } from "@/api/features/audit/security-alert.api";
 import type { FieldSchema } from "@/types";
 import {
     auditLogApi,
@@ -305,9 +309,11 @@ function InspectorSection({
 function AuditLogInspector({
                                log,
                                onViewHistory,
+                               onViewType,
                            }: {
     log: AuditLogDTO;
     onViewHistory: () => void;
+    onViewType: () => void;
 }) {
     const [copied, setCopied] = useState(false);
     const changes = computeChanges(log.oldValue, log.newValue);
@@ -349,20 +355,43 @@ function AuditLogInspector({
             </InspectorSection>
 
             <InspectorSection title="Object">
-                <div className="text-sm font-medium text-foreground">
-                    {log.entityType || "Unknown object"}
-                    {log.entityId ? ` #${log.entityId}` : ""}
+                <div className="flex flex-wrap items-center gap-x-1.5 text-sm font-medium text-foreground">
+                    {log.entityType ? (
+                        <button
+                            type="button"
+                            onClick={onViewType}
+                            title={`See every ${log.entityType} event`}
+                            className="underline decoration-dotted underline-offset-4 hover:text-indigo-600 dark:hover:text-indigo-400"
+                        >
+                            {log.entityType}
+                        </button>
+                    ) : (
+                        <span>Unknown object</span>
+                    )}
+                    {log.entityId && <span>#{log.entityId}</span>}
                 </div>
 
-                {log.entityId && log.entityType !== "AUTH" && (
-                    <button
-                        type="button"
-                        onClick={onViewHistory}
-                        className="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
-                    >
-                        View history
-                    </button>
-                )}
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    {log.entityType && (
+                        <button
+                            type="button"
+                            onClick={onViewType}
+                            className="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                        >
+                            All {log.entityType} events
+                        </button>
+                    )}
+
+                    {log.entityId && (
+                        <button
+                            type="button"
+                            onClick={onViewHistory}
+                            className="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                        >
+                            History of #{log.entityId}
+                        </button>
+                    )}
+                </div>
             </InspectorSection>
 
             <InspectorSection title="Trace">
@@ -802,7 +831,17 @@ async function getAllAuditLogs(
 
 export default function AuditLogPage() {
     const [showExportModal, setShowExportModal] = useState(false);
-    const [view, setView] = useState<"logs" | "stats" | "security">("logs");
+    const [view, setView] = useState<"logs" | "stats" | "security">(() =>
+        new URLSearchParams(window.location.search).get("view") === "security"
+            ? "security"
+            : "logs",
+    );
+
+    const { data: openAlertCount = 0 } = useQuery({
+        queryKey: ["security-open-count"],
+        queryFn: securityAlertApi.getOpenCount,
+        refetchInterval: 15_000,
+    });
     const [exporting, setExporting] = useState(false);
 
     const [period, setPeriod] = useState<Period>("30days");
@@ -815,10 +854,7 @@ export default function AuditLogPage() {
     const [search, setSearch] = useState("");
     const [filters, setFilters] = useState<Record<string, unknown>>({});
     const [selectedLog, setSelectedLog] = useState<AuditLogDTO | null>(null)
-    const [historyTarget, setHistoryTarget] = useState<{
-        entityType: string;
-        entityId: string;
-    } | null>(null);
+    const [historyTarget, setHistoryTarget] = useState<AuditHistoryScope | null>(null);
 
     const metaQuery = useQuery({
         queryKey: ["audit-log-filter-options"],
@@ -1047,11 +1083,22 @@ export default function AuditLogPage() {
         null,
     );
 
-    const openHistory = (log: AuditLogDTO) =>
+    /** History of one record (PROJECT_TEAM #337) */
+    const openHistory = (log: AuditLogDTO) => {
+        if (!log.entityType || !log.entityId) return;
+
         setHistoryTarget({
             entityType: log.entityType,
             entityId: String(log.entityId),
         });
+    };
+
+    /** Every event of one object type (AUTH, COURSE...) */
+    const openObjectType = (log: AuditLogDTO) => {
+        if (!log.entityType) return;
+
+        setHistoryTarget({ entityType: log.entityType, entityId: null });
+    };
 
     const removeFilter = (name: string) =>
         setFilters((previous) => {
@@ -1147,7 +1194,7 @@ export default function AuditLogPage() {
                             {([
                                 { key: "logs", label: "Logs feed" },
                                 { key: "stats", label: "Statistics" },
-                            { key: "security", label: "Security" },
+                                { key: "security", label: "Security" },
                             ] as const).map((tab) => (
                                 <button
                                     key={tab.key}
@@ -1162,6 +1209,11 @@ export default function AuditLogPage() {
                                     }`}
                                 >
                                     {tab.label}
+                                    {tab.key === "security" && openAlertCount > 0 && (
+                                        <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                            {openAlertCount}
+                                        </span>
+                                    )}
                                     {tab.key === "logs" && viewCounts && (
                                         <span
                                             className={`rounded-full px-1.5 py-0.5 text-[10px] ${
@@ -1178,52 +1230,73 @@ export default function AuditLogPage() {
                         </div>
                     </div>
 
-                    {/* Date range shared by Logs and Statistics */}
-                    <div className="flex flex-wrap items-center gap-3">
-                        <select
-                            value={period}
-                            onChange={(event) => {
-                                setPeriod(event.target.value as Period);
-                                setPage(0);
-                            }}
-                            className="h-9 min-w-[150px] rounded-lg border border-border bg-card px-3 text-sm text-foreground/80 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
-                            aria-label="Filter by period"
+                    {openAlertCount > 0 && view !== "security" && (
+                        <button
+                            type="button"
+                            onClick={() => setView("security")}
+                            className="flex w-full items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-left text-sm text-red-700 transition hover:bg-red-500/15 dark:text-red-300"
                         >
-                            <option value="7days">Last 7 days</option>
-                            <option value="30days">Last 30 days</option>
-                            <option value="thisMonth">This month</option>
-                            <option value="all">All time</option>
-                            <option value="custom">Custom range</option>
-                        </select>
+                            <AlertTriangle className="h-4 w-4 shrink-0" />
+                            <span className="font-medium">
+                                {openAlertCount} security{" "}
+                                {openAlertCount === 1 ? "alert needs" : "alerts need"} your review
+                            </span>
+                            <span className="ml-auto text-xs underline">
+                                Review and block
+                            </span>
+                        </button>
+                    )}
 
-                        {period === "custom" && (
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="date"
-                                    value={customFrom}
-                                    max={customTo || undefined}
-                                    onChange={(event) => {
-                                        setCustomFrom(event.target.value);
-                                        setPage(0);
-                                    }}
-                                    className="h-9 rounded-lg border border-border bg-card px-2 text-sm text-foreground/80 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
-                                    aria-label="From date"
-                                />
-                                <span className="text-muted-foreground">–</span>
-                                <input
-                                    type="date"
-                                    value={customTo}
-                                    min={customFrom || undefined}
-                                    onChange={(event) => {
-                                        setCustomTo(event.target.value);
-                                        setPage(0);
-                                    }}
-                                    className="h-9 rounded-lg border border-border bg-card px-2 text-sm text-foreground/80 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
-                                    aria-label="To date"
-                                />
-                            </div>
-                        )}
-                    </div>
+                    {view === "security" && <AuditSecurityPanel />}
+
+                    {/* Date range shared by Logs and Statistics */}
+                    {view !== "security" && (
+                        <div className="flex flex-wrap items-center gap-3">
+                            <select
+                                value={period}
+                                onChange={(event) => {
+                                    setPeriod(event.target.value as Period);
+                                    setPage(0);
+                                }}
+                                className="h-9 min-w-[150px] rounded-lg border border-border bg-card px-3 text-sm text-foreground/80 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
+                                aria-label="Filter by period"
+                            >
+                                <option value="7days">Last 7 days</option>
+                                <option value="30days">Last 30 days</option>
+                                <option value="thisMonth">This month</option>
+                                <option value="all">All time</option>
+                                <option value="custom">Custom range</option>
+                            </select>
+
+                            {period === "custom" && (
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="date"
+                                        value={customFrom}
+                                        max={customTo || undefined}
+                                        onChange={(event) => {
+                                            setCustomFrom(event.target.value);
+                                            setPage(0);
+                                        }}
+                                        className="h-9 rounded-lg border border-border bg-card px-2 text-sm text-foreground/80 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
+                                        aria-label="From date"
+                                    />
+                                    <span className="text-muted-foreground">–</span>
+                                    <input
+                                        type="date"
+                                        value={customTo}
+                                        min={customFrom || undefined}
+                                        onChange={(event) => {
+                                            setCustomTo(event.target.value);
+                                            setPage(0);
+                                        }}
+                                        className="h-9 rounded-lg border border-border bg-card px-2 text-sm text-foreground/80 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
+                                        aria-label="To date"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {view === "stats" && (
                         <AuditStatsDashboard
@@ -1274,9 +1347,6 @@ export default function AuditLogPage() {
                             />
                         </div>
                     )}
-
-                    {view === "security" && <AuditSecurityPanel />}
-
 
                     {view === "logs" && (
                         <div
@@ -1482,10 +1552,10 @@ export default function AuditLogPage() {
                                         </div>
                                     ) : (
                                         <>
-                                            <div className="overflow-x-auto">
+                                            <div className="max-h-[calc(100vh-22rem)] min-h-[20rem] overflow-auto">
                                                 <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-                                                    <thead className="border-b border-border bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
-                                                    <tr>
+                                                    <thead className="sticky top-0 z-10 border-b border-border bg-card text-[11px] uppercase tracking-wide text-muted-foreground">
+                                                    <tr className="bg-muted/40">
                                                         <th className="whitespace-nowrap px-5 py-3 font-semibold">
                                                             Time
                                                         </th>
@@ -1515,6 +1585,7 @@ export default function AuditLogPage() {
                                                             selected={selectedLog?.id === log.id}
                                                             onViewDetails={() => setSelectedLog(log)}
                                                             onViewHistory={() => openHistory(log)}
+                                                            onViewType={() => openObjectType(log)}
                                                         />
                                                     ))}
                                                     </tbody>
@@ -1581,6 +1652,7 @@ export default function AuditLogPage() {
                                             key={selectedLog.id}
                                             log={selectedLog}
                                             onViewHistory={() => openHistory(selectedLog)}
+                                            onViewType={() => openObjectType(selectedLog)}
                                         />
                                     </div>
                                 </aside>
@@ -1657,6 +1729,10 @@ export default function AuditLogPage() {
                                     onViewHistory={() => {
                                         setSelectedLog(null);
                                         openHistory(selectedLog);
+                                    }}
+                                    onViewType={() => {
+                                        setSelectedLog(null);
+                                        openObjectType(selectedLog);
                                     }}
                                 />
                             </div>
@@ -1858,12 +1934,13 @@ export default function AuditLogPage() {
                 </div>
             )}
 
-            <EntityHistoryDialog
-                open={!!historyTarget}
-                entityType={historyTarget?.entityType ?? ""}
-                entityId={historyTarget?.entityId ?? null}
-                onClose={() => setHistoryTarget(null)}
-            />
+            {historyTarget && (
+                <AuditHistoryExplorer
+                    key={`${historyTarget.entityType}:${historyTarget.entityId ?? "*"}:${historyTarget.action ?? ""}`}
+                    initialScope={historyTarget}
+                    onClose={() => setHistoryTarget(null)}
+                />
+            )}
         </MainLayout>
     );
 }
@@ -1873,11 +1950,13 @@ function AuditLogRow({
                          selected,
                          onViewDetails,
                          onViewHistory,
+                         onViewType,
                      }: {
     log: AuditLogDTO;
     selected: boolean;
     onViewDetails: () => void;
     onViewHistory: () => void;
+    onViewType: () => void;
 }) {
     const objectName = log.entityType || "Unknown object";
     const objectId = log.entityId ? `#${log.entityId}` : "";
@@ -1914,26 +1993,40 @@ function AuditLogRow({
 
             <td className="px-5 py-3.5">
                 <div className="font-medium text-foreground/80">
-                    {objectName}
+                    {log.entityType ? (
+                        <button
+                            type="button"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onViewType();
+                            }}
+                            title={`See every ${log.entityType} event`}
+                            className="underline decoration-dotted decoration-muted-foreground/50 underline-offset-4 hover:text-indigo-600 dark:hover:text-indigo-400"
+                        >
+                            {objectName}
+                        </button>
+                    ) : (
+                        objectName
+                    )}
                 </div>
 
-                {objectId && (
-                    <div className="mt-1 text-xs text-muted-foreground">
-                        {objectId}
-                    </div>
-                )}
+                {(objectId || log.entityId) && (
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                        {objectId && <span>{objectId}</span>}
 
-                {log.entityId && log.entityType !== "AUTH" && (
-                    <button
-                        type="button"
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            onViewHistory();
-                        }}
-                        className="mt-1 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
-                    >
-                        View history
-                    </button>
+                        {log.entityId && (
+                            <button
+                                type="button"
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onViewHistory();
+                                }}
+                                className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                            >
+                                View history
+                            </button>
+                        )}
+                    </div>
                 )}
             </td>
 
