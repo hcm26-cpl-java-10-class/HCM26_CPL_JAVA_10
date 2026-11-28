@@ -114,6 +114,23 @@ public class GradebookService {
                 + (score == null ? "" : score.stripTrailingZeros().toPlainString());
     }
 
+    private StudentRow studentRow(User u, List<GradebookColumn> columns,
+            Map<Long, Map<Long, BigDecimal>> byStudent, Map<Long, Map<Long, BigDecimal>> bonusByStudent) {
+        Map<Long, BigDecimal> scores = new HashMap<>(byStudent.getOrDefault(u.getId(), Map.of()));
+        Map<Long, BigDecimal> bonuses = bonusByStudent.getOrDefault(u.getId(), Map.of());
+        // diem hien thi = diem goc + bonus (toi da 10); chi cong khi sinh vien da co diem goc
+        bonuses.forEach((colId, pts) -> scores.computeIfPresent(colId, (k, base) -> base.add(pts).min(TEN)));
+        BigDecimal sum = BigDecimal.ZERO;
+        for (GradebookColumn c : columns) {
+            BigDecimal sc = scores.get(c.getId());
+            if (sc != null)
+                sum = sum.add(sc.multiply(c.getWeightPercent()));
+        }
+        BigDecimal finalScore = columns.isEmpty() ? null
+                : sum.divide(HUNDRED, 2, RoundingMode.HALF_UP).min(TEN);
+        return new StudentRow(u.getId(), u.getFullName(), u.getEmail(), u.getUserCode(), scores, bonuses, finalScore);
+    }
+
     private Gradebook buildGradebook(Course course) {
         // thu tu hien thi: Quiz, Assignment, Midterm, Final test (cung loai theo thu tu
         // tao)
@@ -139,26 +156,30 @@ public class GradebookService {
             Exam e = c.getSourceExam();
             colDtos.add(new ColumnDto(c.getId(), c.getName(), c.getType(), c.getWeightPercent(),
                     e == null ? null : e.getId(), e == null ? null : e.getTitle(),
-                    e == null || resultAccess.canStudentSeeScoreOnMyScores(e)));
+                    e == null || resultAccess.canStudentSeeScoreOnMyScores(e), gradingState(e)));
         }
         List<StudentRow> rows = new ArrayList<>();
+        Set<Long> enrolledIds = new HashSet<>();
         for (CourseEnrollment en : enrollmentRepository.findActiveStudentsByCourse(course.getId())) {
             User u = en.getUser();
-            Map<Long, BigDecimal> scores = new HashMap<>(byStudent.getOrDefault(u.getId(), Map.of()));
-            Map<Long, BigDecimal> bonuses = bonusByStudent.getOrDefault(u.getId(), Map.of());
-            // diem hien thi = diem goc + bonus (toi da 10); chi cong khi sinh vien da co diem goc
-            bonuses.forEach((colId, pts) -> scores.computeIfPresent(colId, (k, base) -> base.add(pts).min(TEN)));
-            BigDecimal sum = BigDecimal.ZERO;
-            for (GradebookColumn c : columns) {
-                BigDecimal sc = scores.get(c.getId());
-                if (sc != null)
-                    sum = sum.add(sc.multiply(c.getWeightPercent()));
-            }
-            BigDecimal finalScore = columns.isEmpty() ? null
-                    : sum.divide(HUNDRED, 2, RoundingMode.HALF_UP).min(TEN);
-            rows.add(new StudentRow(u.getId(), u.getFullName(), u.getEmail(), u.getUserCode(), scores,
-                    bonuses, finalScore));
+            enrolledIds.add(u.getId());
+            rows.add(studentRow(u, columns, byStudent, bonusByStudent));
         }
+        // Extra students = not enrolled but have an imported score / bonus in this course's columns.
+        // They use exactly the same columns and weights, so editing the main table updates them too.
+        Map<Long, User> extraUsers = new LinkedHashMap<>();
+        for (GradebookScore sc : scoreRepository.findAllByCourse(course.getId())) {
+            if (sc.getScore() != null && !enrolledIds.contains(sc.getStudent().getId()))
+                extraUsers.putIfAbsent(sc.getStudent().getId(), sc.getStudent());
+        }
+        for (GradebookBonus b : bonusRepository.findActiveByCourse(course.getId())) {
+            if (!enrolledIds.contains(b.getStudent().getId()))
+                extraUsers.putIfAbsent(b.getStudent().getId(), b.getStudent());
+        }
+        List<StudentRow> extraRows = new ArrayList<>();
+        for (User u : extraUsers.values())
+            extraRows.add(studentRow(u, columns, byStudent, bonusByStudent));
+        extraRows.sort(Comparator.comparing(StudentRow::name, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)));
         java.time.LocalDateTime savedAt = stateRepository.findByCourse_Id(course.getId())
                 .map(GradebookState::getSavedAt).orElse(null);
         // chua luu = bang diem hien tai khac voi ban da Save gan nhat (hoac chua Save
@@ -169,7 +190,9 @@ public class GradebookService {
             unsaved = !colDtos.isEmpty();
         } else {
             Set<String> current = new HashSet<>();
-            for (StudentRow s : rows) {
+            List<StudentRow> allRows = new ArrayList<>(rows);
+            allRows.addAll(extraRows);
+            for (StudentRow s : allRows) {
                 int pos = 0;
                 for (ColumnDto c : colDtos) {
                     current.add(snapshotKey(s.id(), pos++, c.type(), c.name(), c.examId(), c.weightPercent(),
@@ -183,7 +206,7 @@ public class GradebookService {
             }
             unsaved = !current.equals(saved);
         }
-        return new Gradebook(course.getId(), course.getName(), colDtos, totalWeight, rows, savedAt, unsaved);
+        return new Gradebook(course.getId(), course.getName(), colDtos, totalWeight, rows, savedAt, unsaved, extraRows);
     }
 
     /**
@@ -233,7 +256,9 @@ public class GradebookService {
         publishedRepository.flush();
         Gradebook g = buildGradebook(course);
         List<GradebookPublishedItem> items = new ArrayList<>();
-        for (StudentRow s : g.students()) {
+        List<StudentRow> everyone = new ArrayList<>(g.students());
+        everyone.addAll(g.extraStudents());
+        for (StudentRow s : everyone) {
             int pos = 0;
             for (ColumnDto c : g.columns()) {
                 items.add(GradebookPublishedItem.builder()
@@ -277,7 +302,7 @@ public class GradebookService {
                 com.example.starter_project_2025.system.exam.core.domain.ExamCategory.QUIZ,
                 com.example.starter_project_2025.system.exam.core.domain.ExamCategory.MIDTERM,
                 com.example.starter_project_2025.system.exam.core.domain.ExamCategory.FINAL_TEST);
-        List<Exam> exams = new ArrayList<>(examRepository.findByCourseLink(courseId, null, null, true));
+        List<Exam> exams = new ArrayList<>(examRepository.findByCourseLink(courseId, null, null, false));
         exams.sort(Comparator.comparingInt((Exam e) -> order.indexOf(e.getCategory())).thenComparing(Exam::getId));
         List<Exam> toCreate = new ArrayList<>();
         for (Exam e : exams) {
@@ -521,6 +546,18 @@ public class GradebookService {
      * So khop theo user id: co diem + co trong lop -> add; co diem nhung khong
      * trong lop -> thua; trong lop khong co diem -> thieu.
      */
+    /** NO_ATTEMPTS / PENDING_GRADING / GRADED for the linked exam (null when the column has no exam). */
+    private String gradingState(Exam exam) {
+        if (exam == null)
+            return null;
+        List<ExamAttempt> attempts = attemptRepository.findAllByExam_Id(exam.getId());
+        if (attempts.isEmpty())
+            return "NO_ATTEMPTS";
+        boolean pending = attempts.stream()
+                .anyMatch(a -> !com.example.starter_project_2025.system.demo.course.CourseAssessmentService.fullyGraded(a));
+        return pending ? "PENDING_GRADING" : "GRADED";
+    }
+
     private ImportReport compute(GradebookColumn c, Exam exam, boolean apply) {
         return compute(c, exam, apply, false);
     }
@@ -564,6 +601,15 @@ public class GradebookService {
             if (u == null) {
                 User x = examUsers.get(e.getKey());
                 extra.add(person(x, e.getValue(), "Took the assessment but is not enrolled in this course"));
+                if (apply) { // extra students get their own score table (same columns / weights)
+                    GradebookScore xs = scoreRepository.findByColumn_IdAndStudent_Id(c.getId(), x.getId())
+                            .orElseGet(() -> GradebookScore.builder().column(c).student(x).build());
+                    if (!(keepManual && "MANUAL".equals(xs.getSource()))) {
+                        xs.setScore(e.getValue());
+                        xs.setSource("EXAM");
+                        scoreRepository.save(xs);
+                    }
+                }
                 continue;
             }
             imported++;

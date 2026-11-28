@@ -1,3 +1,4 @@
+import { formatDateTimeCustomNow } from "@/i18n/format";
 import { sprintApi, sprintBacklogApi } from "@/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -159,7 +160,7 @@ const formatDateTime = (value?: string | null) => {
     return "—";
   }
 
-  return date.toLocaleString("en-GB", {
+  return formatDateTimeCustomNow(date, {
     day: "2-digit",
     month: "short",
     year: "numeric",

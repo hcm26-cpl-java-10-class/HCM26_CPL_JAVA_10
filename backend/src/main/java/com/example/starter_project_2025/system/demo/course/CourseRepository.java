@@ -20,6 +20,8 @@ public interface CourseRepository extends BaseCrudRepository<Course, Long> {
 
     boolean existsByName(String name);
 
+    boolean existsByThumbnailUrlEndingWith(String suffix);
+
     boolean existsBySyllabus_Id(Long syllabusId);
 
     boolean existsByCategories_Id(Long categoryId);
@@ -33,6 +35,13 @@ public interface CourseRepository extends BaseCrudRepository<Course, Long> {
         group by cat.id
     """)
     List<Object[]> countPublishedByCategory();
+
+    @Query("""
+        select c.id, cat.id from Course c join c.categories cat
+        where c.status = com.example.starter_project_2025.system.demo.course.CourseStatus.PUBLISHED
+          and c.isActive = true
+    """)
+    List<Object[]> findPublishedCourseCategoryIds();
 
     Optional<Course> findByName(String name);
 }

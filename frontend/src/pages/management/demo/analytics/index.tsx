@@ -1,3 +1,4 @@
+import { formatNumberNow } from "@/i18n/format";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -80,7 +81,7 @@ export default function CourseAnalyticsPage() {
           subtitle="Select a course to explore its learning performance."
           stats={[
             { label: "Available courses", value: String(selectableCourses.length) },
-            { label: "Total learners", value: totalLearners.toLocaleString("en-US") },
+            { label: "Total learners", value: formatNumberNow(totalLearners) },
             { label: "Avg. completion", value: `${avgCompletion.toFixed(0)}%` },
           ]}
           searchTerm={searchTerm}

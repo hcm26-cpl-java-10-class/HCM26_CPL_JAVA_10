@@ -32,11 +32,15 @@ public class ExamAttemptAnswer extends BaseEntity {
     @JoinColumn(name = "question_id", nullable = false)
     private ExamAttemptQuestion question;
 
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "exam_attempt_answer_option",
             joinColumns = @JoinColumn(name = "answer_id"),
-            inverseJoinColumns = @JoinColumn(name = "option_id")
+            inverseJoinColumns = @JoinColumn(name = "option_id"),
+            uniqueConstraints = @UniqueConstraint(
+                    name = "uk_exam_attempt_answer_option",
+                    columnNames = {"answer_id", "option_id"}
+            )
     )
     private Set<ExamAttemptOption> selectedOptions = new HashSet<>();
 
@@ -60,6 +64,45 @@ public class ExamAttemptAnswer extends BaseEntity {
     @Column(name = "grade_attempts", nullable = false)
     private int gradeAttempts = 0;
 
+    /** Estimated % of AI-written content (0-100); null = not analysed / answer too short. */
+    @Column(name = "ai_percent")
+    private Integer aiPercent;
+
+    /** Short reasons behind aiPercent, separated by " | ". */
+    @Column(name = "ai_signals", columnDefinition = "TEXT")
+    private String aiSignals;
+
     /** Thoi diem som nhat duoc thu cham lai tu dong. */
     private Instant nextGradeAt;
+
+    // ===== AI Essay Draft Grading Results (Never exposed to students until CONFIRMED) =====
+    @Column(name = "ai_proposed_score", precision = 12, scale = 4)
+    private BigDecimal aiProposedScore;
+
+    @Column(name = "ai_feedback", columnDefinition = "TEXT")
+    private String aiFeedback;
+
+    @Column(name = "ai_reasoning", columnDefinition = "TEXT")
+    private String aiReasoning;
+
+    @Column(name = "ai_analysis", columnDefinition = "TEXT")
+    private String aiAnalysis;
+
+    @Column(name = "ai_criterion_scores_json", columnDefinition = "TEXT")
+    private String aiCriterionScoresJson;
+
+    @Column(name = "ai_flag_ambiguous")
+    private Boolean aiFlagAmbiguous;
+
+    @Column(name = "ai_flag_reason", length = 1000)
+    private String aiFlagReason;
+
+    @Column(name = "ai_graded_at")
+    private Instant aiGradedAt;
+
+    @Column(name = "ai_grading_status", length = 30)
+    private String aiGradingStatus;
+
+    @Column(name = "ai_grading_error", length = 1000)
+    private String aiGradingError;
 }

@@ -32,6 +32,7 @@ public interface CourseMapper extends BaseCrudMapper<Course, CourseDTO> {
     @Mapping(source = "syllabus.id", target = "syllabusId")
     @Mapping(source = "syllabus.code", target = "syllabusCode")
     @Mapping(source = "syllabus.name", target = "syllabusName")
+    @Mapping(target = "coverImage", ignore = true)
     CourseDTO toResponse(Course entity);
 
     @Override

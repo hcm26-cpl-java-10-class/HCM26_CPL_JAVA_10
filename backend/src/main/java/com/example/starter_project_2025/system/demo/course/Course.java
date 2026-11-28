@@ -17,6 +17,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
+@EntityListeners(CourseCoverListener.class)
 @Getter
 @Setter
 @SuperBuilder
@@ -47,6 +48,10 @@ public class Course extends BaseEntity {
     @Column(length = 255)
     String thumbnailUrl;
 
+    /** Request-only selected image; never stored in a database column. */
+    @Transient
+    String coverImage;
+
     @Column(length = 100)
     String instructor;
 
@@ -55,11 +60,15 @@ public class Course extends BaseEntity {
     User instructorUser;
 
     @Builder.Default
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "course_category",
             joinColumns = @JoinColumn(name = "course_id"),
-            inverseJoinColumns = @JoinColumn(name = "category_id")
+            inverseJoinColumns = @JoinColumn(name = "category_id"),
+            uniqueConstraints = @UniqueConstraint(
+                    name = "uk_course_category_course_cat",
+                    columnNames = {"course_id", "category_id"}
+            )
     )
     Set<Category> categories = new HashSet<>();
 

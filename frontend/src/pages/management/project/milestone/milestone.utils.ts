@@ -1,4 +1,7 @@
 import axios from "axios";
+import { createLocaleFormatter } from "@/i18n/format";
+import { toLanguage } from "@/i18n/languages";
+import i18n from "@/i18n";
 import type {
   CreateMilestoneRequest,
   MilestoneApiError,
@@ -75,18 +78,16 @@ export function formatDateTime(value?: string | null): string {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return createLocaleFormatter(toLanguage(i18n.language)).formatDateTimeMedium(date);
 }
 
 export function formatTenantDateTime(value: string | null | undefined, timeZone: string): string {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
+  const locale = createLocaleFormatter(toLanguage(i18n.language)).locale;
   try {
-    return new Intl.DateTimeFormat("en-GB", {
+    return new Intl.DateTimeFormat(locale, {
       year: "numeric",
       month: "short",
       day: "2-digit",
@@ -97,7 +98,7 @@ export function formatTenantDateTime(value: string | null | undefined, timeZone:
       timeZoneName: "shortOffset",
     }).format(date);
   } catch {
-    return `${new Intl.DateTimeFormat("en-GB", {
+    return `${new Intl.DateTimeFormat(locale, {
       year: "numeric",
       month: "short",
       day: "2-digit",
@@ -106,17 +107,18 @@ export function formatTenantDateTime(value: string | null | undefined, timeZone:
       hour12: false,
       timeZone: "UTC",
       timeZoneName: "short",
-    }).format(date)} (tenant timezone unavailable)`;
+    }).format(date)} (${i18n.t("tenant timezone unavailable")})`;
   }
 }
 
 export function formatRelativeDeadline(value: string | null | undefined): string {
-  if (!value) return "No deadline";
+  if (!value) return i18n.t("No deadline");
   const deadline = new Date(value);
   if (Number.isNaN(deadline.getTime())) return "";
   const difference = deadline.getTime() - Date.now();
   const absoluteMinutes = Math.round(Math.abs(difference) / 60_000);
-  const relative = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+  const locale = createLocaleFormatter(toLanguage(i18n.language)).locale;
+  const relative = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
 
   if (absoluteMinutes < 60) {
     return relative.format(difference < 0 ? -absoluteMinutes : absoluteMinutes, "minute");
@@ -136,7 +138,9 @@ export function isPastDeadline(milestone: MilestoneListItem): boolean {
 
 export function formatPenalty(value?: number | null, basis?: "FIXED" | "PER_DAY"): string {
   if (value == null) return "—";
-  return `${new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 }).format(value)}%${basis === "PER_DAY" ? " per day" : ""}`;
+  const locale = createLocaleFormatter(toLanguage(i18n.language)).locale;
+  const formatted = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value);
+  return `${formatted}%${basis === "PER_DAY" ? ` ${i18n.t("per day")}` : ""}`;
 }
 
 export function formatMilestoneStatus(status: MilestoneStatus): string {

@@ -1,3 +1,4 @@
+import { formatDateTimeNow } from "@/i18n/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +22,7 @@ export function SubmissionCard({ row, onView, renderRowActions, showActions = tr
       </CardHeader>
       <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
         <div><p className="flex items-center gap-1 text-xs text-muted-foreground"><Users className="size-3" /> Team</p><p className="mt-1 font-medium">{item.teamName}</p><p className="text-xs text-muted-foreground">{item.studentName}</p></div>
-        <div><p className="flex items-center gap-1 text-xs text-muted-foreground"><Clock3 className="size-3" /> Submitted</p><p className="mt-1 font-medium">{item.submittedAt ? new Date(item.submittedAt).toLocaleString("en-GB") : "Not submitted"}</p>{item.late ? <Badge variant="destructive" className="mt-1">Late · {item.penaltyPercent}%</Badge> : null}</div>
+        <div><p className="flex items-center gap-1 text-xs text-muted-foreground"><Clock3 className="size-3" /> Submitted</p><p className="mt-1 font-medium">{item.submittedAt ? formatDateTimeNow(item.submittedAt) : "Not submitted"}</p>{item.late ? <Badge variant="destructive" className="mt-1">Late · {item.penaltyPercent}%</Badge> : null}</div>
       </CardContent>
       <CardFooter><Button variant="outline" size="sm" className="w-full justify-between" onClick={(e) => { e.stopPropagation(); onView(row); }}>{item.status === "SUBMITTED" ? "Start review" : "View review result"} <ArrowRight className="size-4" /></Button></CardFooter>
     </Card>

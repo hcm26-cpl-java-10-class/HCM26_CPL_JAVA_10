@@ -17,6 +17,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -76,6 +77,7 @@ public class Team extends BaseEntity {
     @Column(length = 2000)
     private String conflictResolution;
 
+    @Builder.Default
     @OneToMany(mappedBy = "team", fetch = FetchType.LAZY)
     private Set<TeamMember> members = new HashSet<>();
 

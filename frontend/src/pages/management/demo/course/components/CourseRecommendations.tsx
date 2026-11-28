@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { courseApi } from "@/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
@@ -9,8 +10,8 @@ import { recommendationsApi, type Recommendation } from "@/api/features/recommen
 import { recommendationContext, type RecommendationTurn, courseReplyText, recommendationPage, RecommendationRequest, readRecommendationHistory, recommendationHistoryKey } from "@/utils/recommendation-session";
 import { useCourseEnrollment } from "../hooks/useCourseEnrollment";
 import { CourseCard, CourseCardSkeleton } from "./CourseCard";
-import { filterAndSortRecommendations, recommendationFilterLabels, type DurationFilter, type RatingFilter, type RecommendationFilters } from "./recommendation-filters";
-import type { CourseLevel } from "@/types";
+import { filterAndSortRecommendations, catalogCategoryNames, recommendationCategoryNames, recommendationFilterLabels, type DurationFilter, type RatingFilter, type RecommendationFilters } from "./recommendation-filters";
+import type { CategoryTreeDTO, CourseLevel } from "@/types";
 
 const defaultFilters: RecommendationFilters = { categories: [], levels: [], durations: [], ratings: [], sort: "best" };
 
@@ -33,6 +34,8 @@ function AccountRecommendations({ account, search = "", filters: controlledFilte
   const client = useQueryClient();
   const queryKey = ["course-recommendations", account];
   const query = useQuery({ queryKey, queryFn: ({ signal }) => recommendationsApi.get(signal), staleTime: 0, gcTime: 0, retry: 1 });
+  const categoryQuery = useQuery({ queryKey: ["course-catalog-categories"], queryFn: courseApi.getCatalogCategories, staleTime: 5 * 60 * 1000 });
+  const categoryTree = categoryQuery.data ?? [];
   const { canEnroll, enrollMutation, enrollmentByCourseId } = useCourseEnrollment();
   const request = useRef(new RecommendationRequest());
   const action = useRef(new RecommendationRequest());
@@ -134,9 +137,9 @@ function AccountRecommendations({ account, search = "", filters: controlledFilte
   };
   const keyword = search.trim().toLowerCase();
   const eligible = (cards ?? query.data?.recommendations ?? []).filter(item => !enrollmentByCourseId.has(item.course.id));
-  const searchMatches = filterAndSortRecommendations(eligible, search, defaultFilters);
-  const visible = filterAndSortRecommendations(eligible, search, filters);
-  const categories = [...new Set(searchMatches.map(item => item.course.categoryName).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b));
+  const searchMatches = filterAndSortRecommendations(eligible, search, defaultFilters, categoryTree);
+  const visible = filterAndSortRecommendations(eligible, search, filters, categoryTree);
+  const categories = [...new Set([...catalogCategoryNames(categoryTree), ...searchMatches.flatMap(item => recommendationCategoryNames(item.course, categoryTree)), ...filters.categories])].sort((a, b) => a.localeCompare(b));
   const hasReviewedCourses = searchMatches.some(item => item.course.totalReviews > 0);
   const activeFilterCount = filters.categories.length + filters.levels.length + filters.durations.length + filters.ratings.length;
   useEffect(() => { setPage(1); }, [search]);
@@ -150,7 +153,7 @@ function AccountRecommendations({ account, search = "", filters: controlledFilte
       <label className="text-sm">{text("Language", "Ngôn ngữ")} <select aria-label="Recommendation language" className="rounded border bg-background p-1" value={language} onChange={e => { cancelChat(); setError(""); setLanguage(e.target.value as "en" | "vi"); }}><option value="en">English</option><option value="vi">Tiếng Việt</option></select></label>
     </div>
     <div className="flex flex-wrap gap-2">
-      <Button variant="outline" aria-expanded={open} onClick={() => setOpen(!open)}>{text("Ask AI to help me choose", "Nhờ AI giúp chọn khóa học")}</Button>
+      <Button size="lg" className="min-h-11 w-full whitespace-normal shadow-sm sm:w-auto" aria-controls="course-ai-chooser" aria-expanded={open} onClick={() => setOpen(!open)}><Sparkles aria-hidden="true" />{text("Ask AI to help me choose", "Nhờ AI giúp chọn khóa học")}</Button>
       <Button variant="outline" disabled={!query.data || saving} aria-expanded={editing} onClick={() => { setGoals(query.data?.preferences.goals ?? ""); setInterests(query.data?.preferences.interests.join(", ") ?? ""); setEditing(!editing); }}>{text("Learning preferences", "Sở thích học tập")}</Button>
       <Button variant="ghost" disabled={saving || query.isFetching} onClick={() => void refresh()}>{text("Refresh", "Làm mới")}</Button>
     </div>
@@ -161,7 +164,7 @@ function AccountRecommendations({ account, search = "", filters: controlledFilte
       <p className="text-xs text-muted-foreground">{text("Reset removes saved goals, interests and dismissals. Conversation is kept. Clear chat only removes the conversation.", "Đặt lại sẽ xóa mục tiêu, sở thích và các khóa đã ẩn; giữ cuộc trò chuyện. Xóa trò chuyện chỉ xóa nội dung trò chuyện.")}</p>
       <div className="flex flex-wrap gap-2"><Button disabled={saving} type="submit">{text("Save preferences", "Lưu sở thích")}</Button><Button disabled={saving} type="button" variant="outline" onClick={() => void update("reset")}>{text("Reset preferences and dismissals", "Đặt lại sở thích và khóa đã ẩn")}</Button></div>
     </form>}
-    {open && <div className="overflow-hidden rounded-2xl border border-indigo-200 bg-background shadow-sm dark:border-indigo-800">
+    {open && <div id="course-ai-chooser" className="overflow-hidden rounded-2xl border border-indigo-200 bg-background shadow-sm dark:border-indigo-800">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-indigo-50/70 px-4 py-3 dark:bg-indigo-950/40">
         <div className="flex items-center gap-3"><span className="rounded-xl bg-indigo-600 p-2 text-white"><Sparkles aria-hidden="true" className="size-5" /></span><div><h3 className="font-semibold">{text("Your AI course guide", "AI đồng hành chọn khóa học")}</h3><p className="text-xs text-muted-foreground">{text("Find a course that fits your next step", "Chọn khóa học phù hợp với bước tiếp theo")}</p></div></div>
         <Button size="sm" variant="ghost" onClick={clear}>{text("Clear chat", "Xóa trò chuyện")}</Button>
@@ -193,14 +196,15 @@ function AccountRecommendations({ account, search = "", filters: controlledFilte
     </div>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {query.isError && <div role="alert"><p>{text("Could not load recommendations.", "Không tải được gợi ý.")}</p><Button variant="outline" onClick={() => void query.refetch()}>{text("Retry", "Thử lại")}</Button></div>}
-    {!query.isLoading && !query.isError && <p className="text-xs text-muted-foreground">Filters apply to this account's {eligible.length}-course recommendation shortlist, not the entire course catalog.</p>}
+    {!query.isLoading && !query.isError && <p className="text-xs text-muted-foreground">Filters apply to this account's {eligible.length}-course recommendation shortlist, not the entire course catalog. All active categories are listed, including those with zero matching recommendations.</p>}
+    {categoryQuery.isError && <p role="alert" className="text-sm text-muted-foreground">Category list unavailable. Showing categories from your recommendations. <Button variant="ghost" size="sm" onClick={() => void categoryQuery.refetch()}>Retry categories</Button></p>}
     <details className="rounded-xl border bg-background p-3 lg:hidden">
       <summary className="flex cursor-pointer list-none items-center justify-between font-medium"><span className="flex items-center gap-2"><Filter className="size-4" /> Filters {activeFilterCount > 0 && `(${activeFilterCount})`}</span><ChevronDown className="size-4" /></summary>
-      <div className="pt-4"><RecommendationFilterPanel items={searchMatches} categories={categories} filters={filters} showRatings={hasReviewedCourses} onChange={next => { setFilters(next); setPage(1); }} /></div>
+      <div className="pt-4"><RecommendationFilterPanel items={searchMatches} categories={categories} categoryTree={categoryTree} filters={filters} showRatings={hasReviewedCourses} onChange={next => { setFilters(next); setPage(1); }} /></div>
     </details>
     <div className="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
       <aside className="hidden border-r pr-5 lg:block" aria-label="Recommendation filters">
-        <RecommendationFilterPanel items={searchMatches} categories={categories} filters={filters} showRatings={hasReviewedCourses} onChange={next => { setFilters(next); setPage(1); }} />
+        <RecommendationFilterPanel items={searchMatches} categories={categories} categoryTree={categoryTree} filters={filters} showRatings={hasReviewedCourses} onChange={next => { setFilters(next); setPage(1); }} />
       </aside>
       <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-3 border-b pb-3">
@@ -235,10 +239,9 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
   return <span className="inline-flex items-center gap-1 rounded-full border bg-background px-3 py-1 text-xs font-medium">{label}<button type="button" aria-label={`Remove ${label} filter`} onClick={onRemove}><X className="size-3.5" /></button></span>;
 }
 
-function RecommendationFilterPanel({ items, categories, filters, showRatings, onChange }: { items: Recommendation[]; categories: string[]; filters: RecommendationFilters; showRatings: boolean; onChange: (filters: RecommendationFilters) => void }) {
-  const [showAllCategories, setShowAllCategories] = useState(false);
+function RecommendationFilterPanel({ items, categories, categoryTree, filters, showRatings, onChange }: { items: Recommendation[]; categories: string[]; categoryTree: CategoryTreeDTO[]; filters: RecommendationFilters; showRatings: boolean; onChange: (filters: RecommendationFilters) => void }) {
   const toggle = <T extends string,>(values: T[], value: T) => values.includes(value) ? values.filter(item => item !== value) : [...values, value];
-  const categoryCount = (value: string) => items.filter(item => item.course.categoryName === value).length;
+  const categoryCount = (value: string) => items.filter(item => recommendationCategoryNames(item.course, categoryTree).includes(value)).length;
   const levelCount = (value: CourseLevel) => items.filter(item => item.course.level === value).length;
   const durationCount = (value: DurationFilter) => items.filter(item => {
     const seconds = item.course.totalDuration;
@@ -250,7 +253,7 @@ function RecommendationFilterPanel({ items, categories, filters, showRatings, on
   }).length;
   return <div className="space-y-6">
     <div className="flex items-center justify-between"><h3 className="font-semibold">Filter by</h3>{filters.categories.length + filters.levels.length + filters.durations.length + filters.ratings.length > 0 && <Button type="button" variant="ghost" size="sm" onClick={() => onChange({ ...defaultFilters, sort: filters.sort })}>Clear</Button>}</div>
-    <FilterGroup title="Category">{categories.slice(0, showAllCategories ? categories.length : 5).map(value => <FilterOption key={value} label={value} count={categoryCount(value)} checked={filters.categories.includes(value)} onChange={() => onChange({ ...filters, categories: toggle(filters.categories, value) })} />)}{categories.length > 5 && <Button type="button" variant="link" className="h-auto px-0" onClick={() => setShowAllCategories(value => !value)}>{showAllCategories ? "Show less" : `Show ${categories.length - 5} more`}</Button>}</FilterGroup>
+    <FilterGroup title="Category">{categories.map(value => <FilterOption key={value} label={value} count={categoryCount(value)} checked={filters.categories.includes(value)} onChange={() => onChange({ ...filters, categories: toggle(filters.categories, value) })} />)}</FilterGroup>
     <FilterGroup title="Level">{(["BEGINNER", "INTERMEDIATE", "ADVANCED"] as CourseLevel[]).map(value => <FilterOption key={value} label={recommendationFilterLabels.levels[value]} count={levelCount(value)} checked={filters.levels.includes(value)} onChange={() => onChange({ ...filters, levels: toggle(filters.levels, value) })} />)}</FilterGroup>
     <FilterGroup title="Content duration">{(["under-2h", "2h-10h", "10h-plus"] as DurationFilter[]).map(value => <FilterOption key={value} label={recommendationFilterLabels.durations[value]} count={durationCount(value)} checked={filters.durations.includes(value)} onChange={() => onChange({ ...filters, durations: toggle(filters.durations, value) })} />)}<p className="text-xs text-muted-foreground">Courses without duration metadata are excluded only when a duration filter is selected.</p></FilterGroup>
     {showRatings && <FilterGroup title="Rating">{(["4.5-plus", "4.0-4.49", "under-4"] as RatingFilter[]).map(value => <FilterOption key={value} label={recommendationFilterLabels.ratings[value]} count={ratingCount(value)} checked={filters.ratings.includes(value)} onChange={() => onChange({ ...filters, ratings: toggle(filters.ratings, value) })} />)}</FilterGroup>}

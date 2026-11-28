@@ -1,3 +1,4 @@
+import { getCurrentLocale } from "@/i18n/format";
 import { z } from "zod";
 import type { LatePolicyType } from "@/types";
 
@@ -69,7 +70,7 @@ function validateScheduleRules(value: Pick<MilestoneFormValues, "deadline" | "la
 export const milestoneFormSchema = z.object(milestoneFormFields).superRefine(validateScheduleRules);
 
 export function tenantToday(timeZone: string): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
+  const parts = new Intl.DateTimeFormat(getCurrentLocale(), {
     timeZone, year: "numeric", month: "2-digit", day: "2-digit",
   }).formatToParts(new Date());
   const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
@@ -88,7 +89,7 @@ export function tenantStartOfDay(date: string, timeZone: string): Date | null {
   const cached = tenantStartCache.get(key);
   if (cached !== undefined) return new Date(cached);
 
-  const formatter = new Intl.DateTimeFormat("en-US", {
+  const formatter = new Intl.DateTimeFormat(getCurrentLocale(), {
     timeZone, year: "numeric", month: "2-digit", day: "2-digit",
   });
   const localDate = (instant: number) => {

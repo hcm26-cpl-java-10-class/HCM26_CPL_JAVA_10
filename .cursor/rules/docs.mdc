@@ -1,0 +1,19 @@
+---
+description: Enforce FAMS LMS docs/ directory organization and Markdown rules when creating, editing, or moving documentation files.
+globs:
+  - "docs/**"
+  - "*.md"
+alwaysApply: false
+---
+
+# Documentation Rules (`docs/`)
+
+Before creating, editing, or moving any `.md` file in this repository:
+
+1. Read `docs/README.md` and check the matching `docs/01-`..`09-` subfolder first to avoid duplicates.
+2. Follow `.agents/skills/docs-authoring/SKILL.md`:
+   - Never place new `.md` files at repo root or directly under `docs/` (only `docs/README.md`).
+   - Use the matching numbered topic folder (`docs/01-`..`09-`); new top-level folders must follow `NN-kebab-case`.
+   - No spaces in filenames; relative links only; never embed local paths (`C:/...`, `D:/...`, `file:///...`).
+   - Update `docs/README.md` if adding a key document or new topic folder.
+3. Verify with `node scripts/check-docs-rule.mjs --ci`.

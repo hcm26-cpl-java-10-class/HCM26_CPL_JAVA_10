@@ -1,3 +1,4 @@
+import { formatDateTimeNow } from "@/i18n/format";
 import { projectTemplateApi } from "@/api/features/project-template.api";
 import { projectTemplateVersionApi } from "@/api/features/project-template-version.api";
 import { aiTemplateReviewApi } from "@/api/features/ai-template-review.api";
@@ -116,7 +117,7 @@ export function ProjectTemplateDetailPage() {
   const canArchive = options.isSuccess && options.data?.canArchive === true && !query.isError
     && template?.readOnly !== true
     && template?.status === "ACTIVE" && options.hasPermission("PROJECT_TEMPLATE_ARCHIVE");
-  const formatDate = (value: string) => new Date(value).toLocaleString("en-GB");
+  const formatDate = (value: string) => formatDateTimeNow(value);
   const selectTab = (value: string) => setSearchParams((current) => {
     const next = new URLSearchParams(current);
     if (value === "overview") next.delete("tab");

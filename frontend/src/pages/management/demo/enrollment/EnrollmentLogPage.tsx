@@ -1,3 +1,4 @@
+import { formatDateTimeCustomNow } from "@/i18n/format";
 import { enrollmentApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
@@ -59,7 +60,7 @@ const formatDate = (value?: string | null) => {
     if (!value) return "-";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "medium" });
+    return formatDateTimeCustomNow(date, { dateStyle: "short", timeStyle: "medium" });
 };
 
 const sortAuditRows = (

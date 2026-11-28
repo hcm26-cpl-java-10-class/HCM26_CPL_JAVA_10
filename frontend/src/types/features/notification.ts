@@ -1,4 +1,4 @@
-export type NotificationCategory = "EXAM" | "COURSE" | "PROJECT" | "SYSTEM";
+export type NotificationCategory = "EXAM" | "COURSE" | "PROJECT" | "CLASS" | "SYSTEM";
 
 export interface NotificationDTO {
   id: number;
@@ -32,4 +32,14 @@ export interface NotificationPageDTO {
 export interface NotificationPreferenceDTO {
   category: NotificationCategory;
   inAppEnabled: boolean;
+  emailEnabled?: boolean;
+  inAppMandatory?: boolean;
+  emailMandatory?: boolean;
+}
+
+export interface TenantNotificationPolicyDTO {
+  category: NotificationCategory;
+  inAppMandatory: boolean;
+  emailMandatory: boolean;
+  cooldownMinutes: number;
 }

@@ -59,19 +59,4 @@ npx tsc --noEmit -p tsconfig.app.json  # type-check app sources
 
 ## Documentation Rules (`docs/`)
 
-Enforced by `.github/workflows/docs-structure-check.yml` and indexed in `docs/README.md`:
-
-- **Never place `.md` files directly in `docs/`** (only `docs/README.md` is allowed at the root of `docs/`).
-- **Never add new `.md` files at the repository root** (keep only standard root files such as `README.md`, `AGENTS.md`, `CLAUDE.md`).
-- **Place every doc inside the matching numbered topic folder:**
-  - `docs/01-getting-started/` — setup, run guides, commit/git conventions
-  - `docs/02-architecture/` — architecture, class diagrams, ERDs
-  - `docs/03-exam-assessment/` — exam, question, grading, auth/exam security & test guides
-  - `docs/04-course-learning/` — courses, syllabus, progress, analytics, recommendations
-  - `docs/05-project-workspace/` — Mock Project Hub (`plans/`, `use-cases/`, `fixtures/`, `images/`)
-  - `docs/06-testing-verification/` — bug fix reports, investigations, test plans, acceptance evidence
-  - `docs/07-demo/` — demo scripts, walkthroughs, review kits
-  - `docs/08-training-operations/` — classes, class setup, training calendar, trainers, sessions
-  - `docs/09-deployment-operations/` — deployment, cutover, rollback, safe startup, infrastructure (SMTP/DB)
-- **New topic folder:** Only when no existing folder fits; must follow `NN-kebab-case` (e.g. `10-<topic>/`) and be added to `docs/README.md`.
-- **Naming & links:** No spaces in `.md` filenames; use relative paths for internal links; never commit local absolute paths (`C:/...`, `D:/...`, `file:///...`).
+Only when creating, editing, or moving `.md` files: read `docs/README.md` and follow `.agents/skills/docs-authoring/SKILL.md` (loaded automatically via `.claude/rules/docs.md` and enforced by `.claude/settings.json` `PreToolUse` hook, `.githooks/pre-commit`, and `.github/workflows/docs-structure-check.yml`). Validate with `node scripts/check-docs-rule.mjs --ci`.

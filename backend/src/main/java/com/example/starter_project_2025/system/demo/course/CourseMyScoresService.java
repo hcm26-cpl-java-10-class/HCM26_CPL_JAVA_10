@@ -33,6 +33,7 @@ public class CourseMyScoresService {
     private final ExamResultAccessService resultAccessService;
     private final EntityManager entityManager;
     private final GradebookPublishedItemRepository publishedRepository;
+    private final com.example.starter_project_2025.system.exam.gradebook.GradebookTemplateProvider templateProvider;
 
     @Transactional(readOnly = true)
     public List<CourseMyScoresDTO> findMyCourseScores(Long studentId) {
@@ -48,16 +49,27 @@ public class CourseMyScoresService {
 
         Map<Long, ExamAttempt> bestAttempts = selectBestAttempts(studentAttempts);
 
-        return enrollments.stream()
-                .filter(enrollment -> enrollment.getCourse() != null)
-                .map(enrollment -> publishedScores(enrollment.getCourse(),
-                                withTemplate(enrollment.getCourse().getId(), publishedRepository.findByCourse_IdAndStudent_IdOrderByPositionAsc(
-                                        enrollment.getCourse().getId(), studentId)))
-                        .orElseGet(() -> buildCourseScores(enrollment.getCourse(), bestAttempts)))
+        // enrolled courses first, then courses where the student only appears as an "extra student"
+        // (took the assessment, e.g. via link, without being enrolled) and the instructor has saved the scores
+        List<Course> courses = new ArrayList<>();
+        Set<Long> seen = new java.util.HashSet<>();
+        for (var enrollment : enrollments) {
+            if (enrollment.getCourse() != null && seen.add(enrollment.getCourse().getId()))
+                courses.add(enrollment.getCourse());
+        }
+        for (Course extra : publishedRepository.findCoursesOfStudent(studentId)) {
+            if (seen.add(extra.getId())) courses.add(extra);
+        }
+        return courses.stream()
+                .map(course -> publishedScores(course,
+                                withTemplate(course.getId(), publishedRepository.findByCourse_IdAndStudent_IdOrderByPositionAsc(
+                                        course.getId(), studentId)))
+                        .orElseGet(() -> buildCourseScores(course, bestAttempts)))
                 .collect(Collectors.toMap(
                         CourseMyScoresDTO::courseId,
                         dto -> dto,
-                        (first, second) -> first
+                        (first, second) -> first,
+                        java.util.LinkedHashMap::new
                 ))
                 .values()
                 .stream()
@@ -69,7 +81,7 @@ public class CourseMyScoresService {
      * moi cot diem la mot muc, diem tong = tong(diem x ti trong) / 100 (giong cot Final cua giang vien).
      */
     private List<GradebookPublishedItem> withTemplate(Long courseId, List<GradebookPublishedItem> own) {
-        return own == null || own.isEmpty() ? publishedRepository.templateForCourse(courseId) : own;
+        return own == null || own.isEmpty() ? templateProvider.forCourse(courseId) : own;
     }
 
     private java.util.Optional<CourseMyScoresDTO> publishedScores(Course course, List<GradebookPublishedItem> items) {

@@ -1,3 +1,4 @@
+import { formatNumberNow } from "@/i18n/format";
 import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { AlertTriangle } from "lucide-react";
@@ -28,7 +29,7 @@ const parseMetric = (value: string) => {
 };
 
 const formatMetricNumber = (value: number, decimalPlaces: number) =>
-  value.toLocaleString("en-US", {
+  formatNumberNow(value, {
     minimumFractionDigits: decimalPlaces,
     maximumFractionDigits: decimalPlaces,
   });

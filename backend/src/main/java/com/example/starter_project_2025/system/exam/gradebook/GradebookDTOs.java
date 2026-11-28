@@ -13,7 +13,7 @@ public final class GradebookDTOs {
         }
 
         public record ColumnDto(Long id, String name, String type, BigDecimal weightPercent, Long examId,
-                        String examTitle, boolean published) {
+                        String examTitle, boolean published, String gradingState) {
         }
 
         public record StudentRow(Long id, String name, String email, String code,
@@ -30,7 +30,9 @@ public final class GradebookDTOs {
 
         public record Gradebook(Long courseId, String courseName, List<ColumnDto> columns,
                         BigDecimal totalWeight, List<StudentRow> students,
-                        java.time.LocalDateTime savedAt, boolean unsaved) {
+                        java.time.LocalDateTime savedAt, boolean unsaved,
+                        /** Took a linked assessment but not enrolled (e.g. joined by link). Same columns / weights. */
+                        List<StudentRow> extraStudents) {
         }
 
         public record ScanResult(Gradebook gradebook, int created, int refreshed, List<ImportReport> reports) {

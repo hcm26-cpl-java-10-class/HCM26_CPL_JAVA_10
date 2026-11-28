@@ -34,6 +34,10 @@ public interface GradebookPublishedItemRepository extends JpaRepository<Gradeboo
                 .toList();
     }
 
+    /** Courses in which the student has saved score rows (covers extra students who are not enrolled). */
+    @Query("select distinct i.course from GradebookPublishedItem i where i.student.id = :studentId")
+    List<com.example.starter_project_2025.system.demo.course.Course> findCoursesOfStudent(@Param("studentId") Long studentId);
+
     @Modifying
     @Query("delete from GradebookPublishedItem i where i.course.id = :courseId")
     void deleteByCourse(@Param("courseId") Long courseId);

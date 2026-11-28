@@ -25,7 +25,7 @@ class PublishedCourseGradeTest {
         var access=mock(ExamResultAccessService.class);
         when(published.findByCourse_IdAndStudent_IdOrderByPositionAsc(1L,2L))
                 .thenReturn(List.of(item("20","10"),item("80","5")));
-        var service=new CourseAssessmentService(exams,attempts,access,mock(LessonRepository.class),published);
+        var service=new CourseAssessmentService(exams,attempts,access,mock(LessonRepository.class),published,mock(com.example.starter_project_2025.system.exam.gradebook.GradebookTemplateProvider.class));
         var grade=service.grade(1L,2L);
         assertEquals(new BigDecimal("6.00"),grade.overallScore());
         assertEquals("PASSED",grade.status());

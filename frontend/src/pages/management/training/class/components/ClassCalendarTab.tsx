@@ -1,3 +1,4 @@
+import { formatDateCustomNow, formatDateTimeCustomNow } from "@/i18n/format";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlignLeft, CalendarDays, ChevronDown, Download, Eye, Loader2, MoreVertical, Pencil, Save, Settings, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -31,8 +32,8 @@ type CalendarStatus = ClassCalendarVersion["status"];
 function modifiedDate(value: string) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "—";
-    const day = date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).replace(/ /g, "-");
-    return `${day} ${date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })}`;
+    const day = formatDateCustomNow(date, { day: "2-digit", month: "short", year: "numeric" }).replace(/ /g, "-");
+    return `${day} ${formatDateTimeCustomNow(date, { hour: "2-digit", minute: "2-digit", hour12: false })}`;
 }
 
 function StatusBadge({ status }: { status: CalendarStatus }) {

@@ -25,6 +25,8 @@ export interface SmColumn {
   examTitle: string | null;
   /** False when the linked assessment's scores are not published to students yet. */
   published: boolean;
+  /** NO_ATTEMPTS / PENDING_GRADING / GRADED for the linked assessment (null without one). */
+  gradingState?: "NO_ATTEMPTS" | "PENDING_GRADING" | "GRADED" | null;
 }
 
 export type SmReleasePolicy =
@@ -59,6 +61,8 @@ export interface SmGradebook {
   columns: SmColumn[];
   totalWeight: number;
   students: SmStudentRow[];
+  /** Took a linked assessment but not enrolled (e.g. via link). Same columns and weights as the main table. */
+  extraStudents?: SmStudentRow[];
   /** Last time the teacher confirmed with "Save scores" (ISO string) or null. */
   savedAt: string | null;
   /** True when the table differs from the last saved version. */

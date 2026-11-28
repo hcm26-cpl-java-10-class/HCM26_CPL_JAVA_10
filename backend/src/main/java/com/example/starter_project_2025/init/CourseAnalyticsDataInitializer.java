@@ -4,6 +4,7 @@ import com.example.starter_project_2025.system.demo.certificate.Certificate;
 import com.example.starter_project_2025.system.demo.certificate.CertificateRepository;
 import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course.CourseRepository;
+import com.example.starter_project_2025.system.demo.course.CourseStatus;
 import com.example.starter_project_2025.system.demo.course_review.CourseReview;
 import com.example.starter_project_2025.system.demo.course_review.CourseReviewRepository;
 import com.example.starter_project_2025.system.demo.department.Department;
@@ -41,6 +42,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -74,9 +76,31 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
     /** Số học viên seed cho các khóa học không có profile riêng. */
     public static final int DEFAULT_LEARNERS_PER_COURSE = 50;
 
-    /** Tổng số học viên mẫu trong hệ thống (student01 ... student100). */
+    /**
+     * Số học viên mẫu nhóm {@code student01..student100} (seed bởi
+     * {@link DepartmentStudentDataInitializer}).
+     */
     private static final int LEARNER_COUNT = 100;
     private static final String LEARNER_EMAIL_TEMPLATE = "student%02d@example.com";
+
+    /**
+     * Số học viên mẫu nhóm {@code student001..student180} (seed bởi
+     * {@link BulkStudentDataInitializer}).
+     */
+    private static final int BULK_LEARNER_COUNT = BulkStudentDataInitializer.DEFAULT_STUDENT_TOTAL;
+    private static final String BULK_LEARNER_EMAIL_TEMPLATE = "student%03d@example.com";
+
+    /**
+     * Số học viên nhóm cũ {@code student1..student30} (seed bởi phiên bản cũ của
+     * {@link BulkStudentDataInitializer}). Vẫn được đưa vào pool để dữ liệu cũ
+     * không bị "mất" khi chạy seed mới.
+     */
+    private static final int LEGACY_LEARNER_COUNT = 30;
+    private static final String LEGACY_LEARNER_EMAIL_TEMPLATE = "student%d@example.com";
+
+    /** Số học viên tối thiểu / tối đa cho mỗi khóa học (dao động có kiểm soát). */
+    public static final int MIN_LEARNERS_PER_COURSE = 15;
+    public static final int MAX_LEARNERS_PER_COURSE = 85;
 
     /** Ngưỡng "không hoạt động" mặc định của trang analytics (ngày). */
     private static final int INACTIVE_THRESHOLD_DAYS = 14;
@@ -214,9 +238,14 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
             return;
         }
 
-        // Chia học viên vào các phòng ban mẫu (cần làm trước khi seed enrollment
-        // để mỗi phòng ban có tỉ lệ hoàn thành khác nhau).
-        assignDepartments(learners);
+        // Đảm bảo các phòng ban mẫu tồn tại (không gán lại học viên: phần
+        // phân bổ đã do DepartmentStudentDataInitializer đảm nhiệm).
+        ensureSampleDepartments();
+
+        // Kế hoạch đăng ký theo tier: nhóm tích cực 3..5 khóa, nhóm phổ thông
+        // 1..2 khóa, nhóm chưa kích hoạt 0 khóa.
+        Map<Long, Integer> enrollmentPlan = buildEnrollmentPlan(learners, courses.size());
+        Map<Long, List<User>> learnersByCourse = distributeLearners(learners, courses, enrollmentPlan);
 
         int seededCourses = 0;
         for (int c = 0; c < courses.size(); c++) {
@@ -228,8 +257,11 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
             }
 
             CourseProfile profile = profileFor(course, c);
-            int courseLearnerCount = Math.max(1, Math.min(profile.learnerCount(), learners.size()));
-            List<User> courseLearners = pickLearners(learners, courseLearnerCount, c);
+            List<User> courseLearners = learnersByCourse.getOrDefault(course.getId(), List.of());
+            if (courseLearners.isEmpty()) {
+                log.warn("Course analytics seed skipped for course '{}': no learner assigned.", course.getName());
+                continue;
+            }
 
             seedEnrollments(course, courseLearners, lessons, c, profile);
             seedReviews(course, courseLearners, c, profile);
@@ -295,7 +327,7 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
         if (profile != null) {
             return profile;
         }
-        int count = Math.max(1, Math.min(learnersPerCourse, LEARNER_COUNT));
+        int count = Math.max(1, Math.min(learnersPerCourse, MAX_LEARNERS_PER_COURSE));
         return new CourseProfile(
                 "standard", count,
                 new int[]{12, 24, 26, 24, 14},
@@ -304,11 +336,47 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
                 1, 1, 65, 50, 25, 65);
     }
 
-    /** Lấy các khóa học đang active (bỏ qua bản nháp / bị vô hiệu hoá). */
+    /**
+     * Tính số học viên đăng ký cho một khóa học.
+     *
+     * <p>Khóa học có profile riêng dùng số lượng thiết kế của profile. Các khóa
+     * còn lại dao động ngẫu nhiên <b>có kiểm soát</b> trong khoảng
+     * {@value #MIN_LEARNERS_PER_COURSE}..{@value #MAX_LEARNERS_PER_COURSE} (thay
+     * cho mức cố định 50 sinh viên/course), dùng {@link Random} với seed cố định
+     * theo từng khóa nên kết quả luôn giống nhau giữa các lần chạy.
+     *
+     * <p>Khóa học demo vẫn giữ số học viên thiết kế để giữ nguyên "hình dạng"
+     * dữ liệu đã có (tỉ lệ hoàn thành / bỏ học khác nhau rõ rệt).
+     */
+    private int learnerCountFor(Course course, int courseIndex, CourseProfile profile, int poolSize) {
+        int count;
+        if (PROFILES_BY_COURSE.containsKey(course.getName())) {
+            count = profile.learnerCount();
+        } else {
+            Random random = SeededRandom.forScope("course-learner-count", course.getId(), courseIndex);
+            int span = MAX_LEARNERS_PER_COURSE - MIN_LEARNERS_PER_COURSE + 1;
+            count = MIN_LEARNERS_PER_COURSE + random.nextInt(span);
+        }
+        return Math.max(1, Math.min(count, poolSize));
+    }
+
+    /**
+     * Lấy danh sách khóa học cần seed dữ liệu analytics.
+     *
+     * <p>Quét <b>toàn bộ</b> khóa học đang active và đã xuất bản trong database
+     * (không giới hạn cứng ở 4 khóa học demo mặc định ban đầu) để khóa học được
+     * tạo/import về sau cũng có dữ liệu analytics.
+     *
+     * <p>Khóa học bị vô hiệu hoá hoặc còn là bản nháp thì bỏ qua (tránh sinh dữ
+     * liệu cho nội dung chưa công bố).
+     */
     private List<Course> loadCourses() {
         List<Course> courses = new ArrayList<>();
         for (Course course : courseRepository.findAll()) {
             if (Boolean.FALSE.equals(course.getIsActive())) {
+                continue;
+            }
+            if (course.getStatus() != CourseStatus.PUBLISHED) {
                 continue;
             }
             courses.add(course);
@@ -334,11 +402,149 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
         if (learners.isEmpty()) {
             return List.of();
         }
-        Random random = new Random(1000L + courseIndex * 7919L);
+        Random random = SeededRandom.forScope("course-learners", courseIndex);
         List<User> pool = new ArrayList<>(learners);
         // Xáo trộn toàn bộ danh sách rồi lấy đầu N -> mỗi khóa học có tập học viên khác nhau.
         Collections.shuffle(pool, random);
         return new ArrayList<>(pool.subList(0, Math.min(count, pool.size())));
+    }
+
+    // =====================================================================
+    // Kế hoạch đăng ký theo tier (nhóm hành vi của học viên)
+    // =====================================================================
+
+    /**
+     * Tính số khóa học mà mỗi học viên sẽ đăng ký, theo tier của học viên.
+     *
+     * <p>Yêu cầu nghiệp vụ:
+     * <ul>
+     *   <li>Nhóm <b>tích cực</b> ({@link BulkStudentDataInitializer#TIER_ACTIVE}):
+     *       đăng ký 3..5 khóa học.</li>
+     *   <li>Nhóm <b>phổ thông</b> ({@link BulkStudentDataInitializer#TIER_REGULAR}):
+     *       đăng ký 1..2 khóa học.</li>
+     *   <li>Nhóm <b>chưa kích hoạt</b> ({@link BulkStudentDataInitializer#TIER_IDLE}):
+     *       chưa đăng ký khóa học nào (0 khóa) để test bộ lọc danh sách trống.</li>
+     * </ul>
+     *
+     * <p>Học viên không thuộc nhóm seed mới (ví dụ nhóm cũ {@code student01..100})
+     * được xử lý như nhóm phổ thông.
+     *
+     * @param courseCount tổng số khóa học đang seed
+     * @return map {@code userId -> số khóa học cần đăng ký}
+     */
+    private Map<Long, Integer> buildEnrollmentPlan(List<User> learners, int courseCount) {
+        Map<Long, Integer> plan = new LinkedHashMap<>();
+        if (courseCount <= 0) {
+            return plan;
+        }
+
+        Random random = SeededRandom.forScope("enrollment-plan");
+
+        for (User learner : learners) {
+            String tier = BulkStudentDataInitializer.tierOf(learner);
+            int min = BulkStudentDataInitializer.minCoursesForTier(tier);
+            int max = BulkStudentDataInitializer.maxCoursesForTier(tier);
+            if (max > courseCount) {
+                max = courseCount;
+            }
+            if (min > max) {
+                min = max;
+            }
+            int value = min >= max ? min : min + random.nextInt(max - min + 1);
+            plan.put(learner.getId(), value);
+        }
+        return plan;
+    }
+
+    /**
+     * Phân bổ học viên cho từng khóa học theo {@link #buildEnrollmentPlan}.
+     *
+     * <p>Mỗi khóa học nhận một số lượng học viên <b>khác nhau</b> (dao động theo
+     * số khóa học mà học viên còn có thể đăng ký), nhưng tổng số enrollment của
+     * mỗi học viên luôn khớp với tier của học viên.
+     *
+     * @return map {@code courseId -> danh sách học viên của khóa học đó}
+     */
+    private Map<Long, List<User>> distributeLearners(
+            List<User> learners,
+            List<Course> courses,
+            Map<Long, Integer> plan
+    ) {
+        Map<Long, List<User>> byCourse = new LinkedHashMap<>();
+        for (Course course : courses) {
+            byCourse.put(course.getId(), new ArrayList<>());
+        }
+
+        Random random = SeededRandom.forScope("learner-distribution");
+
+        // 1) Tính "sức chứa" của từng khóa học: số học viên tối đa có thể tham gia.
+        Map<Long, Integer> remainingCapacity = new LinkedHashMap<>();
+        for (int i = 0; i < courses.size(); i++) {
+            Course course = courses.get(i);
+            remainingCapacity.put(course.getId(),
+                    Math.max(0, learnerCountFor(course, i, profileFor(course, i), learners.size())));
+        }
+
+        // Số khóa học đã gán cho từng học viên (dùng để chặn vượt tier).
+        Map<Long, Integer> assignedCount = new LinkedHashMap<>();
+
+        // 2) Với mỗi học viên, chọn ngẫu nhiên các khóa học theo số khóa của tier.
+        for (User learner : learners) {
+            int needed = plan.getOrDefault(learner.getId(), 0);
+            if (needed <= 0) {
+                continue;
+            }
+
+            List<Course> candidates = new ArrayList<>();
+            for (Course course : courses) {
+                if (remainingCapacity.getOrDefault(course.getId(), 0) > 0) {
+                    candidates.add(course);
+                }
+            }
+            if (candidates.isEmpty()) {
+                continue;
+            }
+
+            Collections.shuffle(candidates, random);
+            int take = Math.min(needed, candidates.size());
+            for (int i = 0; i < take; i++) {
+                Course course = candidates.get(i);
+                byCourse.get(course.getId()).add(learner);
+                assignedCount.merge(learner.getId(), 1, Integer::sum);
+                remainingCapacity.computeIfPresent(course.getId(), (key, value) -> Math.max(0, value - 1));
+            }
+        }
+
+        // 3) Khóa học nào chưa đủ người thì bổ sung từ pool (giữ số lượng học viên
+        //    khác nhau giữa các khóa như đã thiết kế).
+        for (Course course : courses) {
+            List<User> assigned = byCourse.get(course.getId());
+            int capacity = remainingCapacity.getOrDefault(course.getId(), 0);
+            if (capacity <= 0 || assigned.size() >= capacity) {
+                continue;
+            }
+            Random filler = SeededRandom.forScope("learner-filler", course.getId());
+            List<User> shuffled = SeededRandom.shuffled(learners, filler);
+            for (User candidate : shuffled) {
+                if (assigned.size() >= capacity) {
+                    break;
+                }
+                if (assigned.contains(candidate)) {
+                    continue;
+                }
+                // Không vượt quá số khóa học tối đa của tier học viên.
+                int maxForTier = BulkStudentDataInitializer.maxCoursesForTier(
+                        BulkStudentDataInitializer.tierOf(candidate));
+                int current = assignedCount.getOrDefault(candidate.getId(), 0);
+                if (maxForTier > 0 && current >= maxForTier) {
+                    continue;
+                }
+                assigned.add(candidate);
+                assignedCount.merge(candidate.getId(), 1, Integer::sum);
+            }
+        }
+
+        return byCourse;
     }
 
     // =====================================================================
@@ -1195,43 +1401,30 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
     // =====================================================================
 
     /**
-     * Tạo các phòng ban mẫu (nếu chưa có) và gán học viên vào phòng ban.
+     * Bảo đảm các phòng ban mẫu tồn tại (nếu chưa có).
      *
-     * <p>Học viên được chia vòng tròn theo danh sách phòng ban; một phần nhỏ để trống
-     * để tab "Phòng ban" có thêm nhóm "Chưa phân phòng ban".
+     * <p>Phòng ban đã tồn tại thì <b>giữ nguyên</b> (kể cả tên đã được đổi) để
+     * không đè lên dữ liệu phòng ban thật. Học viên <b>không</b> bị gán lại ở
+     * đây: phần phân bổ học viên theo phòng ban do
+     * {@link DepartmentStudentDataInitializer} đảm nhiệm.
      */
-    private void assignDepartments(List<User> learners) {
-        if (learners.isEmpty()) {
-            return;
-        }
-
-        List<Department> departments = new ArrayList<>();
+    private void ensureSampleDepartments() {
         for (String[] template : DEPARTMENTS) {
             String code = template[0];
             String name = template[1];
 
-            Department department = departmentRepository.findByCodeIgnoreCase(code)
-                    .orElseGet(Department::new);
+            Department existing = departmentRepository.findByCodeIgnoreCase(code).orElse(null);
+            if (existing != null) {
+                continue;
+            }
+
+            Department department = new Department();
             department.setCode(code);
             department.setName(name);
             department.setDescription(name);
             department.setIsActive(true);
-            departments.add(departmentRepository.save(department));
+            departmentRepository.save(department);
         }
-
-        for (int i = 0; i < learners.size(); i++) {
-            User learner = learners.get(i);
-
-            // Bỏ phòng ban cũ (nếu có) rồi gán phòng ban theo vòng tròn.
-            learner.getDepartments().clear();
-            // Cứ 8 người thì 1 người để trống -> có nhóm "Chưa phân phòng ban".
-            if (i % 8 != 7) {
-                learner.getDepartments().add(departments.get(i % departments.size()));
-            }
-            userRepository.save(learner);
-        }
-
-        log.info("Assigned {} learners across {} departments.", learners.size(), departments.size());
     }
 
     /** Mã phòng ban chính của học viên (phòng ban đầu tiên trong danh sách). */
@@ -1255,23 +1448,61 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
         return learner.getDepartments().iterator().next();
     }
 
-    /** Lấy danh sách học viên mẫu (student01@example.com ... student100@example.com). */
+    /**
+     * Lấy danh sách học viên mẫu làm pool cho enrollment.
+     *
+     * <p>Gồm 3 nhóm tài khoản (không trùng email):
+     * <ul>
+     *   <li>{@code student01..student100} — nhóm cũ (DepartmentStudentDataInitializer).</li>
+     *   <li>{@code student001..student180} — nhóm lớn (BulkStudentDataInitializer).</li>
+     *   <li>{@code student1..student30} — nhóm legacy từ phiên bản cũ của bulk seed.</li>
+     * </ul>
+     */
     private List<User> loadLearners() {
         Role studentRole = roleRepository.findByName("STUDENT").orElse(null);
 
         List<User> learners = new ArrayList<>();
-        for (int i = 1; i <= LEARNER_COUNT; i++) {
-            String email = String.format(LEARNER_EMAIL_TEMPLATE, i);
-            User user = userRepository.findByEmail(email).orElse(null);
-            if (user == null || Boolean.FALSE.equals(user.getIsActive())) {
-                continue;
+        Set<String> seenEmails = new LinkedHashSet<>();
+
+        collectLearners(learners, seenEmails, LEARNER_EMAIL_TEMPLATE, LEARNER_COUNT);
+        collectLearners(learners, seenEmails, BULK_LEARNER_EMAIL_TEMPLATE, BULK_LEARNER_COUNT);
+        collectLearners(learners, seenEmails, LEGACY_LEARNER_EMAIL_TEMPLATE, LEGACY_LEARNER_COUNT);
+
+        // Bảo đảm mọi học viên trong pool đều có role STUDENT và đang active.
+        for (User user : learners) {
+            boolean needsSave = false;
+            if (Boolean.FALSE.equals(user.getIsActive())) {
+                user.setIsActive(true);
+                needsSave = true;
             }
-            if (studentRole != null && user.getRoles().stream().noneMatch(r -> "STUDENT".equals(r.getName()))) {
+            if (studentRole != null
+                    && user.getRoles().stream().noneMatch(r -> "STUDENT".equals(r.getName()))) {
                 user.getRoles().add(studentRole);
-                user = userRepository.save(user);
+                needsSave = true;
             }
-            learners.add(user);
+            if (needsSave) {
+                userRepository.save(user);
+            }
         }
         return learners;
+    }
+
+    /** Nạp một nhóm học viên theo mẫu email, bỏ qua email đã gặp. */
+    private void collectLearners(
+            List<User> learners,
+            Set<String> seenEmails,
+            String template,
+            int count
+    ) {
+        for (int i = 1; i <= count; i++) {
+            String email = String.format(template, i);
+            if (!seenEmails.add(email)) {
+                continue;
+            }
+            User user = userRepository.findByEmail(email).orElse(null);
+            if (user != null && Boolean.TRUE.equals(user.getIsActive())) {
+                learners.add(user);
+            }
+        }
     }
 }
