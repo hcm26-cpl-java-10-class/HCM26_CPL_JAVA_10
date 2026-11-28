@@ -1,3 +1,4 @@
+import { invalidateAssessmentViews } from "@/utils/assessment-queries";
 import { ConfigureAssessmentLink } from "./ConfigureAssessmentLink";
 import { AssessmentLessonDialog } from "./AssessmentLessonDialog";
 import { lessonApi } from "@/api";
@@ -181,7 +182,7 @@ export function LessonFormModal({
         : await lessonApi.create(payload);
     },
     onSuccess: async (saved) => {
-      await queryClient.invalidateQueries({ queryKey: ["lessons"] });
+      await invalidateAssessmentViews(queryClient);
       toast.success(isEdit ? "Lesson updated." : "Lesson created.");
       onSuccess?.(saved);
       onOpenChange(false);

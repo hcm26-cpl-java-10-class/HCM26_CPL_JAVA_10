@@ -33,3 +33,5 @@ Thư mục `docs/` được chia theo chủ đề. Mỗi mục có prefix số �
 - Bật kiểm tra tự động khi commit ở local (chạy 1 lần sau khi clone): `git config core.hooksPath .githooks`. Kiểm tra thủ công toàn repo: `node scripts/check-docs-rule.mjs --ci`.
 
 Course Management validation: [Course covers and assessment configuration — 2026-11-26](06-testing-verification/course-management-20261126.md).
+
+Integrated Course Management fixes: [Navigation, form alignment and Curriculum visibility — 2026-11-28](06-testing-verification/course-management-20261128.md).

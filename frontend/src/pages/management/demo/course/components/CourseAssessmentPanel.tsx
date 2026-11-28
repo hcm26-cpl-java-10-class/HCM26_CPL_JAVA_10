@@ -1,3 +1,4 @@
+import { invalidateAssessmentViews } from "@/utils/assessment-queries";
 import { courseMappingReturnPath } from "@/utils/assessment-navigation";
 import { Input } from "@/components/ui/input";
 import { validateWeightDraft } from "@/utils/course-weight-draft";
@@ -53,7 +54,7 @@ function CourseAssessmentPanelContent({ courseId, showManageLinks = true }: Cour
     },
     onSuccess: async () => {
       setDraft(null); setSaved(true);
-      await Promise.all([client.invalidateQueries({ queryKey: ["course-exams", courseId] }), client.invalidateQueries({ queryKey: ["course-assessment-plan", courseId] })]);
+      await invalidateAssessmentViews(client);
     },
   });
   const dirty = !!draft && (exams.data ?? []).some(e => draft[e.id] !== (e.courseWeight == null ? "" : String(e.courseWeight)));
@@ -65,7 +66,8 @@ function CourseAssessmentPanelContent({ courseId, showManageLinks = true }: Cour
   return <section id="course-assessments" className="scroll-mt-4 space-y-3 rounded-xl border bg-card p-4" aria-label="Course assessments and grading">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h2 className="text-lg font-semibold">Assessments and course grading</h2>
-      <div className="flex flex-wrap gap-2">{showManageLinks && <Button asChild variant="outline"><Link to={`/exams/curriculum?courseId=${courseId}&returnTo=${encodeURIComponent(courseMappingReturnPath(returnTo, courseId))}`}>Manage assessment links</Link></Button>}
+      <div className="flex flex-wrap gap-2">{showManageLinks && <Button asChild variant="outline"><Link to={`/curriculum?courseId=${courseId}${targetSectionId > 0 ? `&sectionId=${targetSectionId}` : ""}`}>Back to Curriculum</Link></Button>}
+        {showManageLinks && <Button asChild variant="outline"><Link to={`/exams/curriculum?courseId=${courseId}&returnTo=${encodeURIComponent(courseMappingReturnPath(returnTo, courseId))}`}>Manage assessment links</Link></Button>}
         <Button variant="outline" disabled={!!draft || saving.isPending} onClick={() => { void plan.refetch(); void exams.refetch(); }}>Refresh</Button></div>
     </div>
     {plan.isPending ? <p role="status">Loading assessment plan…</p> : plan.isError ? <p role="alert">Could not load the assessment plan.</p> : <>
@@ -85,22 +87,18 @@ function CourseAssessmentPanelContent({ courseId, showManageLinks = true }: Cour
       {saving.isError && <p role="alert" className="text-destructive">{(saving.error as { response?: { data?: { message?: string } } })?.response?.data?.message || "Could not save weights. Your values are retained. Check permissions and course totals, then retry."}</p>}
       <div className="flex gap-2"><Button disabled={!dirty || !!validation.error || saving.isPending} onClick={() => saving.mutate()}>{saving.isPending ? "Saving weights…" : "Save weights"}</Button><Button variant="outline" disabled={saving.isPending} onClick={() => { setDraft(null); saving.reset(); }}>Cancel</Button></div>
     </div>}
-    {targetLessonId > 0 && <div className="space-y-2 rounded border p-3">
-      <Button asChild variant="outline"><Link to={`/curriculum?courseId=${courseId}${targetSectionId > 0 ? `&sectionId=${targetSectionId}&lessonId=${targetLessonId}` : ""}`}>Back to Curriculum</Link></Button>
-      {exams.isSuccess && !exams.data.some(exam => exam.lessonId === targetLessonId) && <p role="status">This lesson has no linked assessment yet. <Link className="underline" to={`/exams/curriculum?courseId=${courseId}&returnTo=${encodeURIComponent(returnTo)}`}>Configure its assessment link</Link> using Assessment Management.</p>}
-    </div>}
+    {targetLessonId > 0 && exams.isSuccess && !exams.data.some(exam => exam.lessonId === targetLessonId) && <p role="status" className="rounded border p-3">This lesson has no linked assessment yet. <Link className="underline" to={`/exams/curriculum?courseId=${courseId}&returnTo=${encodeURIComponent(returnTo)}`}>Configure its assessment link</Link> using Assessment Management.</p>}
     {exams.isLoading && <p role="status">Loading linked assessments.</p>}
     {exams.isError && <p role="alert">Could not load linked assessments.</p>}
     {exams.data?.length === 0 && <p>No assessments linked. Courses without assessments use lesson completion.</p>}
-    <div className="space-y-2">{exams.data?.map(exam => <div key={exam.id} id={`course-assessment-${exam.id}`} tabIndex={-1} aria-label={`Configure ${exam.title}`} className={`grid items-center gap-4 rounded border p-3 ${exam.lessonId === targetLessonId ? "ring-2 ring-ring" : ""} ${draft ? "lg:grid-cols-[minmax(0,1fr)_9rem_auto]" : "sm:grid-cols-[minmax(0,1fr)_auto]"}`}>
+    <div className="space-y-2">{exams.data?.map(exam => <div key={exam.id} id={`course-assessment-${exam.id}`} tabIndex={-1} aria-label={`Configure ${exam.title}`} className={`grid items-end gap-4 rounded border p-3 ${exam.lessonId === targetLessonId ? "ring-2 ring-ring" : ""} ${draft ? "lg:grid-cols-[minmax(0,1fr)_9rem_auto]" : "sm:grid-cols-[minmax(0,1fr)_auto]"}`}>
       <div className="min-w-0 break-words"><p className="font-medium">{exam.title}</p><p className="text-sm text-muted-foreground">{exam.category} · Weight: {exam.courseWeight == null ? "Not set" : `${exam.courseWeight}%`} · {exam.lessonTitle || exam.sectionTitle || "Course assessment"}</p></div>
       {draft && <div className="flex w-full min-w-0 flex-col gap-1.5 text-sm">
         <label htmlFor={`assessment-weight-${courseId}-${exam.id}`} className="font-medium">Weight (%)</label>
         <Input id={`assessment-weight-${courseId}-${exam.id}`} aria-label={`Weight (%) for ${exam.title}`} autoFocus={exam.lessonId === targetLessonId} className="block w-full tabular-nums" inputMode="decimal" value={draft[exam.id] ?? ""} disabled={saving.isPending} onChange={e => setDraft({ ...draft, [exam.id]: e.target.value })} />
       </div>}
       <div className="flex flex-wrap gap-2">
-        {canEdit && !draft && exam.lessonId === targetLessonId && <Button variant="outline" size="sm" onClick={editWeights}>Edit assessment weight</Button>}
-        <Button asChild variant="outline" size="sm" className="w-full lg:w-auto"><Link to={`/exams/${exam.id}${returnQuery}`}>Questions, settings and results</Link></Button>
+        <Button asChild variant="outline" size="sm" className="h-9 w-full lg:w-auto"><Link to={`/exams/${exam.id}${returnQuery}`}>Questions, settings and results</Link></Button>
       </div>
     </div>)}</div>
     <Button asChild variant="outline"><Link to={`/courses/${courseId}/grades?returnTo=${encodeURIComponent(returnTo)}`}>View learner grades</Link></Button>

@@ -51,12 +51,27 @@ it("focuses the assessment linked to the requested lesson and retains a precise 
  vi.mocked(examApi.listByCourse).mockResolvedValue([{id:1,title:"Other",courseWeight:70,lessonId:8},{id:2,title:"Target",courseWeight:30,lessonId:9}] as never);
  render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><MemoryRouter initialEntries={["/courses/7?assessmentLessonId=9&assessmentSectionId=3#course-assessments"]}><CourseAssessmentPanel courseId={7}/></MemoryRouter></QueryClientProvider>);
  const target=await screen.findByLabelText("Configure Target");await waitFor(()=>expect(target).toHaveFocus());
- expect(screen.getByRole("link",{name:"Back to Curriculum"})).toHaveAttribute("href","/curriculum?courseId=7&sectionId=3&lessonId=9");
- await userEvent.click(screen.getByRole("button",{name:"Edit assessment weight"}));
+ expect(screen.getByRole("link",{name:"Back to Curriculum"})).toHaveAttribute("href","/curriculum?courseId=7&sectionId=3");
+ expect(screen.queryByRole("button",{name:"Edit assessment weight"})).not.toBeInTheDocument();
+ expect(screen.getAllByRole("button",{name:"Edit weights"})).toHaveLength(1);
+ const back = screen.getByRole("link",{name:"Back to Curriculum"});
+ const manage = screen.getByRole("link",{name:"Manage assessment links"});
+ expect(back.parentElement).toBe(manage.parentElement);
+ expect(back.compareDocumentPosition(manage) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ await userEvent.click(screen.getByRole("button",{name:"Edit weights"}));
  expect(screen.getByRole("textbox",{name:"Weight (%) for Target"})).toHaveFocus();
  expect(api.put).not.toHaveBeenCalled();
 });
 it("routes an unlinked assessment lesson to the existing mapping workflow without creating records",async()=>{
  render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><MemoryRouter initialEntries={["/courses/7?assessmentLessonId=999#course-assessments"]}><CourseAssessmentPanel courseId={7}/></MemoryRouter></QueryClientProvider>);
  expect(await screen.findByText(/This lesson has no linked assessment yet/)).toBeInTheDocument();expect(screen.getByRole("link",{name:"Configure its assessment link"})).toHaveAttribute("href",expect.stringContaining("/exams/curriculum?courseId=7"));expect(api.put).not.toHaveBeenCalled();
+});
+
+it("invalidates the cached course outline after weights are saved",async()=>{
+ const client=new QueryClient({defaultOptions:{queries:{retry:false}}});client.setQueryData(["course-detail",7],{assessments:[{id:1,courseWeight:70}]});
+ render(<QueryClientProvider client={client}><MemoryRouter><CourseAssessmentPanel courseId={7}/></MemoryRouter></QueryClientProvider>);
+ await userEvent.click(await screen.findByRole("button",{name:"Edit weights"}));const input=screen.getByRole("textbox",{name:"Weight (%) for Quiz"});
+ await userEvent.clear(input);await userEvent.type(input,"60");vi.mocked(api.put).mockResolvedValueOnce({});
+ await userEvent.click(screen.getByRole("button",{name:"Save weights"}));await screen.findByText("Assessment weights saved.");
+ await waitFor(()=>expect(client.getQueryState(["course-detail",7])?.isInvalidated).toBe(true));
 });

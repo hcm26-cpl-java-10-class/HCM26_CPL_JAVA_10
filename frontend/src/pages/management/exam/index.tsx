@@ -1,3 +1,4 @@
+import { invalidateAssessmentViews } from "@/utils/assessment-queries";
 import { examApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -145,7 +146,7 @@ export default function ExamManagementPage() {
       setCfg(DEFAULT_CONFIG);
       setShowErrors(false);
       setExamPage(0);
-      void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
+      void invalidateAssessmentViews(queryClient);
       toast.success("Exam created successfully");
     },
     onError: (error) => toast.error(getErrorMessage(error, "Failed to save exam")),
@@ -427,7 +428,7 @@ export default function ExamManagementPage() {
         open={isImportOpen}
         onOpenChange={setImportOpen}
         onSuccess={() => {
-          void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
+          void invalidateAssessmentViews(queryClient);
         }}
       />
     </MainLayout>

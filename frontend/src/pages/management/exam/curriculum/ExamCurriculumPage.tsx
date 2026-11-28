@@ -1,3 +1,4 @@
+import { invalidateAssessmentViews } from "@/utils/assessment-queries";
 import { courseMappingReturnPath } from "@/utils/assessment-navigation";
 import { CourseAssessmentPanel } from "@/pages/management/demo/course/components/CourseAssessmentPanel";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -210,7 +211,7 @@ export default function ExamCurriculumPage() {
   const unlinkExamMutation = useMutation({
     mutationFn: (exam: CourseExam) => examApi.unlinkFromCurriculum(courseId, exam.id, false),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["course-exams", courseId] });
+      void invalidateAssessmentViews(queryClient);
       toast.success("Assessment unlinked successfully");
       setUnlinkTarget(null);
     },
@@ -609,7 +610,7 @@ export default function ExamCurriculumPage() {
             open={linkModalOpen}
             onOpenChange={setLinkModalOpen}
             onSuccess={() => {
-              void queryClient.invalidateQueries({ queryKey: ["course-exams", courseId] });
+              void invalidateAssessmentViews(queryClient);
             }}
           />
 

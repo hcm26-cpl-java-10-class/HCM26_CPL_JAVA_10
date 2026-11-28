@@ -5,7 +5,7 @@ import com.example.starter_project_2025.system.exam.attempt.service.ExamAttemptS
 import com.example.starter_project_2025.system.exam.core.domain.*;
 import com.example.starter_project_2025.system.exam.courselink.service.ExamProgressLockService;
 import com.example.starter_project_2025.system.exam.integrity.domain.ExamProctorImageRepository;
-import com.example.starter_project_2025.system.exam.invitation.domain.InvitationRepository;
+import com.example.starter_project_2025.system.exam.invitation.domain.*;
 import com.example.starter_project_2025.system.exam.pool.domain.ExamQuestionPoolVersionRepository;
 import com.example.starter_project_2025.system.exam.pool.service.ExamPoolAttemptSnapshotService;
 import com.example.starter_project_2025.system.exam.pool.service.ExamPoolRandomSelectionService;
@@ -28,237 +28,40 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ExamPreparationServiceTest {
-    @Mock
-
-    ExamR
-
-    posit
-
-    ry ex
-
-    ms;
-
-    @Mock
-
-    ExamA
-
-    tempt
-
-    eposi
-    ory attempts;
-
-    @Mock
-
-    U
-
-    pository
-    u se
-
-    s;
-
-    @Mock 
-        
-          
-          
-
-
-    
-    
-     
-        
-       
-         
-            
-        
-         
-         
-    Quest  
-            
-     
-
-         
-    
-           
-                
-         
-           
-        
-        
-         
-     
-
-    onTak
-    rMapper mapper;
-
-    @Mock
-
-    Invit
-
-    tionRepository invitations;
-
-    @
-
-    ExamResul
-    t Ac
-
-    essServic e results;
-
-    @Mock
-
-    ExamP octor
-    mageRepository i
-    m a ges;
-
-    @Mock  
-            
-     
-
-         
-    
-           
-                
-         
-           
-        
-        
-         
-     
-
-    ExamP
-    ogressLockServ ice progress
-
-    @Mock
-
-    ExamQuestionPoolVers ionRepository pools;
-
-    @Mock
-
-    ExamPoolRandomSelectionServ ice
-    s e lection;
-    @
-
-    ExamPoolAttemptSnapshotService
-    sn apshots;
-
-    @InjectMo
-    c ks
-
-    ExamAttem p
-    tService service;
-
+    @Mock ExamRepository exams;
+    @Mock ExamAttemptRepository attempts;
+    @Mock UserRepository users;
+    @Mock QuestionTakerMapper mapper;
+    @Mock InvitationRepository invitations;
+    @Mock ExamResultAccessService results;
+    @Mock ExamProctorImageRepository images;
+    @Mock ExamProgressLockService progress;
+    @Mock ExamQuestionPoolVersionRepository pools;
+    @Mock ExamPoolRandomSelectionService selection;
+    @Mock ExamPoolAttemptSnapshotService snapshots;
+    @InjectMocks ExamAttemptService service;
     Exam exam;
-
-    @Befo 
-    eEach    
-    void setup() {   
-         
-            
-        
-         
-         
-        exam = new Exam();
-            
-     
-
-         
-    
-           
-                
-        exam.setId(1L); 
-        exam.setTit l e("Java"); 
-        exam.setIsActive(true);
-        
-         
-     
-
-        e
-
-    am.setDuration Minutes(60);
-             
-           
-         
-     
-
-        e
-    am.setPassScore(new BigDecimal("6"));
-
-    exam. s etAccessCode("PRIVATE_PASSWORD");
-        
-        Question question = new Question(); 
-        question . setId(9L); 
-        question.setIsActive(true);
-        
-         
-        question.setPoints(1);
-
-    question.setCont ent("PRIVATE_QUESTION
-        ");  
-     
-
-        e
-    am.setQuestions(Set.of(question));
-        lenient().when(exams.fi
-        ndByI d (1L)).thenReturn(Optional.of(exam));
+    @BeforeEach void setup() {
+        exam=new Exam();exam.setId(1L);exam.setTitle("Java");exam.setIsActive(true);
+        exam.setDurationMinutes(60);exam.setMaxAttempts(2);exam.setPassScore(new BigDecimal("6"));exam.setAccessCode("PRIVATE_PASSWORD");
+        Question question=new Question();question.setId(9L);question.setIsActive(true);question.setPoints(1);
+        question.setContent("PRIVATE_QUESTION");question.setType(QuestionType.ESSAY);
+        exam.setQuestions(Set.of(question));
+        lenient().when(exams.findById(1L)).thenReturn(Optional.of(exam));
     }
-
-    ExamAttempt attempt(ExamAttemptSt
-        atus status) {
-         
-        var a = new   ExamAttempt();
-        
-        
-        
-        a.setId(5L);
-     
-
-        a
-    setStudent(User.builder().id(7L).build());
-        a.set A ttemptNumber(1);
-        a.setStatus(status); 
-        a.setDurationMinutes(60);
-         
-        a.setSta r tedAt(Instant.now()); 
-        a.setDeadlineAt(Instant.now( ).plusSeconds(3600));
-        
-        a.setFinalScore( BigDecimal.TEN); 
-        return a;  
+    ExamAttempt attempt(ExamAttemptStatus status) {
+        var a=new ExamAttempt();a.setId(5L);a.setExam(exam);a.setStudent(User.builder().id(7L).build());
+        a.setAttemptNumber(1);a.setStatus(status);a.setDurationMinutes(60);a.setStartedAt(Instant.now());
+        a.setDeadlineAt(Instant.now().plusSeconds(3600));a.setFinalScore(BigDecimal.TEN);return a;
     }
-
-    @Test 
-    void readingRepeatedlyNeverAllocatesAttemptOr
-    Re ve
-
-    alsSecrets() throws Exc eption {
-        var metadata = s
-        ervice.preparation(1L, 7L);
-
-    service. p reparation(1L, 7L); 
-        
-         
-         
-        assertTrue(metadata.canS
-        tart());    
-     
-
-        a
-    sertEquals(2, metadata.attemptsRemaining());
-        assertEquals(1, metad a ta.questionCount());
-                
-        assertEquals(new BigDecimal("6"), metadata.passScore());
-        String json = new ObjectMapper().wr iteValueAsString(metadata);
-        assertFalse(json.contains("PRIVATE_QUESTION"));
-        
-        assertFalse(json.contains("PRIVATE_ PASSWORD"));
-     
-
-        v
-    rify(attempts, never()).save(any());
-        verify(exams, never()).lockForAttemptStart(an y( )) ;
-
-    verifyNoInter actions(selection, snapshots, users)
-        ; 
+    @Test void readingRepeatedlyNeverAllocatesAttemptOrRevealsSecrets() throws Exception {
+        var metadata=service.preparation(1L,7L);service.preparation(1L,7L);
+        assertTrue(metadata.canStart());assertEquals(0,metadata.attemptsUsed());assertEquals(2,metadata.attemptsRemaining());assertEquals(1,metadata.questionCount());
+        assertEquals(new BigDecimal("6"),metadata.passScore());
+        String json=new ObjectMapper().writeValueAsString(metadata);
+        assertFalse(json.contains("PRIVATE_QUESTION"));assertFalse(json.contains("PRIVATE_PASSWORD"));assertFalse(json.contains("questions\":"));
+        verify(attempts,never()).save(any());verify(exams,never()).lockForAttemptStart(any());verifyNoInteractions(selection,snapshots,users);
     }
-
     @Test
     void latestActiveAttemptRetainsDeadlineAndDoesNotExpireDuringOverview() {
         var a = attempt(ExamAttemptStatus.IN_PROGRESS);

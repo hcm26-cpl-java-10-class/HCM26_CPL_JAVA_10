@@ -49,23 +49,23 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
   return (
     <div className="grid min-w-0 max-w-full gap-4 sm:grid-cols-2">
       <SectionTitle>Basic</SectionTitle>
-      <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+      <label className="grid row-span-3 grid-rows-subgrid gap-2 text-sm font-medium sm:col-span-2">
         Course grade weight (%)
         <Input type="number" min={0} max={100} step="0.01" placeholder="e.g. 15"
           value={cfg.courseWeight} onChange={event => setCfg(c => ({ ...c, courseWeight: event.target.value }))} />
         <span className="text-xs font-normal text-muted-foreground">This assessment's share of the final course grade. Set 0 for practice; leave blank if not configured. Linked assessments together must total 100% when the plan is complete.</span>
       </label>
-      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium sm:col-span-2">
+      <label className="grid min-w-0 max-w-full row-span-3 grid-rows-subgrid gap-2 text-sm font-medium sm:col-span-2">
         Exam Title
         <Input required maxLength={200} className="w-full min-w-0 max-w-full" value={newTitle} onChange={(event) => setNewTitle(event.target.value)} />
       </label>
 
-      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+      <label className="grid min-w-0 max-w-full row-span-3 grid-rows-subgrid gap-2 text-sm font-medium">
         Duration (minutes)
         <Input required type="number" min={1} className="w-full min-w-0 max-w-full" value={newDuration} onChange={(event) => setNewDuration(event.target.value)} />
       </label>
 
-      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+      <label className="grid min-w-0 max-w-full row-span-3 grid-rows-subgrid gap-2 text-sm font-medium">
         Assessment Status
         <Select value={cfg.status} onValueChange={(value) => { if (value) setCfg((c) => ({ ...c, status: value as ExamConfigForm["status"] })); }}>
           <SelectTrigger aria-label="Assessment status" className="w-full min-w-0 max-w-full">
@@ -80,7 +80,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
         </Select>
       </label>
 
-      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+      <label className="grid min-w-0 max-w-full row-span-3 grid-rows-subgrid gap-2 text-sm font-medium">
         Open Time (optional)
         <Input
           type="datetime-local"
@@ -91,7 +91,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
         <span className="text-xs font-normal text-muted-foreground">Leave blank to open immediately.</span>
       </label>
 
-      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+      <label className="grid min-w-0 max-w-full row-span-3 grid-rows-subgrid gap-2 text-sm font-medium">
         Close Time (optional)
         <Input
           type="datetime-local"
@@ -102,7 +102,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
         <span className="text-xs font-normal text-muted-foreground">Must be after Open Time; duration cannot exceed window.</span>
       </label>
 
-      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+      <label className="grid min-w-0 max-w-full row-span-3 grid-rows-subgrid gap-2 text-sm font-medium">
         Exam Password / Access Code (leave blank if not required)
         <Input
           type="text"
@@ -114,7 +114,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
         />
       </label>
 
-      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+      <label className="grid min-w-0 max-w-full row-span-3 grid-rows-subgrid gap-2 text-sm font-medium">
         Question Format
         <Select value={cfg.examType} onValueChange={(value) => { if (value) setCfg((c) => ({ ...c, examType: value as ExamType })); }}>
           <SelectTrigger aria-label="Exam type" aria-invalid={Boolean(fieldErrors.examType)} className={cn("w-full min-w-0 max-w-full", fieldErrors.examType && invalidClass)}>
@@ -135,7 +135,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
         )}
       </label>
 
-      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+      <label className="grid min-w-0 max-w-full row-span-3 grid-rows-subgrid gap-2 text-sm font-medium">
         Exam Category
         <Select value={cfg.category} onValueChange={(value) => {
           if (!value) return;
@@ -169,7 +169,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
       <div className="grid min-w-0 max-w-full gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-2">
         <SectionTitle>Attempts</SectionTitle>
 
-        <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+        <label className="grid min-w-0 max-w-full row-span-3 grid-rows-subgrid gap-2 text-sm font-medium">
           Maximum Attempts
           <Input
             type="number"
@@ -191,7 +191,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
         </label>
 
         <SectionTitle>Scoring</SectionTitle>
-        <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+        <label className="grid min-w-0 max-w-full row-span-3 grid-rows-subgrid gap-2 text-sm font-medium">
           Max Score
           <Input type="number" min={0.01} step="0.01" placeholder="10" className="w-full min-w-0 max-w-full" value={cfg.maxScore} onChange={(event) => setCfg((c) => ({ ...c, maxScore: event.target.value }))} />
           <span className="text-xs font-normal text-muted-foreground">
@@ -199,7 +199,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
           </span>
         </label>
 
-        <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+        <label className="grid min-w-0 max-w-full row-span-3 grid-rows-subgrid gap-2 text-sm font-medium">
           Passing Score
           <Input type="number" min={0} step="0.01" placeholder="5" className="w-full min-w-0 max-w-full" value={cfg.passScore} onChange={(event) => setCfg((c) => ({ ...c, passScore: event.target.value }))} />
           <span className="text-xs font-normal text-muted-foreground">
@@ -208,7 +208,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
         </label>
 
         <SectionTitle>Results</SectionTitle>
-        <div className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+        <div className="grid min-w-0 max-w-full row-span-3 grid-rows-subgrid gap-2 text-sm font-medium">
           Result Visibility
           <Select value={cfg.resultVisibility} onValueChange={(value) => setCfg((c) => ({ ...c, resultVisibility: value as ResultVisibility }))}>
             <SelectTrigger aria-label="Result visibility" className="w-full min-w-0 max-w-full"><SelectValue /></SelectTrigger>
@@ -223,7 +223,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
           </span>
         </div>
 
-        <div className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+        <div className="grid min-w-0 max-w-full row-span-3 grid-rows-subgrid gap-2 text-sm font-medium">
           Show Answers After Exam
           <label className="flex h-9 items-center gap-2 rounded-md border border-input bg-background/50 px-3 py-1 cursor-pointer">
             <input

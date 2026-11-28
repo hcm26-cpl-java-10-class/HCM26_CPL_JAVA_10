@@ -1,4 +1,5 @@
-import { assessmentReturnPath } from "@/utils/assessment-navigation";
+import { invalidateAssessmentViews } from "@/utils/assessment-queries";
+import { assessmentCourseReturnPath } from "@/utils/assessment-navigation";
 import { examApi } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -12,17 +13,17 @@ import { toast } from "sonner";
 import { ExamConfigFields } from "./ExamConfigFields";
 import { buildExamRequest, configFromExam, DEFAULT_CONFIG, getErrorMessage, validateConfig, type ExamConfigForm } from "./examConfig";
 
-export function ExamEditPanel({ examId }: { examId: number }) {
+export function ExamEditPanel({ examId, onDirtyChange }: { examId: number; onDirtyChange?: (dirty: boolean) => void }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { search } = useLocation();
-  const returnTo = assessmentReturnPath(new URLSearchParams(search).get("returnTo"));
-  const returnQuery = returnTo === "/exams" ? "" : "?returnTo=" + encodeURIComponent(returnTo);
   const examQuery = useQuery({
     queryKey: ["exam-detail", examId],
     queryFn: () => examApi.getById(String(examId)),
   });
   const exam: ExamDTO | null = examQuery.data ?? null;
+  const returnTo = assessmentCourseReturnPath(new URLSearchParams(search).get("returnTo"), exam?.courseId);
+  const returnQuery = returnTo === "/exams" ? "" : "?returnTo=" + encodeURIComponent(returnTo);
 
   const [newTitle, setNewTitle] = useState(exam?.title ?? "");
   const [newDuration, setNewDuration] = useState(String(exam?.durationMinutes ?? "60"));
@@ -47,7 +48,7 @@ export function ExamEditPanel({ examId }: { examId: number }) {
     onSuccess: (updated) => {
       queryClient.setQueryData(["exam-detail", examId], updated);
       setCfg(configFromExam(updated));
-      void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
+      void invalidateAssessmentViews(queryClient);
       toast.success("Exam updated successfully");
     },
     onError: (error) => toast.error(getErrorMessage(error, "Failed to save exam")),
@@ -59,7 +60,7 @@ export function ExamEditPanel({ examId }: { examId: number }) {
       setExamToDelete(null);
       setDeleteConfirmInput("");
       queryClient.removeQueries({ queryKey: ["exam-detail", examId] });
-      void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
+      void invalidateAssessmentViews(queryClient);
       toast.success("Exam deleted successfully");
       navigate(returnTo);
     },
@@ -89,6 +90,10 @@ export function ExamEditPanel({ examId }: { examId: number }) {
     ? JSON.stringify([newTitle, newDuration, cfg]) !==
     JSON.stringify([exam.title, String(exam.durationMinutes), configFromExam(exam)])
     : false;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+  }, [dirty, onDirtyChange]);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => {

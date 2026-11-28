@@ -1,5 +1,6 @@
+import { invalidateAssessmentViews } from "@/utils/assessment-queries";
 import { ApiErrorState } from "@/components/exam/ApiErrorState";
-import { assessmentReturnPath } from "@/utils/assessment-navigation";
+import { assessmentCourseReturnPath } from "@/utils/assessment-navigation";
 import { examApi, examTemplateApi } from "@/api";
 import HeaderRight from "@/components/layout/HeaderRight";
 import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
@@ -8,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import type { ExamDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, BookmarkPlus, BookOpen, CheckCircle2, ClipboardCheck, Copy, Lock, Mail, Pencil, BarChart3 } from "lucide-react";
+import { ArrowLeft, Archive, BookmarkPlus, BookOpen, CheckCircle2, ClipboardCheck, Copy, Lock, Mail, Pencil, BarChart3 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -39,8 +40,6 @@ function tabFromPath(pathname: string, examId: string): TabKey {
 export default function ExamDetailPage() {
   const { examId = "" } = useParams<{ examId: string }>();
   const { pathname, search } = useLocation();
-  const returnTo = assessmentReturnPath(new URLSearchParams(search).get("returnTo"));
-  const returnQuery = returnTo === "/exams" ? "" : "?returnTo=" + encodeURIComponent(returnTo);
   const navigate = useNavigate();
   const id = Number(examId);
   const active = tabFromPath(pathname, examId);
@@ -65,6 +64,12 @@ export default function ExamDetailPage() {
     queryFn: () => examApi.getById(examId),
     enabled: Number.isFinite(id) && id > 0,
   });
+  const returnTo = assessmentCourseReturnPath(new URLSearchParams(search).get("returnTo"), examQuery.data?.courseId);
+  const returnQuery = returnTo === "/exams" ? "" : "?returnTo=" + encodeURIComponent(returnTo);
+  const [editDirty, setEditDirty] = useState(false);
+  const leave = (path: string) => {
+    if (!editDirty || window.confirm("Discard unsaved assessment changes?")) navigate(path);
+  };
   const examStatus = examQuery.data?.status ?? "PUBLISHED";
 
   const lifecycleMutation = useMutation({
@@ -76,7 +81,7 @@ export default function ExamDetailPage() {
     },
     onSuccess: ({ action, exam }) => {
       void queryClient.invalidateQueries({ queryKey: ["exam-detail", id] });
-      void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
+      void invalidateAssessmentViews(queryClient);
       void queryClient.invalidateQueries({ queryKey: ["exams"] });
       if (action === "duplicate" && exam?.id) {
         toast.success("Exam duplicated", { duration: 3000 });
@@ -136,7 +141,7 @@ export default function ExamDetailPage() {
   return (
       // Full-screen page: no sidebar, so the tabs and their content can use the whole window.
       <div className="flex h-screen flex-col overflow-hidden bg-background">
-        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-6">
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-3 py-2 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <h1 className="min-w-0 truncate text-base font-semibold" title={title ?? undefined}>{title ?? "Loading..."}</h1>
             {examQuery.data && (examQuery.data.courseName ? (
@@ -219,7 +224,11 @@ export default function ExamDetailPage() {
           </div>
         </header>
 
-        <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
+        <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 py-4 sm:px-6">
+          <div><Button variant="outline" size="sm" onClick={() => leave(returnTo)}>
+            <ArrowLeft className="size-4" />
+            {returnTo === "/exams" ? "Back to assessments" : returnTo.startsWith("/exams/curriculum") ? "Back to assessment links" : "Back to course detail"}
+          </Button></div>
           {examQuery.isError ? (
               <ApiErrorState error={examQuery.error} onRetry={() => void examQuery.refetch()} onBack={() => navigate(returnTo)} />
           ) : (<>
@@ -230,7 +239,7 @@ export default function ExamDetailPage() {
                       type="button"
                       role="tab"
                       aria-selected={active === key}
-                      onClick={() => navigate(`/exams/${examId}/${segment}${returnQuery}`)}
+                      onClick={() => leave(`/exams/${examId}/${segment}${returnQuery}`)}
                       className={`flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                           active === key ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
                       }`}
@@ -260,7 +269,7 @@ export default function ExamDetailPage() {
                 {active === "invitations" && <InvitationsPage />}
                 {active === "statistics" && <ResultStatisticsPage />}
               </EmbeddedLayoutContext.Provider>
-              {active === "edit" && <ExamEditPanel examId={id} />}
+              {active === "edit" && <ExamEditPanel examId={id} onDirtyChange={setEditDirty} />}
             </div>
           </>)}
         </main>
