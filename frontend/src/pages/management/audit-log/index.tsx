@@ -1302,6 +1302,7 @@ export default function AuditLogPage() {
                         <AuditStatsDashboard
                             fromDate={dateRange.fromDate}
                             toDate={dateRange.toDate}
+                            onOpenHistory={setHistoryTarget}
                         />
                     )}
 

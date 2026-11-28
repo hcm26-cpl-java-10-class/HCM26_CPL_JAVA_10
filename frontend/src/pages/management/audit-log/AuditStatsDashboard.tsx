@@ -17,6 +17,7 @@ import {
     type AuditStatsEntityAction,
 } from "@/api";
 import { getActionLabel } from "@/components/audit/auditActions";
+import type { AuditHistoryScope } from "@/components/audit/AuditHistoryExplorer";
 
 const PRIMARY = "#6366f1";
 const DANGER = "#ef4444";
@@ -187,7 +188,16 @@ function Timeline({ days, normalized }: { days: AuditStatsDay[]; normalized: boo
 
 const MAX_ENTITIES = 8;
 
-function EntityDistribution({ items }: { items: AuditStatsEntityAction[] }) {
+function EntityDistribution({
+                                items,
+                                onOpenHistory,
+                            }: {
+    items: AuditStatsEntityAction[];
+    onOpenHistory?: (scope: AuditHistoryScope) => void;
+}) {
+    // "ENTITY:group" of the colour segment whose actions are listed under its bar
+    const [expanded, setExpanded] = useState<string | null>(null);
+
     const { rows, totalEntities } = useMemo(() => {
         const byEntity = new Map<string, { entityType: string; total: number; groups: Record<string, number>; actions: Record<string, number> }>();
         let grandTotal = 0;
@@ -213,6 +223,11 @@ function EntityDistribution({ items }: { items: AuditStatsEntityAction[] }) {
 
     const widest = rows[0].total;
 
+    const actionsOf = (actions: Record<string, number>, groupKey: string) =>
+        Object.entries(actions)
+            .filter(([action]) => groupOf(action) === groupKey)
+            .sort((a, b) => b[1] - a[1]);
+
     return (
         <>
             <ul className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -228,7 +243,18 @@ function EntityDistribution({ items }: { items: AuditStatsEntityAction[] }) {
                 {rows.map((row) => (
                     <li key={row.entityType}>
                         <div className="mb-1 flex items-baseline justify-between gap-3 text-xs">
-                            <span className="truncate font-medium text-foreground">{row.entityType}</span>
+                            {onOpenHistory ? (
+                                <button
+                                    type="button"
+                                    onClick={() => onOpenHistory({ entityType: row.entityType, entityId: null })}
+                                    title={`View all ${row.entityType} history`}
+                                    className="truncate text-left font-medium text-foreground hover:text-indigo-600 hover:underline dark:hover:text-indigo-300"
+                                >
+                                    {row.entityType}
+                                </button>
+                            ) : (
+                                <span className="truncate font-medium text-foreground">{row.entityType}</span>
+                            )}
                             <span className="shrink-0 text-muted-foreground">
                 {row.total} events • {(row.share * 100).toFixed(1)}%
               </span>
@@ -240,25 +266,63 @@ function EntityDistribution({ items }: { items: AuditStatsEntityAction[] }) {
                             {GROUPS.map((group) => {
                                 const count = row.groups[group.key];
                                 if (!count) return null;
-                                const detail = Object.entries(row.actions)
-                                    .filter(([action]) => groupOf(action) === group.key)
+                                const groupActions = actionsOf(row.actions, group.key);
+                                const detail = groupActions
                                     .map(([action, n]) => `${getActionLabel(action)}: ${n}`)
                                     .join(", ");
+                                const segmentKey = `${row.entityType}:${group.key}`;
                                 return (
-                                    <span
+                                    <button
                                         key={group.key}
+                                        type="button"
+                                        disabled={!onOpenHistory}
                                         title={`${group.label} (${count}) - ${detail}`}
+                                        onClick={() => {
+                                            if (groupActions.length === 1) {
+                                                onOpenHistory?.({
+                                                    entityType: row.entityType,
+                                                    entityId: null,
+                                                    action: groupActions[0][0],
+                                                });
+                                            } else {
+                                                setExpanded((current) => (current === segmentKey ? null : segmentKey));
+                                            }
+                                        }}
+                                        className={`h-full ${onOpenHistory ? "cursor-pointer transition hover:opacity-75" : ""}`}
                                         style={{ width: `${(count / row.total) * 100}%`, backgroundColor: group.color }}
                                     />
                                 );
                             })}
                         </div>
+
+                        {GROUPS.map((group) => {
+                            if (expanded !== `${row.entityType}:${group.key}`) return null;
+                            return (
+                                <div key={group.key} className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+                                    <span className="text-muted-foreground">{group.label}:</span>
+                                    {actionsOf(row.actions, group.key).map(([action, n]) => (
+                                        <button
+                                            key={action}
+                                            type="button"
+                                            onClick={() =>
+                                                onOpenHistory?.({ entityType: row.entityType, entityId: null, action })
+                                            }
+                                            className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 font-medium text-foreground/80 hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300"
+                                        >
+                                            {getActionLabel(action)}
+                                            <span className="text-muted-foreground">{n}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            );
+                        })}
                     </li>
                 ))}
             </ul>
 
             <p className="mt-4 text-xs text-muted-foreground">
                 Showing top {rows.length} of {totalEntities} entity types
+                {onOpenHistory && " · click an entity name for its full history, or a colour segment for one action"}
             </p>
         </>
     );
@@ -357,9 +421,11 @@ function TopActors({ items, total }: { items: AuditStatsBucket[]; total: number 
 export function AuditStatsDashboard({
                                         fromDate,
                                         toDate,
+                                        onOpenHistory,
                                     }: {
     fromDate?: string;
     toDate?: string;
+    onOpenHistory?: (scope: AuditHistoryScope) => void;
 }) {
     const [normalized, setNormalized] = useState(false);
 
@@ -487,7 +553,7 @@ export function AuditStatsDashboard({
 
                     <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
                         <Panel title="Actions distributed by entity" subtitle="Audit operations grouped by the kind of change.">
-                            <EntityDistribution items={stats.byEntityAction ?? []} />
+                            <EntityDistribution items={stats.byEntityAction ?? []} onOpenHistory={onOpenHistory} />
                         </Panel>
 
                         <div className="space-y-4">
