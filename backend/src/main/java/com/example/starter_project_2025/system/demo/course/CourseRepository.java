@@ -20,6 +20,12 @@ public interface CourseRepository extends BaseCrudRepository<Course, Long> {
 
     boolean existsByName(String name);
 
+    Optional<Course> findFirstBySyllabus_IdAndSourceTopicScopeKey(Long syllabusId, String key);
+
+    @Query("select c.name from Course c")
+    List<String> findAllCourseNames();
+
+    List<Course> findBySyllabus_Id(Long syllabusId);
     boolean existsByThumbnailUrlEndingWith(String suffix);
 
     boolean existsBySyllabus_Id(Long syllabusId);

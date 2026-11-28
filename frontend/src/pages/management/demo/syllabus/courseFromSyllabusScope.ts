@@ -5,7 +5,7 @@ export type CourseScopeMode = "FULL" | "FOCUSED";
 export type ScopedDraftSection = {
   key: string;
   title: string;
-  lessons: { key: string; title: string }[];
+  lessons: { key: string; title: string; sourceTopicId?: number | null; material?: string; contentType?: import("@/types/features/demo/lesson").LessonContentType; contentUrl?: string; duration?: number }[];
 };
 
 export const allSourceTopicIds = (source: CourseSyllabusPreview): number[] =>
@@ -34,7 +34,7 @@ export function buildCourseOutline(
     return [{
       key: `source-section-${section.id}`,
       title: section.title,
-      lessons: topics.map((topic) => ({ key: `source-topic-${topic.id}`, title: topic.title })),
+      lessons: topics.map((topic) => ({ key: `source-topic-${topic.id}`, title: topic.title, sourceTopicId: topic.id })),
     }];
   });
 }

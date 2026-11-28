@@ -714,7 +714,7 @@ export default function StudentSyllabusPage() {
 
                                                             <div className="space-y-2">
                                                                 <p className="text-xs font-semibold text-muted-foreground">{syllabusLabel(language, "studentMaterials", "Student materials")}</p>
-                                                                <StudentTopicCourseMaterials topicTitle={sourceSectionMap.get(section.id)?.topics.find(sourceTopic => sourceTopic.id === topic.id)?.title ?? topic.title}
+                                                                <StudentTopicCourseMaterials topicId={topic.id} topicTitle={sourceSectionMap.get(section.id)?.topics.find(sourceTopic => sourceTopic.id === topic.id)?.title ?? topic.title}
                                                                     sectionTitle={sourceSectionMap.get(section.id)?.title ?? section.title} courses={linkedCourses}
                                                                     outlines={courseOutlines} loading={loadingCourseMaterials}
                                                                     error={errorCourseMaterials} canReadCourses={canReadCourses} language={language} />

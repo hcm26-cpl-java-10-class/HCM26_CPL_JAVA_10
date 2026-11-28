@@ -335,20 +335,43 @@ function SelectedQuestionCard({
   );
 }
 
-export function ExamQuestionsPanel({ examId }: { examId: number }) {
+/** The same native question workspace can edit a saved Exam or an unsaved Course preview. */
+export type ExamQuestionsPreview = {
+  exam: ExamDTO;
+  selected: QuestionDTO[];
+  onSave: (questions: QuestionDTO[]) => void;
+};
+const EMPTY_QUESTIONS: QuestionDTO[] = [];
+export function allowedQuestionTypes(examType?: ExamDTO["examType"]): QuestionType[] {
+  if (examType === "CODING") return ["CODING"];
+  if (examType === "ESSAY") return ["ESSAY"];
+  if (examType === "MC_CODING") return ["MULTIPLE_CHOICE", "CODING"];
+  if (examType === "MIXED") return ["MULTIPLE_CHOICE", "ESSAY", "CODING"];
+  return ["MULTIPLE_CHOICE"];
+}
+type ExamQuestionsProps = { examId: number; preview?: never } | { examId?: never; preview: ExamQuestionsPreview };
+export function ExamQuestionsPanel({ examId, preview }: ExamQuestionsProps) {
+  const previewMode = Boolean(preview);
+  const saveLabel = previewMode ? "Save to Preview" : "Save to Assessment";
+  // Fail closed if a future handler accidentally tries a saved-only mutation in Preview.
+  const requireSavedId = () => {
+    if (previewMode || examId == null || examId <= 0) throw new Error("Save the Course before modifying an Assessment.");
+    return examId;
+  };
   const queryClient = useQueryClient();
   const examQuery = useQuery({
-    queryKey: ["exam-detail", examId],
-    queryFn: () => examApi.getById(String(examId)),
+    queryKey: previewMode ? ["exam-preview-disabled", "detail"] : ["exam-detail", examId],
+    queryFn: () => examApi.getById(String(requireSavedId())),
+    enabled: !previewMode && examId != null,
   });
-  const activeExam: ExamDTO | null = examQuery.data ?? null;
+  const activeExam: ExamDTO | null = preview ? preview.exam : examQuery.data ?? null;
   const setActiveExam = (exam: ExamDTO | null) => {
-    if (exam) queryClient.setQueryData(["exam-detail", examId], exam);
+    if (!previewMode && exam) queryClient.setQueryData(["exam-detail", examId], exam);
   };
   const poolConfigQuery = useQuery({
-    queryKey: ["exam-question-pool", examId],
-    queryFn: () => examApi.getQuestionPoolConfig(examId),
-    enabled: Boolean(activeExam?.id),
+    queryKey: previewMode ? ["exam-preview-disabled", "pool"] : ["exam-question-pool", examId],
+    queryFn: () => examApi.getQuestionPoolConfig(requireSavedId()),
+    enabled: !previewMode && Boolean(activeExam?.id),
     retry: false,
   });
 
@@ -362,7 +385,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
   const [page, setPage] = useState(0);
 
   // Selection / dialogs
-  const [stagedQuestions, setStagedQuestions] = useState<QuestionDTO[]>([]);
+  const [stagedQuestions, setStagedQuestions] = useState<QuestionDTO[]>(() => preview?.selected ?? []);
   const [editingQuestion, setEditingQuestion] = useState<QuestionDTO | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<number | string>>(new Set());
   const [expandedSelectedIds, setExpandedSelectedIds] = useState<Set<number | string>>(new Set());
@@ -382,14 +405,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
     if (activeExam?.allowedQuestionTypes && activeExam.allowedQuestionTypes.length > 0) {
       return activeExam.allowedQuestionTypes;
     }
-    const type = activeExam?.examType;
-    if (type === "MULTIPLE_CHOICE") return ["MULTIPLE_CHOICE"];
-    if (type === "CODING") return ["CODING"];
-    if (type === "ESSAY") return ["ESSAY"];
-    if (type === "MC_CODING") return ["MULTIPLE_CHOICE", "CODING"];
-    if (type === "MIXED") return ["MULTIPLE_CHOICE", "ESSAY", "CODING"];
-    // Safe fallback for unconfigured legacy exams: do NOT open all types!
-    return ["MULTIPLE_CHOICE"];
+    return allowedQuestionTypes(activeExam?.examType);
   }, [activeExam?.allowedQuestionTypes, activeExam?.examType]);
 
   const lockedQuestionType: QuestionType | null = useMemo(() => {
@@ -410,7 +426,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
     });
   }, [allowedTypes]);
 
-  const savedQuestions = activeExam?.questions ?? [];
+  const savedQuestions = previewMode ? EMPTY_QUESTIONS : activeExam?.questions ?? EMPTY_QUESTIONS;
 
   const savedQuestionIds = savedQuestions
       .map((question) => question.id)
@@ -418,7 +434,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
 
   const bankQuery = useQuery({
     queryKey: ["exam-question-all-bank", lockedQuestionType],
-    enabled: Boolean(activeExam?.id),
+    enabled: previewMode || Boolean(activeExam?.id),
     queryFn: () =>
         questionApi.getPage(
             { page: 0, size: 2000, sort: "id,desc" },
@@ -428,13 +444,13 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
     staleTime: 30_000,
   });
   const examAiQuery = useQuery({
-    queryKey: ["exam-ai-questions", examId],
-    queryFn: () => aiQuestionGeneratorApi.getExamAiQuestions(examId),
-    enabled: Boolean(examId),
+    queryKey: previewMode ? ["exam-preview-disabled", "ai"] : ["exam-ai-questions", examId],
+    queryFn: () => aiQuestionGeneratorApi.getExamAiQuestions(requireSavedId()),
+    enabled: !previewMode && Boolean(examId),
   });
 
   const deleteAiQuestionMutation = useMutation({
-    mutationFn: (questionId: number) => aiQuestionGeneratorApi.deleteExamAiQuestion(examId, questionId),
+    mutationFn: (questionId: number) => aiQuestionGeneratorApi.deleteExamAiQuestion(requireSavedId(), questionId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["exam-ai-questions", examId] });
       void queryClient.invalidateQueries({ queryKey: ["exam-detail", examId] });
@@ -457,7 +473,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
   const allBankQuestions = useMemo(
     () => {
       const bankItems = (bankQuery.data?.content ?? []).filter((q) => allowedTypes.includes(q.type));
-      const aiItems = (examAiQuery.data ?? []).filter((q) => allowedTypes.includes(q.type));
+      const aiItems = (previewMode ? [] : examAiQuery.data ?? []).filter((q) => allowedTypes.includes(q.type));
       const mergedMap = new Map<number, QuestionDTO>();
       for (const item of aiItems) {
         if (item.id != null) mergedMap.set(item.id, item);
@@ -470,7 +486,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       return Array.from(mergedMap.values());
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [bankQuery.data?.content, examAiQuery.data, lockedQuestionType, isPairExam],
+    [bankQuery.data?.content, examAiQuery.data, allowedTypes, previewMode],
   );
 
   const refreshExams = () => {
@@ -478,7 +494,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
   };
 
   const addQuestionsMutation = useMutation({
-    mutationFn: (ids: number[]) => examApi.addQuestions(activeExam!.id!, ids),
+    mutationFn: (ids: number[]) => examApi.addQuestions(requireSavedId(), ids),
     onSuccess: (exam) => {
       setActiveExam(exam);
       refreshExams();
@@ -489,8 +505,8 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
   });
 
   const removeQuestionMutation = useMutation({
-    mutationFn: ({ examId: id, questionId }: { examId: number; questionId: number }) =>
-        examApi.removeQuestion(id, questionId),
+    mutationFn: ({ questionId }: { examId: number; questionId: number }) =>
+        examApi.removeQuestion(requireSavedId(), questionId),
     onSuccess: (exam) => {
       setActiveExam(exam);
       refreshExams();
@@ -541,6 +557,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
 
   useEffect(() => setPage(0), [search, typeFilter, difficultyFilter, topicFilter, hideAdded]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  useEffect(() => { if (previewMode && page >= totalPages) setPage(totalPages - 1); }, [previewMode, page, totalPages]);
   const pageRows = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
   const isAllExpanded = pageRows.length > 0 && pageRows.every((q) => expandedIds.has(q.id));
@@ -616,7 +633,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       randomQuestionCount: number;
       shuffleQuestionOrder: boolean;
     }) =>
-        examApi.saveQuestionPoolConfig(examId, {
+        examApi.saveQuestionPoolConfig(requireSavedId(), {
           ...config,
           questionIds: savedQuestionIds,
         }),
@@ -736,7 +753,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       const existing = new Set(prev.map((q) => q.id));
       return [...prev, ...validAddable.filter((q) => !existing.has(q.id))];
     });
-    toast.success(`Added ${validAddable.length} question(s) to the selection. Click "Save to Assessment" to keep them.`);
+    toast.success(`Added ${validAddable.length} question(s) to the selection. Click "${saveLabel}" to keep them.`);
   };
 
   const handleSaveStagedToExam = () => {
@@ -744,10 +761,14 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       toast.error("Students have already started this assessment, so questions cannot be added.");
       return;
     }
-    if (!activeExam?.id || stagedQuestions.length === 0) return;
+    if (!preview && (!activeExam?.id || stagedQuestions.length === 0)) return;
     const disallowed = stagedQuestions.filter((q) => !allowedTypes.includes(q.type));
     if (disallowed.length > 0) {
       toast.error(`Đề thi không cho phép câu hỏi loại: ${disallowed.map((q) => TYPE_LABEL[q.type] || q.type).join(", ")}`);
+      return;
+    }
+    if (preview) {
+      preview.onSave(stagedQuestions);
       return;
     }
     const ids = stagedQuestions.map((q) => q.id);
@@ -773,7 +794,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
 
   const eligibleForRandom = useMemo(() => {
     return allBankQuestions.filter((q) => {
-      if (sourceIdsInExam.has(q.id)) return false;
+      if (sourceIdsInExam.has(q.id) || (previewMode && stagedIds.has(q.id))) return false;
       const typeToFilter = lockedQuestionType ?? (randomQuestionType !== "ALL" ? randomQuestionType : null);
       if (typeToFilter && q.type !== typeToFilter) return false;
       if (isPairExam && q.type === "ESSAY") return false;
@@ -783,7 +804,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       }
       return true;
     });
-  }, [allBankQuestions, sourceIdsInExam, lockedQuestionType, isPairExam, randomQuestionType, randomDifficulty, randomTopic]);
+  }, [allBankQuestions, sourceIdsInExam, stagedIds, previewMode, lockedQuestionType, isPairExam, randomQuestionType, randomDifficulty, randomTopic]);
 
   const handleConfirmRandomAdd = () => {
     if (eligibleForRandom.length === 0) {
@@ -802,10 +823,10 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       return [...prev, ...picked.filter((q) => !existing.has(q.id))];
     });
     setIsRandomOpen(false);
-    toast.success(`Added ${picked.length} random question(s) to the selection! Click "Save to Assessment" to keep them.`);
+    toast.success(`Added ${picked.length} random question(s) to the selection! Click "${saveLabel}" to keep them.`);
   };
 
-  if (examQuery.isLoading) {
+  if (!previewMode && examQuery.isLoading) {
     return <p className="py-10 text-center text-sm text-muted-foreground">Loading questions...</p>;
   }
   if (!activeExam) {
@@ -960,9 +981,9 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                 type="button"
                 size="sm"
                 className="inline-flex items-center gap-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-xs text-xs h-8 px-2 whitespace-nowrap shrink-0"
-                disabled={activeExamStarted}
+                disabled={activeExamStarted || previewMode}
                 onClick={() => setIsAiGenOpen(true)}
-                title="Tạo câu hỏi bằng AI"
+                title={previewMode ? "Create Draft Course before generating questions with AI" : "Tạo câu hỏi bằng AI"}
               >
                 <Sparkles className="size-3.5 shrink-0" />
                 <span>AI Generate</span>
@@ -986,7 +1007,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                 onToggleExpand={() => togglePreview(q.id)}
                 onAdd={() => stageQuestion(q)}
                 onUndo={() => unstageQuestion(q.id)}
-                onDeletePermanent={() => handleDeleteAiQuestionPermanent(q.id)}
+                onDeletePermanent={previewMode ? undefined : () => handleDeleteAiQuestionPermanent(q.id)}
               />
             ))}
           </div>
@@ -1028,7 +1049,8 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
             )}
           </div>
 
-          {/* Question Pool loading / error */}
+          {/* Question Pool requires a persisted Assessment. */}
+          {!previewMode && <>
           {poolConfigQuery.isLoading && (
               <p className="mx-3 text-xs text-muted-foreground">
                 Loading Question Pool configuration...
@@ -1127,6 +1149,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
             )}
           </div>
 
+          </>}
           {typeSummary.length > 0 && (
             <div className="flex flex-wrap gap-1.5 border-b bg-muted/20 px-3.5 py-2">
               {typeSummary.map((row) => (
@@ -1179,18 +1202,18 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
             <Button
               type="button"
               className="h-9 w-full bg-emerald-600 font-medium text-white shadow-sm hover:bg-emerald-700"
-              disabled={activeExamStarted || stagedQuestions.length === 0 || addQuestionsMutation.isPending}
+              disabled={activeExamStarted || (!previewMode && stagedQuestions.length === 0) || addQuestionsMutation.isPending}
               onClick={handleSaveStagedToExam}
             >
               <Save className="mr-1.5 size-4" />
-              {addQuestionsMutation.isPending
+              {previewMode ? "Save to Preview" : addQuestionsMutation.isPending
                 ? "Saving to assessment..."
                 : stagedQuestions.length > 0
                   ? `Save ${stagedQuestions.length} Question(s) to Assessment`
                   : "Save to Assessment"}
             </Button>
             <p className={`text-center text-[11px] ${stagedQuestions.length > 0 ? "font-medium text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
-              {stagedQuestions.length > 0
+              {previewMode ? "Questions are saved in Course Preview only. Create Draft Course to persist them." : stagedQuestions.length > 0
                 ? `${stagedQuestions.length} question(s) are only in this list. Click "Save to Assessment" to keep them.`
                 : "All selected questions are saved."}
             </p>
@@ -1344,7 +1367,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
         </DialogContent>
       </Dialog>
 
-      {editingQuestion && activeExam && (
+      {!previewMode && editingQuestion && activeExam && (
         <EditExamQuestionDialog
           exam={activeExam}
           question={editingQuestion}
@@ -1357,7 +1380,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
         />
       )}
 
-      <AiQuestionGeneratorDialog
+      {!previewMode && examId != null && <AiQuestionGeneratorDialog
         open={isAiGenOpen}
         onOpenChange={setIsAiGenOpen}
         examId={examId}
@@ -1372,7 +1395,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
           void queryClient.invalidateQueries({ queryKey: ["exam-question-all-bank"] });
           void queryClient.invalidateQueries({ queryKey: ["exam-ai-questions", examId] });
         }}
-      />
+      />}
     </div>
   );
 }

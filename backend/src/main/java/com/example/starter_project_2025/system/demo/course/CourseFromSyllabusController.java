@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/courses/from-syllabus")
 public class CourseFromSyllabusController {
     private final CourseFromSyllabusService service;
+    private final SyllabusCourseAiSuggestionService aiService;
+    private final SyllabusCourseAiJobService aiJobs;
 
     @GetMapping("/{syllabusId}/preview")
     @PreAuthorize("hasAuthority('SYLLABUS_READ') and hasAuthority('COURSE_CREATE') "
@@ -39,6 +41,48 @@ public class CourseFromSyllabusController {
     public NameAvailability nameAvailability(@PathVariable Long syllabusId,
                                              @RequestParam String name) {
         return service.nameAvailability(syllabusId, name);
+    }
+
+    /** Advisory check. Backend checks again transactionally on Create. */
+    @PostMapping("/{syllabusId}/scope-check")
+    @PreAuthorize("hasAuthority('SYLLABUS_READ') and hasAuthority('COURSE_CREATE')")
+    public CourseFromSyllabusModels.ScopeCheck checkScope(@PathVariable Long syllabusId,
+                                                           @RequestBody CourseFromSyllabusModels.ScopeRequest request) {
+        return service.checkScope(syllabusId, request == null ? null : request.selectedTopicIds());
+    }
+
+    /** AI generates an UNSAVED suggestion from the exact selected source IDs. */
+    @PostMapping("/{syllabusId}/ai-suggestion")
+    @PreAuthorize("hasAuthority('SYLLABUS_READ') and hasAuthority('COURSE_CREATE') "
+            + "and hasAuthority('SECTION_CREATE') and hasAuthority('LESSON_CREATE')")
+    public CourseFromSyllabusModels.AiSuggestion aiSuggestion(@PathVariable Long syllabusId,
+                                                                @RequestBody CourseFromSyllabusModels.AiRequest request) {
+        return aiService.generate(syllabusId, request);
+    }
+
+    /** Start one complete, unsaved Course generation without a long-running HTTP request. */
+    @PostMapping("/{syllabusId}/ai-jobs")
+    @PreAuthorize("hasAuthority('SYLLABUS_READ') and hasAuthority('COURSE_CREATE') "
+            + "and hasAuthority('SECTION_CREATE') and hasAuthority('LESSON_CREATE')")
+    public SyllabusCourseAiJobService.JobView startAiJob(@PathVariable Long syllabusId,
+            @RequestBody CourseFromSyllabusModels.AiRequest request, java.security.Principal principal) {
+        return aiJobs.start(syllabusId, request, principal == null ? null : principal.getName());
+    }
+
+    @GetMapping("/{syllabusId}/ai-jobs/{jobId}")
+    @PreAuthorize("hasAuthority('SYLLABUS_READ') and hasAuthority('COURSE_CREATE') "
+            + "and hasAuthority('SECTION_CREATE') and hasAuthority('LESSON_CREATE')")
+    public SyllabusCourseAiJobService.JobView aiJob(@PathVariable Long syllabusId,
+            @PathVariable String jobId, java.security.Principal principal) {
+        return aiJobs.view(syllabusId, jobId, principal == null ? null : principal.getName());
+    }
+
+    @PostMapping("/{syllabusId}/ai-jobs/{jobId}/resume")
+    @PreAuthorize("hasAuthority('SYLLABUS_READ') and hasAuthority('COURSE_CREATE') "
+            + "and hasAuthority('SECTION_CREATE') and hasAuthority('LESSON_CREATE')")
+    public SyllabusCourseAiJobService.JobView resumeAiJob(@PathVariable Long syllabusId,
+            @PathVariable String jobId, java.security.Principal principal) {
+        return aiJobs.resume(syllabusId, jobId, principal == null ? null : principal.getName());
     }
 
     /** New two-table editor: persist exactly the Section/Lesson titles ordered by the user. */

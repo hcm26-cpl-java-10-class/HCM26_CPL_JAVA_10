@@ -8,8 +8,9 @@ import { resolveTopicCourseReferences } from "./topicCourseMapping";
 import type { SyllabusLanguage } from "./SyllabusLanguageSwitcher";
 
 export function StudentTopicCourseMaterials({
-    topicTitle, sectionTitle, courses, outlines, loading, error, canReadCourses, language = "en",
+    topicId, topicTitle, sectionTitle, courses, outlines, loading, error, canReadCourses, language = "en",
 }: {
+    topicId?: number;
     topicTitle: string;
     sectionTitle: string;
     courses: StudentRelatedCourse[];
@@ -31,14 +32,14 @@ export function StudentTopicCourseMaterials({
     if (!courses.length) {
         return <span className="inline-flex items-center gap-2"><Badge variant="outline">Online</Badge><span className="text-xs text-muted-foreground">{language === "vi" ? "Chưa có khóa học liên kết" : "No course linked yet"}</span></span>;
     }
-    const references = resolveTopicCourseReferences(topicTitle, sectionTitle, courses, outlines);
+    const references = resolveTopicCourseReferences(topicTitle, sectionTitle, courses, outlines, topicId);
     if (!references.length) {
         return <span className="inline-flex items-center gap-2"><Badge variant="outline">Online</Badge><span className="text-xs text-muted-foreground">{language === "vi" ? "Chưa có bài học cho chủ đề này" : "No linked lesson for this topic"}</span></span>;
     }
     return (
         <div className="space-y-2">
             {references.map((reference) => (
-                <div key={reference.courseId} className="min-w-0 rounded-md border bg-background/40 p-2">
+                <div key={`${reference.courseId}-${reference.lessonId}`} className="min-w-0 rounded-md border bg-background/40 p-2">
                     <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium">
                         <BookOpenText className="size-3.5 shrink-0 text-muted-foreground" />
                         <span className="truncate" title={reference.courseName}>{reference.courseName}</span>

@@ -25,7 +25,7 @@ import jakarta.persistence.Enumerated;
         order = 0,
         permission = "SYLLABUS_READ"
 )
-public class Syllabus extends BaseEntity {
+public class    Syllabus extends BaseEntity {
 
     @Column(nullable = false, unique = true, length = 30)
     private String code;
