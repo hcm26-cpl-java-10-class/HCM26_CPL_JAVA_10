@@ -59,6 +59,16 @@ const ACTION_META: Record<string, { label?: string; tone: Tone }> = {
   APPLY: { tone: "blue" },
   ACCEPT: { tone: "emerald" },
   REJECT: { tone: "red" },
+  APPROVE: { tone: "emerald" },
+  CLONE: { tone: "sky" },
+  DEACTIVATE: { tone: "orange" },
+  CHANGE_PASSWORD: { tone: "amber" },
+  BLOCK: { tone: "red" },
+  UNBLOCK: { tone: "emerald" },
+  EXTEND_BLOCK: { tone: "orange" },
+  AUTO_UNBLOCK: { tone: "teal" },
+  SECURITY_ALERT: { tone: "red" },
+  DISMISS: { tone: "slate" },
 };
 
 /** Actions the UI knows about; used until the real list is loaded from the server. */

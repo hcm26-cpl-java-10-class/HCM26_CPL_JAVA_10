@@ -55,4 +55,10 @@ public final class AuditAction {
     public static final String APPLY = "APPLY";
     public static final String ACCEPT = "ACCEPT";
     public static final String REJECT = "REJECT";
+
+    // training / security
+    public static final String APPROVE = "APPROVE";
+    public static final String CLONE = "CLONE";
+    public static final String DEACTIVATE = "DEACTIVATE";
+    public static final String CHANGE_PASSWORD = "CHANGE_PASSWORD";
 }

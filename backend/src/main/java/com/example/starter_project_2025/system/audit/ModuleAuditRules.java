@@ -185,7 +185,7 @@ public class ModuleAuditRules implements AuditRuleProvider {
         );
     }
 
-    private static AuditRule rule(
+    static AuditRule rule(
             String targetClass,
             String method,
             String action,
