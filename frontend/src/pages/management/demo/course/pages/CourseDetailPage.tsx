@@ -1,4 +1,5 @@
 import { CourseAssessmentPanel } from "../components/CourseAssessmentPanel";
+import { CoursePolicyPanel, PrerequisiteNotice, usePrerequisites } from "../components/CoursePolicyPanel";
 import { PermissionGate } from "@/components/PermissionGate";
 
 import { courseApi, departmentApi, enrollmentApi, progressApi } from "@/api";
@@ -124,7 +125,7 @@ export function CourseDetailPage({ forceEnrollmentManagement = false }: { forceE
             </Button>
           </div>
         ) : (
-          <><CourseDetailContent course={course} enrollmentManagement={enrollmentManagement} /><CourseAssessmentPanel courseId={course.id} /></>
+          <><CourseDetailContent course={course} enrollmentManagement={enrollmentManagement} /><CourseAssessmentPanel courseId={course.id} /><CoursePolicyPanel courseId={course.id} /></>
         )}
       </div>
     </MainLayout>
@@ -350,6 +351,8 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
   const { canEnroll, canCancel, enrollmentsQuery, enrollmentByCourseId, enrollMutation, cancelMutation } =
     useCourseEnrollment();
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const prerequisitesQuery = usePrerequisites(course.id, !course.enrolled);
+  const missingPrerequisites = (prerequisitesQuery.data ?? []).filter((p) => !p.met).map((p) => p.courseName);
 
   const enrollment = enrollmentByCourseId.get(course.id);
   const progressQuery = useQuery({
@@ -397,7 +400,7 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
       <Button
         size="lg"
         className="w-full"
-        disabled={enrollMutation.isPending}
+        disabled={enrollMutation.isPending || missingPrerequisites.length > 0}
         onClick={() => enrollMutation.mutate(course.id)}
       >
         {enrollMutation.isPending ? "Enrolling..." : "Enroll"}
@@ -429,6 +432,7 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
       )}
 
       {action}
+      {!course.enrolled && canEnroll && !isStaffPreview && <PrerequisiteNotice missing={missingPrerequisites} />}
 
       <PermissionGate permissions={["DEPARTMENT_READ", "DEPARTMENT_UPDATE"]} requireAll>
         <DepartmentEnrollmentControl courseId={course.id} />

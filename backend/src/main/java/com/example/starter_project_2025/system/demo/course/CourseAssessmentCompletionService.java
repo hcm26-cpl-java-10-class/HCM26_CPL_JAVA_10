@@ -17,6 +17,7 @@ public class CourseAssessmentCompletionService {
     private final LessonProgressRepository progress;
     private final CertificateService certificates;
     private final NotificationService notifications;
+    private final com.example.starter_project_2025.system.demo.coursepolicy.CourseCompletionRuleService rules;
     @Transactional
     public void refreshCourse(Long courseId) {
         for (CourseEnrollment enrollment:enrollments.findActiveStudentsByCourse(courseId)) refresh(enrollment);
@@ -29,7 +30,9 @@ public class CourseAssessmentCompletionService {
             if (!item.isCompleted()) { item.setCompleted(true);item.setCompletedAt(LocalDateTime.now());progress.save(item); }
         }
         var done=progress.findAllByEnrollment_Id(enrollment.getId()).stream().filter(LessonProgress::isCompleted).map(p->p.getLesson().getId()).toList();
-        if (!active.isEmpty() && active.stream().allMatch(l->done.contains(l.getId())) && grades.canComplete(enrollment.getCourse().getId(),enrollment.getUser().getId())) {
+        int completedActive=(int) active.stream().filter(l->done.contains(l.getId())).count();
+        Long courseId=enrollment.getCourse().getId(), studentId=enrollment.getUser().getId();
+        if (rules.isComplete(courseId,active.size(),completedActive,()->grades.canComplete(courseId,studentId))) {
             certificates.issueIfCourseCompleted(enrollment);
             notifications.createOnce(enrollment.getUser().getId(),"course-completed:"+enrollment.getId(),"Course completed",
                     "You completed "+enrollment.getCourse().getName()+".","/courses/"+enrollment.getCourse().getId());

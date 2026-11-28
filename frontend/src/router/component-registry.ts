@@ -4,6 +4,8 @@ import EmailComposePage from "@/pages/communications/EmailComposePage";
 import EmailTemplatesPage from "@/pages/communications/EmailTemplatesPage";
 import NotificationPoliciesPage from "@/pages/communications/NotificationPoliciesPage";
 import RecommendedCoursesPage from "@/pages/student/RecommendedCoursesPage";
+import LearningPathListPage from "@/pages/management/demo/learning-path/LearningPathListPage";
+import LearningPathDetailPage from "@/pages/management/demo/learning-path/LearningPathDetailPage";
 import CourseLearnerGradesPage from "@/pages/management/demo/course/pages/CourseLearnerGradesPage";
 import ScoreManagementPage from "@/pages/management/exam/score-management";
 import ExamCurriculumPage from "@/pages/management/exam/curriculum/ExamCurriculumPage";
@@ -540,6 +542,8 @@ export const routes: RouteConfig[] = [
     isModuleDriven: false,
   },
   { path: "/student/recommendations", component: RecommendedCoursesPage, requiredPermission: "ENROLLMENT_CREATE", isModuleDriven: false },
+  { path: "/learning-paths", component: LearningPathListPage, requiredPermission: "COURSE_READ", isModuleDriven: false },
+  { path: "/learning-paths/:id", component: LearningPathDetailPage, requiredPermission: "COURSE_READ", isModuleDriven: false },
   // STUDENT
   {
     path: "/student",

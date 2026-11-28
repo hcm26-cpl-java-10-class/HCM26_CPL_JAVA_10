@@ -20,7 +20,7 @@ export default function RecommendedCoursesPage() {
   return <MainLayout pathName={{ recommendations: "For you" }}><div className="mx-auto max-w-7xl space-y-5">
     <header className="space-y-3"><h1 className="text-3xl font-bold">For you</h1>
     <p className="text-muted-foreground">Discover courses for your interests.</p>
-    <Button asChild variant="outline"><Link to="/courses">Browse all courses</Link></Button></header>
+    <div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link to="/courses">Browse all courses</Link></Button><Button asChild variant="outline"><Link to="/learning-paths">Learning paths</Link></Button></div></header>
     <label className="block space-y-2"><span>Search recommendations</span>
     <Input value={params.get("q") ?? ""} onChange={e => updateParams(next => { e.target.value ? next.set("q", e.target.value) : next.delete("q"); next.delete("page"); })} /></label>
     <CourseRecommendations

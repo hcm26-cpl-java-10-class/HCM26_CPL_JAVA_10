@@ -36,6 +36,7 @@ public class CourseEnrollmentService {
     private final LessonRepository lessonRepository;
     private final LessonProgressRepository progressRepository;
     private final NotificationService notificationService;
+    private final com.example.starter_project_2025.system.demo.coursepolicy.CoursePrerequisiteService prerequisites;
 
     @Transactional
     public CourseEnrollment enroll(Long userId, Long courseId) {
@@ -44,6 +45,8 @@ public class CourseEnrollmentService {
                         new ResourceNotFoundException("User not found"));
 
         Course course = getAvailableCourse(courseId);
+        // Self-service enrollment must respect prerequisites; staff assignment (enrollStudent / departments) may override.
+        prerequisites.assertMet(userId, courseId);
 
         return createEnrollment(user, course);
     }
