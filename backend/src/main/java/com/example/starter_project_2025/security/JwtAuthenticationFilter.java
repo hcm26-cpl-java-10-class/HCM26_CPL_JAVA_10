@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.security;
 
+import com.example.starter_project_2025.system.audit.guard.RequestAbuseFilter;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
 import com.example.starter_project_2025.system.project.tenant.TenantRepository;
@@ -73,9 +74,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 UserDetails userDetails = userDetailsService.loadUserByUsername(jwt.getSubject());
 
+                request.setAttribute(RequestAbuseFilter.ATTR_USER_EMAIL, userDetails.getUsername());
+                if (userDetails instanceof UserPrincipal principal) {
+                    request.setAttribute(RequestAbuseFilter.ATTR_USER_ID, principal.getUser().getId());
+                }
+
                 if (!userDetails.isAccountNonLocked()
                         || !userDetails.isEnabled()) {
                     SecurityContextHolder.clearContext();
+                    request.setAttribute(RequestAbuseFilter.ATTR_SKIP, true);
                     writeJsonError(response, HttpServletResponse.SC_FORBIDDEN,
                             "ACCOUNT_INACTIVE", "Account is locked or disabled");
                     return;

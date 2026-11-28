@@ -15,6 +15,7 @@ import {
     KNOWN_ACTIONS,
 } from "@/components/audit/auditActions";
 import { AuditStatsDashboard } from "./AuditStatsDashboard";
+import { AuditSecurityPanel } from "@/components/audit/AuditSecurityPanel";
 import type { FieldSchema } from "@/types";
 import {
     auditLogApi,
@@ -801,7 +802,7 @@ async function getAllAuditLogs(
 
 export default function AuditLogPage() {
     const [showExportModal, setShowExportModal] = useState(false);
-    const [view, setView] = useState<"logs" | "stats">("logs");
+    const [view, setView] = useState<"logs" | "stats" | "security">("logs");
     const [exporting, setExporting] = useState(false);
 
     const [period, setPeriod] = useState<Period>("30days");
@@ -1146,6 +1147,7 @@ export default function AuditLogPage() {
                             {([
                                 { key: "logs", label: "Logs feed" },
                                 { key: "stats", label: "Statistics" },
+                            { key: "security", label: "Security" },
                             ] as const).map((tab) => (
                                 <button
                                     key={tab.key}
@@ -1272,6 +1274,9 @@ export default function AuditLogPage() {
                             />
                         </div>
                     )}
+
+                    {view === "security" && <AuditSecurityPanel />}
+
 
                     {view === "logs" && (
                         <div

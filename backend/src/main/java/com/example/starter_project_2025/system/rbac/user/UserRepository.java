@@ -170,4 +170,12 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
        OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
     """)
     List<Long> findIdsByActorName(@Param("keyword") String keyword);
+
+    @Query("select distinct u from User u join u.roles role "
+            + "where role.name = 'ADMIN' and u.isActive = true")
+    List<User> findActiveAdmins();
+
+    List<User> findByBlockedUntilAfterOrderByBlockedUntilAsc(java.time.LocalDateTime now);
+
+    List<User> findByBlockedUntilNotNullAndBlockedUntilBefore(java.time.LocalDateTime now);
 }

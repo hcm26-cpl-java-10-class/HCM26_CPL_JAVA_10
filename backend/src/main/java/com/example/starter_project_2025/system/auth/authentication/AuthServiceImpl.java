@@ -236,7 +236,7 @@ public class AuthServiceImpl implements AuthService {
 
         User user = refreshToken.getUser();
 
-        if (Boolean.TRUE.equals(user.getLocked())) {
+        if (user.hasActiveLock()) {
             refreshTokenService.revokeAllRefreshTokens(user.getId(), "ACCOUNT_LOCKED");
             authAuditService.record(user.getTenantId(), user.getId(), user.getEmail(), user.getId(),
                     AuthAuditAction.REFRESH_FAILED, ipAddress, userAgent, "Account is locked");
@@ -448,7 +448,7 @@ public class AuthServiceImpl implements AuthService {
             String userAgent,
             AuthAuditAction failAction
     ) {
-        if (Boolean.TRUE.equals(user.getLocked())) {
+        if (user.hasActiveLock()) {
             authAuditService.record(user.getTenantId(), user.getId(), user.getEmail(), user.getId(),
                     failAction, ipAddress, userAgent, "Account is locked");
             throw new LockedException("Account is locked");

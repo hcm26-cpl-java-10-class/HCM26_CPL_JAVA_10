@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.rbac.user;
 
+import java.time.LocalDateTime;
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportEntity;
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField;
@@ -18,7 +19,6 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 
-import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -110,6 +110,21 @@ public class User extends BaseEntity {
 
     @Column(name = "last_login_at")
     LocalDateTime lastLoginAt;
+
+    /** Temporary block set by an admin; the account is usable again once this moment has passed. */
+    @Column(name = "blocked_until")
+    LocalDateTime blockedUntil;
+
+    @Column(name = "block_reason", length = 500)
+    String blockReason;
+
+    public boolean isTemporarilyBlocked() {
+        return blockedUntil != null && blockedUntil.isAfter(LocalDateTime.now());
+    }
+
+    public boolean hasActiveLock() {
+        return Boolean.TRUE.equals(locked) || isTemporarilyBlocked();
+    }
 
     @Builder.Default
     @Column(name = "is_guest", nullable = false)
