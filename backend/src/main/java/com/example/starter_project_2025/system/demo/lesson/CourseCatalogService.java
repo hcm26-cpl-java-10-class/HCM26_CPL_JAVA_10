@@ -42,6 +42,33 @@ public class CourseCatalogService {
     private final com.example.starter_project_2025.system.exam.core.domain.ExamRepository examRepository;
 
     public Page<CatalogCourseDTO> search(String keyword, Long categoryId, CourseLevel level, Pageable pageable, Long userId) {
+        return searchWithSpec(null, keyword, categoryId, level, pageable, userId);
+    }
+
+    /** Filters published catalog courses restricted to the given course IDs (e.g. saved bookmarks). */
+    public Page<CatalogCourseDTO> searchByIds(
+            Collection<Long> courseIds,
+            String keyword,
+            Long categoryId,
+            CourseLevel level,
+            Pageable pageable,
+            Long userId
+    ) {
+        if (courseIds == null || courseIds.isEmpty()) {
+            return Page.empty(sanitize(pageable));
+        }
+        Specification<Course> idFilter = (root, query, cb) -> root.get("id").in(courseIds);
+        return searchWithSpec(idFilter, keyword, categoryId, level, pageable, userId);
+    }
+
+    private Page<CatalogCourseDTO> searchWithSpec(
+            Specification<Course> extraSpec,
+            String keyword,
+            Long categoryId,
+            CourseLevel level,
+            Pageable pageable,
+            Long userId
+    ) {
         Pageable safePageable = sanitize(pageable);
 
         Set<Long> categoryIds = null;
@@ -53,6 +80,9 @@ public class CourseCatalogService {
         }
 
         Specification<Course> spec = buildSpec(keyword, categoryIds, level);
+        if (extraSpec != null) {
+            spec = spec.and(extraSpec);
+        }
         Page<Course> page = courseRepository.findAll(spec, safePageable);
         if (page.isEmpty()) {
             return new PageImpl<>(List.of(), safePageable, page.getTotalElements());
@@ -269,7 +299,8 @@ public class CourseCatalogService {
                 sectionItems,
                 syllabusInfo(course),
                 course.getCourseType(),
-                assessments
+                assessments,
+                course.getStatus()
         );
     }
 

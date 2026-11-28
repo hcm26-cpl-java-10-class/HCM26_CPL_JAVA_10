@@ -2,6 +2,7 @@ export * from "./features/auth.api";
 export * from "./features/demo/book.api";
 export * from "./features/demo/category.api";
 export * from "./features/demo/course.api";
+export * from "./features/demo/course-bookmark.api";
 export * from "./features/demo/department.api";
 export * from "./features/demo/enrollment.api";
 export * from "./features/demo/lesson.api";

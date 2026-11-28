@@ -1,6 +1,7 @@
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
 import { certificateApi, courseApi } from "@/api";
+import { courseBookmarkApi } from "@/api/features/demo/course-bookmark.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ import {
 } from "@/types";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
+  Bookmark,
   GraduationCap,
   Sparkles,
   Search,
@@ -28,6 +30,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useCourseBookmarks } from "../hooks/useCourseBookmarks.ts";
 import { useCourseEnrollment } from "../hooks/useCourseEnrollment.ts";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
 import { CatalogPagination } from "./CatalogPagination.tsx";
@@ -84,6 +87,7 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
   const level = isLevel(levelParam) ? levelParam : undefined;
   const sortParam = searchParams.get("sort");
   const sort: CatalogSort = isSort(sortParam) ? sortParam : "createdAt,desc";
+  const savedOnly = searchParams.get("saved") === "true";
   const pageParam = Number(searchParams.get("page"));
   const page = Number.isInteger(pageParam) && pageParam > 1 ? pageParam - 1 : 0; // URL 1-based, API 0-based
 
@@ -138,17 +142,29 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
     [categoriesQuery.data],
   );
 
+  const {
+    canBookmark,
+    savedCourseIds,
+    savedCount,
+    togglingCourseId,
+    toggleBookmark,
+  } = useCourseBookmarks(true);
+
   const coursesQuery = useQuery({
-    queryKey: ["course-catalog", user?.email, { search: urlSearch.trim(), categoryId, level, sort, page }],
-    queryFn: () =>
-      courseApi.searchCatalog({
+    queryKey: ["course-catalog", user?.email, { savedOnly, search: urlSearch.trim(), categoryId, level, sort, page }],
+    queryFn: () => {
+      const queryParams = {
         search: urlSearch.trim() || undefined,
         categoryId,
         level,
         sort,
         page,
         size: PAGE_SIZE,
-      }),
+      };
+      return savedOnly
+        ? courseBookmarkApi.getSavedCourses(queryParams)
+        : courseApi.searchCatalog(queryParams);
+    },
     placeholderData: (previous, previousQuery) => previousQuery?.queryKey[1] === user?.email ? keepPreviousData(previous) : undefined,
   });
 
@@ -179,7 +195,7 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
     }
   }, [coursesQuery.isPlaceholderData, totalPages, page, updateParams]);
 
-  const hasFilters = Boolean(urlSearch.trim() || categoryId || level);
+  const hasFilters = Boolean(urlSearch.trim() || categoryId || level || savedOnly);
   const clearFilters = () => {
     setSearchInput("");
     setSearchParams(new URLSearchParams(), { replace: true });
@@ -213,7 +229,40 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
         </section>
       )}
 
-      {!embedded && activeRole === "STUDENT" && hasPermission("ENROLLMENT_CREATE") && <Button size="lg" className="min-h-11 w-full whitespace-normal shadow-sm sm:w-auto" onClick={() => navigate("/student/recommendations")}><Sparkles aria-hidden="true" />For you · Recommended courses</Button>}
+      {((!embedded && activeRole === "STUDENT" && hasPermission("ENROLLMENT_CREATE")) || canBookmark) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {!embedded && activeRole === "STUDENT" && hasPermission("ENROLLMENT_CREATE") && (
+            <Button size="lg" className="min-h-11 w-full whitespace-normal shadow-sm sm:w-auto" onClick={() => navigate("/student/recommendations")}>
+              <Sparkles aria-hidden="true" />For you · Recommended courses
+            </Button>
+          )}
+          {canBookmark && (
+            <div className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card p-1" role="group" aria-label="Course view filter">
+              <Button
+                type="button"
+                size="sm"
+                variant={!savedOnly ? "default" : "ghost"}
+                aria-pressed={!savedOnly}
+                className={!savedOnly ? "bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200" : ""}
+                onClick={() => updateParams({ saved: undefined })}
+              >
+                All courses
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={savedOnly ? "default" : "ghost"}
+                aria-pressed={savedOnly}
+                className={savedOnly ? "bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200" : ""}
+                onClick={() => updateParams({ saved: "true" })}
+              >
+                <Bookmark className="size-3.5" aria-hidden="true" />
+                Saved courses ({savedCount})
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       <section className="space-y-1.5">
         <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_200px_170px_170px]">
@@ -321,20 +370,28 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
           </div>
         ) : courses.length === 0 ? (
           <div className="rounded-2xl border border-dashed p-4 text-center">
-            {hasFilters ? (
+            {savedOnly && !urlSearch.trim() && !categoryId && !level ? (
+              <Bookmark className="mx-auto size-9 text-muted-foreground" />
+            ) : hasFilters ? (
               <SearchX className="mx-auto size-9 text-muted-foreground" />
             ) : (
               <GraduationCap className="mx-auto size-9 text-muted-foreground" />
             )}
-            <h3 className="mt-3 font-semibold">No courses found</h3>
+            <h3 className="mt-3 font-semibold">
+              {savedOnly && !urlSearch.trim() && !categoryId && !level
+                ? "No saved courses yet"
+                : "No courses found"}
+            </h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              {hasFilters
-                ? "Try a different keyword or clear some filters."
-                : "No courses have been published yet."}
+              {savedOnly && !urlSearch.trim() && !categoryId && !level
+                ? "Save courses you want to revisit later using the bookmark button."
+                : hasFilters
+                  ? "Try a different keyword or clear some filters."
+                  : "No courses have been published yet."}
             </p>
             {hasFilters && (
               <Button variant="outline" className="mt-4" onClick={clearFilters}>
-                Clear filters
+                {savedOnly && !urlSearch.trim() && !categoryId && !level ? "Browse all courses" : "Clear filters"}
               </Button>
             )}
           </div>
@@ -357,6 +414,9 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
                 showEnrollmentAction={!embedded}
                 showDetailAction
                 onEnroll={(courseId) => enrollMutation.mutate(courseId)}
+                isSaved={canBookmark && savedCourseIds.has(course.id)}
+                isSavingBookmark={togglingCourseId === course.id}
+                onToggleBookmark={canBookmark ? toggleBookmark : undefined}
                 disableNavigation={embedded}
                 onSelect={embedded ? (selected) => navigate(`/course-enrollments/${selected.id}`) : undefined}
               />
