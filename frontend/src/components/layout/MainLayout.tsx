@@ -1,5 +1,6 @@
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import HeaderRight from "@/components/layout/HeaderRight";
+import { PageHistoryButton } from "@/components/audit/PageHistoryButton";
 import { SidebarMenu } from "@/components/layout/Sidebar.tsx";
 import DynamicBreadcrumbs from "@/components/layout/DynamicBreadcrumbs.tsx";
 import { StudentNavbar } from "@/components/layout/StudentNavbar";
@@ -94,6 +95,10 @@ export function MainLayout({
                         </div>
                         {headerActions && <div className="shrink-0">{headerActions}</div>}
                         <div className="shrink-0"><HeaderRight /></div>
+                        <div className="flex shrink-0 items-center gap-2">
+                            <PageHistoryButton />
+                            <HeaderRight />
+                        </div>
                     </div>
                 </header>
 
