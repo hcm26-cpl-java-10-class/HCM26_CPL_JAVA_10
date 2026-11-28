@@ -26,6 +26,7 @@ import type { CourseDetailAssessment, CourseDetail, CourseDetailLesson, CourseDe
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  Bookmark,
   BookOpen,
   CheckCircle2,
   ChevronDown,
@@ -49,6 +50,7 @@ import {
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { useCourseBookmarks } from "../hooks/useCourseBookmarks.ts";
 import { useCourseEnrollment } from "../hooks/useCourseEnrollment.ts";
 import {
   LEVEL_BADGE_CLASS,
@@ -174,10 +176,15 @@ export function CourseDetailContent({
         <p className="text-sm text-muted-foreground">
           Instructor: <span className="font-medium text-foreground">{course.instructor || "—"}</span>
         </p>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5"><Layers className="size-4" /> {course.sections.length} sections</span>
-          <span className="inline-flex items-center gap-1.5"><BookOpen className="size-4" /> {course.lessonCount} lessons</span>
-          <span className="inline-flex items-center gap-1.5"><Clock className="size-4" /> {formatTotalDuration(course.totalDuration)}</span>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5"><Layers className="size-4" /> {course.sections.length} sections</span>
+            <span className="inline-flex items-center gap-1.5"><BookOpen className="size-4" /> {course.lessonCount} lessons</span>
+            <span className="inline-flex items-center gap-1.5"><Clock className="size-4" /> {formatTotalDuration(course.totalDuration)}</span>
+          </div>
+          {enrollmentManagement && (!course.status || course.status === "PUBLISHED") && (
+            <CourseBookmarkButton courseId={course.id} />
+          )}
         </div>
       </div>
     </section>
@@ -346,6 +353,37 @@ function CourseLearnersPanel({ course }: { course: CourseDetail }) {
 }
 
 /** Nút hành động động: Ghi danh / Tiếp tục học / Xem trước (staff). */
+function CourseBookmarkButton({
+  courseId,
+  fullWidth = false,
+}: {
+  courseId: number;
+  fullWidth?: boolean;
+}) {
+  const { canBookmark, savedCourseIds, togglingCourseId, toggleBookmark } = useCourseBookmarks();
+  if (!canBookmark) return null;
+
+  const isSaved = savedCourseIds.has(courseId);
+  return (
+    <Button
+      type="button"
+      variant={isSaved ? "default" : "outline"}
+      size={fullWidth ? "default" : "sm"}
+      className={`${fullWidth ? "w-full " : ""}${
+        isSaved
+          ? "bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+          : ""
+      }`}
+      aria-pressed={isSaved}
+      disabled={togglingCourseId === courseId}
+      onClick={() => toggleBookmark(courseId)}
+    >
+      <Bookmark className={`size-4 ${isSaved ? "fill-current" : ""}`} />
+      {isSaved ? "Saved for later" : "Save for later"}
+    </Button>
+  );
+}
+
 function CourseActionCard({ course }: { course: CourseDetail }) {
   const { canEnroll, canCancel, enrollmentsQuery, enrollmentByCourseId, enrollMutation, cancelMutation } =
     useCourseEnrollment();
@@ -429,6 +467,8 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
       )}
 
       {action}
+
+      <CourseBookmarkButton courseId={course.id} fullWidth />
 
       <PermissionGate permissions={["DEPARTMENT_READ", "DEPARTMENT_UPDATE"]} requireAll>
         <DepartmentEnrollmentControl courseId={course.id} />

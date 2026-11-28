@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { CatalogCourse } from "@/types";
-import { Award, CheckCircle2, Clock, GraduationCap, PlayCircle, BookOpen, Eye } from "lucide-react";
+import { Award, Bookmark, CheckCircle2, Clock, GraduationCap, PlayCircle, BookOpen, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 import { CourseEnrollmentAssignmentDialog } from "./CourseEnrollmentAssignmentDialog";
 import { LEVEL_BADGE_CLASS, LEVEL_LABEL, formatTotalDuration } from "../utils/course.utils.ts";
@@ -18,6 +18,9 @@ interface CourseCardProps {
   showEnrollmentAction?: boolean;
   showDetailAction?: boolean;
   onEnroll: (courseId: number) => void;
+  isSaved?: boolean;
+  isSavingBookmark?: boolean;
+  onToggleBookmark?: (courseId: number) => void;
   disableNavigation?: boolean;
   onSelect?: (course: CatalogCourse) => void;
 }
@@ -32,6 +35,9 @@ export function CourseCard({
   showEnrollmentAction = true,
   showDetailAction = false,
   onEnroll,
+  isSaved = false,
+  isSavingBookmark = false,
+  onToggleBookmark,
   disableNavigation = false,
   onSelect,
 }: CourseCardProps) {
@@ -43,23 +49,8 @@ export function CourseCard({
     }
   };
 
-  const cardHeader = (
-    <div
-      className="relative h-44 overflow-hidden bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100"
-      onClick={disableNavigation ? handleSelect : undefined}
-      role={disableNavigation ? "button" : undefined}
-      tabIndex={disableNavigation ? 0 : undefined}
-      onKeyDown={
-        disableNavigation
-          ? (event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                handleSelect();
-              }
-            }
-          : undefined
-      }
-    >
+  const headerBody = (
+    <>
       {course.thumbnailUrl ? (
         <img
           src={course.thumbnailUrl}
@@ -79,6 +70,52 @@ export function CourseCard({
         <Badge className="absolute right-3 top-3 bg-emerald-600 text-white hover:bg-emerald-600">
           <CheckCircle2 className="size-3" /> {certificateToken ? "Completed" : "Enrolled"}
         </Badge>
+      )}
+    </>
+  );
+
+  const cardHeader = (
+    <div className="relative h-44 overflow-hidden bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100">
+      {disableNavigation ? (
+        <div
+          className="h-full w-full cursor-pointer"
+          onClick={handleSelect}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              handleSelect();
+            }
+          }}
+        >
+          {headerBody}
+        </div>
+      ) : (
+        <Link to={detailPath} className="block h-full w-full" aria-label={`View ${course.name}`}>
+          {headerBody}
+        </Link>
+      )}
+      {onToggleBookmark && (
+        <button
+          type="button"
+          disabled={isSavingBookmark}
+          aria-pressed={isSaved}
+          aria-label={isSaved ? `Remove bookmark for ${course.name}` : `Save ${course.name} for later`}
+          title={isSaved ? "Saved · Click to remove" : "Save for later"}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onToggleBookmark(course.id);
+          }}
+          className={`absolute bottom-3 right-3 z-10 flex size-8 items-center justify-center rounded-full border shadow-sm transition ${
+            isSaved
+              ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800 dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+              : "border-slate-200 bg-white/95 text-slate-800 hover:bg-white dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-100 dark:hover:bg-slate-900"
+          } disabled:opacity-60`}
+        >
+          <Bookmark className={`size-4 ${isSaved ? "fill-current" : ""}`} />
+        </button>
       )}
     </div>
   );
@@ -106,13 +143,7 @@ export function CourseCard({
 
   return (
     <article className="group flex flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-lg">
-      {disableNavigation ? (
-        cardHeader
-      ) : (
-        <Link to={detailPath} className="block" aria-label={`View ${course.name}`}>
-          {cardHeader}
-        </Link>
-      )}
+      {cardHeader}
 
       <div className="flex flex-1 flex-col gap-1.5 px-4 py-2">
         <div>

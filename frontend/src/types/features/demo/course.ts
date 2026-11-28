@@ -121,6 +121,7 @@ export interface CourseDetailAssessment {
 export interface CourseDetail {
   assessments?: CourseDetailAssessment[];
   courseType?: CourseType;
+  status?: CourseStatus;
   syllabus?: { id: number; code: string; name: string } | null;
   id: number;
   name: string;

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import { usePermissions } from "@/hooks/usePermissions";
 import { CourseSyllabusPickerDialog } from "./CourseSyllabusPickerDialog";
+import { SavedCoursesTrigger } from "./SavedCoursesSheet";
 import type {
   AiApplyResult,
   AiChatMessage,
@@ -786,6 +787,8 @@ export function CourseHeaderActions({ table }: { table: any }) {
           <Sparkles className="mr-2 h-4 w-4 text-amber-500" /> Create with AI
         </Button>
       )}
+
+      <SavedCoursesTrigger />
 
       <CourseSyllabusPickerDialog open={syllabusPickerOpen} onOpenChange={setSyllabusPickerOpen} />
       <AiCourseBuilderSheet open={open} onOpenChange={setOpen} />

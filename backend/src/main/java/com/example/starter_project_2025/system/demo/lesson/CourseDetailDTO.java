@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.demo.lesson;
 
 import com.example.starter_project_2025.system.demo.course.CourseLevel;
+import com.example.starter_project_2025.system.demo.course.CourseStatus;
 
 import java.util.List;
 
@@ -26,7 +27,8 @@ public record CourseDetailDTO(
         List<SectionItem> sections,
         SyllabusInfo syllabus,
         com.example.starter_project_2025.system.demo.course.CourseType courseType,
-        List<AssessmentItem> assessments
+        List<AssessmentItem> assessments,
+        CourseStatus status
 ) {
     /** Public outline metadata only: no questions, answers, passwords or student scores. */
     public record AssessmentItem(Long id,String title,

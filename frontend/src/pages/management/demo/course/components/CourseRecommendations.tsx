@@ -8,6 +8,7 @@ import { Sparkles, Send, Loader2, Square, RotateCcw, ChevronDown, Filter, X } fr
 import { Input } from "@/components/ui/input";
 import { recommendationsApi, type Recommendation } from "@/api/features/recommendations.api";
 import { recommendationContext, type RecommendationTurn, courseReplyText, recommendationPage, RecommendationRequest, readRecommendationHistory, recommendationHistoryKey } from "@/utils/recommendation-session";
+import { useCourseBookmarks } from "../hooks/useCourseBookmarks";
 import { useCourseEnrollment } from "../hooks/useCourseEnrollment";
 import { CourseCard, CourseCardSkeleton } from "./CourseCard";
 import { filterAndSortRecommendations, catalogCategoryNames, recommendationCategoryNames, recommendationFilterLabels, type DurationFilter, type RatingFilter, type RecommendationFilters } from "./recommendation-filters";
@@ -37,6 +38,7 @@ function AccountRecommendations({ account, search = "", filters: controlledFilte
   const categoryQuery = useQuery({ queryKey: ["course-catalog-categories"], queryFn: courseApi.getCatalogCategories, staleTime: 5 * 60 * 1000 });
   const categoryTree = categoryQuery.data ?? [];
   const { canEnroll, enrollMutation, enrollmentByCourseId } = useCourseEnrollment();
+  const { canBookmark, savedCourseIds, togglingCourseId, toggleBookmark } = useCourseBookmarks();
   const request = useRef(new RecommendationRequest());
   const action = useRef(new RecommendationRequest());
   const locked = useRef(false);
@@ -221,7 +223,17 @@ function AccountRecommendations({ account, search = "", filters: controlledFilte
         {query.isLoading ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{[1,2,3].map(i => <CourseCardSkeleton key={i} />)}</div> : visible.length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {paged.items.map(item => <div key={item.course.id} className="space-y-2 rounded-xl border bg-background p-2 shadow-sm">
             <p className="flex gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:bg-blue-950/40 dark:text-blue-100"><Sparkles className="mt-0.5 size-4 shrink-0" /><span><strong>Why this course:</strong> {vi ? translateReason(item.reason) : item.reason}</span></p>
-            <CourseCard course={item.course} canEnroll={canEnroll} isEnrolling={enrollMutation.isPending && enrollMutation.variables === item.course.id} canAssign={false} showDetailAction onEnroll={enroll} />
+            <CourseCard
+              course={item.course}
+              canEnroll={canEnroll}
+              isEnrolling={enrollMutation.isPending && enrollMutation.variables === item.course.id}
+              canAssign={false}
+              showDetailAction
+              onEnroll={enroll}
+              isSaved={canBookmark && savedCourseIds.has(item.course.id)}
+              isSavingBookmark={togglingCourseId === item.course.id}
+              onToggleBookmark={canBookmark ? toggleBookmark : undefined}
+            />
             <Button variant="ghost" size="sm" disabled={saving} aria-label={`${text("Dismiss", "Ẩn")} ${item.course.name}`} onClick={() => void update("dismiss", item.course.id)}>{text("Not suitable · Dismiss", "Không phù hợp · Ẩn")}</Button>
           </div>)}
         </div> : !query.isError && <div role="status" className="space-y-3 rounded-xl border border-dashed p-6 text-center"><p>{keyword && !activeFilterCount ? text("No recommended courses match your search. Clear or change the search to see more suggestions.", "Không có khóa học được gợi ý phù hợp với tìm kiếm. Xóa hoặc đổi từ khóa để xem thêm gợi ý.") : keyword || activeFilterCount ? text("No recommended courses match the current search and filters.", "Không có khóa học được gợi ý phù hợp với tìm kiếm và bộ lọc hiện tại.") : state === "EMPTY_CATALOG" ? text("No active published courses yet.", "Chưa có khóa học đang hoạt động và công khai.") : state === "NO_MATCHES" ? text("No matching courses. Try different preferences or another question.", "Không có khóa phù hợp. Hãy thử sở thích hoặc câu hỏi khác.") : text("No more eligible courses. You may already be enrolled or have dismissed the available courses. Reset dismissals to reconsider them.", "Không còn khóa học đủ điều kiện. Bạn có thể đã đăng ký hoặc ẩn các khóa hiện có. Đặt lại để xem lại các khóa đã ẩn.")}</p>{activeFilterCount > 0 && <Button variant="outline" onClick={() => { setFilters({ ...defaultFilters, sort: filters.sort }); setPage(1); }}>Clear filters</Button>}</div>}

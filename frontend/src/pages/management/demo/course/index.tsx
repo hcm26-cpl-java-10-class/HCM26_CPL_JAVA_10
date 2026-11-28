@@ -18,6 +18,7 @@ import {
 import { CourseCatalogPage } from "./components/CourseCatalogPage";
 import { CourseDetailPage } from "./pages/CourseDetailPage";
 import { CourseHeaderActions } from "./components/AiCourseBuilder";
+import { CourseRowBookmarkAction } from "./components/SavedCoursesSheet";
 
 const courseStatusOptions: { label: string; value: CourseStatus }[] = [
   { label: "Draft (hidden from students)", value: "DRAFT" },
@@ -142,6 +143,7 @@ export const entityConfig: EntityConfig = {
   api: courseApi,
   schema: courseSchema,
   headerActions: ({ table }) => <CourseHeaderActions table={table} />,
+  extraRowActions: (row) => <CourseRowBookmarkAction row={row} />,
   actionPages: {
     // /courses/:id — chi tiết khóa học (giáo trình, nút Ghi danh / Tiếp tục học)
     detail: {
