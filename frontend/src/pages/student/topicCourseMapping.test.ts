@@ -87,3 +87,35 @@ describe("student Syllabus topic ↔ Course links (partial Course scope)", () =>
         expect(references.map((r) => r.courseId)).toEqual([4]);
     });
 });
+
+it("uses stable Topic ID even when Gemini renamed the Lesson", () => {
+    const course = { id: 1, name: "AI Database Course" };
+    const outline = {
+        id: 1,
+        name: "AI Database Course",
+        sections: [{ id: 7, title: "Completely renamed Section", lessons: [
+            { id: 501, title: "Understanding Relational Entities", sourceTopicId: 101 },
+        ] }],
+    } as unknown as import("@/types").CourseDetail;
+    const matches = resolveTopicCourseReferences("Entities and Relationships", "Relational Modelling",
+        [course], [outline], 101);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].lessonId).toBe(501);
+    expect(resolveTopicCourseReferences("Other Topic", "Relational Modelling", [course], [outline], 999)).toEqual([]);
+});
+
+
+describe("AI expanded lessons", () => {
+    it("returns every Lesson linked by the same source Topic ID", () => {
+        const outline = {
+            id: 4, name: "Expanded SQL",
+            sections: [{ id: 2, title: "Expanded Topics", lessons: [
+                { id: 21, title: "Join Concepts", sourceTopicId: 101 },
+                { id: 22, title: "Join Exercises", sourceTopicId: 101 },
+                { id: 23, title: "Introduction", sourceTopicId: null },
+            ] }],
+        } as unknown as CourseDetail;
+        const result = resolveTopicCourseReferences("Joins", "Anything", linked, [outline], 101);
+        expect(result.map((r) => r.lessonId)).toEqual([21, 22]);
+    });
+});

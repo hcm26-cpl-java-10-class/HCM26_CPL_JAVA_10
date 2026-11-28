@@ -14,7 +14,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { getErrorMessage } from "./examConfig";
 import { ExamEditPanel } from "./ExamEditPanel";
-import { ExamQuestionsPanel } from "./ExamQuestionsPanel";
+import { ExamQuestionsPanel, type ExamQuestionsPreview } from "./ExamQuestionsPanel";
 import ResultStatisticsPage from "./ResultStatisticsPage";
 import InvitationsPage from "./invitation";
 
@@ -36,14 +36,15 @@ function tabFromPath(pathname: string, examId: string): TabKey {
   return TABS.find((tab) => tab.segment === segment)?.key ?? "questions";
 }
 
-export default function ExamDetailPage() {
+type PreviewDetail = ExamQuestionsPreview & { onBack: () => void };
+export default function ExamDetailPage({ preview }: { preview?: PreviewDetail } = {}) {
   const { examId = "" } = useParams<{ examId: string }>();
   const { pathname, search } = useLocation();
   const returnTo = assessmentReturnPath(new URLSearchParams(search).get("returnTo"));
   const returnQuery = returnTo === "/exams" ? "" : "?returnTo=" + encodeURIComponent(returnTo);
   const navigate = useNavigate();
   const id = Number(examId);
-  const active = tabFromPath(pathname, examId);
+  const active = preview ? "questions" : tabFromPath(pathname, examId);
 
   // This page fills the window and scrolls inside, so the browser page itself must not scroll
   // (otherwise two scrollbars appear).
@@ -61,9 +62,9 @@ export default function ExamDetailPage() {
 
   const queryClient = useQueryClient();
   const examQuery = useQuery({
-    queryKey: ["exam-detail", id],
+    queryKey: preview ? ["exam-preview-disabled", "page"] : ["exam-detail", id],
     queryFn: () => examApi.getById(examId),
-    enabled: Number.isFinite(id) && id > 0,
+    enabled: !preview && Number.isFinite(id) && id > 0,
   });
   const examStatus = examQuery.data?.status ?? "PUBLISHED";
 
@@ -122,9 +123,9 @@ export default function ExamDetailPage() {
     setTemplateDescription("");
   };
 
-  const title = examQuery.data?.title;
+  const title = preview?.exam.title ?? examQuery.data?.title;
   const counts: Partial<Record<TabKey, { value: number; warn?: boolean }>> = {
-    questions: { value: examQuery.data?.questionIds?.length ?? examQuery.data?.questions?.length ?? 0 },
+    questions: { value: preview?.selected.length ?? examQuery.data?.questionIds?.length ?? examQuery.data?.questions?.length ?? 0 },
     ...((examQuery.data?.invitationCount ?? 0) > 0
         ? { invitations: { value: examQuery.data?.invitationCount ?? 0 } }
         : {}),
@@ -139,7 +140,8 @@ export default function ExamDetailPage() {
         <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-6">
           <div className="flex min-w-0 items-center gap-3">
             <h1 className="min-w-0 truncate text-base font-semibold" title={title ?? undefined}>{title ?? "Loading..."}</h1>
-            {examQuery.data && (examQuery.data.courseName ? (
+            {preview && <span className="hidden max-w-[40ch] truncate rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground md:inline">{preview.exam.courseName}</span>}
+            {!preview && examQuery.data && (examQuery.data.courseName ? (
                 <span
                     className="hidden max-w-[40ch] truncate rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground md:inline"
                     title={[examQuery.data.courseName, examQuery.data.sectionTitle, examQuery.data.lessonTitle].filter(Boolean).join(" › ")}
@@ -158,7 +160,8 @@ export default function ExamDetailPage() {
             ))}
           </div>
           <div className="flex items-center gap-2">
-            {examQuery.data && (
+            {preview && <><span className="text-xs text-muted-foreground">PREVIEW</span><Button size="sm" variant="outline" onClick={preview.onBack}>Back to Course Preview</Button></>}
+            {!preview && examQuery.data && (
                 <div className="hidden items-center gap-1.5 sm:flex">
               <span className="rounded-md bg-slate-900 px-2 py-0.5 text-xs font-medium text-white dark:bg-slate-100 dark:text-slate-900">
                 {examStatus}
@@ -220,17 +223,17 @@ export default function ExamDetailPage() {
         </header>
 
         <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
-          {examQuery.isError ? (
+          {!preview && examQuery.isError ? (
               <ApiErrorState error={examQuery.error} onRetry={() => void examQuery.refetch()} onBack={() => navigate(returnTo)} />
           ) : (<>
-            <div className="grid grid-cols-2 gap-1 rounded-lg border bg-muted/40 p-1 sm:grid-cols-5" role="tablist" aria-label="Assessment sections">
-              {TABS.map(({ key, label, segment, icon: Icon }) => (
+            <div className={`grid gap-1 rounded-lg border bg-muted/40 p-1 ${preview ? "grid-cols-1" : "grid-cols-2 sm:grid-cols-5"}`} role="tablist" aria-label="Assessment sections">
+              {TABS.filter(tab => !preview || tab.key === "questions").map(({ key, label, segment, icon: Icon }) => (
                   <button
                       key={key}
                       type="button"
                       role="tab"
                       aria-selected={active === key}
-                      onClick={() => navigate(`/exams/${examId}/${segment}${returnQuery}`)}
+                      onClick={() => { if (!preview) navigate(`/exams/${examId}/${segment}${returnQuery}`); }}
                       className={`flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                           active === key ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
                       }`}
@@ -254,7 +257,7 @@ export default function ExamDetailPage() {
             </div>
 
             <div role="tabpanel">
-              {active === "questions" && <ExamQuestionsPanel examId={id} />}
+              {active === "questions" && (preview ? <ExamQuestionsPanel preview={preview} /> : <ExamQuestionsPanel examId={id} />)}
               <EmbeddedLayoutContext.Provider value>
                 {active === "grading" && <ResultStatisticsPage mode="attempts" />}
                 {active === "invitations" && <InvitationsPage />}

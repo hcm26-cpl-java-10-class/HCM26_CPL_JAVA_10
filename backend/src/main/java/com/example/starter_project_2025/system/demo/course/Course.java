@@ -23,7 +23,8 @@ import java.util.Set;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "courses")
+@Table(name = "courses", uniqueConstraints = @UniqueConstraint(
+        name = "uk_courses_syllabus_scope", columnNames = {"syllabus_id", "source_topic_scope_key"}))
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("COURSE")
 @ImportEntity("course")
@@ -75,6 +76,25 @@ public class Course extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "syllabus_id")
     Syllabus syllabus;
+
+    /** Null for legacy/standard Courses. V1: SHA-256 of Topic IDs; V2: SHA-256 of Topic IDs AND normalized Course outline. */
+    @Column(name = "source_topic_scope_key", length = 64)
+    String sourceTopicScopeKey;
+
+    /** Selected Topic IDs in canonical order; not derived from Lesson titles. */
+    @Column(name = "source_topic_ids", columnDefinition = "TEXT")
+    String sourceTopicIds;
+
+    /** Normalized uniqueness for generated-from-Syllabus Courses only; legacy/standard rows stay unchanged. */
+    @Column(name = "normalized_name_key", length = 150, unique = true)
+    String normalizedNameKey;
+
+    @PrePersist
+    @PreUpdate
+    void updateNameKey() {
+        normalizedNameKey = courseType == CourseType.FROM_SYLLABUS
+                ? CourseSourceScope.nameKey(name) : null;
+    }
 
     @Builder.Default
     @Enumerated(EnumType.STRING)

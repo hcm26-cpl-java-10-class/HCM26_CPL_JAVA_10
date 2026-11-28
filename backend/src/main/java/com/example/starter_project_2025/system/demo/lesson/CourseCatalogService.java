@@ -301,7 +301,8 @@ public class CourseCatalogService {
                 lesson.getOrderIndex(),
                 !unlocked,
                 unlocked ? lesson.getContentUrl() : null,
-                unlocked ? lesson.getTextContent() : null
+                unlocked ? lesson.getTextContent() : null,
+                lesson.getSourceSyllabusTopicId()
         );
     }
 }

@@ -298,7 +298,7 @@ public class LessonServiceImpl
         switch (type) {
             case VIDEO, AUDIO, DOCUMENT, LINK -> {
                 if (!hasUrl) {
-                    ctx.add("contentUrl", "Content URL is required for " + type + " lessons");
+                    if (!outlineEditable) ctx.add("contentUrl", "Content URL is required for " + type + " lessons");
                 } else if (!isValidHttpUrl(url.trim())) {
                     ctx.add("contentUrl", "Content URL must be a valid http/https URL");
                 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, FileText, FolderOpen, GraduationCap, LockKeyhole, Target, ListChecks } from "lucide-react";
+import { BookOpen, CheckCircle2, FileText, FolderOpen, GraduationCap, LockKeyhole, Target, ListChecks } from "lucide-react";
 
 import { syllabusApi } from "@/api/features/demo/syllabus.api";
 import type { CourseSyllabusPreview } from "@/api/features/demo/course.api";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { CourseScopeMode } from "./courseFromSyllabusScope";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import CourseDisclosureChevron from "./CourseDisclosureChevron";
 
 type Props = {
   source: CourseSyllabusPreview;
@@ -22,20 +23,24 @@ type Props = {
   scopePending: boolean;
   onApplyScope: () => void;
   selectionDisabled?: boolean;
+  /** Compact mode is used only by the Course-from-Syllabus workspace. */
+  compact?: boolean;
 };
 
 export default function SyllabusSourcePreviewPanel({
   source, syllabusId, scopeMode, onScopeModeChange, selectedTopicIds,
   onToggleTopic, onToggleSection, selectedCount, scopePending,
-  onApplyScope, selectionDisabled = false,
+  onApplyScope, selectionDisabled = false, compact = false,
 }: Props) {
   const [showDetails, setShowDetails] = useState(false);
+  const [showCompactInfo, setShowCompactInfo] = useState(true);
   const [showClos, setShowClos] = useState(false);
+  const [showFullSource, setShowFullSource] = useState(false);
   const [openSections, setOpenSections] = useState<number[]>([]);
-  const infoQuery = useQuery({ queryKey: ["syllabus-information", syllabusId], queryFn: () => syllabusApi.getInformation(syllabusId) });
-  const progressQuery = useQuery({ queryKey: ["syllabus-progress", syllabusId], queryFn: () => syllabusApi.progress(syllabusId) });
-  const closQuery = useQuery({ queryKey: ["syllabus-clos", syllabusId], queryFn: () => syllabusApi.listClos(syllabusId) });
-  const coverageQuery = useQuery({ queryKey: ["syllabus-coverage", syllabusId], queryFn: () => syllabusApi.coverage(syllabusId) });
+  const infoQuery = useQuery({ queryKey: ["syllabus-information", syllabusId], queryFn: () => syllabusApi.getInformation(syllabusId), enabled: true });
+  const progressQuery = useQuery({ queryKey: ["syllabus-progress", syllabusId], queryFn: () => syllabusApi.progress(syllabusId), enabled: !compact || showFullSource });
+  const closQuery = useQuery({ queryKey: ["syllabus-clos", syllabusId], queryFn: () => syllabusApi.listClos(syllabusId), enabled: !compact || showFullSource });
+  const coverageQuery = useQuery({ queryKey: ["syllabus-coverage", syllabusId], queryFn: () => syllabusApi.coverage(syllabusId), enabled: !compact || showFullSource });
 
   useEffect(() => { setOpenSections(source.sections.length ? [source.sections[0].id] : []); }, [source.syllabusId]);
   const info = infoQuery.data;
@@ -45,8 +50,123 @@ export default function SyllabusSourcePreviewPanel({
   const topicCount = source.sections.reduce((sum, section) => sum + section.topics.length, 0);
   const selected = new Set(selectedTopicIds);
 
+  if (compact && !showFullSource) {
+    return (
+      <section className="min-w-0 space-y-3 rounded-xl border bg-card p-3 sm:p-4" aria-label="Published Syllabus source">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-base font-semibold"><BookOpen className="size-4" /> Syllabus Source</h2>
+          <Badge variant="outline">Published</Badge>
+        </div>
+        <h3 className="break-words text-sm font-semibold leading-relaxed">{source.syllabusName}</h3>
+        <div className="grid grid-cols-2 gap-2">
+          {[["Sections", source.sections.length], ["Topics", topicCount]].map(([label, value]) =>
+            <div className="min-w-0 rounded-lg border bg-muted/20 p-3" key={label}>
+              <div className="text-xl font-semibold tabular-nums">{value}</div>
+              <div className="text-xs text-muted-foreground">{label}</div>
+            </div>)}
+        </div>
+
+        <Collapsible open={showCompactInfo} onOpenChange={setShowCompactInfo} className="overflow-hidden rounded-lg border" aria-label="Syllabus General Information">
+          <CollapsibleTrigger className="flex w-full min-w-0 items-center justify-between gap-2 px-3 py-2.5 text-left text-sm font-semibold hover:bg-muted/40">
+            <span className="flex min-w-0 items-center gap-2"><GraduationCap className="size-4 shrink-0 text-muted-foreground"/> General Information</span>
+            <CourseDisclosureChevron open={showCompactInfo} />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="border-t px-3 py-3">
+            {infoQuery.isError && <p role="status" className="mb-2 text-xs text-muted-foreground">Additional information is temporarily unavailable. Syllabus outline is still available.</p>}
+            <dl className="space-y-2.5 text-xs">
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-2">
+                <dt className="text-muted-foreground">Syllabus Code</dt>
+                <dd className="min-w-0 break-words font-medium">{source.syllabusCode}</dd>
+              </div>
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-2">
+                <dt className="text-muted-foreground">Degree Level</dt>
+                <dd className="min-w-0 break-words font-medium">{info?.degreeLevel || (infoQuery.isPending ? "Loading…" : "Not specified")}</dd>
+              </div>
+              {(info?.description || source.syllabusDescription) && <div className="min-w-0 space-y-1">
+                <dt className="text-muted-foreground">Description</dt>
+                <dd className="break-words leading-relaxed">{info?.description || source.syllabusDescription}</dd>
+              </div>}
+              {([["Teaching Methods", info?.teachingMethods], ["Time Allocation", info?.timeAllocation], ["Required Tools", info?.requiredTools]] as const)
+                .filter(([, value]) => Boolean(value?.trim()))
+                .map(([label, value]) => <div key={label} className="min-w-0 space-y-1">
+                  <dt className="text-muted-foreground">{label}</dt>
+                  <dd className="break-words leading-relaxed">{value}</dd>
+                </div>)}
+            </dl>
+          </CollapsibleContent>
+        </Collapsible>
+
+        <div className="space-y-2" aria-label="Syllabus Sections and Topics">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="flex items-center gap-2 text-sm font-semibold"><FolderOpen className="size-4 text-muted-foreground" /> Sections &amp; Topics</h3>
+            <span className="text-xs text-muted-foreground">{source.sections.length} sections · {topicCount} topics</span>
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2" aria-label="Course scope and outline controls">
+            <div className="flex min-w-0 flex-wrap items-center gap-2" role="group" aria-label="Course source scope">
+              <Button type="button" size="sm" className="max-w-full" aria-pressed={scopeMode === "FULL"} variant={scopeMode === "FULL" ? "default" : "outline"} disabled={selectionDisabled} onClick={() => onScopeModeChange("FULL")}>All Topics</Button>
+              <Button type="button" size="sm" className="max-w-full" aria-pressed={scopeMode === "FOCUSED"} variant={scopeMode === "FOCUSED" ? "default" : "outline"} disabled={selectionDisabled} onClick={() => onScopeModeChange("FOCUSED")}>Focused Course</Button>
+            </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-1" role="group" aria-label="Section display controls">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setOpenSections(source.sections.map(section => section.id))}>Expand all</Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setOpenSections([])}>Collapse all</Button>
+            </div>
+          </div>
+          <div className="max-h-[26rem] space-y-2 overflow-y-auto pr-1">
+            {source.sections.length === 0 && <p className="rounded-md border p-3 text-xs text-muted-foreground">No active Sections are available.</p>}
+            {source.sections.map((section, index) => {
+              const isOpen = openSections.includes(section.id);
+              const topicIds = section.topics.map(topic => topic.id);
+              return (
+                <Collapsible key={section.id} open={isOpen}
+                  onOpenChange={value => setOpenSections(current => value ? [...new Set([...current, section.id])] : current.filter(id => id !== section.id))}
+                  className="min-w-0 overflow-hidden rounded-md border">
+                  <div className="flex min-w-0 items-center gap-2 bg-muted/20 px-2">
+                    {scopeMode === "FOCUSED" && section.topics.length > 0 && <Checkbox
+                      aria-label={`Select all Topics in Section ${index + 1}`}
+                      disabled={selectionDisabled}
+                      checked={topicIds.every(id => selected.has(id)) ? true : topicIds.some(id => selected.has(id)) ? "indeterminate" : false}
+                      onCheckedChange={value => onToggleSection(topicIds, value === true)} />}
+                    <CollapsibleTrigger className="flex min-w-0 flex-1 items-center justify-between gap-2 py-2.5 text-left hover:text-foreground">
+                      <span className="min-w-0 break-words text-xs font-medium leading-relaxed">Section {index + 1}: {section.title}</span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        <Badge variant="outline" className="whitespace-nowrap text-[10px] font-normal">{section.topics.length} Topics</Badge>
+                        <CourseDisclosureChevron open={isOpen}/>
+                      </span>
+                    </CollapsibleTrigger>
+                  </div>
+                  <CollapsibleContent className="space-y-1 border-t p-2">
+                    {section.topics.length === 0 && <p className="text-xs text-muted-foreground">No active Topics.</p>}
+                    {section.topics.map((topic, topicIndex) => <div key={topic.id} className="flex min-w-0 items-start gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted/30">
+                      {scopeMode === "FOCUSED" ? <Checkbox
+                        aria-label={`Select Topic ${topicIndex + 1}: ${topic.title}`}
+                        disabled={selectionDisabled}
+                        checked={selected.has(topic.id)}
+                        onCheckedChange={value => onToggleTopic(topic.id, value === true)} /> :
+                        <span className="shrink-0 tabular-nums text-muted-foreground">{index + 1}.{topicIndex + 1}</span>}
+                      <span className="min-w-0 break-words leading-relaxed">{topic.title}</span>
+                    </div>)}
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
+          </div>
+        </div>
+
+        <Button type="button" variant="outline" className="w-full whitespace-normal" onClick={() => setShowFullSource(true)}>
+          <BookOpen className="size-4"/> View Full Syllabus
+        </Button>
+        <div className="space-y-2 border-t pt-3" aria-label="Topic selection summary">
+          <p className="text-xs text-muted-foreground">{selectedCount}/{topicCount} source Topics selected. {scopeMode === "FOCUSED" ? "Choose individual Topics in the outline above." : "All Topics are included."}</p>
+          {scopePending && <Button type="button" className="w-full whitespace-normal" size="sm" disabled={selectionDisabled || selectedCount === 0} onClick={onApplyScope}>Apply Topic Selection</Button>}
+        </div>
+        <p className="text-xs text-muted-foreground">Read-only source. Editing the Course never changes this Syllabus.</p>
+      </section>
+    );
+  }
+
   return (
     <section className="min-w-0 rounded-xl border bg-card p-4 lg:sticky lg:top-3 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto" aria-label="Published Syllabus source">
+      {compact && <Button type="button" variant="outline" size="sm" className="mb-3 w-full" onClick={() => setShowFullSource(false)}>Close Full Syllabus</Button>}
       <div className="flex items-start justify-between gap-2">
         <h2 className="flex items-center gap-2 text-base font-semibold"><BookOpen className="size-4" /> Syllabus Source</h2>
         <Badge variant="outline" className="shrink-0 gap-1"><LockKeyhole className="size-3" /> Read-only</Badge>
@@ -64,7 +184,7 @@ export default function SyllabusSourcePreviewPanel({
       <Collapsible open={showDetails} onOpenChange={setShowDetails} className="mt-3 rounded-lg border">
         <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 p-3 text-left text-sm font-semibold hover:bg-muted/40">
           <span className="flex items-center gap-2"><GraduationCap className="size-4" /> General Information</span>
-          {showDetails ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+          <CourseDisclosureChevron open={showDetails} />
         </CollapsibleTrigger>
         <div className="border-t px-3 py-2 text-xs"><span className="text-muted-foreground">Degree Level: </span>{info?.degreeLevel || (infoQuery.isPending ? "Loading…" : "Not provided")}</div>
         <CollapsibleContent className="space-y-2 border-t px-3 py-3 text-sm">
@@ -87,7 +207,7 @@ export default function SyllabusSourcePreviewPanel({
       <Collapsible open={showClos} onOpenChange={setShowClos} className="mt-3 rounded-lg border">
         <CollapsibleTrigger className="flex w-full items-center justify-between p-3 text-sm font-semibold hover:bg-muted/40">
           <span className="flex items-center gap-2"><Target className="size-4"/> Course Learning Outcomes <Badge variant="outline">{clos.length}</Badge></span>
-          {showClos ? <ChevronDown className="size-4"/> : <ChevronRight className="size-4"/>}
+          <CourseDisclosureChevron open={showClos} />
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-2 border-t p-3">
           {closQuery.isError ? <p className="text-xs text-destructive">Could not load CLOs.</p> : clos.length ? clos.map((clo) =>
@@ -133,7 +253,7 @@ export default function SyllabusSourcePreviewPanel({
                 />}
                 <CollapsibleTrigger className="flex min-w-0 flex-1 items-center justify-between gap-2 px-1 py-3 text-left text-sm font-semibold hover:bg-muted/50">
                   <span className="flex min-w-0 items-start gap-2"><FolderOpen className="mt-0.5 size-4 shrink-0 text-muted-foreground"/><span className="break-words">Section {sectionIndex + 1}: {section.title}</span></span>
-                  <span className="flex shrink-0 items-center gap-2"><Badge variant="outline">{section.topics.length} topics</Badge>{opened ? <ChevronDown className="size-4"/> : <ChevronRight className="size-4"/>}</span>
+                  <span className="flex shrink-0 items-center gap-2"><Badge variant="outline">{section.topics.length} topics</Badge><CourseDisclosureChevron open={opened} /></span>
                 </CollapsibleTrigger>
               </div>
               <CollapsibleContent className="p-3">
