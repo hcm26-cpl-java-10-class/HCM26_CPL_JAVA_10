@@ -1,5 +1,6 @@
- === IDE ===
+# === IDE ===
 .idea/
+.run/*.saved
 *.iml
 .vscode/
 
@@ -11,16 +12,77 @@ Thumbs.db
 backend/target/
 backend/*.jar
 backend/*.war
+backend/data/
+
+# === Local databases and demo logs ===
+/data/
+*.mv.db
+*.trace.db
+*.lock.db
+backend/demo-start.log
 
 # === Backend .env (secrets) ===
 backend/.env
+backend/.env.local
+backend/.env.*.local
+!backend/.env.example
 
-# === Frontend (Node) ===
+# === Frontend / Node ===
+/node_modules/
+node_modules/
+/package.json
 frontend/node_modules/
 frontend/dist/
+frontend/.env
+
+# === Test artifacts & Playwright reports ===
+playwright-report/
+test-results/
+frontend/playwright-report/
+frontend/test-results/
+/routes_dump.txt
+
+# === Frontend .env (secrets/local config) ===
+# .env.example được commit để người mới biết cần đặt biến nào.
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
 
 # === Docker .env (secrets) ===
 docker/.env
 
+# === Logs ===
+*.log
 
 /backend.zip
+# Ignore other local .github artifacts (keep workflows, PR template & path-scoped instructions tracked)
+.github/*
+!.github/pull_request_template.md
+!.github/workflows/
+!.github/instructions/
+.codacy/
+
+/backend/compile.log
+/backend/compile_error.txt
+/test.txt
+/docs/UFR-PRJ-004-*.md
+/.playwright-mcp/
+
+# === Nested clone / local workspace folder ===
+HCM26_CPL_JAVA_10/
+frontend-dev.err
+frontend/vite.err
+frontend/vite.out
+backend/portability-test.log
+
+# === Runtime uploaded files (khong commit) ===
+uploads/
+
+# === Local test tools & docx scratch files ===
+*.docx
+/swagger_*.png
+/swagger_rendered.png
+/swagger_test.png
+/extracted_images/
+/extracted_minh_hoang/
+/tools/

@@ -14,80 +14,134 @@ import {
     normalizeRole,
     STUDENT_ROLE,
 } from "@/utils/rbac.utils";
-import { Plus } from "lucide-react";
-import { useMemo } from "react";
+import { ClipboardList, Plus } from "lucide-react";
+import { useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 interface AutoCrudPageProps {
     entity: EntityConfig;
+    openCreateOnMount?: boolean;
+    createNotice?: string;
 }
 
-export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
+export const AutoCrudPage = ({ entity, openCreateOnMount = false, createNotice }: AutoCrudPageProps) => {
     const navigate = useNavigate();
     const { activeRole } = usePermissions();
     const breadcrumbKey = entity.path.replace(/^\/+/, "");
 
     const table = useProTable(entity.api, entity.schema);
+    const autoOpened = useRef(false);
+
+    useEffect(() => {
+        if (openCreateOnMount && table.permission.canCreate && !autoOpened.current) {
+            autoOpened.current = true;
+            table.openCreate();
+        }
+    }, [openCreateOnMount, table.permission.canCreate, table.openCreate]);
 
     const createPage = entity.actionPages?.create;
     const editPage = entity.actionPages?.edit;
     const detailPage = entity.actionPages?.detail;
 
-    // Khai báo trước khi sử dụng trong useMemo
     const normalizedActiveRole = normalizeRole(activeRole);
     const isAdminRole = normalizedActiveRole === ADMIN_ROLE;
     const isUserManagement = entity.path === "/users";
     const isStudentRole = normalizedActiveRole === STUDENT_ROLE;
 
-    const headerActions = useMemo(() => {
-        if (!createPage) {
+
+const headerActions = useMemo(() => {
+    const customActions = entity.headerActions?.({ table });
+
+    if (!createPage) {
+        return customActions ? (
+            <div className="flex items-center gap-2">
+                {customActions}
+            </div>
+        ) : undefined;
+    }
+
+    const createPath = normalizeEntityActionPath(
+        entity.path,
+        createPage.path
+    );
+
+    if (isUserManagement && isAdminRole) {
+        const createAccountAction = (
+            <ActionButton
+                onClick={() => navigate(createPath)}
+                tooltip="Tạo tài khoản học sinh / giáo viên"
+                title="Tạo tài khoản"
+                variant="default"
+                icon={<Plus size={16} />}
+            />
+        );
+
+        return (
+            <div className="flex items-center gap-2">
+                {customActions}
+                {createAccountAction}
+            </div>
+        );
+    }
+
+    const createAction = (
+        <PermissionGate
+            permission={
+                createPage.requiredPermission ||
+                table.permission?.keys?.create
+            }
+        >
+            <ActionButton
+                onClick={() => navigate(createPath)}
+                tooltip={`Create ${entity.name}`}
+                title="Create"
+                variant="default"
+                icon={<Plus size={16} />}
+            />
+        </PermissionGate>
+    );
+
+    if (!customActions && !createAction) {
+        return undefined;
+    }
+
+    return (
+        <div className="flex items-center gap-2">
+            {customActions}
+            {createAction}
+        </div>
+    );
+}, [
+    createPage,
+    entity,
+    table,
+    isAdminRole,
+    isUserManagement,
+    navigate,
+]);
+
+    /**
+     * Admin-only shortcut to the student backlog view, so admins can browse
+     * Sprints / Sprint Backlogs the same way students do.
+     */
+    const backlogShortcutActions = useMemo(() => {
+        if (!isAdminRole || !entity.backlogShortcutPath) {
             return undefined;
         }
 
-        const createPath = normalizeEntityActionPath(
-            entity.path,
-            createPage.path
-        );
-
-        // Ưu tiên hiển thị nút tạo tài khoản ở trang Users cho Admin
-        if (isUserManagement && isAdminRole) {
-            return (
-                <ActionButton
-                    onClick={() => navigate(createPath)}
-                    tooltip="Tạo tài khoản học sinh / giáo viên"
-                    title="Tạo tài khoản"
-                    variant="default"
-                    icon={<Plus size={16} />}
-                />
-            );
-        }
+        const path = entity.backlogShortcutPath;
 
         return (
-            <PermissionGate
-                permission={
-                    createPage.requiredPermission ||
-                    table.permission?.keys?.create
-                }
-            >
-                <ActionButton
-                    onClick={() => navigate(createPath)}
-                    tooltip={`Create ${entity.name}`}
-                    title="Create"
-                    variant="default"
-                    icon={<Plus size={16} />}
-                />
-            </PermissionGate>
+            <ActionButton
+                onClick={() => navigate(path)}
+                tooltip="View backlogs as student"
+                title="Backlogs"
+                variant="outline"
+                icon={<ClipboardList size={16} />}
+            />
         );
-    }, [
-        createPage,
-        entity.name,
-        entity.path,
-        isAdminRole,
-        isUserManagement,
-        navigate,
-        table.permission?.keys?.create,
-    ]);
+    }, [entity.backlogShortcutPath, isAdminRole, navigate]);
 
     const onEdit = useMemo(() => {
         if (!editPage) {
@@ -155,16 +209,51 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
         isStudentRole ||
         (isReadOnlyLikeRole && !(isUserManagement && isAdminRole));
 
+    /**
+     * Browse mode is read-only card view, but entities owned by the student
+     * persona (e.g. Sprints) can opt in to keep a "Create" action that opens
+     * the inline form modal.
+     */
+    const browseActions =
+        browseMode && entity.browseModeCreate && table.permission?.canCreate ? (
+            <PermissionGate permission={table.permission?.keys?.create}>
+                <ActionButton
+                    onClick={() => table.openCreate()}
+                    tooltip={`Create ${entity.name}`}
+                    title="Create"
+                    variant="default"
+                    icon={<Plus size={16} />}
+                />
+            </PermissionGate>
+        ) : undefined;
+
+    /**
+     * Entities owned by the student persona (e.g. Sprints) can also keep the
+     * edit / delete actions and the active toggle inside the browse view; the
+     * individual buttons stay gated by RowActions permissions.
+     */
+    const browseRowActions = browseMode && !!entity.browseModeActions;
+
     return (
         <MainLayout pathName={{ [breadcrumbKey]: entity.name }}>
+            {createNotice && (
+                <p className="mb-3 text-sm text-muted-foreground">{createNotice}</p>
+            )}
             <ProTable
                 table={table}
                 mode={browseMode ? "browse" : "default"}
                 headerActions={browseMode ? undefined : headerActions}
-                hideActions={browseMode}
+                extraHeaderActions={
+                    browseMode ? undefined : backlogShortcutActions
+                }
+                browseActions={browseActions}
+                browseRowActions={browseRowActions}
+                hideActions={browseMode && !browseRowActions}
                 onEdit={browseMode ? undefined : onEdit}
                 onView={onView}
+                renderExtraRowActions={entity.extraRowActions}
                 renderCard={entity.cardRenderer}
+                cardLayout={entity.cardLayout}
             />
         </MainLayout>
     );

@@ -1,0 +1,151 @@
+{
+  "scope": "AC08-AC12",
+  "exportedAt": "2026-10-23T19:22:12.7254198+07:00",
+  "sourceReportModifiedAt": "2026-10-23T19:17:40.9910839+07:00",
+  "sourceReport": "backend/target/surefire-reports/TEST-com.example.starter_project_2025.system.project.WorkspaceAcceptanceIntegrationTest.xml",
+  "layer": "Spring Boot + MockMvc integration tests; these are not Postman network captures.",
+  "database": "Unique in-memory H2 test database. Fresh tenant/project/team/member per case; workspace records cleaned after each case.",
+  "total": 23,
+  "passed": 23,
+  "failedOrSkipped": 0,
+  "cases": [
+    {
+      "ac": "AC09",
+      "test": "ac09ReplayIsDurableAndDifferentPayloadConflicts",
+      "result": "PASS",
+      "seconds": "0.973"
+    },
+    {
+      "ac": "AC11",
+      "test": "ac11MissingTargetIs404(String)[1]",
+      "result": "PASS",
+      "seconds": "0.118"
+    },
+    {
+      "ac": "AC11",
+      "test": "ac11MissingTargetIs404(String)[2]",
+      "result": "PASS",
+      "seconds": "0.078"
+    },
+    {
+      "ac": "AC12",
+      "test": "ac12MandatorySaveFailureRollsEverythingBackAndSameKeyCanRetry(String)[1]",
+      "result": "PASS",
+      "seconds": "0.153"
+    },
+    {
+      "ac": "AC12",
+      "test": "ac12MandatorySaveFailureRollsEverythingBackAndSameKeyCanRetry(String)[2]",
+      "result": "PASS",
+      "seconds": "0.127"
+    },
+    {
+      "ac": "AC12",
+      "test": "ac12MandatorySaveFailureRollsEverythingBackAndSameKeyCanRetry(String)[3]",
+      "result": "PASS",
+      "seconds": "0.114"
+    },
+    {
+      "ac": "AC12",
+      "test": "ac12MandatorySaveFailureRollsEverythingBackAndSameKeyCanRetry(String)[4]",
+      "result": "PASS",
+      "seconds": "0.109"
+    },
+    {
+      "ac": "AC12",
+      "test": "ac12MandatorySaveFailureRollsEverythingBackAndSameKeyCanRetry(String)[5]",
+      "result": "PASS",
+      "seconds": "0.099"
+    },
+    {
+      "ac": "AC12",
+      "test": "ac12MandatorySaveFailureRollsEverythingBackAndSameKeyCanRetry(String)[6]",
+      "result": "PASS",
+      "seconds": "0.124"
+    },
+    {
+      "ac": "AC08",
+      "test": "ac08DifferentKeyReturnsExistingWorkspaceAndDatabaseAlsoEnforcesUniqueness",
+      "result": "PASS",
+      "seconds": "0.081"
+    },
+    {
+      "ac": "AC12",
+      "test": "ac12AuditHasFullContextAndOutboxRedeliveryNeverDuplicatesActivity",
+      "result": "PASS",
+      "seconds": "0.141"
+    },
+    {
+      "ac": "AC11",
+      "test": "ac11InvalidSelection422AndForeignTenant403",
+      "result": "PASS",
+      "seconds": "0.076"
+    },
+    {
+      "ac": "AC11",
+      "test": "ac11ExpiredSessionIs401AndWritesNothing",
+      "result": "PASS",
+      "seconds": "0.042"
+    },
+    {
+      "ac": "AC11",
+      "test": "ac11RejectsProjectStatusChangedSinceConfirmation(String)[1]",
+      "result": "PASS",
+      "seconds": "0.052"
+    },
+    {
+      "ac": "AC11",
+      "test": "ac11RejectsProjectStatusChangedSinceConfirmation(String)[2]",
+      "result": "PASS",
+      "seconds": "0.054"
+    },
+    {
+      "ac": "AC11",
+      "test": "ac11RejectsProjectStatusChangedSinceConfirmation(String)[3]",
+      "result": "PASS",
+      "seconds": "0.051"
+    },
+    {
+      "ac": "AC10",
+      "test": "ac10ConcurrentRequestsProduceOnlyOneLogicalCreation(boolean)[1]",
+      "result": "PASS",
+      "seconds": "0.06"
+    },
+    {
+      "ac": "AC10",
+      "test": "ac10ConcurrentRequestsProduceOnlyOneLogicalCreation(boolean)[2]",
+      "result": "PASS",
+      "seconds": "0.055"
+    },
+    {
+      "ac": "AC11",
+      "test": "ac11RechecksRevocationSinceConfirmation(String)[1]",
+      "result": "PASS",
+      "seconds": "0.048"
+    },
+    {
+      "ac": "AC11",
+      "test": "ac11RechecksRevocationSinceConfirmation(String)[2]",
+      "result": "PASS",
+      "seconds": "0.047"
+    },
+    {
+      "ac": "AC11",
+      "test": "ac11RechecksRevocationSinceConfirmation(String)[3]",
+      "result": "PASS",
+      "seconds": "0.046"
+    },
+    {
+      "ac": "AC11",
+      "test": "ac11RechecksRevocationSinceConfirmation(String)[4]",
+      "result": "PASS",
+      "seconds": "0.039"
+    },
+    {
+      "ac": "AC11",
+      "test": "ac11RechecksRevocationSinceConfirmation(String)[5]",
+      "result": "PASS",
+      "seconds": "0.039"
+    }
+  ]
+}

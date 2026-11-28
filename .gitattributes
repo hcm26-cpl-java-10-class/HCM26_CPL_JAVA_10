@@ -1,0 +1,5 @@
+# Judge0 doc config tu ENV vars. Neu file judge0.conf / docker-compose.yml bi doi thanh CRLF
+# (Windows), gia tri se la "redis\r" va Judge0 khong tim duoc Redis.
+# Ep LF cho cac file config Docker.
+docker/judge0/judge0.conf text eol=lf
+docker/judge0/docker-compose.yml text eol=lf

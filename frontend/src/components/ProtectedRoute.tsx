@@ -1,5 +1,5 @@
 import React from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 
 import { useSelector } from "react-redux";
 import type { RootState } from "@/store/store";
@@ -19,10 +19,16 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireAll = false,
 }) => {
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
-  const { hasPermission, hasAnyPermission, hasAllPermissions } = usePermissions();
+  const { activeRole, hasPermission, hasAnyPermission, hasAllPermissions } = usePermissions();
+
+  const { pathname } = useLocation();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (activeRole === "STUDENT" && (/^\/exams(?:\/|$)/.test(pathname) || /^\/management\/exam(?:\/|$)/.test(pathname))) {
+    return <Navigate to="/student/exams" replace />;
   }
 
   if (requiredPermission && !hasPermission(requiredPermission)) {

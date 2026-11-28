@@ -1,6 +1,8 @@
 package com.example.starter_project_2025.security;
 
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import jakarta.annotation.Nonnull;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -23,17 +25,26 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private static final String AUTH_PATH_PREFIX = "/api/auth/";
+    private static final Set<String> SKIPPED_AUTH_PATHS = Set.of(
+            "/api/auth/login",
+            "/api/auth/register",
+            "/api/auth/refresh",
+            "/api/auth/forgot-password",
+            "/api/auth/reset-password",
+            "/api/auth/resend-verification"
+    );
     private static final Logger LOGGER = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     RefreshTokenService refreshTokenService;
     UserDetailsServiceImpl userDetailsService;
+    TenantRepository tenantRepository;
 
     @Override
     protected void doFilterInternal(@Nonnull HttpServletRequest request,
@@ -48,19 +59,39 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 Jwt jwt = refreshTokenService.decodeAccessToken(token);
 
-
+                String sessionId = jwt.getClaimAsString("sid");
+                if (StringUtils.hasText(sessionId) && !refreshTokenService.isSessionActive(sessionId)) {
+                    SecurityContextHolder.clearContext();
+                    if (!"/api/auth/logout".equals(request.getServletPath())) {
+                        writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED,
+                                "SESSION_REVOKED", "Session has been revoked or expired. Please sign in again.");
+                        return;
+                    }
+                    filterChain.doFilter(request, response);
+                    return;
+                }
 
                 UserDetails userDetails = userDetailsService.loadUserByUsername(jwt.getSubject());
 
                 if (!userDetails.isAccountNonLocked()
                         || !userDetails.isEnabled()) {
                     SecurityContextHolder.clearContext();
-
-                    response.sendError(
-                            HttpServletResponse.SC_FORBIDDEN,
-                            "Account is locked or disabled"
-                    );
+                    writeJsonError(response, HttpServletResponse.SC_FORBIDDEN,
+                            "ACCOUNT_INACTIVE", "Account is locked or disabled");
                     return;
+                }
+
+                if (userDetails instanceof UserPrincipal principal && principal.getUser().getTenantId() != null) {
+                    boolean tenantActive = tenantRepository.findById(principal.getUser().getTenantId())
+                            .map(Tenant::getActive)
+                            .map(Boolean.TRUE::equals)
+                            .orElse(true);
+                    if (!tenantActive) {
+                        SecurityContextHolder.clearContext();
+                        writeJsonError(response, HttpServletResponse.SC_FORBIDDEN,
+                                "TENANT_INACTIVE", "Organization tenant is currently inactive");
+                        return;
+                    }
                 }
 
                 UsernamePasswordAuthenticationToken authentication =
@@ -88,8 +119,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
-
-        return path != null && path.startsWith(AUTH_PATH_PREFIX);
+        return path != null && SKIPPED_AUTH_PATHS.contains(path);
     }
 
     private String getTokenFromRequest(HttpServletRequest request) {
@@ -102,4 +132,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return null;
     }
 
+    private void writeJsonError(HttpServletResponse response, int status, String code, String message) throws IOException {
+        response.setStatus(status);
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write(
+                "{\"status\":" + status + ",\"code\":\"" + code + "\",\"message\":\"" + message + "\"}"
+        );
+    }
 }

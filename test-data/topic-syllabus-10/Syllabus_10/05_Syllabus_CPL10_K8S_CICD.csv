@@ -1,0 +1,54 @@
+﻿,,,,,,,,
+,,,,,,,,
+,Fresher / OJT Training Program,,,,,,,
+,KUBERNETES ORCHESTRATION & GITHUB ACTIONS CI/CD SYLLABUS,,,,,,,
+,,,,,,,,
+,,,,,Document Code,,,SYL-CPL10_K8S_CICD
+,,,,,Version,,,1.0
+,,,,,Effective Date,,,11/11/2026
+Kubernetes Orchestration & GitHub Actions CI/CD Syllabus,,,,,,,,
+1,Technical Group,DevOps,,,,,,
+2,Topic Name,Kubernetes Orchestration & GitHub Actions CI/CD,,,,,,
+3,Topic Code,CPL10_K8S_CICD,,,,,,
+4,Version,1.0,,,,,,
+5,Training Audience,Developers & DevOps Trainees automating application delivery,,,,,,
+6,Course Objectives,"Build multi-stage Docker images, deploy Helm/Kubernetes manifests with probes and autoscaling, and automate CI/CD via GitHub Actions.",,,,,,
+7,Topic Outline,"- Unit 1: Container Optimization & Multi-Stage Builds
+- Unit 2: Kubernetes Core Workloads & Scaling
+- Unit 3: GitHub Actions CI/CD & Helm Packaging
+- Unit 4: DevOps Assessment & Deployment Exam",,,,,,
+8,Time Allocation,Concept/Lecture,0.25,"Theory, architecture concepts",8 Sessions,,,
+,,Assignment/Lab,0.29,Hands-on coding & exercises,,,,
+,,Guides/Review,0.08,Code walkthrough & Q&A,,,,
+,,Seminar/Workshop,0.17,Interactive seminar & debugging,,,,
+,,Exam,0.21,Quizzes & practical defense exam,,,,
+9,Training Materials & Environments,Text book,Official DevOps Documentation & FAMS Guides,,,,,
+,,References,FAMS Internal LMS Knowledge Base,,,,,
+,,Technical requirements,"Modern IDE, Docker, Git, Browser DevTools",,,,,
+10,Assessment Scheme,Quizzes & Knowledge Tests,2,20,Short quizzes checking core theory (>= 6.0 / 10),,,
+,,Practical Lab Test,2,30,Hands-on lab assignments & Git code quality (>= 6.0 / 10),,,
+,,Final Practical Test,1,50,Capstone implementation & live defense (>= 6.0 / 10),,,
+,,Pass Criteria,6,Overall GPA >= 6.0 / 10; Complete 100% quizzes and final practical test,,,,
+11,Training Delivery Principles,Trainees,Completed prerequisite track; Active participation in daily labs,,,,,
+,Training Delivery Principles,Trainer,Senior DevOps Engineer / Technical Mentor,,,,,
+,Training Delivery Principles,Training,"- Concept lectures in morning or online
+- Hands-on lab exercises & reviews in afternoon
+- Max 4h (240 mins) per session",,,,,
+,Training Delivery Principles,Re-Test,2 - Allow up to 2 re-takes with different exam variants,,,,,
+,Training Delivery Principles,Marking,Evaluated by trainer against official FAMS rubric,,,,,
+,Training Delivery Principles,Waiver Criteria,Fast-track entry exam score >= 8.5 / 10,,,,,
+,,,,,,,,
+Kubernetes Orchestration & GitHub Actions CI/CD - Training Schedule,,,,,,,,
+Training Unit/Chapter,,Session,Content,Learning Objectives,Delivery Type,Duration (mins),Training Format,Training Materials / Logistics & General Notes
+1,Container Optimization & Multi-Stage Builds,1,"Container Security, Distroless Images & Layer Caching",Shrink Java/Node Docker images under 150MB with non-root users,Concept/Lecture,180,Offline - Sáng (Morning),Slide-Docker-BestPractices.pdf
+,,2,Multi-Container Compose Stack & Healthchecks Lab,"Orchestrate backend, frontend, PostgreSQL, and Redis locally",Assignment/Lab,180,Offline - Chiều (Afternoon),Lab-01-Docker-Stack.zip
+2,Kubernetes Core Workloads & Scaling,3,"Pods, Deployments, Services, Ingress & ConfigMaps",Understand Kubernetes control plane and networking fundamentals,Concept/Lecture,180,Online - Sáng (Morning),Slide-K8s-Workloads.pdf
+,,4,Deploy Fullstack App with Liveness/Readiness & HPA Lab,"Configure rolling updates, resource limits, and HorizontalPodAutoscaler",Assignment/Lab,240,Offline - Chiều (Afternoon),Lab-02-K8s-Manifests.zip
+3,GitHub Actions CI/CD & Helm Packaging,5,"Automated Build, Test, Trivy Scan & Push Pipeline",Author reusable GitHub Actions workflows with environment secrets,Seminar/Workshop,240,Offline - Sáng (Morning),Workshop-GitHub-Actions.pdf
+,,6,Helm Charts & Rollback Troubleshooting Review,Practice zero-downtime rollbacks and pod log debugging,Guides/Review,120,Online - Chiều (Afternoon),Guide-Helm-Rollback.pdf
+4,DevOps Assessment & Deployment Exam,7,Docker & Kubernetes Concepts Quiz,"Test pod scheduling, ingress routing, and CI/CD stages",Test/Quiz,120,Offline - Sáng (Morning),Quiz-K8s-CICD.pdf
+,,8,End-to-End CI/CD & K8s Deployment Practical Exam,Deploy tagged release to local cluster via automated workflow,Exam,180,Offline - Chiều (Afternoon),Exam-DevOps-Rubric.pdf
+,,,,,,,,
+AUTHORSHIP,,,,,,,,
+,Role,Name,Account,Unit,Notes,,,
+,Course Lead,Le Minh Hoang,hoanglm26,Training Department,HCM26_CPL_JAVA_10,,,

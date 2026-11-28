@@ -2,10 +2,6 @@ package com.example.starter_project_2025.system.external_api.exception;
 
 import lombok.Getter;
 
-/**
- * Exception thrown when an external API call fails.
- * Wraps HTTP status code and response body for debugging.
- */
 @Getter
 public class ExternalApiException extends RuntimeException {
 

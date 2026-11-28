@@ -1,44 +1,137 @@
-import { courseApi, enrollmentApi } from "@/api";
-import { AutoCrudPage } from "@/pages/management/AutoCrudPage";
+import { CourseCoverEditor } from "./components/CourseCoverEditor";
+import { categoryApi, courseApi, userApi } from "@/api";
+import { syllabusApi } from "@/api/features/demo/syllabus.api";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import type { CourseDTO } from "@/types/features/demo/course";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CheckCircle2, GraduationCap, Search } from "lucide-react";
-import { useState } from "react";
-import { toast } from "sonner";
-import { type EntityConfig, type EntitySchema, auditableFieldsSchema, type FieldSchema } from "@/types";
+import { AutoCrudPage } from "@/pages/management/AutoCrudPage";
+import {
+  type CourseStatus,
+  type EntityConfig,
+  type EntitySchema,
+  auditableFieldsSchema,
+  type FieldSchema,
+} from "@/types";
+import { CourseCatalogPage } from "./components/CourseCatalogPage";
+import { CourseDetailPage } from "./pages/CourseDetailPage";
+import { CourseHeaderActions } from "./components/AiCourseBuilder";
+import { CourseRowBookmarkAction } from "./components/SavedCoursesSheet";
+
+const courseStatusOptions: { label: string; value: CourseStatus }[] = [
+  { label: "Draft (hidden from students)", value: "DRAFT" },
+  { label: "Published", value: "PUBLISHED" },
+  { label: "Archived", value: "ARCHIVED" },
+];
 
 const courseSchema: EntitySchema = {
   entityName: "course",
   idField: "id",
   fields: [
     {
+      name: "courseType",
+      label: "Course type",
+      type: "select",
+      editable: false,
+      sortable: true,
+      filterable: true,
+      options: [
+        { label: "Standard course", value: "STANDARD" },
+        { label: "From Syllabus", value: "FROM_SYLLABUS" },
+      ],
+    },
+    {
       name: "name",
       label: "Course Name",
+      hint: "Unique course title, e.g. Java Programming Basics",
       type: "text",
       sortable: true,
       bold: true,
+      validation: {
+        required: true,
+        requiredMessage: "Course name is required",
+        maxLength: 150, // khớp CourseDTO @Size(max = 150)
+      },
     },
     {
       name: "instructor",
       label: "Instructor",
       type: "text",
       sortable: true,
+      editable: false,
+    },
+    {
+      name: "instructorId",
+      label: "Instructor (User)",
+      hint: "Pick the teacher account that owns this course",
+      type: "relation",
+      sortable: false,
+      visible: false,
+      relation: {
+        api: userApi,
+        valueField: "id",
+        labelField: "email",
+      },
+    },
+    {
+      name: "categoryIds",
+      label: "Categories",
+      hint: "Choose one or more active categories",
+      type: "relation",
+      relation: {
+        api: categoryApi,
+        valueField: "id",
+        labelField: "name",
+        multiple: true,
+      },
+    },
+    {
+      name: "status",
+      label: "Publication status",
+      hint: "New courses must start as Draft; publish after adding sections and lessons",
+      type: "select",
+      sortable: true,
+      options: courseStatusOptions,
+      validation: {
+        // Backend (CourseServiceImpl.beforeCreate) từ chối tạo mới với status PUBLISHED.
+        // Khi sửa sang PUBLISHED, backend sẽ kiểm tra giáo trình (>=1 section, mỗi section >=1 lesson).
+        custom: (value, _form, { isEdit }) =>
+          !isEdit && value === "PUBLISHED"
+            ? "A new course has no sections or lessons yet. Save it as Draft, add content, then publish."
+            : null,
+      },
+    },
+    {
+      name: "level",
+      label: "Course level",
+      hint: "Difficulty of the course",
+      type: "select",
+      sortable: true,
+      filterable: true,
+      options: [
+        { label: "Beginner", value: "BEGINNER" },
+        { label: "Intermediate", value: "INTERMEDIATE" },
+        { label: "Advanced", value: "ADVANCED" },
+      ],
     },
     {
       name: "description",
       label: "Description",
+      hint: "Short summary shown to students",
       type: "textarea",
       sortable: false,
+      validation: { maxLength: 500 }, // khớp CourseDTO @Size(max = 500)
     },
     {
       name: "thumbnailUrl",
-      label: "Thumbnail URL",
+      label: "Course cover",
+      renderForm: (value, form, onChange, options, disabled) => <CourseCoverEditor value={value} form={form} onChange={onChange} categories={options.categoryIds ?? []} disabled={disabled} />,
+      hint: "Link to the cover image, e.g. https://example.com/cover.jpg",
       type: "text",
       sortable: false,
+      validation: { url: true, maxLength: 255 }, // khớp CourseDTO @Size(max = 255)
     },
     ...(auditableFieldsSchema as FieldSchema[]),
   ],
@@ -49,175 +142,105 @@ export const entityConfig: EntityConfig = {
   path: "/courses",
   api: courseApi,
   schema: courseSchema,
+  headerActions: ({ table }) => <CourseHeaderActions table={table} />,
+  extraRowActions: (row) => <CourseRowBookmarkAction row={row} />,
+  actionPages: {
+    // /courses/:id — chi tiết khóa học (giáo trình, nút Ghi danh / Tiếp tục học)
+    detail: {
+      path: "/courses/:id",
+      component: CourseDetailPage,
+      requiredPermission: "COURSE_READ",
+    },
+  },
 };
 
 export default function CourseManagementPage() {
-  const { activeRole } = usePermissions();
+  const { activeRole, hasPermission } = usePermissions();
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const canCreateFromSyllabus = [
+    "SYLLABUS_READ", "COURSE_CREATE", "SECTION_CREATE", "LESSON_CREATE",
+  ].every(hasPermission);
+  const requested = params.has("fromSyllabus");
+  const syllabusId = Number(params.get("fromSyllabus"));
+  const validId = requested && Number.isSafeInteger(syllabusId) && syllabusId > 0;
+  const student = activeRole?.toUpperCase() === "STUDENT";
 
-  if (activeRole?.toUpperCase() !== "STUDENT") {
-    return <AutoCrudPage entity={entityConfig} />;
+  const syllabusQuery = useQuery({
+    queryKey: ["course-create-from-syllabus", syllabusId],
+    queryFn: () => syllabusApi.get(syllabusId),
+    enabled: validId && !student && canCreateFromSyllabus,
+  });
+  const syllabus = syllabusQuery.data;
+  const selectable = syllabus?.status === "PUBLISHED" && syllabus.isActive;
+
+  const prefilledEntity = useMemo<EntityConfig>(() => {
+    if (!selectable || !syllabus) return entityConfig;
+    const name = `${syllabus.name} - Class 01`.slice(0, 150);
+    const description = (syllabus.description ?? "").slice(0, 500);
+
+    return {
+      ...entityConfig,
+      api: {
+        ...courseApi,
+        create: async (data: CourseDTO) => {
+          const created = await courseApi.createFromSyllabus({
+            ...data, syllabusId: syllabus.id, status: "DRAFT",
+          });
+          navigate(`/curriculum?courseId=${created.id}`);
+          return created;
+        },
+      },
+      schema: {
+        ...courseSchema,
+        fields: courseSchema.fields.map((field) => {
+          if (field.name === "name") return { ...field, defaultValue: name };
+          if (field.name === "description") return { ...field, defaultValue: description };
+          if (field.name === "status") {
+            return {
+              ...field,
+              defaultValue: "DRAFT",
+              createOptions: [
+                { label: "Draft (hidden from students)", value: "DRAFT" },
+              ],
+            };
+          }
+          return field;
+        }),
+      },
+    };
+  }, [selectable, syllabus, navigate]);
+
+  if (student) return <CourseCatalogPage />;
+  if (!requested) return <AutoCrudPage entity={entityConfig} />;
+
+  let message = "";
+  if (!validId) message = "Invalid Syllabus ID.";
+  else if (!canCreateFromSyllabus)
+    message = "Creating a course from Syllabus requires Syllabus read and Course, Section, Lesson create permissions.";
+  else if (syllabusQuery.isPending) message = "Loading Syllabus...";
+  else if (syllabusQuery.isError || !syllabus)
+    message = "Cannot load this Syllabus.";
+  else if (!selectable)
+    message = "Publish and activate this Syllabus before creating a Course.";
+
+  if (message) {
+    return (
+      <MainLayout pathName={{ courses: "Courses" }}>
+        <div className="space-y-4 rounded-xl border bg-card p-6">
+          <p>{message}</p>
+          <Link className="text-sm underline" to="/courses">Back to Courses</Link>
+        </div>
+      </MainLayout>
+    );
   }
 
-  return <StudentCourseCatalog />;
-}
-
-function StudentCourseCatalog() {
-  const [search, setSearch] = useState("");
-  const queryClient = useQueryClient();
-  const coursesQuery = useQuery({
-    queryKey: ["course-catalog", search],
-    queryFn: () => courseApi.getPage({ page: 0, size: 200 }, search.trim() || undefined),
-  });
-  const enrollmentsQuery = useQuery({
-    queryKey: ["my-enrollments"],
-    queryFn: enrollmentApi.getMyCourses,
-  });
-  const enrollments = enrollmentsQuery.data ?? [];
-  const enrolledCourseIds = new Set(enrollments.map((enrollment) => enrollment.courseId));
-
-  const enrollMutation = useMutation({
-    mutationFn: enrollmentApi.enroll,
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["my-enrollments"] }),
-        queryClient.invalidateQueries({ queryKey: ["course-catalog"] }),
-      ]);
-      toast.success("You are enrolled in this course.");
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Could not enroll in this course.");
-    },
-  });
-
-  const courses = coursesQuery.data?.content ?? coursesQuery.data?.items ?? [];
-
   return (
-    <MainLayout pathName={{ courses: "Courses" }}>
-      <div className="mx-auto w-full max-w-7xl space-y-8">
-        <section className="relative overflow-hidden rounded-3xl bg-slate-950 px-6 py-10 text-white sm:px-10 sm:py-14">
-          <div className="pointer-events-none absolute -right-16 -top-24 size-80 rounded-full bg-blue-500/30 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-32 right-1/3 size-72 rounded-full bg-violet-500/20 blur-3xl" />
-          <div className="relative max-w-2xl">
-            <Badge className="mb-5 border border-white/20 bg-white/10 text-blue-100 hover:bg-white/10">
-              LEARN SOMETHING NEW
-            </Badge>
-            <h1 className="text-3xl font-bold tracking-tight sm:text-5xl">
-              Build skills that move you forward.
-            </h1>
-            <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
-              Explore courses created by your instructors and keep your learning journey in one place.
-            </p>
-            <div className="mt-7 flex flex-wrap gap-3 text-sm text-slate-200">
-              <span className="inline-flex items-center gap-2"><BookOpen className="size-4" /> {courses.length} courses</span>
-              <span className="inline-flex items-center gap-2"><CheckCircle2 className="size-4" /> {enrollments.length} enrolled</span>
-            </div>
-          </div>
-          <GraduationCap className="absolute bottom-8 right-10 hidden size-32 text-white/10 sm:block" />
-        </section>
-
-        <section className="space-y-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className="text-2xl font-semibold tracking-tight">Explore courses</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Find a course and enroll to add it to your learning dashboard.
-              </p>
-            </div>
-            <div className="relative w-full sm:max-w-sm">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                aria-label="Search courses"
-                className="pl-9"
-                placeholder="Search courses or instructors"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </div>
-          </div>
-
-          {coursesQuery.isLoading || enrollmentsQuery.isLoading ? (
-            <p role="status" className="rounded-2xl border p-8 text-center text-sm text-muted-foreground">
-              Loading courses...
-            </p>
-          ) : coursesQuery.isError || enrollmentsQuery.isError ? (
-            <div role="alert" className="space-y-3 rounded-2xl border border-destructive/30 p-6">
-              <p className="text-sm text-destructive">
-                Could not load the course catalog or your enrollments. Please check your connection and try again.
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  void coursesQuery.refetch();
-                  void enrollmentsQuery.refetch();
-                }}
-              >
-                Try again
-              </Button>
-            </div>
-          ) : courses.length === 0 ? (
-            <div className="rounded-2xl border border-dashed p-10 text-center">
-              <GraduationCap className="mx-auto size-9 text-muted-foreground" />
-              <h3 className="mt-3 font-semibold">No courses found</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {search ? "Try a different search term." : "Your teacher has not published any courses yet."}
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {courses.map((course) => {
-                const isEnrolled = course.id !== undefined && enrolledCourseIds.has(course.id);
-
-                return (
-                  <article key={course.id} className="group overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-lg">
-                    <div className="relative h-48 overflow-hidden bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100">
-                      {course.thumbnailUrl ? (
-                        <img
-                          src={course.thumbnailUrl}
-                          alt=""
-                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center">
-                          <GraduationCap className="size-16 text-blue-900/25" />
-                        </div>
-                      )}
-                      <Badge className="absolute left-3 top-3 bg-white/95 text-slate-800 hover:bg-white">
-                        Course
-                      </Badge>
-                    </div>
-                    <div className="space-y-3 p-5">
-                      <div>
-                        <h3 className="line-clamp-2 min-h-12 text-lg font-semibold leading-6">
-                          {course.name || "Untitled course"}
-                        </h3>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {course.instructor || "Course instructor"}
-                        </p>
-                      </div>
-                      <p className="line-clamp-3 min-h-[3.75rem] text-sm leading-5 text-muted-foreground">
-                        {course.description || "Start learning with this instructor-led course."}
-                      </p>
-                      {isEnrolled ? (
-                        <Button className="w-full" variant="secondary" disabled>
-                          <CheckCircle2 className="size-4" /> Enrolled
-                        </Button>
-                      ) : (
-                        <Button
-                          className="w-full"
-                          disabled={course.id === undefined || enrollMutation.isPending}
-                          onClick={() => course.id !== undefined && enrollMutation.mutate(course.id)}
-                        >
-                          Enroll for free
-                        </Button>
-                      )}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      </div>
-    </MainLayout>
+    <AutoCrudPage
+      key={syllabusId}
+      entity={prefilledEntity}
+      openCreateOnMount
+      createNotice={`Create a Draft Course from ${syllabus?.code} - ${syllabus?.name}. Sections and Topics become editable Sections and Lessons. Add lesson content in Curriculum before publishing.`}
+    />
   );
 }

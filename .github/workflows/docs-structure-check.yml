@@ -1,0 +1,40 @@
+name: Docs Structure Check
+
+on:
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - "docs/**"
+      - "*.md"
+      - "scripts/check-docs-rule.mjs"
+      - ".github/workflows/docs-structure-check.yml"
+  push:
+    branches: [dev, main]
+    paths:
+      - "docs/**"
+      - "*.md"
+      - "scripts/check-docs-rule.mjs"
+      - ".github/workflows/docs-structure-check.yml"
+  workflow_dispatch:
+
+jobs:
+  validate-docs-structure:
+    name: Validate docs/ & Markdown rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check docs structure and markdown rules
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/check-docs-rule.mjs --ci

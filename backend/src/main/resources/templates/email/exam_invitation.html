@@ -13,5 +13,52 @@
         <p>Vui lòng đăng nhập vào hệ thống để kiểm tra lịch thi và sẵn sàng tham gia.</p>
         <p style="margin-top: 30px; font-size: 0.9em; color: #777;">Trân trọng,<br>Hệ thống Quản lý Kỳ thi</p>
     </div>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; background:#f7f8fa; padding:16px;">
+<div style="max-width: 620px; margin: 0 auto; background:#ffffff; padding: 28px; border-radius: 10px; border:1px solid #e5e7eb;">
+    <h2 style="color:#2c3e50; margin-top:0;">Lời mời tham gia kỳ thi</h2>
+
+    <p>Xin chào <strong th:text="${username}">Học sinh</strong>,</p>
+    <p>Bạn đã được mời tham gia kỳ thi: <strong th:text="${examTitle}">Tên kỳ thi</strong>.</p>
+
+    <table style="width:100%; border-collapse:collapse; margin:18px 0;">
+        <tr>
+            <td style="padding:8px 10px; background:#f3f4f6; width:150px;">Thời gian bắt đầu</td>
+            <td style="padding:8px 10px;" th:text="${startTime}">--/--/---- --:--</td>
+        </tr>
+        <tr>
+            <td style="padding:8px 10px; background:#f3f4f6;">Thời gian kết thúc</td>
+            <td style="padding:8px 10px;" th:text="${endTime}">--/--/---- --:--</td>
+        </tr>
+        <tr>
+            <td style="padding:8px 10px; background:#f3f4f6;">Thời lượng</td>
+            <td style="padding:8px 10px;">
+                <span th:text="${durationMinutes}">60</span> phút
+            </td>
+        </tr>
+        <tr>
+            <td style="padding:8px 10px; background:#f3f4f6;">Hạn chót xác nhận</td>
+            <td style="padding:8px 10px;" th:text="${expiresAt}">--/--/---- --:--</td>
+        </tr>
+    </table>
+
+    <p th:if="${note != null and !note.isEmpty()}" style="background:#fffbeb; border-left:4px solid #f59e0b; padding:10px 12px;">
+        <strong>Ghi chú:</strong> <span th:text="${note}"></span>
+    </p>
+
+    <div style="text-align:center; margin:26px 0;">
+        <a th:href="${acceptLink}"
+           style="background:#2563eb; color:#ffffff; padding:12px 28px; border-radius:6px;
+                  text-decoration:none; display:inline-block; font-weight:600;">
+            Xem &amp; Xác nhận lời mời
+        </a>
+    </div>
+
+    <p style="font-size:0.9em; color:#6b7280;">
+        Bạn cần đăng nhập vào hệ thống để xác nhận lời mời này.
+        Nếu bạn chưa có tài khoản, vui lòng liên hệ giáo viên phụ trách.
+    </p>
+
+    <p style="margin-top: 30px; font-size: 0.9em; color: #777;">Trân trọng,<br>Hệ thống Quản lý Kỳ thi</p>
+</div>
 </body>
 </html>

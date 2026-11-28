@@ -7,6 +7,8 @@ import jakarta.validation.constraints.Size;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.util.List;
+
 @Getter
 @Setter
 @Builder
@@ -25,6 +27,38 @@ public class CourseDTO extends BaseDTO {
     @Size(max = 255, message = "Thumbnail URL must not exceed 255 characters")
     String thumbnailUrl;
 
+    @Size(max = 2800000, message = "Cover image must be 2 MB or smaller")
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
+    String coverImage;
+
     @Size(max = 100, message = "Instructor must not exceed 100 characters")
     String instructor;
+
+    Long instructorId;
+
+    /** true = chủ động bỏ giảng viên đang được gán; null/false = không thay đổi khi cập nhật. */
+    Boolean clearInstructor;
+
+    List<Long> categoryIds;
+
+    /** true = bỏ danh mục của khóa học (PUT bỏ qua null nên cần cờ riêng). */
+    Boolean clearCategory;
+
+    List<String> categoryNames;
+
+    Long syllabusId;
+    Boolean clearSyllabus;
+    String syllabusCode;
+    String syllabusName;
+
+    @com.fasterxml.jackson.annotation.JsonProperty(
+            access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    CourseType courseType;
+
+    CourseStatus status;
+
+    Boolean isFree;
+
+    CourseLevel level;
+
 }

@@ -1,0 +1,15 @@
+import assert from "node:assert/strict";
+import { learnerGradesPage } from "../src/utils/course-learner-grades.ts";
+const rows = Array.from({ length: 26 }, (_, i) => ({ studentId: i + 1, studentName: `Learner ${i + 1}`, studentEmail: `student${i + 1}@example.com`, grade: { overallScore: i % 2 ? 8 : null, status: i % 2 ? "PASSED" : "IN_PROGRESS" } }));
+assert.equal(learnerGradesPage(rows, "", "ALL", 1).rows.length, 10);
+assert.equal(learnerGradesPage(rows, "", "ALL", 2).rows[0].studentId, 11);
+assert.equal(learnerGradesPage(rows, "", "ALL", 3).rows.length, 6);
+const passed = learnerGradesPage(rows, "", "PASSED", 2);
+assert.equal(passed.total, 13); assert.equal(passed.rows.length, 3); assert.ok(passed.rows.every(row => row.grade.status === "PASSED"));
+assert.equal(learnerGradesPage(rows, "student24@", "ALL", 1).rows[0].studentId, 24);
+assert.equal(learnerGradesPage(rows, "no match", "ALL", 99).page, 1);
+assert.equal(learnerGradesPage(rows, "", "ALL", 99).page, 3);
+assert.equal(learnerGradesPage(rows, "", "ALL", NaN).page, 1);
+const vietnamese = [{ ...rows[0], studentName: "Nguyễn Thị Đào" }];
+assert.equal(learnerGradesPage(vietnamese, "nguyen thi dao", "ALL", 1).total, 1);
+console.log("Learner grade search, filtering and 10-row pagination checks passed.");

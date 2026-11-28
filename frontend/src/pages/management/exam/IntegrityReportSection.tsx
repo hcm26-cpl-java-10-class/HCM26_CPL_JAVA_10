@@ -1,0 +1,554 @@
+// NEW (anti-cheat): bao cao vi pham cua ky thi, hien trong trang Thong ke ket qua.
+// CHANGED: chi thong ke (khong co xem xet/ghi chu/export). Chi co 1 co duy nhat "Bi gan co" = co vi pham,
+// de sau nay lam tinh nang sua diem cho sinh vien bi gan co. Loc duoc theo tung loai vi pham.
+import { AiPercentTag } from "@/components/AiPercentTag";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import {
+    getEntryPhoto,
+    getIntegrityEvents,
+    getIntegrityReport,
+    reviewIntegrityFlags,
+    type IntegrityReportRow,
+} from "@/api/exam.api";
+import type { IntegrityReviewStatus } from "@/types";
+import { formatScore } from "@/utils/examScore";
+
+const TYPE_LABEL: Record<string, string> = {
+    TAB_HIDDEN: "Tab switch",
+    WINDOW_BLUR: "Window switch",
+    FULLSCREEN_EXIT: "Fullscreen exit",
+    COPY: "Copy",
+    CUT: "Cut",
+    PASTE: "Paste",
+    CONTEXT_MENU: "Right-click",
+    DEVTOOLS_KEY: "DevTools key",
+    PRINT_ATTEMPT: "Print / screenshot",
+    MULTI_SESSION: "Multiple sessions",
+    CAMERA_OFF: "Camera off",
+    CAMERA_COVERED: "Camera covered",
+    FACE_MISSING: "Left camera view",
+    MULTIPLE_FACES: "Extra person in view",
+    HEAD_TURNED: "Head turned",
+    DIFFERENT_PERSON: "Different person",
+    DUPLICATE_CONTENT: "Duplicate content",
+    EXTREME_DURATION: "Submitted too fast",
+};
+
+const TYPE_COLOR: Record<string, string> = {
+    TAB_HIDDEN: "bg-amber-500",
+    WINDOW_BLUR: "bg-orange-500",
+    FULLSCREEN_EXIT: "bg-sky-500",
+    COPY: "bg-violet-500",
+    CUT: "bg-violet-400",
+    PASTE: "bg-fuchsia-500",
+    CONTEXT_MENU: "bg-slate-500",
+    DEVTOOLS_KEY: "bg-rose-500",
+    PRINT_ATTEMPT: "bg-pink-500",
+    MULTI_SESSION: "bg-red-600",
+    CAMERA_OFF: "bg-red-700",
+    CAMERA_COVERED: "bg-yellow-600",
+    FACE_MISSING: "bg-teal-500",
+    MULTIPLE_FACES: "bg-indigo-600",
+    HEAD_TURNED: "bg-cyan-600",
+    DIFFERENT_PERSON: "bg-red-800",
+    DUPLICATE_CONTENT: "bg-purple-700",
+    EXTREME_DURATION: "bg-amber-600",
+};
+
+/** Nhom loai vi pham dung cho bo loc (khop cac cot dem cua bang). */
+const FILTER_TYPES: { key: string; label: string; count: (r: IntegrityReportRow) => number; warning?: boolean }[] = [
+    { key: "TAB_HIDDEN", label: "Tab switch", count: (r) => r.tabSwitchCount },
+    { key: "WINDOW_BLUR", label: "Window switch", count: (r) => r.windowBlurCount },
+    { key: "FULLSCREEN_EXIT", label: "Fullscreen exit", count: (r) => r.fullscreenExitCount },
+    { key: "COPY", label: "Copy / paste", count: (r) => r.copyPasteCount },
+    { key: "CONTEXT_MENU", label: "Right-click", count: (r) => r.contextMenuCount },
+    { key: "DEVTOOLS_KEY", label: "DevTools / print shortcuts", count: (r) => r.shortcutCount },
+    { key: "MULTI_SESSION", label: "Multiple sessions", count: (r) => r.multiSessionCount },
+    { key: "CAMERA_OFF", label: "Camera off", count: (r) => r.cameraOffCount },
+    { key: "CAMERA_COVERED", label: "Camera covered", count: (r) => r.cameraCoveredCount },
+    { key: "FACE_MISSING", label: "Left camera view", count: (r) => r.faceMissingCount },
+    { key: "MULTIPLE_FACES", label: "Extra person in view", count: (r) => r.multipleFacesCount },
+    { key: "HEAD_TURNED", label: "Head turned", count: (r) => r.headTurnedCount },
+    { key: "DIFFERENT_PERSON", label: "Different person", count: (r) => r.differentPersonCount },
+    { key: "DUPLICATE_CONTENT", label: "Duplicate content", count: (r) => r.duplicateContentCount },
+    // warning only: not counted as a violation and does not flag the attempt
+    { key: "EXTREME_DURATION", label: "Submitted too fast", count: (r) => (r.extremeDuration ? 1 : 0), warning: true },
+];
+
+const PAGE_SIZE = 10;
+
+const fmtDate = (v?: string | null) => (v ? new Date(v).toLocaleString() : "—");
+const fmtDuration = (s?: number | null) => {
+    if (s == null) return "—";
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}p` : `${m}p ${s % 60}s`;
+};
+
+function typeCounts(r: IntegrityReportRow): [string, number][] {
+    return FILTER_TYPES.filter((t) => !t.warning).map((t) => [t.key, t.count(r)] as [string, number]).filter(([, n]) => n > 0);
+}
+
+function StatCard({ label, value, tone }: { label: string; value: number; tone?: "red" | "amber" | "default" }) {
+    const accent =
+        tone === "red" ? "border-l-red-500"
+            : tone === "amber" ? "border-l-amber-500"
+                : "border-l-primary/40";
+    return (
+        <div className={`rounded-lg border border-l-4 bg-card p-3 ${accent}`}>
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+        </div>
+    );
+}
+
+function BarRow({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
+    const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+    return (
+        <div className="grid grid-cols-[9rem_1fr_2.5rem] items-center gap-2 text-sm">
+            <span className="truncate text-muted-foreground">{label}</span>
+            <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+            </div>
+            <span className="text-right tabular-nums">({value})</span>
+        </div>
+    );
+}
+
+function EntryPhotoBox({ examId, attemptId }: { examId: number; attemptId: number }) {
+    const q = useQuery({
+        queryKey: ["integrity-entry-photo", examId, attemptId],
+        queryFn: () => getEntryPhoto(examId, attemptId),
+    });
+    if (q.isLoading) return <p className="mt-3 text-sm text-muted-foreground">Loading entry photo...</p>;
+    if (!q.data?.imageData) return null;
+    return (
+        <div className="mt-3 flex items-start gap-3">
+            <a href={q.data.imageData} target="_blank" rel="noreferrer" title="Open full size">
+                <img src={q.data.imageData} alt="Entry photo" className="h-28 w-36 rounded-md border object-cover" />
+            </a>
+            <div className="text-sm">
+                <p className="font-medium">Entry photo</p>
+                <p className="text-muted-foreground">Taken at {fmtDate(q.data.capturedAt)} before the exam started.</p>
+            </div>
+        </div>
+    );
+}
+
+function EventList({ examId, attemptId }: { examId: number; attemptId: number }) {
+    const q = useQuery({
+        queryKey: ["integrity-events", examId, attemptId],
+        queryFn: () => getIntegrityEvents(examId, attemptId),
+    });
+    if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading events...</p>;
+    if (!q.data?.length) return <p className="text-sm text-muted-foreground">No violation events.</p>;
+    return (
+        <div className="max-h-64 overflow-auto rounded-md border">
+            <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-muted/80 text-left text-muted-foreground">
+                    <tr>
+                        <th className="px-3 py-1.5">Time</th>
+                        <th className="px-3 py-1.5">Type</th>
+                        <th className="px-3 py-1.5">Away (s)</th>
+                        <th className="px-3 py-1.5">IP</th>
+                        <th className="px-3 py-1.5">Browser</th>
+                        <th className="px-3 py-1.5">Details</th>
+                        <th className="px-3 py-1.5">Photo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {q.data.map((e) => (
+                        <tr key={e.id} className="border-t">
+                            <td className="whitespace-nowrap px-3 py-1.5">{fmtDate(e.occurredAt)}</td>
+                            <td className="px-3 py-1.5">
+                                <span className="inline-flex items-center gap-1.5">
+                                    <span className={`size-2 rounded-full ${TYPE_COLOR[e.type] ?? "bg-slate-400"}`} />
+                                    {TYPE_LABEL[e.type] ?? e.type}
+                                </span>
+                            </td>
+                            <td className="px-3 py-1.5">{e.durationSeconds ?? "—"}</td>
+                            <td className="px-3 py-1.5">{e.ipAddress ?? "—"}</td>
+                            <td className="max-w-[16rem] truncate px-3 py-1.5" title={e.userAgent ?? ""}>{e.userAgent ?? "—"}</td>
+                            <td className="px-3 py-1.5">{e.detail ?? ""}</td>
+                            <td className="px-3 py-1.5">
+                                {e.snapshot ? (
+                                    <a href={e.snapshot} target="_blank" rel="noreferrer" title="Open evidence photo">
+                                        <img src={e.snapshot} alt="Evidence" className="h-12 w-16 rounded border object-cover" />
+                                    </a>
+                                ) : "—"}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+const REVIEW_STATUS_LABEL: Record<IntegrityReviewStatus, string> = {
+    UNREVIEWED: "Unreviewed",
+    CLEARED: "Cleared (Valid)",
+    CONFIRMED_VIOLATION: "Confirmed Violation",
+};
+
+function IntegrityReviewPanel({ examId, row }: { examId: number; row: IntegrityReportRow }) {
+    const queryClient = useQueryClient();
+    const [status, setStatus] = useState<IntegrityReviewStatus>(row.reviewStatus ?? "UNREVIEWED");
+    const [note, setNote] = useState<string>(row.reviewNote ?? "");
+
+    const mutation = useMutation({
+        mutationFn: () => reviewIntegrityFlags(examId, row.attemptId, { status, note }),
+        onSuccess: () => {
+            toast.success("Integrity review saved");
+            void queryClient.invalidateQueries({ queryKey: ["exam-integrity-report", examId] });
+        },
+        onError: () => {
+            toast.error("Failed to save review. A note is required when confirming a violation.");
+        },
+    });
+
+    return (
+        <div className="mt-4 rounded-md border bg-background p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium">Reviewer Disposition (BR-UNI-19)</p>
+                {row.reviewedAt && (
+                    <span className="text-xs text-muted-foreground">
+                        Last reviewed: {fmtDate(row.reviewedAt)}
+                    </span>
+                )}
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+                Flags are advisory signals only. Record an explicit human review decision and note.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+                {(["UNREVIEWED", "CLEARED", "CONFIRMED_VIOLATION"] as IntegrityReviewStatus[]).map((option) => (
+                    <Button
+                        key={option}
+                        type="button"
+                        size="sm"
+                        variant={status === option ? "default" : "outline"}
+                        onClick={() => setStatus(option)}
+                    >
+                        {REVIEW_STATUS_LABEL[option]}
+                    </Button>
+                ))}
+            </div>
+            <Textarea
+                className="mt-2 min-h-16 text-sm"
+                placeholder="Reviewer note (required if confirming a violation)..."
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+            />
+            <div className="mt-2 flex justify-end">
+                <Button
+                    type="button"
+                    size="sm"
+                    disabled={mutation.isPending}
+                    onClick={() => mutation.mutate()}
+                >
+                    {mutation.isPending ? "Saving..." : "Save Review"}
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+type Filter = "ALL" | "FLAGGED";
+type Sort = "FLAG" | "VIOLATIONS" | "NAME";
+
+export function IntegrityReportSection({ examId }: { examId: number }) {
+    const [filter, setFilter] = useState<Filter>("ALL");
+    const [typeFilter, setTypeFilter] = useState<string>("ALL");
+    const [sort, setSort] = useState<Sort>("FLAG");
+    const [search, setSearch] = useState("");
+    const [page, setPage] = useState(0);
+    const [expanded, setExpanded] = useState<number | null>(null);
+
+    const query = useQuery({
+        queryKey: ["exam-integrity-report", examId],
+        queryFn: () => getIntegrityReport(examId),
+        enabled: examId > 0,
+    });
+    const report = query.data;
+
+    const labelOf = (key: string, base: string) =>
+        key === "HEAD_TURNED" ? `Head turned > ${report?.headTurnAngleDeg ?? 35}°`
+            : key === "EXTREME_DURATION" ? `Submitted too fast (< ${report?.fastSubmitPercent ?? 20}% of the time)`
+                : base;
+
+    const rows = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        const typeDef = FILTER_TYPES.find((t) => t.key === typeFilter);
+        const list = (report?.rows ?? []).filter((r) => {
+            if (filter === "FLAGGED" && !r.flagged) return false;
+            if (typeDef && typeDef.count(r) === 0) return false;
+            if (!term) return true;
+            return [r.studentName, r.email, r.username, r.employeeCode, r.phone]
+                .some((v) => (v ?? "").toLowerCase().includes(term));
+        });
+        const sorted = [...list];
+        if (sort === "VIOLATIONS") sorted.sort((a, b) => b.totalViolations - a.totalViolations);
+        else if (sort === "NAME") sorted.sort((a, b) => a.studentName.localeCompare(b.studentName));
+        else sorted.sort((a, b) => Number(b.flagged) - Number(a.flagged) || b.totalViolations - a.totalViolations);
+        return sorted;
+    }, [report, filter, typeFilter, sort, search]);
+
+    useEffect(() => setPage(0), [filter, typeFilter, sort, search]);
+
+    const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+    const safePage = Math.min(page, pageCount - 1);
+    const pageRows = rows.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+
+    const typeTotals = Object.entries(report?.totalsByType ?? {}).filter(([, n]) => n > 0);
+    const maxType = Math.max(1, ...typeTotals.map(([, n]) => n));
+
+    const filters: { key: Filter; label: string }[] = [
+        { key: "ALL", label: "All" },
+        { key: "FLAGGED", label: "Flagged" },
+    ];
+
+    return (
+        <section className="min-w-0 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
+            <div>
+                <h2 className="text-lg font-semibold">Integrity Report</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                    Number of violations per attempt, with student information. Violations are only recorded; nothing is handled automatically.
+                </p>
+            </div>
+
+            {query.isLoading && <p className="mt-4 text-sm text-muted-foreground">Loading...</p>}
+            {query.isError && <p className="mt-4 text-sm text-destructive">Unable to load the integrity report.</p>}
+
+            {report && !report.antiCheatEnabled && (
+                <p className="mt-4 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                    Anti-cheating is not enabled for this exam. Turn it on in the exam edit form (Anti-cheating monitoring); any existing data is still shown below.
+                </p>
+            )}
+
+            {report && (
+                <>
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <StatCard label="Attempts" value={report.totalAttempts} />
+                        <StatCard label="Flagged (with violations)" value={report.flaggedAttempts} tone="red" />
+                        <StatCard label="Total violations" value={report.totalViolations} />
+                        <StatCard label="Submitted too fast (warning)" value={report.extremeDurationAttempts ?? 0} tone="amber" />
+                    </div>
+
+                    <div className="mt-4 rounded-lg border p-4">
+                        <p className="text-sm font-medium">Violations by type</p>
+                        <div className="mt-3 grid gap-2 lg:grid-cols-2 lg:gap-x-8">
+                            {typeTotals.length === 0 && (
+                                <p className="text-sm text-muted-foreground">No violations recorded yet.</p>
+                            )}
+                            {typeTotals.map(([t, n]) => (
+                                <BarRow key={t} label={labelOf(t, TYPE_LABEL[t] ?? t)} value={n} max={maxType} color={TYPE_COLOR[t] ?? "bg-slate-400"} />
+                            ))}
+                        </div>
+                        <p className="mt-3 text-xs text-muted-foreground">
+                            Flag: an attempt with at least 1 violation or with answers duplicated from another student. "Submitted too fast" (under {report.fastSubmitPercent ?? 20}% of the exam time) is only a warning and does not flag the attempt. Exam settings: head turned over {report.headTurnAngleDeg ?? 35}° for {report.headTurnSeconds ?? 2}s counts as a violation.
+                        </p>
+                    </div>
+
+                    <div className="mt-5 flex flex-wrap items-center gap-3">
+                        <div className="relative">
+                            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <input
+                                className="h-9 w-64 rounded-md border bg-background pl-8 pr-3 text-sm"
+                                placeholder="Search name / email / code..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                            />
+                        </div>
+                        <div className="inline-flex overflow-hidden rounded-md border">
+                            {filters.map((f) => (
+                                <button
+                                    key={f.key}
+                                    type="button"
+                                    onClick={() => setFilter(f.key)}
+                                    className={`px-3 py-1.5 text-sm transition ${
+                                        filter === f.key ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                                    }`}
+                                >
+                                    {f.label}
+                                </button>
+                            ))}
+                        </div>
+                        <select
+                            className="h-9 rounded-md border bg-background px-2 text-sm"
+                            value={typeFilter}
+                            onChange={(e) => setTypeFilter(e.target.value)}
+                            aria-label="Filter by violation type"
+                        >
+                            <option value="ALL">Violation type: all</option>
+                            {FILTER_TYPES.map((t) => (
+                                <option key={t.key} value={t.key}>{labelOf(t.key, t.label)}</option>
+                            ))}
+                        </select>
+                        <select
+                            className="h-9 rounded-md border bg-background px-2 text-sm"
+                            value={sort}
+                            onChange={(e) => setSort(e.target.value as Sort)}
+                            aria-label="Sort"
+                        >
+                            <option value="FLAG">Sort: flagged first</option>
+                            <option value="VIOLATIONS">Sort: most violations</option>
+                            <option value="NAME">Sort: by name</option>
+                        </select>
+                        <span className="text-sm text-muted-foreground">{rows.length} attempts</span>
+                    </div>
+
+                    <div className="mt-3 overflow-x-auto rounded-lg border">
+                        <table className="w-full min-w-[860px] text-sm">
+                            <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                                <tr>
+                                    <th className="w-8 px-3 py-2" />
+                                    <th className="px-3 py-2">Student</th>
+                                    <th className="px-3 py-2">Attempt</th>
+                                    <th className="px-3 py-2">Violations</th>
+                                    <th className="px-3 py-2">Flag</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {pageRows.length === 0 && (
+                                    <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">No data.</td></tr>
+                                )}
+                                {pageRows.map((r) => {
+                                    const open = expanded === r.attemptId;
+                                    const counts = typeCounts(r);
+                                    return (
+                                        <Fragment key={r.attemptId}>
+                                            <tr
+                                                className={`cursor-pointer border-t align-top hover:bg-muted/40 ${r.flagged ? "bg-red-50/60 dark:bg-red-950/20" : ""}`}
+                                                onClick={() => setExpanded(open ? null : r.attemptId)}
+                                            >
+                                                <td className="px-3 py-3 text-muted-foreground">
+                                                    {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                                </td>
+                                                <td className="px-3 py-3">
+                                                    <div className="font-medium">{r.studentName}</div>
+                                                    <div className="text-xs text-muted-foreground">{r.email ?? "—"}</div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {[r.username, r.employeeCode, r.phone].filter(Boolean).join(" · ") || "—"}
+                                                        {r.guest && <span className="ml-1 rounded bg-muted px-1.5 py-0.5">Guest</span>}
+                                                    </div>
+                                                </td>
+                                                <td className="px-3 py-3">
+                                                    <div>Attempt #{r.attemptNumber}</div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {r.finalScore != null || r.objectiveScore != null
+                                                            ? `${formatScore(r.finalScore ?? r.objectiveScore)}/${formatScore(r.maxScore ?? 10)} points`
+                                                            : "No score yet"}
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground">Took {fmtDuration(r.durationSeconds)}</div>
+                                                    <AiPercentTag percent={r.aiPercent} signals={r.aiSignals} className="mt-1" />
+                                                    {r.extremeDuration && (
+                                                        <span
+                                                            className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                                                            title="Submitted in under 20% of the exam time (warning only)"
+                                                        >
+                                                            ⚠ Submitted too fast
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-3">
+                                                    <div className={`text-lg font-semibold tabular-nums ${r.totalViolations > 0 ? "" : "text-muted-foreground"}`}>
+                                                        {r.totalViolations}
+                                                    </div>
+                                                    <div className="mt-1 flex max-w-[18rem] flex-wrap gap-1">
+                                                        {counts.map(([t, n]) => (
+                                                            <span key={t} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">
+                                                                <span className={`size-1.5 rounded-full ${TYPE_COLOR[t] ?? "bg-slate-400"}`} />
+                                                                {TYPE_LABEL[t] ?? t} ({n})
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                                <td className="px-3 py-3">
+                                                    <div className="flex flex-col items-start gap-1">
+                                                        {r.flagged ? (
+                                                            <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-medium text-white dark:bg-slate-100 dark:text-slate-900">
+                                                                Flagged
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">—</span>
+                                                        )}
+                                                        {r.reviewStatus && r.reviewStatus !== "UNREVIEWED" && (
+                                                            <span className="rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-700 dark:border-slate-700 dark:text-slate-300">
+                                                                {REVIEW_STATUS_LABEL[r.reviewStatus]}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {open && (
+                                                <tr className="border-t bg-muted/20">
+                                                    <td colSpan={5} className="p-4">
+                                                        <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
+                                                            <span>Started: {fmtDate(r.startedAt)}</span>
+                                                            <span>Submitted: {fmtDate(r.submittedAt)}</span>
+                                                            <span>Total time away: {fmtDuration(r.totalAwaySeconds)}</span>
+                                                            <span>Last violation: {fmtDate(r.lastViolationAt)}</span>
+                                                            {r.description && <span className="sm:col-span-2 lg:col-span-4">Description: {r.description}</span>}
+                                                        </div>
+                                                        {r.hasEntryPhoto && <EntryPhotoBox examId={examId} attemptId={r.attemptId} />}
+                                                        {r.duplicateMatches?.length > 0 && (
+                                                            <div className="mt-3">
+                                                                <p className="mb-2 text-sm font-medium">Duplicate content ({r.duplicateMatches.length})</p>
+                                                                <div className="overflow-auto rounded-md border">
+                                                                    <table className="w-full text-xs">
+                                                                        <thead className="bg-muted/80 text-left text-muted-foreground">
+                                                                            <tr>
+                                                                                <th className="px-3 py-1.5">Question</th>
+                                                                                <th className="px-3 py-1.5">Duplicate of</th>
+                                                                                <th className="px-3 py-1.5">Similarity</th>
+                                                                                <th className="px-3 py-1.5">Level</th>
+                                                                                <th className="px-3 py-1.5">Explanation</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {r.duplicateMatches.map((m) => (
+                                                                                <tr key={`${m.questionId}-${m.otherAttemptId}`} className="border-t">
+                                                                                    <td className="px-3 py-1.5">#{m.questionOrder}</td>
+                                                                                    <td className="px-3 py-1.5">{m.otherStudentName}</td>
+                                                                                    <td className="px-3 py-1.5 tabular-nums">{m.similarity.toFixed(0)}%</td>
+                                                                                    <td className="px-3 py-1.5">{m.matchType ?? "—"}</td>
+                                                                                    <td className="px-3 py-1.5">{m.explanation ?? ""}</td>
+                                                                                </tr>
+                                                                            ))}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        <p className="mb-2 mt-3 text-sm font-medium">Event details</p>
+                                                        <EventList examId={examId} attemptId={r.attemptId} />
+                                                        <IntegrityReviewPanel examId={examId} row={r} />
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </Fragment>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {pageCount > 1 && (
+                        <div className="mt-3 flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Page {safePage + 1}/{pageCount}</span>
+                            <div className="flex gap-2">
+                                <Button variant="outline" size="sm" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>Previous</Button>
+                                <Button variant="outline" size="sm" disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)}>Next</Button>
+                            </div>
+                        </div>
+                    )}
+                </>
+            )}
+        </section>
+    );
+}

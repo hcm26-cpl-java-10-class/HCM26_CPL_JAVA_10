@@ -10,4 +10,4 @@ export interface PermissionDTO extends BaseDTO {
 export interface PermissionFilter extends BaseFilter {
   resource?: string;
   action?: string;
-} 
+}

@@ -12,6 +12,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -48,11 +49,28 @@ public class Role extends BaseEntity {
     String description;
 
     @Builder.Default
+    @Column(name = "is_system", nullable = false)
+    @ColumnDefault("false")
+    @ExportField(name = "Is System")
+    Boolean isSystem = false;
+
+    @Builder.Default
+    @Column(name = "is_active", nullable = false)
+    @ExportField(name = "Is Active")
+    Boolean isActive = true;
+
+    @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)
     @ExportField(name = "Permissions", relation = true, path = "name")
     @ImportField(name = "Permissions", lookupEntity = Permission.class, lookupField = "name", separator = ",")
-    @JoinTable( name = "role_permissions",
-                joinColumns = @JoinColumn(name = "role_id"),
-                inverseJoinColumns = @JoinColumn(name = "permission_id"))
+    @JoinTable(
+            name = "role_permissions",
+            joinColumns = @JoinColumn(name = "role_id"),
+            inverseJoinColumns = @JoinColumn(name = "permission_id"),
+            uniqueConstraints = @UniqueConstraint(
+                    name = "uk_role_permissions_role_perm",
+                    columnNames = {"role_id", "permission_id"}
+            )
+    )
     Set<Permission> permissions = new HashSet<>();
 }

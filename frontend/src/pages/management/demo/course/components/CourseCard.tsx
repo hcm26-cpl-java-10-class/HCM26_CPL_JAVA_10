@@ -1,0 +1,237 @@
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import type { CatalogCourse } from "@/types";
+import { Award, Bookmark, CheckCircle2, Clock, GraduationCap, PlayCircle, BookOpen, Eye } from "lucide-react";
+import { Link } from "react-router-dom";
+import { CourseEnrollmentAssignmentDialog } from "./CourseEnrollmentAssignmentDialog";
+import { LEVEL_BADGE_CLASS, LEVEL_LABEL, formatTotalDuration } from "../utils/course.utils.ts";
+import { CourseRating } from "../../course_review/components/CourseRating.tsx";
+
+interface CourseCardProps {
+  course: CatalogCourse;
+  /** id enrollment của user cho khóa này (nếu đã ghi danh) — dùng cho nút Continue learning. */
+  enrollmentId?: number;
+  certificateToken?: string;
+  canEnroll: boolean;
+  isEnrolling: boolean;
+  canAssign: boolean;
+  showEnrollmentAction?: boolean;
+  showDetailAction?: boolean;
+  onEnroll: (courseId: number) => void;
+  isSaved?: boolean;
+  isSavingBookmark?: boolean;
+  onToggleBookmark?: (courseId: number) => void;
+  disableNavigation?: boolean;
+  onSelect?: (course: CatalogCourse) => void;
+}
+
+export function CourseCard({
+  course,
+  enrollmentId,
+  certificateToken,
+  canEnroll,
+  isEnrolling,
+  canAssign,
+  showEnrollmentAction = true,
+  showDetailAction = false,
+  onEnroll,
+  isSaved = false,
+  isSavingBookmark = false,
+  onToggleBookmark,
+  disableNavigation = false,
+  onSelect,
+}: CourseCardProps) {
+  const detailPath = `/courses/${course.id}`;
+
+  const handleSelect = () => {
+    if (disableNavigation && onSelect) {
+      onSelect(course);
+    }
+  };
+
+  const headerBody = (
+    <>
+      {course.thumbnailUrl ? (
+        <img
+          src={course.thumbnailUrl}
+          alt=""
+          loading="lazy"
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+      ) : (
+        <div className="flex h-full items-center justify-center">
+          <GraduationCap className="size-14 text-blue-900/25" />
+        </div>
+      )}
+      <Badge className="absolute left-3 top-3 bg-white/95 text-slate-800 hover:bg-white">
+        {course.categoryName || "Course"}
+      </Badge>
+      {course.enrolled && (
+        <Badge className="absolute right-3 top-3 bg-emerald-600 text-white hover:bg-emerald-600">
+          <CheckCircle2 className="size-3" /> {certificateToken ? "Completed" : "Enrolled"}
+        </Badge>
+      )}
+    </>
+  );
+
+  const cardHeader = (
+    <div className="relative h-44 overflow-hidden bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100">
+      {disableNavigation ? (
+        <div
+          className="h-full w-full cursor-pointer"
+          onClick={handleSelect}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              handleSelect();
+            }
+          }}
+        >
+          {headerBody}
+        </div>
+      ) : (
+        <Link to={detailPath} className="block h-full w-full" aria-label={`View ${course.name}`}>
+          {headerBody}
+        </Link>
+      )}
+      {onToggleBookmark && (
+        <button
+          type="button"
+          disabled={isSavingBookmark}
+          aria-pressed={isSaved}
+          aria-label={isSaved ? `Remove bookmark for ${course.name}` : `Save ${course.name} for later`}
+          title={isSaved ? "Saved · Click to remove" : "Save for later"}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onToggleBookmark(course.id);
+          }}
+          className={`absolute bottom-3 right-3 z-10 flex size-8 items-center justify-center rounded-full border shadow-sm transition ${
+            isSaved
+              ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800 dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+              : "border-slate-200 bg-white/95 text-slate-800 hover:bg-white dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-100 dark:hover:bg-slate-900"
+          } disabled:opacity-60`}
+        >
+          <Bookmark className={`size-4 ${isSaved ? "fill-current" : ""}`} />
+        </button>
+      )}
+    </div>
+  );
+
+  const titleContent = (
+    <h3
+      className="line-clamp-2 min-h-12 text-lg font-semibold leading-6"
+      onClick={disableNavigation ? handleSelect : undefined}
+      role={disableNavigation ? "button" : undefined}
+      tabIndex={disableNavigation ? 0 : undefined}
+      onKeyDown={
+        disableNavigation
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                handleSelect();
+              }
+            }
+          : undefined
+      }
+    >
+      {course.name || "Untitled course"}
+    </h3>
+  );
+
+  return (
+    <article className="group flex flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-lg">
+      {cardHeader}
+
+      <div className="flex flex-1 flex-col gap-1.5 px-4 py-2">
+        <div>
+          {disableNavigation ? (
+            titleContent
+          ) : (
+            <Link to={detailPath} className="hover:underline">
+              {titleContent}
+            </Link>
+          )}
+          <CourseRating
+            averageRating={course.averageRating}
+            totalReviews={course.totalReviews}
+            className="mt-0.5"
+          />
+          <p className="mt-1 text-sm text-muted-foreground">{course.instructor || "Course instructor"}</p>
+        </div>
+
+        <p className="line-clamp-3 min-h-[3.75rem] text-sm leading-5 text-muted-foreground">
+          {course.description || "Start learning with this instructor-led course."}
+        </p>
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+          {course.level && (
+            <Badge variant="secondary" className={LEVEL_BADGE_CLASS[course.level]}>
+              {LEVEL_LABEL[course.level]}
+            </Badge>
+          )}
+          <span className="inline-flex items-center gap-1">
+            <BookOpen className="size-3.5" /> {course.lessonCount} lessons
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Clock className="size-3.5" /> {formatTotalDuration(course.totalDuration)}
+          </span>
+        </div>
+
+        <div className="mt-auto flex flex-col gap-2 pt-2">
+          {showDetailAction && (disableNavigation ? (
+            <Button type="button" variant="outline" className="w-full" onClick={handleSelect}>
+              <Eye className="size-4" /> View detail
+            </Button>
+          ) : (
+            <Button asChild variant="outline" className="w-full"><Link to={detailPath}>
+              <Eye className="size-4" /> View detail
+            </Link></Button>
+          ))}
+          {showEnrollmentAction && (course.enrolled && enrollmentId !== undefined ? (
+            certificateToken ? (
+              <Button asChild className="flex-1 bg-green-600 text-white hover:bg-green-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700">
+                <Link to={`/my-certificates/${encodeURIComponent(certificateToken)}`}>
+                  <Award className="size-4" /> View certificate
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild className="flex-1 bg-green-600 text-white hover:bg-green-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700">
+                <Link to={`/enrollments/${enrollmentId}/learn`}>
+                  <PlayCircle className="size-4" /> Continue learning
+                </Link>
+              </Button>
+            )
+          ) : (
+            <>
+              {!course.enrolled && canEnroll && (
+                <Button className="flex-1" disabled={isEnrolling} onClick={() => onEnroll(course.id)}>
+                  {isEnrolling ? "Enrolling..." : "Enroll"}
+                </Button>
+              )}
+            </>
+          ))}
+        </div>
+        {canAssign && (
+          <CourseEnrollmentAssignmentDialog course={course} />
+        )}
+      </div>
+    </article>
+  );
+}
+
+export function CourseCardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-2xl border bg-card shadow-sm" aria-hidden>
+      <div className="h-44 animate-pulse bg-muted" />
+      <div className="space-y-1.5 px-4 py-2">
+        <div className="h-5 w-3/4 animate-pulse rounded bg-muted" />
+        <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
+        <div className="h-14 animate-pulse rounded bg-muted" />
+        <div className="h-9 animate-pulse rounded bg-muted" />
+      </div>
+    </div>
+  );
+}

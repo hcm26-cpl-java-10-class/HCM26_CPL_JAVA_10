@@ -1,5 +1,7 @@
 import ToggleTheme from "@/components/ToggleTheme";
-import { useEffect, useRef, useState } from "react";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { useTranslation } from "react-i18next";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge.tsx";
 import type { RootState } from "@/store/store";
 import { useSelector } from "react-redux";
@@ -9,16 +11,19 @@ import {
   formatRoleLabel,
   getHomePathByRole,
   normalizeRole,
+  resolveEffectivePermissions,
   uniqueRoles,
 } from "@/utils/rbac.utils";
 import { useNavigate } from "react-router-dom";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 
 export default function HeaderRight() {
-  const { role, roles } = useSelector((state: RootState) => state.auth);
+  const { role, roles, rolePermissions, permissions, email } = useSelector((state: RootState) => state.auth);
   const { activeRole, availableRoles, isPreviewMode, setViewRole } = useRoleSwitch();
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const primaryRole = normalizeRole(role);
   const assignedRoles = uniqueRoles(roles, primaryRole);
@@ -42,6 +47,7 @@ export default function HeaderRight() {
   if (!role) {
     return (
       <div className="flex items-center gap-3">
+        <LanguageSwitcher />
         <ToggleTheme />
       </div>
     );
@@ -57,6 +63,8 @@ export default function HeaderRight() {
           {formatRoleLabel(currentRole)}
         </Badge>
 
+        <NotificationBell key={email} />
+        <LanguageSwitcher />
         <ToggleTheme />
       </div>
     );
@@ -64,9 +72,30 @@ export default function HeaderRight() {
 
   const switchRole = (nextRole: string) => {
     const normalizedRole = normalizeRole(nextRole);
-    setViewRole(normalizedRole === primaryRole ? null : normalizedRole);
+    const targetRole = normalizedRole === primaryRole ? null : normalizedRole;
+
     setOpen(false);
-    navigate(getHomePathByRole(normalizedRole));
+
+    /**
+     * The role and the URL must change in the same commit: React Router
+     * applies navigation updates inside `startTransition`, so an urgent
+     * `setViewRole` would otherwise commit first and re-render the *current*
+     * protected route with the *new* role (-> 403 on the old page).
+     */
+    startTransition(() => {
+      setViewRole(targetRole);
+      navigate(
+          getHomePathByRole(
+              normalizedRole,
+              resolveEffectivePermissions(
+                  normalizedRole,
+                  rolePermissions,
+                  permissions
+              ),
+          ),
+          { replace: true },
+      );
+    });
   };
 
   return (
@@ -84,7 +113,7 @@ export default function HeaderRight() {
           ) : (
             <ShieldCheck size={14} />
           )}
-          <span>{formatRoleLabel(currentRole)} View</span>
+          <span>{t("{{role}} View", { role: formatRoleLabel(currentRole) })}</span>
           <ChevronDown
             size={13}
             className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}
@@ -110,7 +139,7 @@ export default function HeaderRight() {
                     }`}
                 >
                   {studentRow ? <GraduationCap size={15} /> : <ShieldCheck size={15} />}
-                  {formatRoleLabel(availableRole)} View
+                  {t("{{role}} View", { role: formatRoleLabel(availableRole) })}
                   {(selected || !isAssignedRole) && (
                     <span className="ml-auto flex items-center gap-2">
                       {selected && (
@@ -138,6 +167,8 @@ export default function HeaderRight() {
         </Badge>
       )}
 
+      <LanguageSwitcher />
+      <NotificationBell key={email} />
       <ToggleTheme />
     </div >
   );

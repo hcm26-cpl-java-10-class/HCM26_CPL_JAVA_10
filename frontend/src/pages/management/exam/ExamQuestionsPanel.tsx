@@ -1,0 +1,1401 @@
+import { examApi, questionApi } from "@/api";
+import { aiQuestionGeneratorApi } from "@/api/features/ai-question-generator.api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { ExamDTO, QuestionDTO, QuestionDifficulty, QuestionType } from "@/types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, Check, ChevronUp, Dices, Eye, EyeOff, Pencil, Plus, Save, Search, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
+import { QuestionAnswersPreview } from "./question/components/QuestionAnswersPreview";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { getErrorMessage } from "./examConfig";
+import { EditExamQuestionDialog, isExamStarted } from "./ExamQuestionParts";
+import { AiQuestionGeneratorDialog } from "./components/AiQuestionGeneratorDialog";
+import axios from "axios";
+
+const PAGE_SIZE = 8;
+
+const TYPE_CONFIG: Record<QuestionType, { label: string; badge: string }> = {
+  MULTIPLE_CHOICE: {
+    label: "Multiple Choice",
+    badge: "bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/25",
+  },
+  ESSAY: {
+    label: "Essay",
+    badge: "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/25",
+  },
+  CODING: {
+    label: "Coding",
+    badge: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/25",
+  },
+};
+
+const TYPE_LABEL: Record<QuestionType, string> = {
+  MULTIPLE_CHOICE: "Multiple Choice",
+  ESSAY: "Essay",
+  CODING: "Coding",
+};
+
+const DIFFICULTY_CONFIG: Record<QuestionDifficulty, { label: string; badge: string }> = {
+  EASY: {
+    label: "Easy",
+    badge: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
+  },
+  MEDIUM: {
+    label: "Medium",
+    badge: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25",
+  },
+  HARD: {
+    label: "Hard",
+    badge: "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/25",
+  },
+};
+
+const DIFFICULTY_LABEL: Record<QuestionDifficulty, string> = {
+  EASY: "Easy",
+  MEDIUM: "Medium",
+  HARD: "Hard",
+};
+
+const normalizeTopic = (topic?: string | null) => (topic ?? "").trim().toLowerCase();
+
+function toggleIn<T>(set: Set<T>, value: T): Set<T> {
+  const next = new Set(set);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  return next;
+}
+
+function QuestionMeta({ q }: { q: QuestionDTO }) {
+  const typeCfg = TYPE_CONFIG[q.type] ?? { label: q.type, badge: "bg-muted text-foreground border-border" };
+  const diffCfg = DIFFICULTY_CONFIG[q.difficulty] ?? { label: q.difficulty, badge: "bg-muted text-foreground border-border" };
+  const isAi = Boolean(q.isAiGenerated || q.source === "AI_GENERATED");
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      {isAi && (
+        <span className="rounded-md border border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-800 dark:bg-purple-950/70 dark:text-purple-300 px-2 py-0.5 font-semibold flex items-center gap-1 shadow-2xs">
+          <Sparkles className="size-3 text-purple-600 dark:text-purple-400" />
+          ✨ AI Generated
+        </span>
+      )}
+      <span className={`rounded-md border px-2 py-0.5 font-medium ${typeCfg.badge}`}>{typeCfg.label}</span>
+      <span className={`rounded-md border px-2 py-0.5 font-semibold ${diffCfg.badge}`}>{diffCfg.label}</span>
+      <span className="rounded-md border border-border/60 bg-muted/40 px-2 py-0.5 text-muted-foreground font-medium">
+        Weight: {q.points}
+      </span>
+    </div>
+  );
+}
+
+/** One question of the library with inline preview expansion */
+function LibraryCard({
+  q,
+  state,
+  locked,
+  isExpanded,
+  onToggleExpand,
+  onAdd,
+  onUndo,
+  onDeletePermanent,
+}: {
+  q: QuestionDTO;
+  state: "available" | "staged" | "inExam";
+  locked: boolean;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  onAdd: () => void;
+  onUndo: () => void;
+  onDeletePermanent?: () => void;
+}) {
+  const isAi = Boolean(q.isAiGenerated || q.source === "AI_GENERATED");
+  return (
+    <div className={`rounded-xl border bg-card p-4 shadow-xs transition-all hover:border-primary/40 ${state === "inExam" ? "opacity-75" : ""}`}>
+      <div className="flex items-start justify-between gap-3">
+        <QuestionMeta q={q} />
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2.5 text-xs text-primary hover:bg-primary/10"
+            onClick={onToggleExpand}
+          >
+            {isExpanded ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+            {isExpanded ? "Hide preview" : "Preview"}
+          </Button>
+          {state === "available" && (
+            <div className="flex items-center gap-1">
+              {isAi && onDeletePermanent && (
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="outline"
+                  className="text-rose-600 border-rose-300 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950/50"
+                  aria-label="Xóa hẳn câu hỏi AI"
+                  title="Xóa hẳn câu hỏi AI khỏi cơ sở dữ liệu"
+                  disabled={locked}
+                  onClick={onDeletePermanent}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="icon-sm"
+                aria-label="Add to selected questions"
+                title="Add to selected questions"
+                disabled={locked}
+                onClick={onAdd}
+              >
+                <Plus className="size-4" />
+              </Button>
+            </div>
+          )}
+          {state === "staged" && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 px-2 text-xs text-emerald-600 border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20"
+              title="Click to remove from the selection"
+              onClick={onUndo}
+            >
+              <Check className="size-3.5" />
+              Added
+            </Button>
+          )}
+          {state === "inExam" && (
+            <Badge variant="outline" className="text-[10px] bg-muted/40">
+              In assessment
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">{q.content}</p>
+
+      {q.imageUrl && (
+        <div className="mt-2.5 overflow-hidden rounded-md border bg-muted/10 p-2">
+          <img src={q.imageUrl} alt="" className="max-h-48 w-auto rounded object-contain" />
+        </div>
+      )}
+
+      {q.topic?.trim() && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground font-mono">
+            #{q.topic.trim()}
+          </span>
+        </div>
+      )}
+
+      {isExpanded && (
+        <div className="mt-3 pt-3 border-t space-y-2">
+          <QuestionAnswersPreview question={q} />
+          <div className="flex justify-center pt-2 border-t border-border/40">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1.5 px-3 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
+              onClick={onToggleExpand}
+            >
+              <ChevronUp className="size-3.5" />
+              <span>Collapse preview</span>
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Selected question card (saved or staged) matching the library card style */
+function SelectedQuestionCard({
+  q,
+  orderNumber,
+  isStaged,
+  isExpanded,
+  locked,
+  onToggleExpand,
+  onEdit,
+  onRemove,
+}: {
+  q: QuestionDTO;
+  orderNumber: number;
+  isStaged?: boolean;
+  isExpanded: boolean;
+  locked: boolean;
+  onToggleExpand: () => void;
+  onEdit?: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div
+      className={`rounded-xl border p-4 shadow-xs transition-all ${
+        isStaged
+          ? "border-emerald-500/40 bg-emerald-500/[0.04] dark:bg-emerald-500/[0.06]"
+          : "border-border bg-card hover:border-primary/40"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {isStaged ? (
+            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 text-xs font-semibold px-2 py-0.5">
+              Question {orderNumber} · Not saved yet
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="font-semibold text-xs px-2 py-0.5 bg-muted/60 border-border/80">
+              Question {orderNumber}
+            </Badge>
+          )}
+          <QuestionMeta q={q} />
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2.5 text-xs text-primary hover:bg-primary/10"
+            onClick={onToggleExpand}
+          >
+            {isExpanded ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+            {isExpanded ? "Hide preview" : "Preview"}
+          </Button>
+
+          {onEdit && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+              title={locked ? "Assessment has started" : "Edit question points or content"}
+              disabled={locked}
+              onClick={onEdit}
+            >
+              <Pencil className="size-3.5" />
+              <span>Edit</span>
+            </Button>
+          )}
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs text-rose-500/80 hover:text-rose-400 hover:bg-rose-500/10"
+            title={locked ? "Assessment has started" : "Remove question from selection"}
+            disabled={locked}
+            onClick={onRemove}
+          >
+            <Trash2 className="size-3.5" />
+            <span>Remove</span>
+          </Button>
+        </div>
+      </div>
+
+      <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+        {q.content}
+      </p>
+
+      {q.imageUrl && (
+        <div className="mt-2.5 overflow-hidden rounded-md border bg-muted/10 p-2">
+          <img src={q.imageUrl} alt="" className="max-h-48 w-auto rounded object-contain" />
+        </div>
+      )}
+
+      {q.topic?.trim() && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground font-mono">
+            #{q.topic.trim()}
+          </span>
+        </div>
+      )}
+
+      {isExpanded && (
+        <div className="mt-3 pt-3 border-t space-y-2">
+          <QuestionAnswersPreview question={q} />
+          <div className="flex justify-center pt-2 border-t border-border/40">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1.5 px-3 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
+              onClick={onToggleExpand}
+            >
+              <ChevronUp className="size-3.5" />
+              <span>Collapse preview</span>
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The same native question workspace can edit a saved Exam or an unsaved Course preview. */
+export type ExamQuestionsPreview = {
+  exam: ExamDTO;
+  selected: QuestionDTO[];
+  onSave: (questions: QuestionDTO[]) => void;
+};
+const EMPTY_QUESTIONS: QuestionDTO[] = [];
+export function allowedQuestionTypes(examType?: ExamDTO["examType"]): QuestionType[] {
+  if (examType === "CODING") return ["CODING"];
+  if (examType === "ESSAY") return ["ESSAY"];
+  if (examType === "MC_CODING") return ["MULTIPLE_CHOICE", "CODING"];
+  if (examType === "MIXED") return ["MULTIPLE_CHOICE", "ESSAY", "CODING"];
+  return ["MULTIPLE_CHOICE"];
+}
+type ExamQuestionsProps = { examId: number; preview?: never } | { examId?: never; preview: ExamQuestionsPreview };
+export function ExamQuestionsPanel({ examId, preview }: ExamQuestionsProps) {
+  const previewMode = Boolean(preview);
+  const saveLabel = previewMode ? "Save to Preview" : "Save to Assessment";
+  // Fail closed if a future handler accidentally tries a saved-only mutation in Preview.
+  const requireSavedId = () => {
+    if (previewMode || examId == null || examId <= 0) throw new Error("Save the Course before modifying an Assessment.");
+    return examId;
+  };
+  const queryClient = useQueryClient();
+  const examQuery = useQuery({
+    queryKey: previewMode ? ["exam-preview-disabled", "detail"] : ["exam-detail", examId],
+    queryFn: () => examApi.getById(String(requireSavedId())),
+    enabled: !previewMode && examId != null,
+  });
+  const activeExam: ExamDTO | null = preview ? preview.exam : examQuery.data ?? null;
+  const setActiveExam = (exam: ExamDTO | null) => {
+    if (!previewMode && exam) queryClient.setQueryData(["exam-detail", examId], exam);
+  };
+  const poolConfigQuery = useQuery({
+    queryKey: previewMode ? ["exam-preview-disabled", "pool"] : ["exam-question-pool", examId],
+    queryFn: () => examApi.getQuestionPoolConfig(requireSavedId()),
+    enabled: !previewMode && Boolean(activeExam?.id),
+    retry: false,
+  });
+
+  // Filters
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<Set<QuestionType>>(new Set());
+  const [difficultyFilter, setDifficultyFilter] = useState<Set<QuestionDifficulty>>(new Set());
+  const [topicFilter, setTopicFilter] = useState<Set<string>>(new Set());
+  const [hideAdded, setHideAdded] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(true);
+  const [page, setPage] = useState(0);
+
+  // Selection / dialogs
+  const [stagedQuestions, setStagedQuestions] = useState<QuestionDTO[]>(() => preview?.selected ?? []);
+  const [editingQuestion, setEditingQuestion] = useState<QuestionDTO | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<number | string>>(new Set());
+  const [expandedSelectedIds, setExpandedSelectedIds] = useState<Set<number | string>>(new Set());
+  const [isRandomOpen, setIsRandomOpen] = useState(false);
+  const [isAiGenOpen, setIsAiGenOpen] = useState(false);
+  const [randomCount, setRandomCount] = useState(10);
+  const [randomTopic, setRandomTopic] = useState<string>("");
+  const [randomDifficulty, setRandomDifficulty] = useState<string>("ALL");
+  const [randomQuestionType, setRandomQuestionType] = useState<string>("ALL");
+  // Question Pool configuration
+  const [poolRandomEnabled, setPoolRandomEnabled] = useState(true);
+  const [poolRandomCount, setPoolRandomCount] = useState(10);
+  const [poolShuffleOrder, setPoolShuffleOrder] = useState(true);
+
+  // Derive allowed question types strictly from backend exam configuration
+  const allowedTypes: QuestionType[] = useMemo(() => {
+    if (activeExam?.allowedQuestionTypes && activeExam.allowedQuestionTypes.length > 0) {
+      return activeExam.allowedQuestionTypes;
+    }
+    return allowedQuestionTypes(activeExam?.examType);
+  }, [activeExam?.allowedQuestionTypes, activeExam?.examType]);
+
+  const lockedQuestionType: QuestionType | null = useMemo(() => {
+    return allowedTypes.length === 1 ? allowedTypes[0] : null;
+  }, [allowedTypes]);
+
+  const isPairExam = allowedTypes.length === 2 && allowedTypes.includes("MULTIPLE_CHOICE") && allowedTypes.includes("CODING");
+  const activeExamStarted = isExamStarted(activeExam);
+
+  // Clear any disallowed type filters whenever allowedTypes changes
+  useEffect(() => {
+    setTypeFilter((prev) => {
+      const next = new Set<QuestionType>();
+      for (const t of prev) {
+        if (allowedTypes.includes(t)) next.add(t);
+      }
+      return next;
+    });
+  }, [allowedTypes]);
+
+  const savedQuestions = previewMode ? EMPTY_QUESTIONS : activeExam?.questions ?? EMPTY_QUESTIONS;
+
+  const savedQuestionIds = savedQuestions
+      .map((question) => question.id)
+      .filter((id): id is number => id != null);
+
+  const bankQuery = useQuery({
+    queryKey: ["exam-question-all-bank", lockedQuestionType],
+    enabled: previewMode || Boolean(activeExam?.id),
+    queryFn: () =>
+        questionApi.getPage(
+            { page: 0, size: 2000, sort: "id,desc" },
+            undefined,
+            { isActive: true, ...(lockedQuestionType ? { type: lockedQuestionType } : {}) },
+        ),
+    staleTime: 30_000,
+  });
+  const examAiQuery = useQuery({
+    queryKey: previewMode ? ["exam-preview-disabled", "ai"] : ["exam-ai-questions", examId],
+    queryFn: () => aiQuestionGeneratorApi.getExamAiQuestions(requireSavedId()),
+    enabled: !previewMode && Boolean(examId),
+  });
+
+  const deleteAiQuestionMutation = useMutation({
+    mutationFn: (questionId: number) => aiQuestionGeneratorApi.deleteExamAiQuestion(requireSavedId(), questionId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["exam-ai-questions", examId] });
+      void queryClient.invalidateQueries({ queryKey: ["exam-detail", examId] });
+      void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
+      toast.success("Đã xóa vĩnh viễn câu hỏi AI khỏi hệ thống.");
+    },
+    onError: (error) => toast.error(getErrorMessage(error, "Không thể xóa câu hỏi AI")),
+  });
+
+  const handleDeleteAiQuestionPermanent = (questionId: number) => {
+    if (activeExamStarted) {
+      toast.error("Bài thi đã bắt đầu, không thể xóa câu hỏi.");
+      return;
+    }
+    if (window.confirm("Bạn có chắc chắn muốn xóa HẲN câu hỏi AI này khỏi cơ sở dữ liệu? Hành động này không thể hoàn tác.")) {
+      deleteAiQuestionMutation.mutate(questionId);
+    }
+  };
+
+  const allBankQuestions = useMemo(
+    () => {
+      const bankItems = (bankQuery.data?.content ?? []).filter((q) => allowedTypes.includes(q.type));
+      const aiItems = (previewMode ? [] : examAiQuery.data ?? []).filter((q) => allowedTypes.includes(q.type));
+      const mergedMap = new Map<number, QuestionDTO>();
+      for (const item of aiItems) {
+        if (item.id != null) mergedMap.set(item.id, item);
+      }
+      for (const item of bankItems) {
+        if (item.id != null && !mergedMap.has(item.id)) {
+          mergedMap.set(item.id, item);
+        }
+      }
+      return Array.from(mergedMap.values());
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [bankQuery.data?.content, examAiQuery.data, allowedTypes, previewMode],
+  );
+
+  const refreshExams = () => {
+    void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
+  };
+
+  const addQuestionsMutation = useMutation({
+    mutationFn: (ids: number[]) => examApi.addQuestions(requireSavedId(), ids),
+    onSuccess: (exam) => {
+      setActiveExam(exam);
+      refreshExams();
+      void queryClient.invalidateQueries({ queryKey: ["exam-question-all-bank"] });
+      void queryClient.invalidateQueries({ queryKey: ["exam-ai-questions", examId] });
+    },
+    onError: (error) => toast.error(getErrorMessage(error, "Failed to add questions to assessment")),
+  });
+
+  const removeQuestionMutation = useMutation({
+    mutationFn: ({ questionId }: { examId: number; questionId: number }) =>
+        examApi.removeQuestion(requireSavedId(), questionId),
+    onSuccess: (exam) => {
+      setActiveExam(exam);
+      refreshExams();
+      void queryClient.invalidateQueries({ queryKey: ["exam-question-all-bank"] });
+      void queryClient.invalidateQueries({ queryKey: ["exam-ai-questions", examId] });
+      toast.success("Question removed from assessment");
+    },
+    onError: (error) => toast.error(getErrorMessage(error, "Failed to remove question from assessment")),
+  });
+
+  const sourceIdsInExam = useMemo(() => {
+    const set = new Set<number>();
+    (activeExam?.questions ?? []).forEach((q) => {
+      if (q.sourceQuestionId != null) set.add(q.sourceQuestionId);
+      if (q.id != null) set.add(q.id);
+    });
+    return set;
+  }, [activeExam?.questions]);
+  const stagedIds = useMemo(() => new Set(stagedQuestions.map((q) => q.id)), [stagedQuestions]);
+
+  const stagedPoints = stagedQuestions.reduce((sum, q) => sum + (q.points || 0), 0);
+  const totalPointsInExam = (activeExam?.totalPoints ?? 0) + stagedPoints;
+  const totalQuestionsInExamCount = (activeExam?.questions?.length ?? 0) + stagedQuestions.length;
+
+  const topicCounts = useMemo(() => {
+    const counts = new Map<string, { label: string; count: number }>();
+    for (const q of allBankQuestions) {
+      const label = (q.topic ?? "").trim();
+      if (!label) continue;
+      const key = label.toLowerCase();
+      counts.set(key, { label, count: (counts.get(key)?.count ?? 0) + 1 });
+    }
+    return [...counts.entries()].sort((a, b) => a[1].label.localeCompare(b[1].label));
+  }, [allBankQuestions]);
+  const topicList = topicCounts.map(([, v]) => v.label);
+
+  const filtered = useMemo(() => {
+    const s = search.trim().toLowerCase();
+    return allBankQuestions.filter((q) => {
+      if (typeFilter.size > 0 && !typeFilter.has(q.type)) return false;
+      if (difficultyFilter.size > 0 && !difficultyFilter.has(q.difficulty)) return false;
+      if (topicFilter.size > 0 && !topicFilter.has(normalizeTopic(q.topic))) return false;
+      if (hideAdded && (sourceIdsInExam.has(q.id) || stagedIds.has(q.id))) return false;
+      if (s && !(q.content || "").toLowerCase().includes(s) && !(q.topic || "").toLowerCase().includes(s)) return false;
+      return true;
+    });
+  }, [allBankQuestions, search, typeFilter, difficultyFilter, topicFilter, hideAdded, sourceIdsInExam, stagedIds]);
+
+  useEffect(() => setPage(0), [search, typeFilter, difficultyFilter, topicFilter, hideAdded]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  useEffect(() => { if (previewMode && page >= totalPages) setPage(totalPages - 1); }, [previewMode, page, totalPages]);
+  const pageRows = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+
+  const isAllExpanded = pageRows.length > 0 && pageRows.every((q) => expandedIds.has(q.id));
+  const togglePreviewAll = () => {
+    if (isAllExpanded) {
+      setExpandedIds(new Set());
+    } else {
+      const next = new Set(expandedIds);
+      pageRows.forEach((q) => next.add(q.id));
+      setExpandedIds(next);
+    }
+  };
+  const togglePreview = (id: number | string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectedPreview = (id: number | string) => {
+    setExpandedSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const questionIds = savedQuestions
+        .map((q) => q.id)
+        .filter((id): id is number => id != null);
+
+    const config = poolConfigQuery.data;
+
+    if (config) {
+      // Chỉ giữ những câu hỏi vừa thuộc Exam vừa có trong Pool đã lưu.
+      const configuredIds = new Set(config.questionIds ?? []);
+      const validPoolIds = questionIds.filter((id) => configuredIds.has(id));
+
+      setPoolRandomEnabled(config.randomSelectionEnabled);
+      setPoolRandomCount(
+          Math.min(
+              validPoolIds.length,
+              Math.max(1, config.randomQuestionCount)
+          )
+      );
+      setPoolShuffleOrder(config.shuffleQuestionOrder);
+      return;
+    }
+
+    if (
+        poolConfigQuery.isError &&
+        axios.isAxiosError(poolConfigQuery.error) &&
+        poolConfigQuery.error.response?.status === 404
+    ) {
+      // Chưa có cấu hình: mặc định chọn toàn bộ câu hỏi đã lưu trong Exam.
+      setPoolRandomEnabled(true);
+      setPoolRandomCount(Math.min(10, Math.max(1, questionIds.length)));
+      setPoolShuffleOrder(true);
+    }
+  }, [
+    poolConfigQuery.data,
+    poolConfigQuery.isError,
+    poolConfigQuery.error,
+    savedQuestions,
+  ]);
+
+  const savePoolConfigMutation = useMutation({
+    mutationFn: (config: {
+      randomSelectionEnabled: boolean;
+      randomQuestionCount: number;
+      shuffleQuestionOrder: boolean;
+    }) =>
+        examApi.saveQuestionPoolConfig(requireSavedId(), {
+          ...config,
+          questionIds: savedQuestionIds,
+        }),
+
+    onSuccess: (config) => {
+      setPoolRandomEnabled(config.randomSelectionEnabled);
+      setPoolRandomCount(config.randomQuestionCount);
+      setPoolShuffleOrder(config.shuffleQuestionOrder);
+
+      void queryClient.invalidateQueries({
+        queryKey: ["exam-question-pool", examId],
+      });
+
+      toast.success("Question Pool settings saved successfully.");
+    },
+
+    onError: (error) => {
+      toast.error(getErrorMessage(error, "Failed to save Question Pool configuration."));
+    },
+  });
+
+  const handlePoolRandomToggle = (enabled: boolean) => {
+    if (
+        savedQuestionIds.length === 0 ||
+        savePoolConfigMutation.isPending
+    ) return;
+
+    const nextCount = Math.min(
+        savedQuestionIds.length,
+        Math.max(1, poolRandomCount)
+    );
+
+    setPoolRandomEnabled(enabled);
+    setPoolRandomCount(nextCount);
+
+    savePoolConfigMutation.mutate({
+      randomSelectionEnabled: enabled,
+      randomQuestionCount: enabled ? nextCount : savedQuestionIds.length,
+      shuffleQuestionOrder: poolShuffleOrder,
+    });
+  };
+
+  const handlePoolCountChange = (value: number) => {
+    setPoolRandomCount(value);
+  };
+
+  const handlePoolCountSave = () => {
+    if (
+        !poolRandomEnabled ||
+        savePoolConfigMutation.isPending ||
+        !Number.isInteger(poolRandomCount) ||
+        poolRandomCount < 1 ||
+        poolRandomCount > savedQuestionIds.length
+    ) return;
+
+    savePoolConfigMutation.mutate({
+      randomSelectionEnabled: true,
+      randomQuestionCount: poolRandomCount,
+      shuffleQuestionOrder: poolShuffleOrder,
+    });
+  };
+
+  const handlePoolShuffleChange = (checked: boolean) => {
+    if (
+        savePoolConfigMutation.isPending ||
+        savedQuestionIds.length === 0
+    ) return;
+
+    setPoolShuffleOrder(checked);
+
+    savePoolConfigMutation.mutate({
+      randomSelectionEnabled: poolRandomEnabled,
+      randomQuestionCount: poolRandomEnabled
+          ? poolRandomCount
+          : savedQuestionIds.length,
+      shuffleQuestionOrder: checked,
+    });
+  };
+
+  const selectedAll = useMemo(() => [...savedQuestions, ...stagedQuestions], [savedQuestions, stagedQuestions]);
+
+  const isAllSelectedExpanded =
+    selectedAll.length > 0 && selectedAll.every((q) => expandedSelectedIds.has(q.id));
+  const toggleSelectedPreviewAll = () => {
+    if (isAllSelectedExpanded) {
+      setExpandedSelectedIds(new Set());
+    } else {
+      const next = new Set(expandedSelectedIds);
+      selectedAll.forEach((q) => next.add(q.id));
+      setExpandedSelectedIds(next);
+    }
+  };
+  const addable = filtered.filter((q) => !sourceIdsInExam.has(q.id) && !stagedIds.has(q.id));
+  const hasFilters = search !== "" || typeFilter.size > 0 || difficultyFilter.size > 0 || topicFilter.size > 0;
+
+  const clearFilters = () => {
+    setSearch("");
+    setTypeFilter(new Set());
+    setDifficultyFilter(new Set());
+    setTopicFilter(new Set());
+  };
+
+  const stageQuestion = (q: QuestionDTO) => {
+    if (activeExamStarted || sourceIdsInExam.has(q.id)) return;
+    if (!allowedTypes.includes(q.type)) {
+      toast.error(`Đề thi không cho phép loại câu hỏi ${TYPE_LABEL[q.type] || q.type}`);
+      return;
+    }
+    setStagedQuestions((prev) => (prev.some((item) => item.id === q.id) ? prev : [...prev, q]));
+  };
+  const unstageQuestion = (id: number) => setStagedQuestions((prev) => prev.filter((item) => item.id !== id));
+
+  const addAllMatching = () => {
+    if (activeExamStarted || addable.length === 0) return;
+    const validAddable = addable.filter((q) => allowedTypes.includes(q.type));
+    setStagedQuestions((prev) => {
+      const existing = new Set(prev.map((q) => q.id));
+      return [...prev, ...validAddable.filter((q) => !existing.has(q.id))];
+    });
+    toast.success(`Added ${validAddable.length} question(s) to the selection. Click "${saveLabel}" to keep them.`);
+  };
+
+  const handleSaveStagedToExam = () => {
+    if (activeExamStarted) {
+      toast.error("Students have already started this assessment, so questions cannot be added.");
+      return;
+    }
+    if (!preview && (!activeExam?.id || stagedQuestions.length === 0)) return;
+    const disallowed = stagedQuestions.filter((q) => !allowedTypes.includes(q.type));
+    if (disallowed.length > 0) {
+      toast.error(`Đề thi không cho phép câu hỏi loại: ${disallowed.map((q) => TYPE_LABEL[q.type] || q.type).join(", ")}`);
+      return;
+    }
+    if (preview) {
+      preview.onSave(stagedQuestions);
+      return;
+    }
+    const ids = stagedQuestions.map((q) => q.id);
+    addQuestionsMutation.mutate(ids, {
+      onSuccess: () => {
+        setStagedQuestions([]);
+        toast.success(`Saved ${ids.length} question(s) to assessment successfully!`);
+      },
+    });
+  };
+
+  const openRandomDialog = () => {
+    setRandomTopic(topicFilter.size === 1 ? (topicCounts.find(([k]) => topicFilter.has(k))?.[1].label ?? "") : "");
+    setRandomDifficulty(difficultyFilter.size === 1 ? [...difficultyFilter][0] : "ALL");
+    setRandomQuestionType(lockedQuestionType ?? (typeFilter.size === 1 ? [...typeFilter][0] : "ALL"));
+    setIsRandomOpen(true);
+  };
+
+  const allAvailableBankQuestions = useMemo(
+    () => allBankQuestions.filter((q) => !sourceIdsInExam.has(q.id) && !stagedIds.has(q.id)),
+    [allBankQuestions, sourceIdsInExam, stagedIds],
+  );
+
+  const eligibleForRandom = useMemo(() => {
+    return allBankQuestions.filter((q) => {
+      if (sourceIdsInExam.has(q.id) || (previewMode && stagedIds.has(q.id))) return false;
+      const typeToFilter = lockedQuestionType ?? (randomQuestionType !== "ALL" ? randomQuestionType : null);
+      if (typeToFilter && q.type !== typeToFilter) return false;
+      if (isPairExam && q.type === "ESSAY") return false;
+      if (randomDifficulty !== "ALL" && q.difficulty !== randomDifficulty) return false;
+      if (randomTopic.trim()) {
+        if ((q.topic || "").trim().toLowerCase() !== randomTopic.trim().toLowerCase()) return false;
+      }
+      return true;
+    });
+  }, [allBankQuestions, sourceIdsInExam, stagedIds, previewMode, lockedQuestionType, isPairExam, randomQuestionType, randomDifficulty, randomTopic]);
+
+  const handleConfirmRandomAdd = () => {
+    if (eligibleForRandom.length === 0) {
+      toast.warning("No eligible questions available to add!");
+      return;
+    }
+    const count = Math.min(randomCount, eligibleForRandom.length);
+    const shuffled = [...eligibleForRandom];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const picked = shuffled.slice(0, count);
+    setStagedQuestions((prev) => {
+      const existing = new Set(prev.map((q) => q.id));
+      return [...prev, ...picked.filter((q) => !existing.has(q.id))];
+    });
+    setIsRandomOpen(false);
+    toast.success(`Added ${picked.length} random question(s) to the selection! Click "${saveLabel}" to keep them.`);
+  };
+
+  if (!previewMode && examQuery.isLoading) {
+    return <p className="py-10 text-center text-sm text-muted-foreground">Loading questions...</p>;
+  }
+  if (!activeExam) {
+    return <p className="py-10 text-center text-sm text-destructive">Failed to load the assessment.</p>;
+  }
+
+
+  const typeSummary = allowedTypes
+    .map((type) => {
+      const items = selectedAll.filter((q) => q.type === type);
+      return { type, count: items.length, points: items.reduce((sum, q) => sum + (q.points || 0), 0) };
+    })
+    .filter((row) => row.count > 0);
+
+  return (
+    <div className="flex flex-col gap-3">
+      {activeExamStarted && (
+        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+          <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span>Students have already started this assessment. Adding, editing, and removing questions are disabled to protect student results.</span>
+        </div>
+      )}
+
+      <div className={`grid gap-4 lg:h-[calc(100vh-12rem)] lg:min-h-[36rem] ${
+        filtersOpen ? "lg:grid-cols-[220px_minmax(0,1.35fr)_minmax(280px,0.8fr)]" : "lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.7fr)]"
+      }`}>
+        {/* ---------------- Filters ---------------- */}
+        <aside className={`min-h-0 flex-col gap-4 overflow-y-auto rounded-md border p-4 ${filtersOpen ? "flex" : "hidden"}`}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Filters</h3>
+            <button type="button" className="text-xs text-primary hover:underline disabled:opacity-40" disabled={!hasFilters} onClick={clearFilters}>
+              Clear filters
+            </button>
+          </div>
+
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input aria-label="Search questions" className="pl-8" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+
+          <fieldset className="grid gap-2">
+            <legend className="mb-1 text-sm font-semibold">Question type</legend>
+            {(["MULTIPLE_CHOICE", "CODING", "ESSAY"] as QuestionType[]).map((type) => {
+              const isAllowed = allowedTypes.includes(type);
+              return (
+                <label
+                  key={type}
+                  className={`flex items-center gap-2 text-sm select-none ${
+                    isAllowed ? "cursor-pointer" : "cursor-not-allowed opacity-50 text-muted-foreground pointer-events-none"
+                  }`}
+                  title={!isAllowed ? "Loại câu hỏi này bị khóa theo định dạng của đề thi" : undefined}
+                >
+                  <input
+                    type="checkbox"
+                    className="size-4 cursor-pointer accent-primary disabled:cursor-not-allowed pointer-events-auto"
+                    disabled={!isAllowed}
+                    checked={isAllowed && typeFilter.has(type)}
+                    onChange={() => {
+                      if (!isAllowed) return;
+                      setTypeFilter((s) => toggleIn(s, type));
+                    }}
+                  />
+                  <span>{TYPE_LABEL[type]}</span>
+                  {!isAllowed && <span className="text-[10px] text-muted-foreground italic">(Khóa)</span>}
+                </label>
+              );
+            })}
+            {allowedTypes.length < 3 && (
+              <p className="text-[11px] text-muted-foreground">Bị giới hạn theo định dạng của đề thi ({activeExam?.examType}).</p>
+            )}
+          </fieldset>
+
+          <fieldset className="grid gap-2">
+            <legend className="mb-1 text-sm font-semibold">Difficulty</legend>
+            {(["EASY", "MEDIUM", "HARD"] as QuestionDifficulty[]).map((d) => (
+              <label key={d} className="flex cursor-pointer items-center gap-2 text-sm">
+                <input type="checkbox" className="size-4 cursor-pointer accent-primary" checked={difficultyFilter.has(d)} onChange={() => setDifficultyFilter((s) => toggleIn(s, d))} />
+                {DIFFICULTY_LABEL[d]}
+              </label>
+            ))}
+          </fieldset>
+
+          <fieldset className="grid gap-2">
+            <legend className="mb-1 text-sm font-semibold">Topic</legend>
+            {topicCounts.length === 0 && <p className="text-xs text-muted-foreground">No topics.</p>}
+            {topicCounts.map(([key, { label, count }]) => (
+              <label key={key} className="flex cursor-pointer items-center gap-2 text-sm">
+                <input type="checkbox" className="size-4 cursor-pointer accent-primary" checked={topicFilter.has(key)} onChange={() => setTopicFilter((s) => toggleIn(s, key))} />
+                <span className="min-w-0 flex-1 truncate">{label}</span>
+                <span className="text-xs text-muted-foreground">{count}</span>
+              </label>
+            ))}
+          </fieldset>
+
+          <label className="flex cursor-pointer items-center gap-2 border-t pt-3 text-sm">
+            <input type="checkbox" className="size-4 cursor-pointer accent-primary" checked={hideAdded} onChange={(e) => setHideAdded(e.target.checked)} />
+            Hide questions already in the assessment
+          </label>
+        </aside>
+
+        {/* ---------------- Question library ---------------- */}
+        <section className="flex min-h-0 flex-col rounded-md border">
+          <div className="flex items-center justify-between gap-2 border-b p-2.5 flex-wrap xl:flex-nowrap">
+            <div className="shrink-0 flex items-center gap-2">
+              <h3 className="text-sm font-semibold">Question library</h3>
+              <span className="text-xs text-muted-foreground">({filtered.length})</span>
+            </div>
+            <div className="flex items-center gap-1 flex-nowrap py-0.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={togglePreviewAll}
+                className="gap-1 text-xs h-8 px-2 shrink-0"
+              >
+                {isAllExpanded ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                <span>{isAllExpanded ? "Collapse all" : "Preview all"}</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-pressed={filtersOpen}
+                onClick={() => setFiltersOpen((v) => !v)}
+                className="text-xs h-8 px-2 shrink-0"
+              >
+                <SlidersHorizontal className="mr-1 size-3.5" />
+                {filtersOpen ? "Hide filters" : "Show filters"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={activeExamStarted || addable.length === 0}
+                onClick={addAllMatching}
+                className="text-xs h-8 px-2 shrink-0"
+              >
+                <Plus className="mr-1 size-3.5" />
+                Add all matching ({addable.length})
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="bg-indigo-600 text-white hover:bg-indigo-700 text-xs h-8 px-2 shrink-0"
+                disabled={activeExamStarted}
+                onClick={openRandomDialog}
+              >
+                <Dices className="mr-1 size-3.5" />
+                Random...
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="inline-flex items-center gap-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-xs text-xs h-8 px-2 whitespace-nowrap shrink-0"
+                disabled={activeExamStarted || previewMode}
+                onClick={() => setIsAiGenOpen(true)}
+                title={previewMode ? "Create Draft Course before generating questions with AI" : "Tạo câu hỏi bằng AI"}
+              >
+                <Sparkles className="size-3.5 shrink-0" />
+                <span>AI Generate</span>
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-3">
+            {bankQuery.isLoading && <p className="py-10 text-center text-sm text-muted-foreground">Loading questions...</p>}
+            {bankQuery.isError && <p className="py-10 text-center text-sm text-destructive">Failed to load questions.</p>}
+            {!bankQuery.isLoading && !bankQuery.isError && pageRows.length === 0 && (
+              <p className="py-10 text-center text-sm text-muted-foreground">No matching questions found.</p>
+            )}
+            {pageRows.map((q) => (
+              <LibraryCard
+                key={q.id}
+                q={q}
+                state={sourceIdsInExam.has(q.id) ? "inExam" : stagedIds.has(q.id) ? "staged" : "available"}
+                locked={activeExamStarted}
+                isExpanded={expandedIds.has(q.id)}
+                onToggleExpand={() => togglePreview(q.id)}
+                onAdd={() => stageQuestion(q)}
+                onUndo={() => unstageQuestion(q.id)}
+                onDeletePermanent={previewMode ? undefined : () => handleDeleteAiQuestionPermanent(q.id)}
+              />
+            ))}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 border-t p-3">
+            <Button type="button" variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+            <span className="min-w-20 text-center text-sm text-muted-foreground">{page + 1} / {totalPages}</span>
+            <Button type="button" variant="outline" size="sm" disabled={page + 1 >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+          </div>
+        </section>
+
+        {/* ---------------- Selected questions ---------------- */}
+        <section className="flex min-h-0 flex-col rounded-xl border bg-card/40">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3.5 bg-card/60">
+            <div>
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <span>Selected questions ({totalQuestionsInExamCount})</span>
+                {stagedQuestions.length > 0 && (
+                  <Badge className="bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                    +{stagedQuestions.length} new
+                  </Badge>
+                )}
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Total weight: <span className="font-semibold text-foreground">{totalPointsInExam}</span> · Max score: <span className="font-semibold text-foreground">{activeExam.maxScore ?? 10}</span>
+              </p>
+            </div>
+            {totalQuestionsInExamCount > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={toggleSelectedPreviewAll}
+                className="gap-1.5 text-xs h-8"
+              >
+                {isAllSelectedExpanded ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                <span>{isAllSelectedExpanded ? "Collapse all" : "Preview all"}</span>
+              </Button>
+            )}
+          </div>
+
+          {/* Question Pool requires a persisted Assessment. */}
+          {!previewMode && <>
+          {poolConfigQuery.isLoading && (
+              <p className="mx-3 text-xs text-muted-foreground">
+                Loading Question Pool configuration...
+              </p>
+          )}
+
+          {poolConfigQuery.isError &&
+              !(axios.isAxiosError(poolConfigQuery.error) &&
+                  poolConfigQuery.error.response?.status === 404) && (
+                  <p className="mx-3 text-xs text-destructive">
+                    Failed to load Question Pool configuration. Please try again.
+                  </p>
+              )}
+          {/* ---------------- Random Question Selection ---------------- */}
+          <div className="border-b bg-card/40 px-3.5 py-2.5 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+      <span className="text-xs text-muted-foreground">
+        Pool: {savedQuestionIds.length} questions
+      </span>
+
+                {savePoolConfigMutation.isPending && (
+                    <span className="text-xs text-muted-foreground">
+          Saving...
+        </span>
+                )}
+              </div>
+
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                    type="checkbox"
+                    className="size-4 accent-primary"
+                    checked={poolRandomEnabled}
+                    onChange={(e) => handlePoolRandomToggle(e.target.checked)}
+                    disabled={
+                        activeExamStarted ||
+                        savedQuestionIds.length === 0 ||
+                        poolConfigQuery.isLoading ||
+                        savePoolConfigMutation.isPending
+                    }
+                />
+                Randomly Select
+              </label>
+            </div>
+
+            {poolRandomEnabled && (
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-2">
+                  <div className="flex items-center gap-2">
+                    <label
+                        htmlFor="pool-random-count"
+                        className="text-xs text-muted-foreground"
+                    >
+                      Number of random questions
+                    </label>
+
+                    <Input
+                        id="pool-random-count"
+                        type="number"
+                        min={1}
+                        max={savedQuestionIds.length}
+                        value={poolRandomCount}
+                        onChange={(e) =>
+                            handlePoolCountChange(Number(e.target.value))
+                        }
+                        onBlur={handlePoolCountSave}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.currentTarget.blur();
+                          }
+                        }}
+                        disabled={
+                            activeExamStarted ||
+                            savePoolConfigMutation.isPending ||
+                            savedQuestionIds.length === 0
+                        }
+                        className="h-8 w-20"
+                    />
+                  </div>
+
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <input
+                        type="checkbox"
+                        className="size-4 accent-primary"
+                        checked={poolShuffleOrder}
+                        onChange={(e) =>
+                            handlePoolShuffleChange(e.target.checked)
+                        }
+                        disabled={
+                            activeExamStarted ||
+                            savePoolConfigMutation.isPending
+                        }
+                    />
+                    Shuffle Question Order
+                  </label>
+                </div>
+            )}
+          </div>
+
+          </>}
+          {typeSummary.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 border-b bg-muted/20 px-3.5 py-2">
+              {typeSummary.map((row) => (
+                <span
+                  key={row.type}
+                  className="rounded-md border border-border/60 bg-background/80 px-2 py-0.5 text-[11px] font-medium text-foreground"
+                >
+                  {TYPE_LABEL[row.type]}: <span className="text-primary font-semibold">{row.count}</span> · weight <span className="text-primary font-semibold">{row.points}</span>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-3.5">
+            {totalQuestionsInExamCount === 0 && (
+              <div className="rounded-xl border border-dashed border-border/70 p-8 text-center text-muted-foreground">
+                <p className="text-sm font-medium">No questions added yet</p>
+                <p className="mt-1 text-xs">Click + on a question in the library to add it here.</p>
+              </div>
+            )}
+
+            {savedQuestions.map((q, idx) => (
+              <SelectedQuestionCard
+                key={q.id}
+                q={q}
+                orderNumber={idx + 1}
+                isExpanded={expandedSelectedIds.has(q.id)}
+                locked={activeExamStarted}
+                onToggleExpand={() => toggleSelectedPreview(q.id)}
+                onEdit={() => setEditingQuestion(q)}
+                onRemove={() => removeQuestionMutation.mutate({ examId: activeExam.id!, questionId: q.id })}
+              />
+            ))}
+
+            {stagedQuestions.map((q, idx) => (
+              <SelectedQuestionCard
+                key={q.id}
+                q={q}
+                orderNumber={savedQuestions.length + idx + 1}
+                isStaged
+                isExpanded={expandedSelectedIds.has(q.id)}
+                locked={activeExamStarted}
+                onToggleExpand={() => toggleSelectedPreview(q.id)}
+                onRemove={() => unstageQuestion(q.id)}
+              />
+            ))}
+          </div>
+
+          <div className="space-y-1.5 border-t p-3">
+            <Button
+              type="button"
+              className="h-9 w-full bg-emerald-600 font-medium text-white shadow-sm hover:bg-emerald-700"
+              disabled={activeExamStarted || (!previewMode && stagedQuestions.length === 0) || addQuestionsMutation.isPending}
+              onClick={handleSaveStagedToExam}
+            >
+              <Save className="mr-1.5 size-4" />
+              {previewMode ? "Save to Preview" : addQuestionsMutation.isPending
+                ? "Saving to assessment..."
+                : stagedQuestions.length > 0
+                  ? `Save ${stagedQuestions.length} Question(s) to Assessment`
+                  : "Save to Assessment"}
+            </Button>
+            <p className={`text-center text-[11px] ${stagedQuestions.length > 0 ? "font-medium text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+              {previewMode ? "Questions are saved in Course Preview only. Create Draft Course to persist them." : stagedQuestions.length > 0
+                ? `${stagedQuestions.length} question(s) are only in this list. Click "Save to Assessment" to keep them.`
+                : "All selected questions are saved."}
+            </p>
+          </div>
+        </section>
+      </div>
+
+      <Dialog open={isRandomOpen} onOpenChange={setIsRandomOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Dices className="size-5 text-indigo-600" />
+              Add Random Questions
+            </DialogTitle>
+            <DialogDescription>
+              Select quantity and scope to randomly select and add questions into this assessment.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">Quick Select Quantity</label>
+              <div className="grid grid-cols-4 gap-2">
+                {[10, 20, 30, 50].map((num) => (
+                    <Button
+                        key={num}
+                        type="button"
+                        variant={randomCount === num ? "default" : "outline"}
+                        size="sm"
+                        className="text-xs h-8 font-medium"
+                        onClick={() => setRandomCount(num)}
+                    >
+                      {num} Questions
+                    </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">Or Enter Custom Number</label>
+              <Input
+                  type="number"
+                  min={1}
+                  max={eligibleForRandom.length || 100}
+                  value={randomCount}
+                  onChange={(e) => {
+                    const value = Number(e.target.value);
+                    setRandomCount(
+                        Math.min(
+                            eligibleForRandom.length,
+                            Math.max(1, Number.isFinite(value) ? value : 1)
+                        )
+                    );
+                  }}
+                  placeholder="e.g. 15, 25, 50"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">Topic</label>
+              <Select value={randomTopic || "ALL"} onValueChange={(val) => setRandomTopic(val === "ALL" ? "" : val)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Topics" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">
+                    All Topics ({allAvailableBankQuestions.length} available)
+                  </SelectItem>
+                  {topicList.map((t) => {
+                    const count = allBankQuestions.filter(
+                        (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === t.toLowerCase()
+                    ).length;
+                    return (
+                        <SelectItem key={t} value={t} disabled={count === 0}>
+                          {t} ({count} available)
+                        </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Question Type</label>
+                <Select
+                    value={lockedQuestionType ?? randomQuestionType}
+                    disabled={lockedQuestionType !== null}
+                    onValueChange={setRandomQuestionType}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Types</SelectItem>
+                    <SelectItem value="MULTIPLE_CHOICE">Multiple Choice</SelectItem>
+                    {!isPairExam && <SelectItem value="ESSAY">Essay</SelectItem>}
+                    <SelectItem value="CODING">Coding</SelectItem>
+                  </SelectContent>
+                </Select>
+                {lockedQuestionType && (
+                    <p className="text-[10px] text-muted-foreground">Locked by assessment type</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Difficulty</label>
+                <Select value={randomDifficulty} onValueChange={setRandomDifficulty}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Difficulties</SelectItem>
+                    <SelectItem value="EASY">Easy</SelectItem>
+                    <SelectItem value="MEDIUM">Medium</SelectItem>
+                    <SelectItem value="HARD">Hard</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="rounded-md bg-muted p-3 text-xs space-y-1">
+              <div className="flex justify-between text-muted-foreground">
+                <span>Available in {randomTopic ? `topic "${randomTopic}"` : "all topics"}:</span>
+                <span className="font-semibold text-foreground">{eligibleForRandom.length} questions</span>
+              </div>
+              <div className="flex justify-between text-muted-foreground">
+                <span>Will add to assessment:</span>
+                <span className="font-semibold text-indigo-600">
+                  {Math.min(randomCount, eligibleForRandom.length)} question(s)
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" type="button" onClick={() => setIsRandomOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+                type="button"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                disabled={eligibleForRandom.length === 0 || addQuestionsMutation.isPending}
+                onClick={handleConfirmRandomAdd}
+            >
+              {addQuestionsMutation.isPending
+                  ? "Adding..."
+                  : `Add ${Math.min(randomCount, eligibleForRandom.length)} Random Question(s)`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {!previewMode && editingQuestion && activeExam && (
+        <EditExamQuestionDialog
+          exam={activeExam}
+          question={editingQuestion}
+          onClose={() => setEditingQuestion(null)}
+          onSaved={(updatedExam: ExamDTO) => {
+            setActiveExam(updatedExam);
+            setEditingQuestion(null);
+            refreshExams();
+          }}
+        />
+      )}
+
+      {!previewMode && examId != null && <AiQuestionGeneratorDialog
+        open={isAiGenOpen}
+        onOpenChange={setIsAiGenOpen}
+        examId={examId}
+        examTitle={activeExam?.title}
+        examType={activeExam?.examType}
+        allowedTypes={allowedTypes}
+        courseId={activeExam?.courseId}
+        courseName={activeExam?.courseName}
+        onQuestionsAdded={() => {
+          void queryClient.invalidateQueries({ queryKey: ["exam-detail", examId] });
+          void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
+          void queryClient.invalidateQueries({ queryKey: ["exam-question-all-bank"] });
+          void queryClient.invalidateQueries({ queryKey: ["exam-ai-questions", examId] });
+        }}
+      />}
+    </div>
+  );
+}

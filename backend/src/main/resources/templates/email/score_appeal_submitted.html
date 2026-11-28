@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>New Score Appeal</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; background:#f7f8fa; padding:16px;">
+<div style="max-width: 620px; margin: 0 auto; background:#ffffff; padding: 28px; border-radius: 10px; border:1px solid #e5e7eb;">
+    <h2 style="color:#b45309; margin-top:0;">New Score Appeal</h2>
+
+    <p>A student submitted a score appeal that needs your review.</p>
+
+    <table style="width:100%; border-collapse:collapse; margin:18px 0;">
+        <tr>
+            <td style="padding:8px 10px; background:#f3f4f6; width:170px;">Student</td>
+            <td style="padding:8px 10px;" th:text="${username}">--</td>
+        </tr>
+        <tr>
+            <td style="padding:8px 10px; background:#f3f4f6;">Exam</td>
+            <td style="padding:8px 10px;" th:text="${examTitle}">--</td>
+        </tr>
+        <tr>
+            <td style="padding:8px 10px; background:#f3f4f6;">Current Score</td>
+            <td style="padding:8px 10px;"><strong th:text="${oldScore}">--</strong></td>
+        </tr>
+        <tr>
+            <td style="padding:8px 10px; background:#f3f4f6;">Requested Score</td>
+            <td style="padding:8px 10px;"><strong th:text="${requestedScore}">--</strong></td>
+        </tr>
+        <tr>
+            <td style="padding:8px 10px; background:#f3f4f6;">Reason</td>
+            <td style="padding:8px 10px;" th:text="${reason}">--</td>
+        </tr>
+    </table>
+
+    <p style="margin-top: 20px;">
+        <a th:href="${reviewLink}"
+           style="display:inline-block; background:#b45309; color:#ffffff; padding:10px 18px; border-radius:6px; text-decoration:none; font-weight:600;">
+            Review Appeal
+        </a>
+    </p>
+
+    <p style="margin-top: 30px; font-size: 0.9em; color: #777;">Best regards,<br>Exam Management System</p>
+</div>
+</body>
+</html>

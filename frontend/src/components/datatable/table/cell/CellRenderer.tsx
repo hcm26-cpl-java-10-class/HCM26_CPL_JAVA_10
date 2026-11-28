@@ -6,8 +6,8 @@ import { iconMap } from "@/components/datatable/iconMap";
 import type { FieldSchema } from "@/types";
 import { OverflowBadges } from "./OverflowBadges";
 import { formatDateValue } from "./dateFormat";
+import { useTranslation } from "react-i18next";
 
-// Re-export for backward compatibility
 export type { DateFormatKey } from "./dateFormat";
 export { DATE_FORMAT_CYCLE, DATE_FORMAT_LABELS, formatDateValue } from "./dateFormat";
 export { OverflowBadges } from "./OverflowBadges";
@@ -15,6 +15,7 @@ export { OverflowBadges } from "./OverflowBadges";
 interface CellRendererProps {
   field: FieldSchema;
   value: any;
+  row?: any;
   relationOptions?: Record<string, any[]>;
   onBooleanToggle?: (fieldName: string, newValue: boolean) => void;
   disableBooleanToggle?: boolean;
@@ -24,14 +25,21 @@ interface CellRendererProps {
 export function CellRenderer({
   field,
   value,
+  row,
   relationOptions = {},
   onBooleanToggle,
   disableBooleanToggle = false,
   dateFormat,
 }: CellRendererProps) {
+  const { t } = useTranslation();
+
+  if (field.renderCell) {
+    return <TableCell>{field.renderCell(value, row)}</TableCell>;
+  }
+
   if (field.type === "boolean") {
     const labels = field.booleanLabels || { true: "Yes", false: "No" };
-    const label = value ? labels.true : labels.false;
+    const label = t(value ? labels.true : labels.false);
     const disableToggle = disableBooleanToggle || !onBooleanToggle || !!field.dynamicChild;
 
     return (
@@ -124,7 +132,6 @@ export function CellRenderer({
     );
   }
 
-  // Handle arrays (like question options)
   if (Array.isArray(value)) {
     if (value.length === 0) {
       return (
@@ -134,10 +141,8 @@ export function CellRenderer({
       );
     }
 
-    // Check if it's an array of objects (like question options)
     const firstItem = value[0];
     if (typeof firstItem === "object" && firstItem !== null) {
-      // For question options, show count with tooltip of contents
       if ("content" in firstItem) {
         const optionsText = value
           .map((opt: any, idx: number) =>
@@ -148,8 +153,8 @@ export function CellRenderer({
         return (
           <TableCell>
             <TooltipWrapper content={optionsText}>
-              <span className="text-muted-foreground cursor-help">
-                {value.length} option{value.length !== 1 ? "s" : ""}
+              <span className="text-xs text-muted-foreground cursor-help">
+                {value.length} {t(value.length === 1 ? "option" : "options")}
               </span>
             </TooltipWrapper>
           </TableCell>
@@ -157,7 +162,6 @@ export function CellRenderer({
       }
     }
 
-    // Array of primitives
     return (
       <TableCell>
         <TruncatedText content={value.join(", ")} bold={field.bold} />
@@ -165,9 +169,14 @@ export function CellRenderer({
     );
   }
 
-  const displayValue = value ?? "—";
+  const optionLabel =
+    field.type === "select"
+      ? field.options?.find((option) => option.value?.toString() === value?.toString())?.label
+      : undefined;
+  // Nhãn enum là text cố định của hệ thống nên dịch được; giá trị thô (tên/email từ DB) giữ nguyên.
+  const displayValue = optionLabel ? t(optionLabel) : (value ?? "—");
   const displayStr =
-    field.type === "date" && value
+    (field.type === "date" || field.type === "datetime") && value
       ? formatDateValue(value, dateFormat)
       : String(displayValue);
 

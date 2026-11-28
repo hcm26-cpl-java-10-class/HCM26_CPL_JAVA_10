@@ -1,0 +1,51 @@
+﻿,,,,,,,,
+,,,,,,,,
+,Fresher / OJT Training Program,,,,,,,
+,OWASP TOP 10 & SPRING OAUTH2 / JWT SECURITY SYLLABUS,,,,,,,
+,,,,,,,,
+,,,,,Document Code,,,SYL-CPL10_APP_SEC
+,,,,,Version,,,1.0
+,,,,,Effective Date,,,11/11/2026
+OWASP Top 10 & Spring OAuth2 / JWT Security Syllabus,,,,,,,,
+1,Technical Group,Security,,,,,,
+2,Topic Name,OWASP Top 10 & Spring OAuth2 / JWT Security,,,,,,
+3,Topic Code,CPL10_APP_SEC,,,,,,
+4,Version,1.0,,,,,,
+5,Training Audience,Backend & Fullstack Engineers hardening production web applications,,,,,,
+6,Course Objectives,"Mitigate OWASP Top 10 vulnerabilities (SQLi, XSS, CSRF, IDOR), implement OAuth2 PKCE + JWT rotation, and audit Spring Security filters.",,,,,,
+7,Topic Outline,"- Unit 1: OWASP Top 10 Vulnerabilities & Remediation
+- Unit 2: OAuth2, OIDC & Stateless JWT Best Practices
+- Unit 3: Security Assessment",,,,,,
+8,Time Allocation,Concept/Lecture,0.38,"Theory, architecture concepts",6 Sessions,,,
+,,Assignment/Lab,0.19,Hands-on coding & exercises,,,,
+,,Guides/Review,0.13,Code walkthrough & Q&A,,,,
+,,Seminar/Workshop,0.00,Interactive seminar & debugging,,,,
+,,Exam,0.31,Quizzes & practical defense exam,,,,
+9,Training Materials & Environments,Text book,Official Security Documentation & FAMS Guides,,,,,
+,,References,FAMS Internal LMS Knowledge Base,,,,,
+,,Technical requirements,"Modern IDE, Docker, Git, Browser DevTools",,,,,
+10,Assessment Scheme,Quizzes & Knowledge Tests,2,20,Short quizzes checking core theory (>= 6.0 / 10),,,
+,,Practical Lab Test,2,30,Hands-on lab assignments & Git code quality (>= 6.0 / 10),,,
+,,Final Practical Test,1,50,Capstone implementation & live defense (>= 6.0 / 10),,,
+,,Pass Criteria,6,Overall GPA >= 6.0 / 10; Complete 100% quizzes and final practical test,,,,
+11,Training Delivery Principles,Trainees,Completed prerequisite track; Active participation in daily labs,,,,,
+,Training Delivery Principles,Trainer,Senior Security Engineer / Technical Mentor,,,,,
+,Training Delivery Principles,Training,"- Concept lectures in morning or online
+- Hands-on lab exercises & reviews in afternoon
+- Max 4h (240 mins) per session",,,,,
+,Training Delivery Principles,Re-Test,2 - Allow up to 2 re-takes with different exam variants,,,,,
+,Training Delivery Principles,Marking,Evaluated by trainer against official FAMS rubric,,,,,
+,Training Delivery Principles,Waiver Criteria,Fast-track entry exam score >= 8.5 / 10,,,,,
+,,,,,,,,
+OWASP Top 10 & Spring OAuth2 / JWT Security - Training Schedule,,,,,,,,
+Training Unit/Chapter,,Session,Content,Learning Objectives,Delivery Type,Duration (mins),Training Format,Training Materials / Logistics & General Notes
+1,OWASP Top 10 Vulnerabilities & Remediation,1,"Broken Access Control, Injection & XSS Defense","Identify and patch IDOR, SQL injection, and CSP bypass flaws",Concept/Lecture,180,Offline - Sáng (Morning),Slide-OWASP-Top10.pdf
+,,2,Hardening Vulnerable Demo App Lab,"Audit input validation, CORS origins, and file upload sanitization",Assignment/Lab,180,Offline - Chiều (Afternoon),Lab-01-AppSec-Fixes.zip
+2,"OAuth2, OIDC & Stateless JWT Best Practices",3,"Spring Security Filter Chain, RBAC & Token Rotation","Implement refresh token rotation, HttpOnly cookies, and @PreAuthorize",Concept/Lecture,180,Online - Sáng (Morning),Slide-OAuth2-JWT.pdf
+,,4,Security Checklist & Dependency Audit Review,Run OWASP Dependency-Check and review security headers,Guides/Review,120,Online - Chiều (Afternoon),Checklist-AppSec.pdf
+3,Security Assessment,5,Web Application Security Quiz,"Verify knowledge of OAuth2 flows, hashing (BCrypt/Argon2), and CSRF",Test/Quiz,120,Offline - Sáng (Morning),Quiz-AppSec.pdf
+,,6,Security Code Audit & Patch Exam,Find and fix 5 planted vulnerabilities in a Spring + React codebase,Exam,180,Offline - Chiều (Afternoon),Exam-Security-Audit.pdf
+,,,,,,,,
+AUTHORSHIP,,,,,,,,
+,Role,Name,Account,Unit,Notes,,,
+,Course Lead,Le Minh Hoang,hoanglm26,Training Department,HCM26_CPL_JAVA_10,,,
