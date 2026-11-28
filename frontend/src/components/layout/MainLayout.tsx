@@ -93,8 +93,12 @@ export function MainLayout({
                             {compactHeader ? <div className="hidden min-w-0 xl:block"><DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} ignorePaths={ignorePaths} /></div>
                                 : <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} ignorePaths={ignorePaths} />}
                         </div>
-                        {headerActions && <div className="shrink-0">{headerActions}</div>}
-                        <div className="shrink-0"><HeaderRight /></div>
+                        {headerActions && (
+                            <div className="shrink-0">
+                                {headerActions}
+                            </div>
+                        )}
+
                         <div className="flex shrink-0 items-center gap-2">
                             <PageHistoryButton />
                             <HeaderRight />
