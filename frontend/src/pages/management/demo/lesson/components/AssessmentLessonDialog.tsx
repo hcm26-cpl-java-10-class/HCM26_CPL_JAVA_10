@@ -1,3 +1,4 @@
+import { invalidateAssessmentViews } from "@/utils/assessment-queries";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/api/axios";
@@ -36,8 +37,7 @@ export function AssessmentLessonDialog(props: Props) {
       return (await api.post<{ lesson: LessonDTO }>("/lessons/with-assessment", { lesson, assessment })).data;
     },
     onSuccess: async ({ lesson }) => {
-      await Promise.all(["lessons", "exam-management", "course-exams", "curriculum", "course-assessment-allocation", "course-assessment-plan", "course-selected-curriculum", "section-lessons"].map(key =>
-        queryClient.invalidateQueries({ queryKey: [key] })));
+      await invalidateAssessmentViews(queryClient);
       toast.success("Assessment and lesson created and linked.");
       props.onSuccess?.(lesson); props.onOpenChange(false);
     },
@@ -55,7 +55,7 @@ export function AssessmentLessonDialog(props: Props) {
   }
   return <Dialog open={props.open} onOpenChange={next => { if (!mutation.isPending) props.onOpenChange(next); }}>
     <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-4xl">
-      <DialogHeader><DialogTitle>Create {props.type === "QUIZ" ? "Quiz" : props.type === "EXAM" ? "Exam" : "Assignment"} lesson</DialogTitle>
+      <DialogHeader className="shrink-0"><DialogTitle>Create {props.type === "QUIZ" ? "Quiz" : props.type === "EXAM" ? "Exam" : "Assignment"} lesson</DialogTitle>
         <DialogDescription>Create an assessment using the Assessment Management form. It will be linked automatically to this lesson in section #{props.sectionId}.</DialogDescription></DialogHeader>
       <div className="min-h-0 space-y-4 overflow-y-auto p-1">
         <p className="text-sm text-muted-foreground">Save this lesson first. Then use Configure assessment in Curriculum to edit its questions and course weight.</p>

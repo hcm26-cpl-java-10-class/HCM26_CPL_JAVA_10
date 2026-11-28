@@ -36,3 +36,11 @@ export function courseMappingReturnPath(value: string | null, courseId: number):
   if (/^\/(courses|course-enrollments)\/[1-9]\d*\/?(?:[?#]|$)/.test(safe)) return safe;
   return courseId > 0 ? `/courses/${courseId}#course-assessments` : "/courses";
 }
+
+/** Resolve direct entry from the saved relationship after validating explicit context. */
+export function assessmentCourseReturnPath(value: string | null, courseId?: number | null): string {
+  const safe = assessmentReturnPath(value);
+  if (safe !== "/exams") return safe;
+  return Number.isSafeInteger(courseId) && Number(courseId) > 0
+    ? `/courses/${courseId}#course-assessments` : "/exams";
+}

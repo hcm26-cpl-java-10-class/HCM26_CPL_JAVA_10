@@ -1,3 +1,6 @@
+import { CurriculumAssessment } from "./CurriculumAssessment";
+import type { CourseExam } from "@/types";
+import { invalidateAssessmentViews } from "@/utils/assessment-queries";
 import { ConfigureAssessmentLink } from "./ConfigureAssessmentLink";
 import { lessonApi } from "@/api";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +33,9 @@ import { formatDuration, LessonPreview } from "./LessonPreview";
 
 interface SectionLessonsProps {
   sectionId: number;
+  assessments?: CourseExam[];
+  assessmentsReady?: boolean;
+  canManageAssessments?: boolean;
   /**
    * Open this lesson's preview (and jump to one of its questions) once the lessons are loaded.
    * Used by the instructor's "Unanswered questions" inbox and notification emails.
@@ -40,7 +46,7 @@ interface SectionLessonsProps {
 }
 
 
-export function SectionLessons({ sectionId, deepLink, onDeepLinkConsumed }: SectionLessonsProps) {
+export function SectionLessons({ sectionId, deepLink, onDeepLinkConsumed, assessments = [], assessmentsReady = false, canManageAssessments = false }: SectionLessonsProps) {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission("LESSON_CREATE");
@@ -57,7 +63,11 @@ export function SectionLessons({ sectionId, deepLink, onDeepLinkConsumed }: Sect
     queryKey: ["lessons", sectionId],
     queryFn: () => lessonApi.getBySection(sectionId),
   });
-  const lessons = lessonsQuery.data ?? [];
+  const lessons = [...(lessonsQuery.data ?? [])].sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0) || (a.id ?? 0) - (b.id ?? 0));
+  const uniqueAssessments = [...new Map(assessments.filter(exam => exam.sectionId === sectionId).map(exam => [exam.id, exam])).values()];
+  const extraAssessments = uniqueAssessments.filter(exam => !lessons.some(lesson =>
+    lesson.id === exam.lessonId && ["QUIZ", "EXAM", "ASSIGNMENT"].includes(lesson.contentType ?? "")));
+
 
   useEffect(() => {
     if (!deepLink || !lessonsQuery.isSuccess) return;
@@ -79,7 +89,7 @@ export function SectionLessons({ sectionId, deepLink, onDeepLinkConsumed }: Sect
   const deleteMutation = useMutation({
     mutationFn: (id: number) => lessonApi.delete(String(id)),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["lessons"] });
+      await invalidateAssessmentViews(queryClient);
       toast.success("Lesson deleted.");
       setDeleting(null);
     },
@@ -93,7 +103,7 @@ export function SectionLessons({ sectionId, deepLink, onDeepLinkConsumed }: Sect
     mutationFn: ({ id, allowSeeking }: { id: number; allowSeeking: boolean }) =>
       lessonApi.update(String(id), { allowSeeking }),
     onSuccess: async (saved) => {
-      await queryClient.invalidateQueries({ queryKey: ["lessons"] });
+      await invalidateAssessmentViews(queryClient);
       toast.success(saved.allowSeeking ? "Seeking enabled." : "Seeking disabled.");
     },
     onError: (error: any) => {
@@ -116,7 +126,7 @@ export function SectionLessons({ sectionId, deepLink, onDeepLinkConsumed }: Sect
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Lessons</h2>
           <p className="text-sm text-muted-foreground">
-            Section #{sectionId} · {lessons.length} lesson{lessons.length === 1 ? "" : "s"}
+            Section #{sectionId} · {lessons.length} lesson{lessons.length === 1 ? "" : "s"}{assessmentsReady ? ` · ${uniqueAssessments.length} assessments` : ""}
           </p>
         </div>
         {canCreate && (
@@ -137,7 +147,7 @@ export function SectionLessons({ sectionId, deepLink, onDeepLinkConsumed }: Sect
             Try again
           </Button>
         </div>
-      ) : lessons.length === 0 ? (
+      ) : lessons.length === 0 && extraAssessments.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
           <h3 className="font-semibold">No lessons yet</h3>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -164,7 +174,8 @@ export function SectionLessons({ sectionId, deepLink, onDeepLinkConsumed }: Sect
                   <TableCell>
                     <Badge variant="secondary">{lesson.contentType}</Badge>
                   </TableCell>
-                  <TableCell>{formatDuration(lesson.duration)}</TableCell>
+                  <TableCell>{["QUIZ", "EXAM", "ASSIGNMENT"].includes(lesson.contentType ?? "") && uniqueAssessments.some(exam => exam.lessonId === lesson.id)
+                    ? `${uniqueAssessments.find(exam => exam.lessonId === lesson.id)!.durationMinutes} min` : formatDuration(lesson.duration)}</TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
                       <ConfigureAssessmentLink lesson={lesson} />
@@ -221,6 +232,10 @@ export function SectionLessons({ sectionId, deepLink, onDeepLinkConsumed }: Sect
                   </TableCell>
                 </TableRow>
               ))}
+              {extraAssessments.map(exam => <TableRow key={`assessment-${exam.id}`}>
+                <TableCell>—</TableCell>
+                <TableCell colSpan={4}>{canManageAssessments ? <CurriculumAssessment exam={exam} /> : <div>{exam.title} · {exam.category} · {exam.durationMinutes} min</div>}</TableCell>
+              </TableRow>)}
             </TableBody>
           </Table>
         </div>

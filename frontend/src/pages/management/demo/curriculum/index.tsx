@@ -1,3 +1,5 @@
+import { examApi } from "@/api";
+import { CurriculumAssessment } from "../lesson/components/CurriculumAssessment";
 import { useCallback, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -163,7 +165,15 @@ export default function CurriculumManagementPage() {
             : 0;
 
     // Quyền người dùng
-    const { hasPermission } = usePermissions();
+    const { hasPermission, activeRole } = usePermissions();
+    const showAssessments = !["STUDENT", "GUEST"].includes(activeRole ?? "") && hasPermission("COURSE_READ") && hasPermission("EXAM_READ");
+    const canManageAssessments = showAssessments && hasPermission("EXAM_UPDATE");
+    const assessmentsQuery = useQuery({
+      queryKey: ["course-exams", courseId],
+      queryFn: () => examApi.listByCourse(courseId),
+      enabled: courseId > 0 && showAssessments,
+    });
+    const assessments = showAssessments ? assessmentsQuery.data ?? [] : [];
 
     const canCreate = hasPermission("SECTION_CREATE");
     const canUpdate = hasPermission("SECTION_UPDATE");
@@ -217,7 +227,7 @@ export default function CurriculumManagementPage() {
     const consumeDeepLink = useCallback(() => setDeepLink(null), []);
 
     const [expandedSectionId, setExpandedSectionId] =
-        useState<number | null>(() => deepLink?.sectionId ?? null);
+        useState<number | null>(() => deepLink?.sectionId ?? parsePositiveId(searchParams.get("sectionId")));
 
     // ======================================
     // GET COURSES
@@ -840,6 +850,15 @@ export default function CurriculumManagementPage() {
                         />
                     )}
 
+                {showAssessments && courseId > 0 && <section className="space-y-3" aria-label="Curriculum assessments">
+                  {assessmentsQuery.isLoading && <p role="status">Loading assessments…</p>}
+                  {assessmentsQuery.isError && <div role="alert">Could not load assessments. <Button variant="outline" onClick={() => void assessmentsQuery.refetch()}>Retry assessments</Button></div>}
+                  {assessments.filter(exam => exam.sectionId == null && exam.lessonId == null).length > 0 && <div className="space-y-3 rounded-xl border p-4">
+                    <h2 className="font-semibold">Course-level assessments ({assessments.filter(exam => exam.sectionId == null && exam.lessonId == null).length})</h2>
+                    <p className="text-sm text-muted-foreground">These assessments apply to the whole course.</p>
+                    {assessments.filter(exam => exam.sectionId == null && exam.lessonId == null).map(exam => canManageAssessments ? <CurriculumAssessment key={exam.id} exam={exam} /> : <p key={exam.id}>{exam.title} · {exam.durationMinutes} min</p>)}
+                  </div>}
+                </section>}
                 {/* Sections */}
                 <div id="curriculum-sections" className="space-y-1.5 scroll-mt-4">
                     <div className="flex items-center gap-2">
@@ -1021,6 +1040,9 @@ export default function CurriculumManagementPage() {
                                             <div className="border-t pt-4">
                                                 <SectionLessons
                                                     sectionId={section.id}
+                                                    assessments={assessments.filter(exam => exam.sectionId === section.id)}
+                                                    assessmentsReady={showAssessments && assessmentsQuery.isSuccess}
+                                                    canManageAssessments={canManageAssessments}
                                                     deepLink={
                                                         deepLink?.sectionId === section.id
                                                             ? deepLink
