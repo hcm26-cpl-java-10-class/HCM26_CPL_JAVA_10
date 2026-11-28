@@ -26,6 +26,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { toast } from "sonner";
 import { LessonPreview } from "../lesson/components/LessonPreview";
 import { LessonQnA } from "../lesson/components/LessonQnA";
+import { AiTutorPanel } from "../lesson/components/AiTutorPanel";
 import { LessonReportDialog } from "../lesson/components/LessonReportDialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useStudyTimeTracker } from "@/hooks/useStudyTimeTracker";
@@ -486,6 +487,17 @@ export function CourseLearningPage() {
                               </Button>
                             </section>
                         ))}
+
+                        {/* AI Tutor: not offered on graded lessons, nor in the admin student preview (no enrollment) */}
+                        {!isAdminStudentPreview &&
+                            !["QUIZ", "EXAM", "ASSIGNMENT"].includes(currentLesson.contentType) && (
+                            <AiTutorPanel
+                                key={`tutor-${currentLesson.lessonId}`}
+                                enrollmentId={enrollmentId}
+                                lessonId={currentLesson.lessonId}
+                                className="mt-4"
+                            />
+                        )}
 
                         {/* Questions & Answers */}
                         <LessonQnA

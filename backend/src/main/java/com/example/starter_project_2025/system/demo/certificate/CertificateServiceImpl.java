@@ -43,6 +43,7 @@ public class CertificateServiceImpl
     LessonProgressRepository lessonProgressRepository;
     CourseEnrollmentRepository courseEnrollmentRepository;
     com.example.starter_project_2025.system.demo.course.CourseAssessmentService assessments;
+    com.example.starter_project_2025.system.demo.coursepolicy.CourseCompletionRuleService rules;
 
     @Override
     protected BaseCrudRepository<Certificate, Long> getRepository() {
@@ -64,7 +65,7 @@ public class CertificateServiceImpl
         if (request.getCourseId() == null) {
             throw new IllegalArgumentException("Course is required");
         }
-        
+
         if (request.getUserId() == null) {
             throw new IllegalArgumentException("User is required");
         }
@@ -75,9 +76,9 @@ public class CertificateServiceImpl
                                 "Course not found: " + request.getCourseId()
                         )
                 );
-        
+
         User user = userRepository.findById(request.getUserId())
-                        .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
         var enrollment=courseEnrollmentRepository.findByUser_IdAndCourse_Id(user.getId(),course.getId())
                 .orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Student must be enrolled before receiving a certificate"));
@@ -156,8 +157,9 @@ public class CertificateServiceImpl
                 .filter(com.example.starter_project_2025.system.demo.course.CourseAssessmentService::activeLesson).toList();
         var completed=lessonProgressRepository.findAllByEnrollment_Id(enrollment.getId()).stream()
                 .filter(LessonProgress::isCompleted).map(p->p.getLesson().getId()).toList();
-        return !active.isEmpty() && active.stream().allMatch(l->completed.contains(l.getId()))
-                && assessments.canComplete(enrollment.getCourse().getId(),enrollment.getUser().getId());
+        int completedActive=(int) active.stream().filter(l->completed.contains(l.getId())).count();
+        Long courseId=enrollment.getCourse().getId(), studentId=enrollment.getUser().getId();
+        return rules.isComplete(courseId,active.size(),completedActive,()->assessments.canComplete(courseId,studentId));
     }
 
 }
