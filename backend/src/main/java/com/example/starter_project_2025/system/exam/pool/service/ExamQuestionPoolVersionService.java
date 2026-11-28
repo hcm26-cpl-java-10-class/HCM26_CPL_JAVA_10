@@ -50,7 +50,8 @@ public class ExamQuestionPoolVersionService {
                         getExamQuestions(exam),
                         false,
                         1,
-                        true
+                        true,
+                        false
                 ));
     }
 
@@ -64,7 +65,8 @@ public class ExamQuestionPoolVersionService {
             List<Question> questions,
             boolean randomSelectionEnabled,
             int randomQuestionCount,
-            boolean shuffleQuestionOrder
+            boolean shuffleQuestionOrder,
+            boolean shuffleAnswerOrder
     ) {
         if (exam == null || exam.getId() == null) {
             throw new IllegalArgumentException(
@@ -106,6 +108,7 @@ public class ExamQuestionPoolVersionService {
         version.setRandomSelectionEnabled(randomSelectionEnabled);
         version.setRandomQuestionCount(randomQuestionCount);
         version.setShuffleQuestionOrder(shuffleQuestionOrder);
+        version.setShuffleAnswerOrder(shuffleAnswerOrder);
 
         // Lưu version trước để có ID.
         version = versionRepository.save(version);
@@ -133,11 +136,13 @@ public class ExamQuestionPoolVersionService {
             List<Question> questions,
             boolean randomSelectionEnabled,
             int randomQuestionCount,
-            boolean shuffleQuestionOrder
+            boolean shuffleQuestionOrder,
+            boolean shuffleAnswerOrder
     ) {
         version.setRandomSelectionEnabled(randomSelectionEnabled);
         version.setRandomQuestionCount(randomQuestionCount);
         version.setShuffleQuestionOrder(shuffleQuestionOrder);
+        version.setShuffleAnswerOrder(shuffleAnswerOrder);
 
         // Giữ collection hiện tại để Hibernate quản lý orphanRemoval.
         if (version.getQuestions() == null) {
@@ -232,6 +237,9 @@ public class ExamQuestionPoolVersionService {
         response.setShuffleQuestionOrder(
                 version.getShuffleQuestionOrder()
         );
+        response.setShuffleAnswerOrder(
+                Boolean.TRUE.equals(version.getShuffleAnswerOrder())
+        );
 
         List<ExamPoolQuestion> questions = version.getQuestions();
 
@@ -275,6 +283,9 @@ public class ExamQuestionPoolVersionService {
                     response.setShuffleQuestionOrder(
                             version.getShuffleQuestionOrder()
                     );
+                    response.setShuffleAnswerOrder(
+                            Boolean.TRUE.equals(version.getShuffleAnswerOrder())
+                    );
                     response.setTotalQuestions(
                             version.getQuestions() == null
                                     ? 0
@@ -301,6 +312,9 @@ public class ExamQuestionPoolVersionService {
 
         if (request.getShuffleQuestionOrder() == null) {
             throw new BadRequestException("Phải xác định chế độ trộn thứ tự câu hỏi");
+        }
+        if (request.getShuffleAnswerOrder() == null) {
+            throw new BadRequestException("Phải xác định chế độ trộn thứ tự đáp án");
         }
 
         // Chỉ lấy câu hỏi đã thuộc Exam, không tạo bản sao mới.
@@ -349,7 +363,8 @@ public class ExamQuestionPoolVersionService {
                     questions,
                     randomEnabled,
                     randomCount,
-                    request.getShuffleQuestionOrder()
+                    request.getShuffleQuestionOrder(),
+                    request.getShuffleAnswerOrder()
             );
         } else {
             boolean alreadyUsed = examAttemptRepository
@@ -362,7 +377,8 @@ public class ExamQuestionPoolVersionService {
                         questions,
                         randomEnabled,
                         randomCount,
-                        request.getShuffleQuestionOrder()
+                        request.getShuffleQuestionOrder(),
+                        request.getShuffleAnswerOrder()
                 );
             } else {
                 // Version chưa được sử dụng: cập nhật ngay Version hiện tại.
@@ -371,7 +387,8 @@ public class ExamQuestionPoolVersionService {
                         questions,
                         randomEnabled,
                         randomCount,
-                        request.getShuffleQuestionOrder()
+                        request.getShuffleQuestionOrder(),
+                        request.getShuffleAnswerOrder()
                 );
             }
         }
@@ -385,6 +402,9 @@ public class ExamQuestionPoolVersionService {
         response.setRandomSelectionEnabled(version.getRandomSelectionEnabled());
         response.setRandomQuestionCount(version.getRandomQuestionCount());
         response.setShuffleQuestionOrder(version.getShuffleQuestionOrder());
+        response.setShuffleAnswerOrder(
+                Boolean.TRUE.equals(version.getShuffleAnswerOrder())
+        );
         response.setTotalQuestions(version.getQuestions().size());
 
         response.setQuestionIds(

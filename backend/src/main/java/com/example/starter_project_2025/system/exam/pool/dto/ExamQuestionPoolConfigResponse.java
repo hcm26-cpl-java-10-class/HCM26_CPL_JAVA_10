@@ -23,6 +23,8 @@ public class ExamQuestionPoolConfigResponse {
 
     private Boolean shuffleQuestionOrder;
 
+    private Boolean shuffleAnswerOrder;
+
     private Integer totalQuestions;
 
     private List<Long> questionIds;

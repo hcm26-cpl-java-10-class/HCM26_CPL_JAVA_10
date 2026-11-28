@@ -1,5 +1,9 @@
 package com.example.starter_project_2025.system.exam.pool.service;
 
+import com.example.starter_project_2025.system.exam.pool.domain.ExamQuestionPoolVersion;
+import com.example.starter_project_2025.system.question.core.domain.QuestionType;
+
+import java.util.Collections;
 import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttempt;
 import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptOption;
 import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptQuestion;
@@ -30,6 +34,11 @@ public class ExamPoolAttemptSnapshotService {
                     "Selected questions are required"
             );
         }
+
+        ExamQuestionPoolVersion poolVersion = attempt.getPoolVersion();
+
+        boolean shuffleAnswerOrder = poolVersion != null
+                && Boolean.TRUE.equals(poolVersion.getShuffleAnswerOrder());
 
         List<ExamAttemptQuestion> snapshots = new ArrayList<>();
 
@@ -76,6 +85,11 @@ public class ExamPoolAttemptSnapshotService {
                         Comparator.comparing(ExamPoolQuestionOption::getDisplayOrder)
                 );
 
+                if (shuffleAnswerOrder
+                        && source.getType() == QuestionType.MULTIPLE_CHOICE) {
+                    Collections.shuffle(sourceOptions);
+                }
+
                 for (ExamPoolQuestionOption sourceOption : sourceOptions) {
                     ExamAttemptOption option = new ExamAttemptOption();
 
@@ -84,7 +98,7 @@ public class ExamPoolAttemptSnapshotService {
                     option.setContent(sourceOption.getContent());
                     option.setCorrect(sourceOption.isCorrect());
                     option.setImageUrl(sourceOption.getImageUrl());
-                    option.setDisplayOrder(sourceOption.getDisplayOrder());
+                    option.setDisplayOrder(snapshot.getOptions().size());
 
                     snapshot.getOptions().add(option);
                 }

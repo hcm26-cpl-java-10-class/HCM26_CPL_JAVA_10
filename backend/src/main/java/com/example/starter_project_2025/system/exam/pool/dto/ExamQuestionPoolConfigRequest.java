@@ -21,6 +21,9 @@ public class ExamQuestionPoolConfigRequest {
     @NotNull
     private Boolean shuffleQuestionOrder;
 
+    @NotNull
+    private Boolean shuffleAnswerOrder;
+
     @NotEmpty
     private List<Long> questionIds;
 }

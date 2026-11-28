@@ -19,5 +19,7 @@ public class ExamQuestionPoolVersionHistoryResponse {
 
     private Boolean shuffleQuestionOrder;
 
+    private Boolean shuffleAnswerOrder;
+
     private Integer totalQuestions;
 }

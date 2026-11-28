@@ -41,6 +41,9 @@ public class ExamQuestionPoolVersion extends BaseEntity {
     @Column(name = "shuffle_question_order", nullable = false)
     private Boolean shuffleQuestionOrder = Boolean.TRUE;
 
+    @Column(name = "shuffle_answer_order")
+    private Boolean shuffleAnswerOrder = Boolean.FALSE;
+
     @OneToMany(
             mappedBy = "poolVersion",
             cascade = CascadeType.ALL,

@@ -15,6 +15,7 @@ import { getErrorMessage } from "./examConfig";
 import { EditExamQuestionDialog, isExamStarted } from "./ExamQuestionParts";
 import { AiQuestionGeneratorDialog } from "./components/AiQuestionGeneratorDialog";
 import axios from "axios";
+import { Switch } from "@/components/ui/switch";
 
 const PAGE_SIZE = 8;
 
@@ -373,9 +374,10 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
   const [randomDifficulty, setRandomDifficulty] = useState<string>("ALL");
   const [randomQuestionType, setRandomQuestionType] = useState<string>("ALL");
   // Question Pool configuration
-  const [poolRandomEnabled, setPoolRandomEnabled] = useState(true);
-  const [poolRandomCount, setPoolRandomCount] = useState(10);
+  const [poolRandomEnabled, setPoolRandomEnabled] = useState(false);
+  const [poolRandomCount, setPoolRandomCount] = useState(1);
   const [poolShuffleOrder, setPoolShuffleOrder] = useState(true);
+  const [poolShuffleAnswerOrder, setPoolShuffleAnswerOrder] = useState(false);
 
   // Derive allowed question types strictly from backend exam configuration
   const allowedTypes: QuestionType[] = useMemo(() => {
@@ -590,6 +592,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
           )
       );
       setPoolShuffleOrder(config.shuffleQuestionOrder);
+      setPoolShuffleAnswerOrder(config.shuffleAnswerOrder);
       return;
     }
 
@@ -598,10 +601,11 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
         axios.isAxiosError(poolConfigQuery.error) &&
         poolConfigQuery.error.response?.status === 404
     ) {
-      // Chưa có cấu hình: mặc định chọn toàn bộ câu hỏi đã lưu trong Exam.
-      setPoolRandomEnabled(true);
-      setPoolRandomCount(Math.min(10, Math.max(1, questionIds.length)));
+      // Chưa có cấu hình: mặc định dùng toàn bộ câu hỏi đã lưu.
+      setPoolRandomEnabled(false);
+      setPoolRandomCount(1);
       setPoolShuffleOrder(true);
+      setPoolShuffleAnswerOrder(false);
     }
   }, [
     poolConfigQuery.data,
@@ -615,6 +619,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       randomSelectionEnabled: boolean;
       randomQuestionCount: number;
       shuffleQuestionOrder: boolean;
+      shuffleAnswerOrder: boolean;
     }) =>
         examApi.saveQuestionPoolConfig(examId, {
           ...config,
@@ -625,6 +630,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       setPoolRandomEnabled(config.randomSelectionEnabled);
       setPoolRandomCount(config.randomQuestionCount);
       setPoolShuffleOrder(config.shuffleQuestionOrder);
+      setPoolShuffleAnswerOrder(config.shuffleAnswerOrder);
 
       void queryClient.invalidateQueries({
         queryKey: ["exam-question-pool", examId],
@@ -656,6 +662,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       randomSelectionEnabled: enabled,
       randomQuestionCount: enabled ? nextCount : savedQuestionIds.length,
       shuffleQuestionOrder: poolShuffleOrder,
+      shuffleAnswerOrder: poolShuffleAnswerOrder,
     });
   };
 
@@ -676,6 +683,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       randomSelectionEnabled: true,
       randomQuestionCount: poolRandomCount,
       shuffleQuestionOrder: poolShuffleOrder,
+      shuffleAnswerOrder: poolShuffleAnswerOrder,
     });
   };
 
@@ -693,8 +701,27 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
           ? poolRandomCount
           : savedQuestionIds.length,
       shuffleQuestionOrder: checked,
+      shuffleAnswerOrder: poolShuffleAnswerOrder,
     });
   };
+
+    const handlePoolShuffleAnswerChange = (checked: boolean) => {
+      if (
+          savePoolConfigMutation.isPending ||
+          savedQuestionIds.length === 0
+      ) return;
+
+      setPoolShuffleAnswerOrder(checked);
+
+      savePoolConfigMutation.mutate({
+        randomSelectionEnabled: poolRandomEnabled,
+        randomQuestionCount: poolRandomEnabled
+            ? poolRandomCount
+            : savedQuestionIds.length,
+        shuffleQuestionOrder: poolShuffleOrder,
+        shuffleAnswerOrder: checked,
+      });
+    };
 
   const selectedAll = useMemo(() => [...savedQuestions, ...stagedQuestions], [savedQuestions, stagedQuestions]);
 
@@ -1042,8 +1069,9 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                     Failed to load Question Pool configuration. Please try again.
                   </p>
               )}
+
           {/* ---------------- Random Question Selection ---------------- */}
-          <div className="border-b bg-card/40 px-3.5 py-2.5 space-y-2">
+          <div className="border-b bg-card/40 px-3.5 py-2.5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
       <span className="text-xs text-muted-foreground">
@@ -1058,11 +1086,10 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
               </div>
 
               <label className="flex items-center gap-2 text-sm font-medium">
-                <input
-                    type="checkbox"
-                    className="size-4 accent-primary"
+                Randomly Select
+                <Switch
                     checked={poolRandomEnabled}
-                    onChange={(e) => handlePoolRandomToggle(e.target.checked)}
+                    onCheckedChange={handlePoolRandomToggle}
                     disabled={
                         activeExamStarted ||
                         savedQuestionIds.length === 0 ||
@@ -1070,61 +1097,72 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                         savePoolConfigMutation.isPending
                     }
                 />
-                Randomly Select
               </label>
             </div>
 
             {poolRandomEnabled && (
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-2">
-                  <div className="flex items-center gap-2">
-                    <label
-                        htmlFor="pool-random-count"
-                        className="text-xs text-muted-foreground"
-                    >
-                      Number of random questions
-                    </label>
-
-                    <Input
-                        id="pool-random-count"
-                        type="number"
-                        min={1}
-                        max={savedQuestionIds.length}
-                        value={poolRandomCount}
-                        onChange={(e) =>
-                            handlePoolCountChange(Number(e.target.value))
-                        }
-                        onBlur={handlePoolCountSave}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.currentTarget.blur();
-                          }
-                        }}
-                        disabled={
-                            activeExamStarted ||
-                            savePoolConfigMutation.isPending ||
-                            savedQuestionIds.length === 0
-                        }
-                        className="h-8 w-20"
-                    />
-                  </div>
-
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <input
-                        type="checkbox"
-                        className="size-4 accent-primary"
-                        checked={poolShuffleOrder}
-                        onChange={(e) =>
-                            handlePoolShuffleChange(e.target.checked)
-                        }
-                        disabled={
-                            activeExamStarted ||
-                            savePoolConfigMutation.isPending
-                        }
-                    />
-                    Shuffle Question Order
+                <div className="flex items-center gap-2 border-t pt-2">
+                  <label
+                      htmlFor="pool-random-count"
+                      className="text-xs text-muted-foreground"
+                  >
+                    Number of random questions
                   </label>
+
+                  <Input
+                      id="pool-random-count"
+                      type="number"
+                      min={1}
+                      max={savedQuestionIds.length}
+                      value={poolRandomCount}
+                      onChange={(e) =>
+                          handlePoolCountChange(Number(e.target.value))
+                      }
+                      onBlur={handlePoolCountSave}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      disabled={
+                          activeExamStarted ||
+                          savePoolConfigMutation.isPending ||
+                          savedQuestionIds.length === 0
+                      }
+                      className="h-8 w-20"
+                  />
                 </div>
             )}
+
+            <div className="flex flex-wrap gap-x-6 gap-y-3 border-t pt-3">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                Shuffle Question Order
+                <Switch
+                    checked={poolShuffleOrder}
+                    onCheckedChange={handlePoolShuffleChange}
+                    disabled={
+                        activeExamStarted ||
+                        savedQuestionIds.length === 0 ||
+                        poolConfigQuery.isLoading ||
+                        savePoolConfigMutation.isPending
+                    }
+                />
+              </label>
+
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                Shuffle Answer Order
+                <Switch
+                    checked={poolShuffleAnswerOrder}
+                    onCheckedChange={handlePoolShuffleAnswerChange}
+                    disabled={
+                        activeExamStarted ||
+                        savedQuestionIds.length === 0 ||
+                        poolConfigQuery.isLoading ||
+                        savePoolConfigMutation.isPending
+                    }
+                />
+              </label>
+            </div>
           </div>
 
           {typeSummary.length > 0 && (
